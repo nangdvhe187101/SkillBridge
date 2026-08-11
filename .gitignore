@@ -1,0 +1,27 @@
+cd ~/Projects/SkillBridge
+cat > .gitignore << 'EOF'
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# .NET
+bin/
+obj/
+*.user
+.vs/
+
+# User Secrets / config nhạy cảm
+appsettings.Development.json
+
+# React / Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.idea/
+.vscode/
+EOF
