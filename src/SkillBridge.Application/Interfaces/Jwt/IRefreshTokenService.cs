@@ -8,6 +8,6 @@ namespace SkillBridge.Application.Interfaces
 {
     public interface IRefreshTokenService
     {
-        Task<AuthResponseDto> RefreshAsync(RefreshTokenDto dto);
+        Task<(AuthResponseDto Result, string RefreshToken)> RefreshAsync(string refreshToken);
     }
 }

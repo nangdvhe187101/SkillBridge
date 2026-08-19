@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using SkillBridge.API.Common;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
 using SkillBridge.Application.Interfaces;
@@ -26,7 +27,8 @@ namespace SkillBridge.API.Controllers
         {
             try
             {
-                var result = await loginService.LoginAsync(dto);
+                var (result, refreshToken) = await loginService.LoginAsync(dto);
+                Response.SetRefreshTokenCookie(refreshToken);
                 return Ok(result);
             }
             catch (BusinessException ex)

@@ -4,7 +4,8 @@ import { myJobsSeed } from '../data/myJobs';
 import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
 import { useToast } from './ToastContext';
 
-import { login as loginApi, register as registerApi, logout as logoutApi } from '../api/authApi';
+import { login as loginApi, register as registerApi, logout as logoutApi, refreshToken as refreshTokenApi } from '../api/authApi';
+import { getAccessToken, setAccessToken, clearAccessToken } from '../api/tokenStore';
 
 const StoreContext = createContext(null);
 
@@ -41,8 +42,7 @@ const initialState = {
   ],
   reviews: [],
   employerReviews: [],
-  token: localStorage.getItem('token') || null,
-  refreshToken: localStorage.getItem('refreshToken') || null,
+  token: getAccessToken(),
   currentUser: JSON.parse(localStorage.getItem('user') || 'null'),
   role: 'student',
   cvFile: null,
@@ -69,19 +69,22 @@ function addTxTo(list, type, label, amount, sign) {
 function reducer(state, action) {
   switch (action.type) {
     case 'AUTH_LOGIN_SUCCESS': {
-      const { token, refreshToken, userId, fullName, email, roleCode } = action.payload;
-      localStorage.setItem('token', token);
-      localStorage.setItem('refreshToken', refreshToken);
+      const { token, userId, fullName, email, roleCode } = action.payload;
+      setAccessToken(token);
       const currentUser = { userId, fullName, email, roleCode };
       localStorage.setItem('user', JSON.stringify(currentUser));
-      return { ...state, token, refreshToken, currentUser, role: roleCode };
+      return { ...state, token, currentUser, role: roleCode };
+    }
+
+    case 'AUTH_TOKEN_REFRESHED': {
+      setAccessToken(action.token);
+      return { ...state, token: action.token };
     }
 
     case 'AUTH_LOGOUT': {
-      localStorage.removeItem('token');
-      localStorage.removeItem('refreshToken');
+      clearAccessToken();
       localStorage.removeItem('user');
-      return { ...state, token: null, refreshToken: null, currentUser: null, role: 'student' };
+      return { ...state, token: null, currentUser: null, role: 'student' };
     }
 
     case 'UPDATE_PROFILE': {
@@ -458,6 +461,17 @@ export function StoreProvider({ children }) {
     return () => clearInterval(id);
   }, []);
 
+  useEffect(() => {
+    // Access token chỉ sống trong memory nên mất khi F5/mở tab mới — thử khôi phục
+    // qua cookie refresh_token (httpOnly) nếu trước đó đã đăng nhập.
+    if (state.currentUser && !state.token) {
+      refreshTokenApi()
+        .then((result) => dispatch({ type: 'AUTH_TOKEN_REFRESHED', token: result.token }))
+        .catch(() => dispatch({ type: 'AUTH_LOGOUT' }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const actions = useMemo(
     () => ({
       submitJobForm: (payload) => dispatch({ type: 'SUBMIT_JOB_FORM', payload }),
@@ -504,9 +518,8 @@ export function StoreProvider({ children }) {
         return result;
       },
       logout: async () => {
-        const currentRefreshToken = localStorage.getItem('refreshToken');
         try {
-          await logoutApi(currentRefreshToken);
+          await logoutApi();
         } catch {
         }
         dispatch({ type: 'AUTH_LOGOUT' });

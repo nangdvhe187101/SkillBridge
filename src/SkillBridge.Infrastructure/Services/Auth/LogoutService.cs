@@ -27,7 +27,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
             if (existing is null)
                 return;
 
-            existing.UsedAt = System.DateTime.UtcNow;
+            existing.UsedAt = DateTime.UtcNow;
             await authTokenRepository.SaveChangesAsync();
         }
     }

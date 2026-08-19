@@ -23,16 +23,18 @@ namespace SkillBridge.Infrastructure.Services
             authTokenRepository = _authTokenRepository;
         }
 
-        public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
+        public async Task<(AuthResponseDto Result, string RefreshToken)> LoginAsync(LoginDto dto)
         {
             if (string.IsNullOrEmpty(dto.Email) || string.IsNullOrEmpty(dto.Password))
                 throw new BusinessException("Vui lòng nhập email và mật khẩu");
+
             var user = await userRepository.GetByEmailWithRoleAsync(dto.Email);
             if (user is null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
                 throw new BusinessException("Email hoặc mật khẩu không đúng");
+
             if (user.AccountStatus == "pending")
                 throw new BusinessException("Tài khoản chưa được kích hoạt, vui lòng kiểm tra email để xác thực trước khi đăng nhập");
-            if (user.AccountStatus == "Locked" || user.AccountStatus == "blacklisted")
+            if (user.AccountStatus == "locked" || user.AccountStatus == "blacklisted")
                 throw new BusinessException("Tài khoản đã bị khóa, vui lòng liên hệ hỗ trợ");
 
             var accessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code);
@@ -49,15 +51,16 @@ namespace SkillBridge.Infrastructure.Services
 
             await authTokenRepository.SaveChangesAsync();
 
-            return new AuthResponseDto
+            var result = new AuthResponseDto
             {
                 Token = accessToken,
-                RefreshToken = refreshToken,
                 UserId = user.Id,
                 FullName = user.FullName,
                 Email = user.Email,
                 RoleCode = user.Role.Code
             };
+
+            return (result, refreshToken);
         }
     }
 }
