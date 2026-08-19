@@ -21,12 +21,12 @@ namespace SkillBridge.Infrastructure.Services
             jwtService = _jwtService;
         }
 
-        public async Task<AuthResponseDto> RefreshAsync(RefreshTokenDto dto)
+        public async Task<(AuthResponseDto Result, string RefreshToken)> RefreshAsync(string refreshToken)
         {
-            if (string.IsNullOrWhiteSpace(dto.RefreshToken))
+            if (string.IsNullOrWhiteSpace(refreshToken))
                 throw new BusinessException("Refresh token không hợp lệ");
 
-            var tokenHash = TokenHasher.HashToken(dto.RefreshToken);
+            var tokenHash = TokenHasher.HashToken(refreshToken);
             var existing = await authTokenRepository.GetValidTokenAsync(tokenHash, "refresh");
 
             if (existing is null) throw new BusinessException("Đã hết hạn phiên làm việc");
@@ -48,15 +48,16 @@ namespace SkillBridge.Infrastructure.Services
 
             await authTokenRepository.SaveChangesAsync();
 
-            return new AuthResponseDto
+            var result = new AuthResponseDto
             {
                 Token = newAccessToken,
-                RefreshToken = newRefreshToken,
                 UserId = user.Id,
                 FullName = user.FullName,
                 Email = user.Email,
                 RoleCode = user.Role.Code
             };
+
+            return (result, newRefreshToken);
         }
     }
 }

@@ -1,3 +1,5 @@
+import { getAccessToken, setAccessToken, clearAccessToken } from "./tokenStore";
+
 const API_URL = "http://localhost:5004/api";
 
 async function handleResponse(response) {
@@ -15,6 +17,7 @@ async function handleResponse(response) {
     }
     return data;
 }
+
 export async function register(fullName, email, password, phoneNumber, roleCode) {
     const res = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
@@ -27,6 +30,7 @@ export async function register(fullName, email, password, phoneNumber, roleCode)
 export async function login(email, password) {
     const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
     });
@@ -51,11 +55,10 @@ export async function resendVerification(email) {
     return handleResponse(res);
 }
 
-export async function refreshToken(refreshTokenValue) {
+export async function refreshToken() {
     const res = await fetch(`${API_URL}/auth/refresh`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: refreshTokenValue }),
+        credentials: "include",
     });
     return handleResponse(res);
 }
@@ -89,10 +92,10 @@ export async function resetPassword(resetToken, newPassword) {
 
 let refreshPromise = null;
 export async function apiFetch(path, options = {}) {
-    const token = localStorage.getItem('token');
     const doFetch = (accessToken) =>
         fetch(`${API_URL}${path}`, {
             ...options,
+            credentials: "include",
             headers: {
                 "Content-Type": "application/json",
                 ...(options.headers || {}),
@@ -100,21 +103,15 @@ export async function apiFetch(path, options = {}) {
             },
         });
 
-    let res = await doFetch(token);
+    let res = await doFetch(getAccessToken());
 
     if (res.status === 401) {
-        const storedRefresh = localStorage.getItem('refreshToken');
-        if (!storedRefresh) {
-            handleAuthExpired();
-            throw new Error("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
-        }
         try {
             if (!refreshPromise) {
-                refreshPromise = refreshToken(storedRefresh).finally(() => { refreshPromise = null; });
+                refreshPromise = refreshToken().finally(() => { refreshPromise = null; });
             }
             const result = await refreshPromise;
-            localStorage.setItem('token', result.token);
-            localStorage.setItem('refreshToken', result.refreshToken);
+            setAccessToken(result.token);
             res = await doFetch(result.token);
         } catch (err) {
             handleAuthExpired();
@@ -126,20 +123,18 @@ export async function apiFetch(path, options = {}) {
 }
 
 function handleAuthExpired() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
+    clearAccessToken();
     localStorage.removeItem('user');
     if (window.location.pathname !== '/auth') {
         window.location.href = '/auth?tab=login';
     }
 }
 
-export async function logout(refreshTokenValue) {
+export async function logout() {
     try {
         await fetch(`${API_URL}/auth/logout`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ refreshToken: refreshTokenValue }),
+            credentials: "include",
         });
     } catch {
     }

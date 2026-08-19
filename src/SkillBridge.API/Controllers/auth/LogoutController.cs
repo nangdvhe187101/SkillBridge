@@ -4,13 +4,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using SkillBridge.Application.DTOs;
+using SkillBridge.API.Common;
 using SkillBridge.Application.Interfaces.Auth;
 
 namespace SkillBridge.API.Controllers
 {
     [ApiController]
     [Route("api/auth")]
+    [EnableRateLimiting("AuthPolicy")]
     public class LogoutController : ControllerBase
     {
         private readonly ILogoutService logoutService;
@@ -19,9 +20,13 @@ namespace SkillBridge.API.Controllers
             logoutService = _logoutService;
         }
         [HttpPost("logout")]
-        public async Task<IActionResult> Logout([FromBody] RefreshTokenDto dto)
+        public async Task<IActionResult> Logout()
         {
-            await logoutService.LogoutAsync(dto.RefreshToken);
+            var refreshToken = Request.Cookies[CookieHelper.RefreshCookieName];
+            if (!string.IsNullOrEmpty(refreshToken))
+                await logoutService.LogoutAsync(refreshToken);
+
+            Response.ClearRefreshTokenCookie();
             return Ok(new { message = "Đã đăng xuất" });
         }
     }
