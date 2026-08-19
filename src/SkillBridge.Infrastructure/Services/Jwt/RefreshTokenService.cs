@@ -23,10 +23,11 @@ namespace SkillBridge.Infrastructure.Services
 
         public async Task<AuthResponseDto> RefreshAsync(RefreshTokenDto dto)
         {
-            var tokenHash = TokenHasher.HashToken(dto.RefreshToken);
-            var existing = await authTokenRepository.GetValidTokenAsync(tokenHash, "refresh");
             if (string.IsNullOrWhiteSpace(dto.RefreshToken))
                 throw new BusinessException("Refresh token không hợp lệ");
+
+            var tokenHash = TokenHasher.HashToken(dto.RefreshToken);
+            var existing = await authTokenRepository.GetValidTokenAsync(tokenHash, "refresh");
 
             if (existing is null) throw new BusinessException("Đã hết hạn phiên làm việc");
 

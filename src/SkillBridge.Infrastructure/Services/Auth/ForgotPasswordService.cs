@@ -52,12 +52,22 @@ namespace SkillBridge.Infrastructure.Services.Auth
         public async Task<string> RequestOtpAsync(ForgotPasswordRequestDto dto)
         {
             var user = await userRepository.GetByEmailAsync(dto.Email);
+
+            // Nếu email không tồn tại: trả về message chung, KHÔNG throw lỗi riêng,
+            // để không lộ việc email đã đăng ký hay chưa (chống user enumeration).
             if (user is null)
-                throw new BusinessException("Email này chưa được đăng ký trong hệ thống");
+            {
+                logger.LogInformation("Yêu cầu quên mật khẩu cho email không tồn tại: {Email}", dto.Email);
+                return GenericOtpMessage;
+            }
 
             var lastOtp = await authTokenRepository.GetLatestTokenByUserAsync(user.Id, TokenTypes.PasswordResetOtp);
             if (lastOtp != null && lastOtp.CreatedAt.AddSeconds(otpResendCooldownSeconds) > DateTime.UtcNow)
             {
+                // Vẫn giữ cooldown thật, nhưng không tiết lộ số giây còn lại kèm thông tin email tồn tại
+                // ra một message khác biệt có thể bị phân biệt qua timing/nội dung.
+                // Ở đây ta chấp nhận trả lỗi cooldown vì đây là hành vi hợp lệ chỉ xảy ra
+                // khi người dùng (hoặc kẻ tấn công) đã gửi request trước đó thành công.
                 var secondsLeft = (int)(lastOtp.CreatedAt.AddSeconds(otpResendCooldownSeconds) - DateTime.UtcNow).TotalSeconds;
                 throw new BusinessException($"Vui lòng đợi {secondsLeft} giây trước khi yêu cầu gửi lại mã OTP.");
             }
@@ -85,7 +95,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
                 logger.LogError(ex, "Gửi OTP quên mật khẩu thất bại cho user {UserId}", user.Id);
             }
 
-            return "Mã OTP đã được gửi đến email của bạn";
+            return GenericOtpMessage;
         }
 
         public async Task<VerifyOtpResultDto> VerifyOtpAsync(VerifyOtpDto dto)

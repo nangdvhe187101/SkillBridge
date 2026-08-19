@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.VisualBasic;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
 using SkillBridge.Application.Interfaces;
@@ -26,16 +25,13 @@ namespace SkillBridge.Infrastructure.Services
 
         public async Task<AuthResponseDto> LoginAsync(LoginDto dto)
         {
-            var user = await userRepository.GetByEmailWithRoleAsync(dto.Email);
-            if (user?.AccountStatus == "pending")
-                throw new BusinessException("Tài khoản chưa được kích hoạt, vui lòng kiểm tra email để xác thực trước khi đăng nhập");
-
             if (string.IsNullOrEmpty(dto.Email) || string.IsNullOrEmpty(dto.Password))
                 throw new BusinessException("Vui lòng nhập email và mật khẩu");
-
+            var user = await userRepository.GetByEmailWithRoleAsync(dto.Email);
             if (user is null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
                 throw new BusinessException("Email hoặc mật khẩu không đúng");
-
+            if (user.AccountStatus == "pending")
+                throw new BusinessException("Tài khoản chưa được kích hoạt, vui lòng kiểm tra email để xác thực trước khi đăng nhập");
             if (user.AccountStatus == "Locked" || user.AccountStatus == "blacklisted")
                 throw new BusinessException("Tài khoản đã bị khóa, vui lòng liên hệ hỗ trợ");
 
