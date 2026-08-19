@@ -71,7 +71,7 @@ builder.Services.AddRateLimiter(
     options =>
     {
         options.AddPolicy("AuthPolicy", httpContext =>
-    RateLimitPartition.GetFixedWindowLimiter(
+        RateLimitPartition.GetFixedWindowLimiter(
         partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         factory: _ => new FixedWindowRateLimiterOptions
         {

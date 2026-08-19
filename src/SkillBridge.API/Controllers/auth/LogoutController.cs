@@ -10,7 +10,7 @@ using SkillBridge.Application.Interfaces.Auth;
 namespace SkillBridge.API.Controllers
 {
     [ApiController]
-    [Route("auth/logout")]
+    [Route("api/auth")]
     public class LogoutController : ControllerBase
     {
         private readonly ILogoutService logoutService;
