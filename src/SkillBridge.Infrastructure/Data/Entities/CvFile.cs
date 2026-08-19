@@ -22,6 +22,14 @@ public partial class CvFile
     [StringLength(255)]
     public string FileName { get; set; } = null!;
 
+    [Column("file_url")]
+    [StringLength(500)]
+    public string FileUrl { get; set; } = null!;
+
+    [Column("public_id")]
+    [StringLength(255)]
+    public string PublicId { get; set; } = null!;
+
     [Column("file_size")]
     public int FileSize { get; set; }
 

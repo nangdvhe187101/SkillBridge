@@ -32,8 +32,6 @@ export default function MyWork() {
           <p>Theo dõi đơn ứng tuyển, việc đang làm và nộp bàn giao sản phẩm — tách riêng khỏi Hồ sơ cá nhân.</p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
             <button className="btn btn-primary btn-sm" onClick={() => navigate('/jobs')}>Tìm việc mới</button>
-            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/profile')}>Xem hồ sơ</button>
-            <button className="btn btn-outline btn-sm" onClick={() => navigate('/wallet')}>Ví & thanh toán</button>
           </div>
         </div>
       </div>

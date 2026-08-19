@@ -1,7 +1,10 @@
 import { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
 import { jobsSeed } from '../data/jobs';
 import { myJobsSeed } from '../data/myJobs';
+import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
 import { useToast } from './ToastContext';
+
+import { login as loginApi, register as registerApi } from '../api/authApi';
 
 const StoreContext = createContext(null);
 
@@ -17,6 +20,9 @@ export { TX_ICON };
 
 function fmtNow() {
   return new Date().toLocaleString('vi-VN');
+}
+function fmtTimeNow() {
+  return new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
 const initialState = {
@@ -35,8 +41,10 @@ const initialState = {
   ],
   reviews: [],
   employerReviews: [],
+  token: localStorage.getItem('token') || null,
+  refreshToken: localStorage.getItem('refreshToken') || null,
+  currentUser: JSON.parse(localStorage.getItem('user') || 'null'),
   role: 'student',
-  displayName: 'Minh Anh',
   cvFile: null,
   employerDocs: [],
   portfolioUploads: [],
@@ -46,6 +54,9 @@ const initialState = {
   nextJobId: 200,
   editingJobId: null,
   triZeroUsed: 2,
+  conversations: conversationsSeed,
+  openChatIds: [],
+  messengerPanelOpen: false,
 };
 
 function addNotifTo(list, icon, text, link = null) {
@@ -57,8 +68,28 @@ function addTxTo(list, type, label, amount, sign) {
 
 function reducer(state, action) {
   switch (action.type) {
-    case 'LOGIN':
-      return { ...state, role: action.role || 'student', displayName: action.name || state.displayName };
+    case 'AUTH_LOGIN_SUCCESS': {
+      const { token, refreshToken, userId, fullName, email, roleCode } = action.payload;
+      localStorage.setItem('token', token);
+      localStorage.setItem('refreshToken', refreshToken);
+      const currentUser = { userId, fullName, email, roleCode };
+      localStorage.setItem('user', JSON.stringify(currentUser));
+      return { ...state, token, refreshToken, currentUser, role: roleCode };
+    }
+
+    case 'AUTH_LOGOUT': {
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+      return { ...state, token: null, refreshToken: null, currentUser: null, role: 'student' };
+    }
+
+    case 'UPDATE_PROFILE': {
+      if (!state.currentUser) return state;
+      const currentUser = { ...state.currentUser, ...action.patch };
+      localStorage.setItem('user', JSON.stringify(currentUser));
+      return { ...state, currentUser };
+    }
 
     case 'SUBMIT_JOB_FORM': {
       const { title, cat, budget, desc, urgent, editingId } = action.payload;
@@ -369,6 +400,50 @@ function reducer(state, action) {
     case 'MARK_NOTIF_READ':
       return { ...state, notifications: state.notifications.map((n) => (n.id === action.id ? { ...n, read: true } : n)) };
 
+    /* ---- messenger ---- */
+    case 'TOGGLE_MESSENGER_PANEL':
+      return { ...state, messengerPanelOpen: action.open !== undefined ? action.open : !state.messengerPanelOpen };
+
+    case 'OPEN_CHAT_WINDOW': {
+      const already = state.openChatIds.includes(action.id);
+      const openChatIds = already ? state.openChatIds : [...state.openChatIds, action.id].slice(-3);
+      const conversations = state.conversations.map((c) => (c.id === action.id ? { ...c, unread: 0 } : c));
+      return { ...state, openChatIds, conversations, messengerPanelOpen: false };
+    }
+
+    case 'CLOSE_CHAT_WINDOW':
+      return { ...state, openChatIds: state.openChatIds.filter((id) => id !== action.id) };
+
+    case 'MARK_CONVERSATION_READ':
+      return { ...state, conversations: state.conversations.map((c) => (c.id === action.id ? { ...c, unread: 0 } : c)) };
+
+    case 'SEND_CHAT_MESSAGE': {
+      const { id, message } = action.payload;
+      const conversations = state.conversations.map((c) => {
+        if (c.id !== id || c.blocked) return c;
+        const newMsg = { id: 'm' + Date.now() + Math.random(), from: 'me', time: fmtTimeNow(), ...message };
+        return { ...c, messages: [...c.messages, newMsg], lastTime: 'Vừa xong' };
+      });
+      return { ...state, conversations };
+    }
+
+    case 'RECEIVE_CHAT_REPLY': {
+      const { id, text } = action.payload;
+      const isOpen = state.openChatIds.includes(id);
+      const conversations = state.conversations.map((c) => {
+        if (c.id !== id || c.blocked) return c;
+        const newMsg = { id: 'm' + Date.now() + Math.random(), from: 'them', type: 'text', text, time: fmtTimeNow() };
+        return { ...c, messages: [...c.messages, newMsg], lastTime: 'Vừa xong', unread: isOpen ? 0 : c.unread + 1 };
+      });
+      return { ...state, conversations };
+    }
+
+    case 'TOGGLE_CONV_FLAG': {
+      const { id, flag } = action.payload;
+      const conversations = state.conversations.map((c) => (c.id === id ? { ...c, [flag]: !c[flag] } : c));
+      return { ...state, conversations };
+    }
+
     default:
       return state;
   }
@@ -410,7 +485,44 @@ export function StoreProvider({ children }) {
       submitReview: (payload) => { dispatch({ type: 'SUBMIT_REVIEW', payload }); showToast('Cảm ơn bạn đã gửi đánh giá!', '✓'); },
       markAllNotifRead: () => dispatch({ type: 'MARK_ALL_NOTIF_READ' }),
       markNotifRead: (id) => dispatch({ type: 'MARK_NOTIF_READ', id }),
-      login: (role, name) => dispatch({ type: 'LOGIN', role, name }),
+      toggleMessengerPanel: (open) => dispatch({ type: 'TOGGLE_MESSENGER_PANEL', open }),
+      openChat: (id) => dispatch({ type: 'OPEN_CHAT_WINDOW', id }),
+      closeChat: (id) => dispatch({ type: 'CLOSE_CHAT_WINDOW', id }),
+      markConversationRead: (id) => dispatch({ type: 'MARK_CONVERSATION_READ', id }),
+      sendChatMessage: (id, message) => {
+        dispatch({ type: 'SEND_CHAT_MESSAGE', payload: { id, message } });
+        setTimeout(() => {
+          const reply = AUTO_REPLIES[Math.floor(Math.random() * AUTO_REPLIES.length)];
+          dispatch({ type: 'RECEIVE_CHAT_REPLY', payload: { id, text: reply } });
+        }, 900 + Math.random() * 700);
+      },
+      toggleConvFlag: (id, flag) => dispatch({ type: 'TOGGLE_CONV_FLAG', payload: { id, flag } }),
+      login: async (email, password) => {
+        const result = await loginApi(email, password);
+        dispatch({ type: "AUTH_LOGIN_SUCCESS", payload: result });
+        showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, '👋');
+        return result;
+      },
+      logout: () => {
+        dispatch({ type: 'AUTH_LOGOUT' });
+        showToast(`Đã đăng xuất`, '👋');
+      },
+      updateProfile: (patch) => {
+        dispatch({ type: 'UPDATE_PROFILE', patch });
+        showToast('Đã cập nhật thông tin tài khoản.', '✓');
+      },
+      changePassword: (currentPassword, newPassword) => {
+        // TODO: nối API đổi mật khẩu thật (POST /auth/change-password) khi backend sẵn sàng.
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            showToast('Đã đổi mật khẩu thành công.', '✓');
+            resolve({ message: 'Đổi mật khẩu thành công.' });
+          }, 600);
+        });
+      },
+      register: async (fullName, email, password, phoneNumber, roleCode) => {
+        return registerApi(fullName, email, password, phoneNumber, roleCode);
+      }
     }),
     [showToast]
   );

@@ -24,6 +24,14 @@ public partial class IdentityDocument
     [StringLength(255)]
     public string FileName { get; set; } = null!;
 
+    [Column("file_url")]
+    [StringLength(500)]
+    public string FileUrl { get; set; } = null!;
+
+    [Column("public_id")]
+    [StringLength(255)]
+    public string PublicId { get; set; } = null!;
+
     [Column("file_type")]
     [StringLength(50)]
     public string FileType { get; set; } = null!;

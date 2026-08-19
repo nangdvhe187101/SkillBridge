@@ -1450,8 +1450,15 @@
     }
 
     @keyframes authCardFloat {
-      0%, 100% { transform: translateY(0) rotate(var(--rot, 0deg)); }
-      50% { transform: translateY(-6px) rotate(var(--rot, 0deg)); }
+
+      0%,
+      100% {
+        transform: translateY(0) rotate(var(--rot, 0deg));
+      }
+
+      50% {
+        transform: translateY(-6px) rotate(var(--rot, 0deg));
+      }
     }
 
     .auth-live-card .alc-av {
@@ -2397,7 +2404,7 @@
       height: 130px;
       border-radius: 12px;
       background:
-        linear-gradient(135deg, rgba(108,76,255,.12), rgba(255,92,122,.10)),
+        linear-gradient(135deg, rgba(108, 76, 255, .12), rgba(255, 92, 122, .10)),
         repeating-linear-gradient(45deg, var(--surface) 0 10px, var(--surface-2) 10px 20px);
       display: flex;
       align-items: center;
@@ -3420,6 +3427,7 @@
 
     /* ---------- responsive ---------- */
     @media (max-width:1400px) {
+
       .nav-cta .btn-ghost,
       .nav-cta .btn-post {
         display: none;
@@ -3614,7 +3622,7 @@
         order: 1;
       }
 
-      .dash-job-row > .btn {
+      .dash-job-row>.btn {
         order: 2;
         margin-left: auto;
       }
@@ -3675,8 +3683,9 @@
     }
 
     @media (max-width:640px) {
+
       .nav-cta .wallet-pill,
-      .nav-cta > .btn-primary {
+      .nav-cta>.btn-primary {
         display: none;
       }
 
@@ -3731,10 +3740,27 @@
     }
 
     /* Chống tràn ngang: CSS Grid item mặc định không co dưới kích thước nội dung tối thiểu */
-    .cat-grid > *, .price-set.is-active > *, .ads-stats > *, .dash-stats > *, .tiers > *,
-    .adm-funnel-row > *, .adm-role-grid > *, .stat-list > *, .forwho > *, .field-row > *,
-    .portfolio-grid > *, .steps > *, .adm-kpis > *, .paymethods > *, .job-grid > *,
-    .post-grid > *, .test-grid > *, .jd-grid > *, .footer-grid > *, .pb-grid > *, .wallet-grid > * {
+    .cat-grid>*,
+    .price-set.is-active>*,
+    .ads-stats>*,
+    .dash-stats>*,
+    .tiers>*,
+    .adm-funnel-row>*,
+    .adm-role-grid>*,
+    .stat-list>*,
+    .forwho>*,
+    .field-row>*,
+    .portfolio-grid>*,
+    .steps>*,
+    .adm-kpis>*,
+    .paymethods>*,
+    .job-grid>*,
+    .post-grid>*,
+    .test-grid>*,
+    .jd-grid>*,
+    .footer-grid>*,
+    .pb-grid>*,
+    .wallet-grid>* {
       min-width: 0;
     }
 
@@ -3823,10 +3849,13 @@
       transition: border-color .18s, background .18s;
       position: relative;
     }
-    .upload-zone:hover, .upload-zone.dragover {
+
+    .upload-zone:hover,
+    .upload-zone.dragover {
       border-color: var(--primary);
       background: var(--surface);
     }
+
     .upload-zone input[type=file] {
       position: absolute;
       inset: 0;
@@ -3835,25 +3864,30 @@
       width: 100%;
       height: 100%;
     }
+
     .upload-zone .uz-ic {
       font-size: 28px;
       margin-bottom: 8px;
     }
+
     .upload-zone b {
       display: block;
       font-size: 13.5px;
       margin-bottom: 4px;
     }
+
     .upload-zone span {
       font-size: 12px;
       color: var(--ink-soft);
     }
+
     .file-chip-row {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 12px;
     }
+
     .file-chip {
       display: inline-flex;
       align-items: center;
@@ -3866,24 +3900,31 @@
       font-weight: 600;
       max-width: 100%;
     }
+
     .file-chip .fc-name {
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       max-width: 180px;
     }
+
     .file-chip button {
       color: var(--ink-soft);
       font-size: 14px;
       line-height: 1;
       padding: 0 2px;
     }
-    .file-chip button:hover { color: var(--coral); }
+
+    .file-chip button:hover {
+      color: var(--coral);
+    }
+
     .auth-link-row {
       display: flex;
       justify-content: flex-end;
       margin: -6px 0 14px;
     }
+
     .auth-link-row a {
       font-size: 13px;
       font-weight: 600;
@@ -3955,7 +3996,6 @@
       color: var(--primary);
     }
 
-    /* ---- notification dropdown ---- */
     .notif-wrap {
       position: relative;
       display: flex;
@@ -4062,7 +4102,6 @@
       color: var(--ink-soft);
     }
 
-    /* ---- wallet page ---- */
     .wallet-hero {
       background: var(--panel-dark);
       color: #fff;
@@ -4223,7 +4262,6 @@
       color: var(--ink-soft);
     }
 
-    /* ---- payment method options ---- */
     .paymethods {
       display: grid;
       gap: 10px;
@@ -4372,7 +4410,6 @@
       border-color: var(--panel-dark);
     }
 
-    /* ---- toast ---- */
     .toast-stack {
       position: fixed;
       bottom: 24px;
@@ -4423,7 +4460,6 @@
       }
     }
 
-    /* ---- chat modal ---- */
     .chat-box {
       max-width: 420px;
       display: flex;
@@ -4532,7 +4568,6 @@
       height: 16px;
     }
 
-    /* ---- review modal (star picker) ---- */
     .star-pick {
       display: flex;
       gap: 6px;
@@ -4614,7 +4649,7 @@
         align-items: flex-start;
       }
     }
-    /* ================= ADMIN DASHBOARD MODULE ================= */
+
     .admin-topbar {
       background: var(--panel-dark);
       color: #fff;
@@ -4852,8 +4887,8 @@
       border-radius: 16px;
       position: relative;
       background:
-        linear-gradient(to right, var(--surface-1, var(--bg)) 0, rgba(255,255,255,0) 24px) 0 0,
-        linear-gradient(to left, var(--surface-1, var(--bg)) 0, rgba(255,255,255,0) 24px) 100% 0;
+        linear-gradient(to right, var(--surface-1, var(--bg)) 0, rgba(255, 255, 255, 0) 24px) 0 0,
+        linear-gradient(to left, var(--surface-1, var(--bg)) 0, rgba(255, 255, 255, 0) 24px) 100% 0;
       background-repeat: no-repeat;
       background-size: 24px 100%, 24px 100%;
       background-attachment: local, local;
@@ -5215,4 +5250,99 @@
       .adm-funnel-row {
         grid-template-columns: 100px 1fr 50px;
       }
+    }
+
+    /* ================= VERIFY EMAIL PAGE ================= */
+    .verify-email-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      background: var(--bg);
+    }
+
+    .verify-email-wrap .auth-box h2 {
+      margin-top: 4px;
+    }
+
+    .verify-spin {
+      width: 60px;
+      height: 60px;
+      margin: 6px auto 22px;
+      border-radius: 999px;
+      border: 4px solid var(--border);
+      border-top-color: var(--primary);
+      animation: verifySpin 0.8s linear infinite;
+    }
+
+    @keyframes verifySpin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .error-tick {
+      width: 64px;
+      height: 64px;
+      border-radius: 999px;
+      background: #FFE3E8;
+      color: #C81E3A;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 6px auto 18px;
+      font-size: 30px;
+    }
+
+    [data-theme="dark"] .error-tick {
+      background: #3A1620;
+      color: #FF8FA3;
+    }
+
+    .field-error {
+      color: #ff6b6b;
+      font-size: 13px;
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .field-error::before {
+      content: "⚠";
+      font-size: 12px;
+    }
+
+    .field.has-error input {
+      border-color: #ff6b6b !important;
+    }
+
+    .password-field {
+      position: relative;
+    }
+
+    .password-toggle {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 16px;
+      line-height: 1;
+    }
+
+    .password-toggle:hover {
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .password-field input {
+      padding-right: 42px;
     }

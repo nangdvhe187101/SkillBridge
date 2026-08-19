@@ -39,6 +39,9 @@ public partial class AdminTeamMember
     [InverseProperty("ResolvedByNavigation")]
     public virtual ICollection<Dispute> Disputes { get; set; } = new List<Dispute>();
 
+    [InverseProperty("KycReviewer")]
+    public virtual ICollection<User> KycReviewedUsers { get; set; } = new List<User>();
+
     [InverseProperty("ReviewedByNavigation")]
     public virtual ICollection<ModerationQueue> ModerationQueues { get; set; } = new List<ModerationQueue>();
 

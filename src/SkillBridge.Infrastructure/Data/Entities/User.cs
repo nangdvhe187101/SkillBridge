@@ -12,6 +12,7 @@ namespace SkillBridge.Infrastructure.Data.Entities;
 [Index("Email", Name = "uq_users_email", IsUnique = true)]
 [Index("PhoneNumber", Name = "uq_users_phone", IsUnique = true)]
 [Index("ReferralCode", Name = "uq_users_referral_code", IsUnique = true)]
+
 public partial class User
 {
     [Key]
@@ -62,6 +63,15 @@ public partial class User
 
     [Column("kyc_status", TypeName = "enum('pending','verified','rejected')")]
     public string KycStatus { get; set; } = null!;
+
+    [Column("kyc_reviewed_by")]
+    public int? KycReviewedBy { get; set; }
+
+    [Column("kyc_reviewed_at", TypeName = "datetime")]
+    public DateTime? KycReviewedAt { get; set; }
+
+    [Column("kyc_rejection_reason", TypeName = "text")]
+    public string? KycRejectionReason { get; set; }
 
     [Column("account_status", TypeName = "enum('active','pending','locked','blacklisted')")]
     public string AccountStatus { get; set; } = null!;
@@ -175,6 +185,10 @@ public partial class User
     [ForeignKey("RoleId")]
     [InverseProperty("Users")]
     public virtual Role Role { get; set; } = null!;
+
+    [ForeignKey("KycReviewedBy")]
+    [InverseProperty("KycReviewedUsers")]
+    public virtual AdminTeamMember? KycReviewer { get; set; }
 
     [InverseProperty("User")]
     public virtual ICollection<SecurityLog> SecurityLogs { get; set; } = new List<SecurityLog>();
