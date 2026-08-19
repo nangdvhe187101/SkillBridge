@@ -4,7 +4,7 @@ import { myJobsSeed } from '../data/myJobs';
 import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
 import { useToast } from './ToastContext';
 
-import { login as loginApi, register as registerApi } from '../api/authApi';
+import { login as loginApi, register as registerApi, logout as logoutApi } from '../api/authApi';
 
 const StoreContext = createContext(null);
 
@@ -503,7 +503,12 @@ export function StoreProvider({ children }) {
         showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, '👋');
         return result;
       },
-      logout: () => {
+      logout: async () => {
+        const currentRefreshToken = localStorage.getItem('refreshToken');
+        try {
+          await logoutApi(currentRefreshToken);
+        } catch {
+        }
         dispatch({ type: 'AUTH_LOGOUT' });
         showToast(`Đã đăng xuất`, '👋');
       },
@@ -511,14 +516,10 @@ export function StoreProvider({ children }) {
         dispatch({ type: 'UPDATE_PROFILE', patch });
         showToast('Đã cập nhật thông tin tài khoản.', '✓');
       },
-      changePassword: (currentPassword, newPassword) => {
-        // TODO: nối API đổi mật khẩu thật (POST /auth/change-password) khi backend sẵn sàng.
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            showToast('Đã đổi mật khẩu thành công.', '✓');
-            resolve({ message: 'Đổi mật khẩu thành công.' });
-          }, 600);
-        });
+      changePassword: async (currentPassword, newPassword) => {
+        const result = await changePasswordApi(currentPassword, newPassword);
+        showToast('Đã đổi mật khẩu thành công.', '✓');
+        return result;
       },
       register: async (fullName, email, password, phoneNumber, roleCode) => {
         return registerApi(fullName, email, password, phoneNumber, roleCode);
