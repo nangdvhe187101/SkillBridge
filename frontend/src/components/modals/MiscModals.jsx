@@ -57,7 +57,7 @@ function formatDeadline(ts) {
 }
 
 export function ApplicantsModal({ onClose, jobId }) {
-  const { state, deleteJob, cancelJob, markJobComplete, startEditJob } = useStore();
+  const { state, deleteJob, cancelJob, markJobComplete, startEditJob, openChatWithPerson } = useStore();
   const { openModal } = useModal();
   const confirm = useConfirm();
   const navigate = useNavigate();
@@ -90,7 +90,7 @@ export function ApplicantsModal({ onClose, jobId }) {
 
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
         <button className="btn btn-outline btn-sm" onClick={() => { onClose(); openModal('viewJob', { jobId: job.id }); }}>👁 Xem tin</button>
-        <button className="btn btn-outline btn-sm" onClick={() => { startEditJob(job.id); onClose(); navigate('/post-job'); }}>✏️ Sửa tin</button>
+        <button className="btn btn-outline btn-sm" onClick={() => { startEditJob(job.id); onClose(); navigate('/dashboard?tab=post'); }}>✏️ Sửa tin</button>
         {job.status === 'in_progress' && (
           <button className="btn btn-outline btn-sm" onClick={handleMarkComplete}>✓ Đánh dấu hoàn thành</button>
         )}
@@ -153,7 +153,7 @@ export function ApplicantsModal({ onClose, jobId }) {
                   <Icon name="check" /> Thuê
                 </button>
               )}
-              <button className="reject" title="Nhắn tin" onClick={() => { onClose(); openModal('chat', { withName: a.name }); }}><Icon name="chat" /></button>
+              <button className="reject" title="Nhắn tin" onClick={() => { onClose(); openChatWithPerson(a.name); }}><Icon name="chat" /></button>
               <button className="reject" title="Xem hồ sơ" onClick={() => { onClose(); navigate(`/u/${slugify(a.name)}`); }}><Icon name="eye" /></button>
               <button className="reject" title="Báo cáo vi phạm" style={{ color: 'var(--coral)' }} onClick={() => { onClose(); openModal('report', { withName: a.name }); }}>🚩</button>
             </div>
@@ -180,7 +180,7 @@ export function ViewJobModal({ onClose, jobId }) {
       </div>
       <p>{job.desc}</p>
       <div className="modal-actions">
-        <button className="btn btn-primary" onClick={() => { onClose(); startEditJob(job.id); navigate('/post-job'); }}>Chỉnh sửa tin</button>
+        <button className="btn btn-primary" onClick={() => { onClose(); startEditJob(job.id); navigate('/dashboard?tab=post'); }}>Chỉnh sửa tin</button>
         <button className="btn btn-outline" onClick={onClose}>Đóng</button>
       </div>
     </ModalShell>

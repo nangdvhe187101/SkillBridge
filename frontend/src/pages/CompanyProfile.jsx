@@ -9,7 +9,7 @@ import { companiesSeed, getCompanyByName, slugify } from '../data/companies';
 export default function CompanyProfile() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { state } = useStore();
+  const { state, openChatWithPerson } = useStore();
   const { openModal } = useModal();
   const { showToast } = useToast();
   const [tab, setTab] = useState('overview');
@@ -34,7 +34,7 @@ export default function CompanyProfile() {
 
   const shareUrl = `https://skillbridge.vn/company/${slug}`;
   const copyLink = () => {
-    if (navigator.clipboard) navigator.clipboard.writeText(shareUrl).catch(() => {});
+    if (navigator.clipboard) navigator.clipboard.writeText(shareUrl).catch(() => { });
     showToast('Đã sao chép đường dẫn hồ sơ.', '🔗');
   };
 
@@ -60,7 +60,7 @@ export default function CompanyProfile() {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-outline btn-sm" onClick={() => openModal('chat', { withName: company.name })}>
+            <button className="btn btn-outline btn-sm" onClick={() => openChatWithPerson(company.name)}>
               <Icon name="chat" style={{ width: 14, height: 14 }} /> Nhắn tin
             </button>
             <button className={'btn btn-sm ' + (following ? 'btn-outline' : 'btn-primary')} onClick={() => setFollowing((f) => !f)}>

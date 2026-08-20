@@ -1,6 +1,7 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../components/Icon';
 import { useModal } from '../context/ModalContext';
+import { useStore } from '../context/StoreContext';
 import { studentsSeed } from '../data/studentDirectory';
 import { slugify } from '../data/companies';
 
@@ -15,6 +16,7 @@ export default function StudentProfile() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { openModal } = useModal();
+  const { openChatWithPerson } = useStore();
 
   const student = studentsSeed.find((s) => slugify(s.name) === slug);
 
@@ -57,7 +59,7 @@ export default function StudentProfile() {
             </div>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, position: 'relative', zIndex: 1 }}>
               <button className="btn btn-outline btn-sm" style={{ background: 'rgba(255,255,255,.08)', color: '#fff', borderColor: 'rgba(255,255,255,.3)' }}
-                onClick={() => openModal('chat', { withName: student.name })}>
+                onClick={() => openChatWithPerson(student.name)}>
                 <Icon name="chat" style={{ width: 14, height: 14 }} /> Nhắn tin
               </button>
               <button className="btn btn-lime btn-sm" onClick={() => navigate('/jobs')}>Mời ứng tuyển</button>

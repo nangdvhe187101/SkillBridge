@@ -4,8 +4,7 @@ import { myJobsSeed } from '../data/myJobs';
 import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
 import { useToast } from './ToastContext';
 
-import { login as loginApi, register as registerApi, logout as logoutApi, refreshToken as refreshTokenApi } from '../api/authApi';
-import { getAccessToken, setAccessToken, clearAccessToken } from '../api/tokenStore';
+import { login as loginApi, register as registerApi } from '../api/authApi';
 
 const StoreContext = createContext(null);
 
@@ -42,7 +41,8 @@ const initialState = {
   ],
   reviews: [],
   employerReviews: [],
-  token: getAccessToken(),
+  token: localStorage.getItem('token') || null,
+  refreshToken: localStorage.getItem('refreshToken') || null,
   currentUser: JSON.parse(localStorage.getItem('user') || 'null'),
   role: 'student',
   cvFile: null,
@@ -69,22 +69,19 @@ function addTxTo(list, type, label, amount, sign) {
 function reducer(state, action) {
   switch (action.type) {
     case 'AUTH_LOGIN_SUCCESS': {
-      const { token, userId, fullName, email, roleCode } = action.payload;
-      setAccessToken(token);
+      const { token, refreshToken, userId, fullName, email, roleCode } = action.payload;
+      localStorage.setItem('token', token);
+      localStorage.setItem('refreshToken', refreshToken);
       const currentUser = { userId, fullName, email, roleCode };
       localStorage.setItem('user', JSON.stringify(currentUser));
-      return { ...state, token, currentUser, role: roleCode };
-    }
-
-    case 'AUTH_TOKEN_REFRESHED': {
-      setAccessToken(action.token);
-      return { ...state, token: action.token };
+      return { ...state, token, refreshToken, currentUser, role: roleCode };
     }
 
     case 'AUTH_LOGOUT': {
-      clearAccessToken();
+      localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
-      return { ...state, token: null, currentUser: null, role: 'student' };
+      return { ...state, token: null, refreshToken: null, currentUser: null, role: 'student' };
     }
 
     case 'UPDATE_PROFILE': {
@@ -414,6 +411,32 @@ function reducer(state, action) {
       return { ...state, openChatIds, conversations, messengerPanelOpen: false };
     }
 
+    case 'OPEN_CHAT_WITH_PERSON': {
+      const { name, subtitle } = action.payload;
+      let conv = state.conversations.find((c) => c.name === name);
+      let conversations = state.conversations;
+      if (!conv) {
+        conv = {
+          id: 'conv-' + name.toLowerCase().replace(/\s+/g, '-') + '-' + Date.now(),
+          name,
+          subtitle: subtitle || '',
+          online: true,
+          kind: 'chat',
+          unread: 0,
+          lastTime: 'Vừa xong',
+          blocked: false,
+          muted: false,
+          archived: false,
+          messages: [
+            { id: 'm' + Date.now(), type: 'text', from: 'them', text: `Chào bạn! Mình là ${name}, có gì cần trao đổi cứ nhắn nhé.`, time: fmtTimeNow() },
+          ],
+        };
+        conversations = [conv, ...state.conversations];
+      }
+      const openChatIds = state.openChatIds.includes(conv.id) ? state.openChatIds : [...state.openChatIds, conv.id].slice(-3);
+      return { ...state, conversations, openChatIds, messengerPanelOpen: false };
+    }
+
     case 'CLOSE_CHAT_WINDOW':
       return { ...state, openChatIds: state.openChatIds.filter((id) => id !== action.id) };
 
@@ -461,17 +484,6 @@ export function StoreProvider({ children }) {
     return () => clearInterval(id);
   }, []);
 
-  useEffect(() => {
-    // Access token chỉ sống trong memory nên mất khi F5/mở tab mới — thử khôi phục
-    // qua cookie refresh_token (httpOnly) nếu trước đó đã đăng nhập.
-    if (state.currentUser && !state.token) {
-      refreshTokenApi()
-        .then((result) => dispatch({ type: 'AUTH_TOKEN_REFRESHED', token: result.token }))
-        .catch(() => dispatch({ type: 'AUTH_LOGOUT' }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const actions = useMemo(
     () => ({
       submitJobForm: (payload) => dispatch({ type: 'SUBMIT_JOB_FORM', payload }),
@@ -501,6 +513,7 @@ export function StoreProvider({ children }) {
       markNotifRead: (id) => dispatch({ type: 'MARK_NOTIF_READ', id }),
       toggleMessengerPanel: (open) => dispatch({ type: 'TOGGLE_MESSENGER_PANEL', open }),
       openChat: (id) => dispatch({ type: 'OPEN_CHAT_WINDOW', id }),
+      openChatWithPerson: (name, subtitle) => dispatch({ type: 'OPEN_CHAT_WITH_PERSON', payload: { name, subtitle } }),
       closeChat: (id) => dispatch({ type: 'CLOSE_CHAT_WINDOW', id }),
       markConversationRead: (id) => dispatch({ type: 'MARK_CONVERSATION_READ', id }),
       sendChatMessage: (id, message) => {
@@ -517,11 +530,7 @@ export function StoreProvider({ children }) {
         showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, '👋');
         return result;
       },
-      logout: async () => {
-        try {
-          await logoutApi();
-        } catch {
-        }
+      logout: () => {
         dispatch({ type: 'AUTH_LOGOUT' });
         showToast(`Đã đăng xuất`, '👋');
       },
@@ -529,10 +538,14 @@ export function StoreProvider({ children }) {
         dispatch({ type: 'UPDATE_PROFILE', patch });
         showToast('Đã cập nhật thông tin tài khoản.', '✓');
       },
-      changePassword: async (currentPassword, newPassword) => {
-        const result = await changePasswordApi(currentPassword, newPassword);
-        showToast('Đã đổi mật khẩu thành công.', '✓');
-        return result;
+      changePassword: (currentPassword, newPassword) => {
+        // TODO: nối API đổi mật khẩu thật (POST /auth/change-password) khi backend sẵn sàng.
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            showToast('Đã đổi mật khẩu thành công.', '✓');
+            resolve({ message: 'Đổi mật khẩu thành công.' });
+          }, 600);
+        });
       },
       register: async (fullName, email, password, phoneNumber, roleCode) => {
         return registerApi(fullName, email, password, phoneNumber, roleCode);

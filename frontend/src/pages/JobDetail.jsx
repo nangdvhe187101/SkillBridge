@@ -32,7 +32,7 @@ export default function JobDetail() {
   const { id } = useParams();
   const jobId = Number(id);
   const navigate = useNavigate();
-  const { state, applyJob, studentAbandonJob } = useStore();
+  const { state, applyJob, studentAbandonJob, openChatWithPerson } = useStore();
   const { openModal } = useModal();
   const confirm = useConfirm();
   useTick(30000);
@@ -109,7 +109,7 @@ export default function JobDetail() {
                       <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 6 }}>Người được thuê: <b>{dashJob.hiredApplicant || 'Bạn'}</b></p>
                       <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 6 }}>Hạn bàn giao: <b>{formatDeadline(dashJob.deadlineAt)}</b></p>
                       <button className="btn btn-primary btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('deliverable', { jobId: dashJob.id })}>📤 Nộp bàn giao / sản phẩm</button>
-                      <button className="btn btn-outline btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('chat', { withName: j.emp })}>💬 Nhắn tin NTD</button>
+                      <button className="btn btn-outline btn-block" style={{ marginBottom: 8 }} onClick={() => openChatWithPerson(j.emp)}>💬 Nhắn tin NTD</button>
                       <button className="btn btn-outline btn-block" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
                         onClick={async () => { if (await confirm(`Bạn chắc chắn muốn bỏ ngang công việc "${j.title}"? Điểm uy tín của bạn sẽ bị trừ và nhà tuyển dụng sẽ được hoàn tiền ký quỹ.`, { danger: true, confirmLabel: 'Bỏ việc' })) studentAbandonJob(dashJob.id); }}>
                         Bỏ việc giữa chừng
@@ -135,7 +135,7 @@ export default function JobDetail() {
                         </div>
                       )}
                       <button className="btn btn-primary btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('deliverable', { jobId: dashJob.id })}>📤 Nộp lại bàn giao</button>
-                      <button className="btn btn-outline btn-block" onClick={() => openModal('chat', { withName: j.emp })}>💬 Hỏi thêm NTD</button>
+                      <button className="btn btn-outline btn-block" onClick={() => openChatWithPerson(j.emp)}>💬 Hỏi thêm NTD</button>
                     </div>
                   )}
                   {dashJob.status === 'completed' && (
@@ -154,7 +154,7 @@ export default function JobDetail() {
                 <div className="jd-price-lbl">Ngân sách công việc</div>
                 <button className="btn btn-primary btn-block" style={{ marginBottom: 10 }} disabled={applyDisabled}
                   onClick={() => applyJob(j.id)}>{applyLabel}</button>
-                <button className="btn btn-outline btn-block" style={{ marginBottom: 10 }} onClick={() => openModal('chat', { withName: j.emp })}>
+                <button className="btn btn-outline btn-block" style={{ marginBottom: 10 }} onClick={() => openChatWithPerson(j.emp)}>
                   <span className="msg-btn-inline"><Icon name="chat" style={{ width: 14, height: 14 }} /> Nhắn tin với nhà tuyển dụng</span>
                 </button>
                 <button className="btn btn-outline btn-block" style={{ marginBottom: 10 }}>Lưu công việc</button>

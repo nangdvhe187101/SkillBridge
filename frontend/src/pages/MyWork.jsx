@@ -18,7 +18,7 @@ const APP_STATUS_LABEL = {
 };
 
 export default function MyWork() {
-  const { state } = useStore();
+  const { state, openChatWithPerson } = useStore();
   const { openModal } = useModal();
   const navigate = useNavigate();
 
@@ -73,7 +73,7 @@ export default function MyWork() {
                           {!isSubmitted && !isRevision && (
                             <button className="btn btn-primary btn-sm" onClick={() => openModal('deliverable', { jobId: j.id })}>📤 Nộp bàn giao / sản phẩm</button>
                           )}
-                          <button className="btn btn-outline btn-sm" onClick={() => openModal('chat', { withName: empName })}>💬 Chat với NTD</button>
+                          <button className="btn btn-outline btn-sm" onClick={() => openChatWithPerson(empName)}>💬 Chat với NTD</button>
                         </div>
                       </div>
                       <div><span className={'djr-status ' + j.status} style={{ display: 'inline-block' }}>{chipLabel}</span></div>
