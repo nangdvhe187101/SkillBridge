@@ -36,6 +36,9 @@ public partial class AdminTeamMember
     [InverseProperty("Actor")]
     public virtual ICollection<AuditLog> AuditLogs { get; set; } = new List<AuditLog>();
 
+    [InverseProperty("KycReviewer")]
+    public virtual ICollection<User> KycReviewedUsers { get; set; } = new List<User>();
+
     [InverseProperty("ResolvedByNavigation")]
     public virtual ICollection<Dispute> Disputes { get; set; } = new List<Dispute>();
 
