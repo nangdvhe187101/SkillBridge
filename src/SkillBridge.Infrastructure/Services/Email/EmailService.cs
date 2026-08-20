@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Configuration;
-using Microsoft.VisualBasic;
 using MimeKit;
 using SkillBridge.Application.Interfaces;
 
@@ -80,7 +79,6 @@ namespace SkillBridge.Infrastructure.Services.Email
         private async Task SendAsync(MimeMessage message)
         {
             using var client = new SmtpClient();
-            client.CheckCertificateRevocation = false;
             await client.ConnectAsync(
                 config["Smtp:Host"] ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:Host"),
                 int.Parse(config["Smtp:Port"] ?? "587"),

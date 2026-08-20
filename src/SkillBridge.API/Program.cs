@@ -8,6 +8,8 @@ using SkillBridge.Infrastructure.Data;
 using System.Text;
 using System.Threading.RateLimiting;
 
+ThreadPool.SetMinThreads(workerThreads: 200, completionPortThreads: 200);
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Host.UseSerilog((context, config) =>
@@ -75,8 +77,10 @@ builder.Services.AddRateLimiter(
         partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
         factory: _ => new FixedWindowRateLimiterOptions
         {
-            PermitLimit = 5,
-            Window = TimeSpan.FromMinutes(1)
+            PermitLimit = 30,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 10,
+            QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst
         }));
         options.RejectionStatusCode = 429;
     }
@@ -90,7 +94,6 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 var app = builder.Build();
 
 app.UseMiddleware<SkillBridge.API.Middleware.ExceptionHandlingMiddleware>();
-app.UseRateLimiter();
 
 if (app.Environment.IsDevelopment())
 {
@@ -106,7 +109,10 @@ app.Use(async (context, next) =>
     context.Response.Headers.Append("Referrer-Policy", "no-referrer");
     await next();
 });
+
 app.UseCors("AllowFrontend");
+app.UseRateLimiter();
+
 app.UseAuthentication();
 app.UseAuthorization();
 

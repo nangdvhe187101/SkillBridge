@@ -13,11 +13,15 @@ namespace SkillBridge.Infrastructure.Services.Email
 {
     public class ResendVerificationService : IResendVerificationService
     {
+        private const string GenericMessage = "Nếu email tồn tại và chưa xác thực, chúng tôi đã gửi link xác thực";
+
         public readonly IUserRepository userRepository;
         public readonly IAuthTokenRepository authTokenRepository;
         public readonly IEmailService emailService;
         public readonly IJwtService jwtService;
         public readonly IConfiguration config;
+
+        private readonly int resendCooldownSeconds;
 
         public ResendVerificationService(
             IUserRepository _userRepository,
@@ -31,27 +35,37 @@ namespace SkillBridge.Infrastructure.Services.Email
             emailService = _emailService;
             jwtService = _jwtService;
             config = _config;
+
+            resendCooldownSeconds = config.GetValue<int?>("Auth:ResendVerificationCooldownSeconds") ?? 60;
         }
 
         public async Task<string> ResendAsync(string email)
         {
-            const string genericMessage = "Nếu email tồn tại và chưa xác thực, chúng tôi đã gửi link xác thực";
             var user = await userRepository.GetByEmailAsync(email);
-            if (user is null || user.AccountStatus != "pending") return genericMessage;
+            if (user is null || user.AccountStatus != "pending")
+                return GenericMessage;
+
+            var lastToken = await authTokenRepository.GetLatestTokenByUserAsync(user.Id, TokenTypes.EmailVerify);
+            if (lastToken != null && lastToken.CreatedAt.AddSeconds(resendCooldownSeconds) > DateTime.UtcNow)
+            {
+                return GenericMessage;
+            }
+
             var verifyTokenPlain = jwtService.GenerateRefreshTokenString();
             await authTokenRepository.AddAsync(new AuthToken
             {
                 UserId = user.Id,
-                TokenType = "email_verify",
+                TokenType = TokenTypes.EmailVerify,
                 TokenHash = TokenHasher.HashToken(verifyTokenPlain),
                 ExpiresAt = DateTime.UtcNow.AddHours(24),
                 CreatedAt = DateTime.UtcNow
             });
             await authTokenRepository.SaveChangesAsync();
+
             var verifyLink = $"{config["Frontend:BaseUrl"]}/verify-email?token={Uri.EscapeDataString(verifyTokenPlain)}";
             await emailService.SendVerificationEmailAsync(user.Email, user.FullName, verifyLink);
 
-            return genericMessage;
+            return GenericMessage;
         }
     }
 }

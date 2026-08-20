@@ -16,6 +16,9 @@ namespace SkillBridge.Infrastructure.Services
         private readonly IJwtService jwtService;
         private readonly IAuthTokenRepository authTokenRepository;
 
+        private const int MaxFailedAttempts = 5;
+        private const int LockoutMinutes = 15;
+
         public LoginService(IUserRepository _userRepository, IJwtService _jwtService, IAuthTokenRepository _authTokenRepository)
         {
             userRepository = _userRepository;
@@ -29,13 +32,40 @@ namespace SkillBridge.Infrastructure.Services
                 throw new BusinessException("Vui lòng nhập email và mật khẩu");
 
             var user = await userRepository.GetByEmailWithRoleAsync(dto.Email);
-            if (user is null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+
+            if (user is null)
                 throw new BusinessException("Email hoặc mật khẩu không đúng");
+
+            if (user.LockoutUntil.HasValue && user.LockoutUntil > DateTime.UtcNow)
+            {
+                throw new BusinessException(BuildLockoutMessage(user.LockoutUntil.Value));
+            }
+
+            var passwordValid = await Task.Run(() => BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash));
+
+            if (!passwordValid)
+            {
+                var justLockedOut = await RegisterFailedAttemptAsync(user);
+
+                if (justLockedOut)
+                {
+                    throw new BusinessException(BuildLockoutMessage(user.LockoutUntil!.Value));
+                }
+
+                var remaining = MaxFailedAttempts - user.FailedLoginAttempts;
+                throw new BusinessException($"Email hoặc mật khẩu không đúng. Bạn còn {remaining} lần thử trước khi tài khoản bị tạm khóa.");
+            }
 
             if (user.AccountStatus == "pending")
                 throw new BusinessException("Tài khoản chưa được kích hoạt, vui lòng kiểm tra email để xác thực trước khi đăng nhập");
             if (user.AccountStatus == "locked" || user.AccountStatus == "blacklisted")
                 throw new BusinessException("Tài khoản đã bị khóa, vui lòng liên hệ hỗ trợ");
+
+            if (user.FailedLoginAttempts > 0 || user.LockoutUntil.HasValue)
+            {
+                user.FailedLoginAttempts = 0;
+                user.LockoutUntil = null;
+            }
 
             var accessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code);
             var refreshToken = jwtService.GenerateRefreshTokenString();
@@ -61,6 +91,29 @@ namespace SkillBridge.Infrastructure.Services
             };
 
             return (result, refreshToken);
+        }
+
+        private async Task<bool> RegisterFailedAttemptAsync(User user)
+        {
+            user.FailedLoginAttempts += 1;
+            var justLockedOut = false;
+
+            if (user.FailedLoginAttempts >= MaxFailedAttempts)
+            {
+                user.LockoutUntil = DateTime.UtcNow.AddMinutes(LockoutMinutes);
+                user.FailedLoginAttempts = 0;
+                justLockedOut = true;
+            }
+
+            await userRepository.SaveChangesAsync();
+            return justLockedOut;
+        }
+
+        private static string BuildLockoutMessage(DateTime lockoutUntilUtc)
+        {
+            var minutesLeft = (int)Math.Ceiling((lockoutUntilUtc - DateTime.UtcNow).TotalMinutes);
+            if (minutesLeft < 1) minutesLeft = 1;
+            return $"Tài khoản tạm khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau {minutesLeft} phút.";
         }
     }
 }

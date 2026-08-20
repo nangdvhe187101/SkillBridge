@@ -1,5 +1,10 @@
+using System;
+using System.Linq;
+using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using MySqlConnector;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
 using SkillBridge.Application.Interfaces;
@@ -96,7 +101,16 @@ public class RegisterService : IRegisterService
         };
 
         await userRepository.AddAsync(user);
-        await userRepository.SaveChangesAsync();
+
+        try
+        {
+            await userRepository.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsDuplicateKeyError(ex))
+        {
+            logger.LogWarning(ex, "Đăng ký thất bại do trùng dữ liệu (race condition) cho email {Email}", dto.Email);
+            throw new BusinessException("Email hoặc số điện thoại này đã được đăng ký");
+        }
 
         var verifyTokenPlain = jwtService.GenerateRefreshTokenString();
 
@@ -129,5 +143,10 @@ public class RegisterService : IRegisterService
             Email = user.Email,
             Message = $"Đăng ký thành công. Vui lòng kiểm tra {emailLabel} để xác thực tài khoản trước khi đăng nhập."
         };
+    }
+
+    private static bool IsDuplicateKeyError(DbUpdateException ex)
+    {
+        return ex.InnerException is MySqlException mysqlEx && mysqlEx.Number == 1062;
     }
 }
