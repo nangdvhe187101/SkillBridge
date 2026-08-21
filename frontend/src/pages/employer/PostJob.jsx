@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
-import Icon from '../components/Icon';
-import PostJobForm from '../components/PostJobForm';
-import { useStore } from '../context/StoreContext';
+import Icon from '../../components/Icon';
+import PostJobForm from '../../components/PostJobForm';
+import { useStore } from '../../context/StoreContext';
 
 export default function PostJob() {
   const { state } = useStore();

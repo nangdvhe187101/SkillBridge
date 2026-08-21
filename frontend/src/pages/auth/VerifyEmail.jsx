@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import Icon from '../components/Icon';
-import { verifyEmail, resendVerification } from '../api/authApi';
+import Icon from '../../components/Icon';
+import { verifyEmail, resendVerification } from '../../api/authApi';
 
 export default function VerifyEmail() {
     const [searchParams] = useSearchParams();

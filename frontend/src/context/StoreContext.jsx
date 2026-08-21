@@ -4,7 +4,8 @@ import { myJobsSeed } from '../data/myJobs';
 import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
 import { useToast } from './ToastContext';
 
-import { login as loginApi, register as registerApi } from '../api/authApi';
+import { login as loginApi, register as registerApi, logout as logoutApi } from '../api/authApi';
+import { setAccessToken, clearAccessToken } from '../api/tokenStore';
 
 const StoreContext = createContext(null);
 
@@ -70,15 +71,13 @@ function reducer(state, action) {
   switch (action.type) {
     case 'AUTH_LOGIN_SUCCESS': {
       const { token, refreshToken, userId, fullName, email, roleCode } = action.payload;
-      localStorage.setItem('token', token);
-      localStorage.setItem('refreshToken', refreshToken);
-      const currentUser = { userId, fullName, email, roleCode };
-      localStorage.setItem('user', JSON.stringify(currentUser));
-      return { ...state, token, refreshToken, currentUser, role: roleCode };
+      setAccessToken(token);
+      localStorage.setItem('user', JSON.stringify({ userId, fullName, email, roleCode }));
+      return { ...state, token, refreshToken, currentUser: { userId, fullName, email, roleCode }, role: roleCode };
     }
 
     case 'AUTH_LOGOUT': {
-      localStorage.removeItem('token');
+      clearAccessToken();
       localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
       return { ...state, token: null, refreshToken: null, currentUser: null, role: 'student' };
@@ -526,11 +525,14 @@ export function StoreProvider({ children }) {
       toggleConvFlag: (id, flag) => dispatch({ type: 'TOGGLE_CONV_FLAG', payload: { id, flag } }),
       login: async (email, password) => {
         const result = await loginApi(email, password);
+        setAccessToken(result.token);
         dispatch({ type: "AUTH_LOGIN_SUCCESS", payload: result });
         showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, '👋');
         return result;
       },
       logout: () => {
+        logoutApi();
+        clearAccessToken();
         dispatch({ type: 'AUTH_LOGOUT' });
         showToast(`Đã đăng xuất`, '👋');
       },

@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { AdminProvider, useAdmin } from '../context/AdminContext';
-import AdminUsers from '../components/admin/AdminUsers';
-import AdminContent from '../components/admin/AdminContent';
-import AdminDisputes from '../components/admin/AdminDisputes';
-import AdminFinance from '../components/admin/AdminFinance';
-import AdminPartners from '../components/admin/AdminPartners';
-import AdminAnalytics from '../components/admin/AdminAnalytics';
-import AdminOps from '../components/admin/AdminOps';
-import AdminRoles from '../components/admin/AdminRoles';
+import { AdminProvider, useAdmin } from '../../context/AdminContext';
+import AdminUsers from '../../components/admin/AdminUsers';
+import AdminContent from '../../components/admin/AdminContent';
+import AdminDisputes from '../../components/admin/AdminDisputes';
+import AdminFinance from '../../components/admin/AdminFinance';
+import AdminPartners from '../../components/admin/AdminPartners';
+import AdminAnalytics from '../../components/admin/AdminAnalytics';
+import AdminOps from '../../components/admin/AdminOps';
+import AdminRoles from '../../components/admin/AdminRoles';
 
 const ROLE_MODULES = {
   super: ['users', 'content', 'disputes', 'finance', 'partners', 'analytics', 'ops', 'roles'],

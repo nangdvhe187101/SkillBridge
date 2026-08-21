@@ -1,8 +1,8 @@
 import { useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Icon from '../components/Icon';
-import { useStore, fmtVND } from '../context/StoreContext';
-import { useConfirm } from '../context/ConfirmContext';
+import Icon from '../../components/Icon';
+import { useStore, fmtVND } from '../../context/StoreContext';
+import { useConfirm } from '../../context/ConfirmContext';
 
 function tierFromScore(score) {
   if (score >= 90) return 'gold';

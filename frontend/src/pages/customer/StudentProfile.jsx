@@ -1,9 +1,9 @@
 import { useNavigate, useParams } from 'react-router-dom';
-import Icon from '../components/Icon';
-import { useModal } from '../context/ModalContext';
-import { useStore } from '../context/StoreContext';
-import { studentsSeed } from '../data/studentDirectory';
-import { slugify } from '../data/companies';
+import Icon from '../../components/Icon';
+import { useModal } from '../../context/ModalContext';
+import { useStore } from '../../context/StoreContext';
+import { studentsSeed } from '../../data/studentDirectory';
+import { slugify } from '../../data/companies';
 
 function tierFromScore(score) {
   if (score >= 90) return 'gold';

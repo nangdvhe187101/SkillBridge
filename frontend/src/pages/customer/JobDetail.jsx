@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import Icon from '../components/Icon';
-import Avatar from '../components/Avatar';
-import { useStore, fmtVND } from '../context/StoreContext';
-import { useModal } from '../context/ModalContext';
-import { useConfirm } from '../context/ConfirmContext';
-import { DeliverablePreview } from '../components/modals/DeliverableModals';
-import { slugify } from '../data/companies';
+import Icon from '../../components/Icon';
+import Avatar from '../../components/Avatar';
+import { useStore, fmtVND } from '../../context/StoreContext';
+import { useModal } from '../../context/ModalContext';
+import { useConfirm } from '../../context/ConfirmContext';
+import { DeliverablePreview } from '../../components/modals/DeliverableModals';
+import { slugify } from '../../data/companies';
 
 function formatDeadline(ts) {
   if (!ts) return '—';

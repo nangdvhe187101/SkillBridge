@@ -43,6 +43,10 @@ public class RegisterService : IRegisterService
 
     public async Task<RegisterResultDto> RegisterAsync(RegisterDto dto)
     {
+        dto.Email = dto.Email?.Trim().ToLowerInvariant() ?? string.Empty;
+        dto.FullName = dto.FullName?.Trim() ?? string.Empty;
+        dto.PhoneNumber = string.IsNullOrWhiteSpace(dto.PhoneNumber) ? null : dto.PhoneNumber.Trim();
+
         if (string.IsNullOrWhiteSpace(dto.Email) || dto.Email.Length > 150 || !ValidationPatterns.Email.IsMatch(dto.Email))
             throw new BusinessException("Email không đúng định dạng");
 

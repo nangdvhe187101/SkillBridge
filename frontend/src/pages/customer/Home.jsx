@@ -1,11 +1,11 @@
 import { useNavigate } from 'react-router-dom';
-import Icon from '../components/Icon';
-import Footer from '../components/Footer';
-import useReveal from '../hooks/useReveal';
-import useCounter from '../hooks/useCounter';
-import HomeAdCarousel from '../components/HomeAdCarousel';
-import FaqItem from '../components/FaqItem';
-import Avatar from '../components/Avatar';
+import Icon from '../../components/Icon';
+import Footer from '../../components/Footer';
+import useReveal from '../../hooks/useReveal';
+import useCounter from '../../hooks/useCounter';
+import HomeAdCarousel from '../../components/HomeAdCarousel';
+import FaqItem from '../../components/FaqItem';
+import Avatar from '../../components/Avatar';
 
 function Counter({ target, suffix }) {
   const [ref, display] = useCounter(target, suffix);

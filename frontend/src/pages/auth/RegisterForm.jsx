@@ -81,7 +81,7 @@ export default function RegisterForm({ onSwitchTab }) {
     }
 
     return (
-        <div className="auth-form is-active">
+        <form className="auth-form is-active" onSubmit={(e) => { e.preventDefault(); handleRegister(); }}>
             <h2>Tạo tài khoản mới</h2>
 
             <div className="role-toggle">
@@ -181,13 +181,13 @@ export default function RegisterForm({ onSwitchTab }) {
 
             {formError && <div className="field-error" style={{ marginBottom: 12 }}>{formError}</div>}
 
-            <button className="btn btn-primary btn-block" onClick={handleRegister} disabled={loading}>
+            <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
                 {loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}
             </button>
 
             <div className="auth-foot">
                 Đã có tài khoản? <a onClick={() => onSwitchTab('login')}>Đăng nhập</a>
             </div>
-        </div>
+        </form>
     );
 }

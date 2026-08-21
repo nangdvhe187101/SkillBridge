@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import Icon from '../components/Icon';
-import { useStore, fmtVND } from '../context/StoreContext';
-import { useModal } from '../context/ModalContext';
-import { useToast } from '../context/ToastContext';
-import { companiesSeed, getCompanyByName, slugify } from '../data/companies';
+import Icon from '../../components/Icon';
+import { useStore, fmtVND } from '../../context/StoreContext';
+import { useModal } from '../../context/ModalContext';
+import { useToast } from '../../context/ToastContext';
+import { companiesSeed, getCompanyByName, slugify } from '../../data/companies';
 
 export default function CompanyProfile() {
   const { slug } = useParams();

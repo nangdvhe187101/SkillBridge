@@ -51,11 +51,12 @@ namespace SkillBridge.Infrastructure.Services.Auth
 
         public async Task<string> RequestOtpAsync(ForgotPasswordRequestDto dto)
         {
-            var user = await userRepository.GetByEmailAsync(dto.Email);
+            var email = dto.Email?.Trim().ToLowerInvariant() ?? string.Empty;
+            var user = await userRepository.GetByEmailAsync(email);
 
             if (user is null)
             {
-                logger.LogInformation("Yêu cầu quên mật khẩu cho email không tồn tại: {Email}", dto.Email);
+                logger.LogInformation("Yêu cầu quên mật khẩu cho email không tồn tại: {Email}", email);
                 return GenericOtpMessage;
             }
 
@@ -94,7 +95,8 @@ namespace SkillBridge.Infrastructure.Services.Auth
 
         public async Task<VerifyOtpResultDto> VerifyOtpAsync(VerifyOtpDto dto)
         {
-            var user = await userRepository.GetByEmailAsync(dto.Email);
+            var email = dto.Email?.Trim().ToLowerInvariant() ?? string.Empty;
+            var user = await userRepository.GetByEmailAsync(email);
             if (user is null)
                 throw new BusinessException(InvalidOtpMessage);
 
@@ -145,6 +147,8 @@ namespace SkillBridge.Infrastructure.Services.Auth
                 throw new BusinessException("Mật khẩu mới không được trùng với mật khẩu cũ");
 
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            user.FailedLoginAttempts = 0;
+            user.LockoutUntil = null;
             tokenEntity.UsedAt = DateTime.UtcNow;
 
             await authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.Refresh);

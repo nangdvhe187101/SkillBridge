@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
-import { useStore, fmtVND, TX_ICON } from '../context/StoreContext';
-import { useModal } from '../context/ModalContext';
+import { useStore, fmtVND, TX_ICON } from '../../context/StoreContext';
+import { useModal } from '../../context/ModalContext';
 
 export default function Wallet() {
   const { state } = useStore();

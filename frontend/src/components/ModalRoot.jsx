@@ -1,7 +1,7 @@
 import { useModal } from '../context/ModalContext';
 import { TopupModal, WithdrawModal, SubscribeModal, HireModal, ClaimModal } from './modals/PayModals';
 import { DeliverableModal, RevisionModal, DeliverableReviewModal } from './modals/DeliverableModals';
-import { ReceiptModal, ApplicantsModal, ViewJobModal, ReportModal, SuccessModal } from './modals/MiscModals';
+import { ReceiptModal, ViewJobModal, ReportModal, SuccessModal } from './modals/MiscModals';
 import ChatModal from './modals/ChatModal';
 import ReviewModal from './modals/ReviewModal';
 
@@ -20,7 +20,6 @@ export default function ModalRoot() {
     case 'revision': return <RevisionModal {...props} />;
     case 'deliverableReview': return <DeliverableReviewModal {...props} />;
     case 'receipt': return <ReceiptModal {...props} />;
-    case 'applicants': return <ApplicantsModal {...props} />;
     case 'viewJob': return <ViewJobModal {...props} />;
     case 'report': return <ReportModal {...props} />;
     case 'success': return <SuccessModal {...props} />;

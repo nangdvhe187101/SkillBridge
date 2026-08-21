@@ -43,7 +43,7 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
     };
 
     return (
-        <div className="auth-form is-active">
+        <form className="auth-form is-active" onSubmit={(e) => { e.preventDefault(); handleLogin(); }}>
             <h2>Chào bạn quay lại</h2>
             <div className="sub">Đăng nhập để tiếp tục tìm việc hoặc đăng tin.</div>
 
@@ -92,13 +92,13 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
 
             {formError && <div className="field-error" style={{ marginBottom: 12 }}>{formError}</div>}
 
-            <button className="btn btn-primary btn-block" onClick={handleLogin} disabled={loading}>
+            <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
                 {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
             </button>
 
             <div className="auth-foot">
                 Chưa có tài khoản? <a onClick={() => onSwitchTab('register')}>Đăng ký ngay</a>
             </div>
-        </div>
+        </form>
     );
 }

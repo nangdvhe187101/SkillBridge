@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useStore } from '../context/StoreContext';
-import '../styles/account-settings.css';
+import { useStore } from '../../context/StoreContext';
+import '../../styles/account-settings.css';
 
 const PHONE_REGEX = /^0\d{9,10}$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;

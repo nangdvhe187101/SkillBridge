@@ -28,10 +28,11 @@ namespace SkillBridge.Infrastructure.Services
 
         public async Task<(AuthResponseDto Result, string RefreshToken)> LoginAsync(LoginDto dto)
         {
-            if (string.IsNullOrEmpty(dto.Email) || string.IsNullOrEmpty(dto.Password))
+            var email = dto.Email?.Trim().ToLowerInvariant() ?? string.Empty;
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(dto.Password))
                 throw new BusinessException("Vui lòng nhập email và mật khẩu");
 
-            var user = await userRepository.GetByEmailWithRoleAsync(dto.Email);
+            var user = await userRepository.GetByEmailWithRoleAsync(email);
 
             if (user is null)
                 throw new BusinessException("Email hoặc mật khẩu không đúng");

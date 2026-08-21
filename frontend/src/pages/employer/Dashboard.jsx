@@ -1,16 +1,26 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import Icon from '../components/Icon';
-import PostJobForm from '../components/PostJobForm';
-import { useStore, fmtVND } from '../context/StoreContext';
-import { useModal } from '../context/ModalContext';
-import { useConfirm } from '../context/ConfirmContext';
-import '../styles/account-settings.css';
+import Icon from '../../components/Icon';
+import PostJobForm from '../../components/PostJobForm';
+import { DonutChart, BarChart } from '../../components/DashboardCharts';
+import DashboardSidebar, { DASHBOARD_TABS as TABS } from '../../components/DashboardSidebar';
+import { useStore, fmtVND } from '../../context/StoreContext';
+import { useModal } from '../../context/ModalContext';
+import { useConfirm } from '../../context/ConfirmContext';
+import '../../styles/account-settings.css';
 
 const STATUS_LABEL = {
   open: 'Đang tuyển', filled: 'Đã đầy', in_progress: 'Đang thực hiện', submitted: 'Chờ xác nhận bàn giao',
   revision_requested: 'Đang chờ SV sửa lại', completed: 'Hoàn thành', cancelled: 'Đã hủy',
 };
+
+const STATUS_COLOR = {
+  open: '#CBFF4D', filled: '#6C4CFF', in_progress: '#57C7FF', submitted: '#FF5C7A',
+  revision_requested: '#FF5C7A', completed: '#4B2FD1', cancelled: '#A9A4CC',
+};
+
+const TIER_LABEL = { gold: '🥇 Gold', silver: '🥈 Silver', bronze: '🥉 Bronze' };
+const TIER_COLOR = { gold: '#CBFF4D', silver: '#57C7FF', bronze: '#FF5C7A' };
 
 function formatDeadline(ts) {
   if (!ts) return '—';
@@ -22,19 +32,36 @@ function formatDeadline(ts) {
   return `còn ${hours} giờ`;
 }
 
-const TABS = [
-  { id: 'overview', label: 'Tổng quan' },
-  { id: 'jobs', label: 'Tin đã đăng' },
-  { id: 'post', label: 'Đăng tin mới' },
-  { id: 'ads', label: 'Quảng cáo Affiliate' },
-];
-
 function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goToAdsTab }) {
   const openCount = state.myJobs.filter((j) => j.status === 'open').length;
   const totalApps = state.myJobs.reduce((s, j) => s + j.applicants.length, 0);
   const paidOut = state.transactions.filter((t) => t.type === 'escrow_release').reduce((s, t) => s + t.amount, 0);
   const needsAttention = state.myJobs.filter((j) => j.status === 'submitted');
-  const recentJobs = state.myJobs.slice(0, 4);
+
+  const statusData = useMemo(() => {
+    const counts = {};
+    state.myJobs.forEach((j) => { counts[j.status] = (counts[j.status] || 0) + 1; });
+    return Object.entries(counts).map(([status, value]) => ({
+      label: STATUS_LABEL[status] || status,
+      value,
+      color: STATUS_COLOR[status],
+    }));
+  }, [state.myJobs]);
+
+  const topJobsData = useMemo(() => {
+    return [...state.myJobs]
+      .sort((a, b) => b.applicants.length - a.applicants.length)
+      .slice(0, 5)
+      .map((j) => ({ label: j.title, value: j.applicants.length }));
+  }, [state.myJobs]);
+
+  const tierData = useMemo(() => {
+    const counts = { gold: 0, silver: 0, bronze: 0 };
+    state.myJobs.forEach((j) => j.applicants.forEach((a) => { if (counts[a.tier] !== undefined) counts[a.tier] += 1; }));
+    return Object.entries(counts).map(([tier, value]) => ({
+      label: TIER_LABEL[tier], value, color: TIER_COLOR[tier],
+    }));
+  }, [state.myJobs]);
 
   return (
     <>
@@ -94,51 +121,97 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
         </div>
       )}
 
-      <div className="dash-panel" style={{ marginTop: 24 }}>
-        <div className="dash-panel-head">
-          <h4>Tin đăng gần đây</h4>
-          {state.myJobs.length > 4 && (
-            <button className="btn btn-outline btn-sm" onClick={goToJobsTab}>Xem tất cả →</button>
+      <div className="dash-analytics-grid" style={{ marginTop: 24 }}>
+        <div className="dash-panel dash-panel-pad">
+          <div className="dash-panel-head">
+            <h4>Trạng thái tin đăng</h4>
+          </div>
+          {state.myJobs.length === 0 ? (
+            <div className="empty-state">Chưa có dữ liệu để hiển thị.</div>
+          ) : (
+            <DonutChart data={statusData} />
           )}
         </div>
-        {recentJobs.length === 0 ? (
-          <div className="empty-state">Bạn chưa đăng tin nào. Hãy đăng tin đầu tiên!</div>
-        ) : (
-          recentJobs.map((j) => (
-            <div className="dash-job-row" key={j.id} title="Bấm để xem ứng viên & chi tiết công việc" onClick={() => openModal('applicants', { jobId: j.id })}>
-              <div className="djr-icon"><Icon name="briefcase" /></div>
-              <div className="djr-main">
-                <b>{j.title}</b>
-                <span>Đăng {j.posted}</span>
-              </div>
-              <span className={'djr-status ' + j.status}>{STATUS_LABEL[j.status] || j.status}</span>
-              <span className="djr-apps">{j.applicants.length} ứng viên</span>
-              <span className="djr-chev" aria-hidden="true"><Icon name="chevright" /></span>
-            </div>
-          ))
-        )}
+
+        <div className="dash-panel dash-panel-pad">
+          <div className="dash-panel-head">
+            <h4>Top tin theo số ứng viên</h4>
+            {state.myJobs.length > 5 && (
+              <button className="btn btn-outline btn-sm" onClick={goToJobsTab}>Xem tất cả →</button>
+            )}
+          </div>
+          <BarChart data={topJobsData} valueSuffix=" ứng viên" />
+        </div>
+
+        <div className="dash-panel dash-panel-pad dash-analytics-span2">
+          <div className="dash-panel-head">
+            <h4>Ứng viên theo cấp độ</h4>
+          </div>
+          <BarChart data={tierData} valueSuffix=" lượt ứng tuyển" />
+        </div>
       </div>
     </>
   );
 }
 
-function JobsTab({ state, openModal, handleMarkComplete, goToPostTab }) {
+const PAGE_SIZE = 5;
+
+function JobsTab({ state, navigate, openModal, handleMarkComplete, goToPostTab }) {
+  const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [page, setPage] = useState(1);
+
+  useEffect(() => { setPage(1); }, [q, statusFilter]);
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return state.myJobs.filter((j) =>
+      (needle === '' || j.title.toLowerCase().includes(needle)) &&
+      (statusFilter === 'all' || j.status === statusFilter)
+    );
+  }, [state.myJobs, q, statusFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageSafe = Math.min(page, totalPages);
+  const paged = filtered.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE);
+
   return (
     <>
       <h1 className="acct-content-title">Tin đã đăng</h1>
 
       <div className="dash-panel" style={{ marginTop: 24 }}>
         <div className="dash-panel-head">
-          <h4>Danh sách tin</h4>
+          <h4>Danh sách tin {filtered.length > 0 && <span style={{ color: 'var(--ink-soft)', fontWeight: 400 }}>({filtered.length})</span>}</h4>
           <button className="btn btn-lime btn-sm" onClick={goToPostTab}>
             <Icon name="plus" style={{ width: 14, height: 14 }} /> Đăng tin mới
           </button>
         </div>
+
+        <div className="dash-toolbar">
+          <div className="dash-search">
+            <Icon name="search" />
+            <input
+              type="text"
+              placeholder="Tìm theo tên công việc..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+          <select className="dash-filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="all">Tất cả trạng thái</option>
+            {Object.entries(STATUS_LABEL).map(([k, v]) => (
+              <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </div>
+
         {state.myJobs.length === 0 ? (
           <div className="empty-state">Bạn chưa đăng tin nào. Hãy đăng tin đầu tiên!</div>
+        ) : filtered.length === 0 ? (
+          <div className="empty-state">Không tìm thấy tin nào khớp với bộ lọc hiện tại.</div>
         ) : (
-          state.myJobs.map((j) => (
-            <div className="dash-job-row" key={j.id} title="Bấm để xem ứng viên & chi tiết công việc" onClick={() => openModal('applicants', { jobId: j.id })}>
+          paged.map((j) => (
+            <div className="dash-job-row" key={j.id} title="Bấm để xem ứng viên & chi tiết công việc" onClick={() => navigate(`/dashboard/jobs/${j.id}`)}>
               <div className="djr-icon"><Icon name="briefcase" /></div>
               <div className="djr-main">
                 <b>{j.title}</b>
@@ -165,6 +238,14 @@ function JobsTab({ state, openModal, handleMarkComplete, goToPostTab }) {
               <span className="djr-chev" aria-hidden="true"><Icon name="chevright" /></span>
             </div>
           ))
+        )}
+
+        {filtered.length > PAGE_SIZE && (
+          <div className="dash-pagination">
+            <button disabled={pageSafe === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹ Trước</button>
+            <span>Trang {pageSafe}/{totalPages}</span>
+            <button disabled={pageSafe === totalPages} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Sau ›</button>
+          </div>
         )}
       </div>
     </>
@@ -251,22 +332,7 @@ export default function Dashboard() {
   return (
     <div className="page active">
       <div className="acct-settings-layout">
-        <div className="acct-sidebar">
-          <div className="acct-sidebar-head">
-            <h2>Dashboard NTD</h2>
-          </div>
-          <div className="acct-tablist">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                className={'acct-tab' + (tab === t.id ? ' is-active' : '')}
-                onClick={() => setTab(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        <DashboardSidebar activeTab={tab} onTabClick={setTab} />
 
         <div className="acct-content">
           {tab === 'overview' && (
@@ -282,6 +348,7 @@ export default function Dashboard() {
           {tab === 'jobs' && (
             <JobsTab
               state={state}
+              navigate={navigate}
               openModal={openModal}
               handleMarkComplete={handleMarkComplete}
               goToPostTab={() => setTab('post')}

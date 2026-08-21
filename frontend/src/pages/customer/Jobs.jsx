@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Icon from '../components/Icon';
-import Avatar from '../components/Avatar';
-import { useStore, fmtVND } from '../context/StoreContext';
-import { adsPool } from '../data/ads';
-import { slugify } from '../data/companies';
+import Icon from '../../components/Icon';
+import Avatar from '../../components/Avatar';
+import { useStore, fmtVND } from '../../context/StoreContext';
+import { adsPool } from '../../data/ads';
+import { slugify } from '../../data/companies';
 
 const CATS = [
   { cat: 'Tất cả', label: 'Tất cả' },

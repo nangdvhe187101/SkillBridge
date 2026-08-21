@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import Avatar from '../components/Avatar';
-import { useStore } from '../context/StoreContext';
-import ChatBubble from '../components/messenger/ChatBubble';
-import ChatComposer from '../components/messenger/ChatComposer';
-import ChatHeaderMenu from '../components/messenger/ChatHeaderMenu';
-import '../styles/messenger.css';
+import Avatar from '../../components/Avatar';
+import { useStore } from '../../context/StoreContext';
+import ChatBubble from '../../components/messenger/ChatBubble';
+import ChatComposer from '../../components/messenger/ChatComposer';
+import ChatHeaderMenu from '../../components/messenger/ChatHeaderMenu';
+import '../../styles/messenger.css';
 
 export default function Messages() {
     const { state, sendChatMessage, markConversationRead, toggleConvFlag } = useStore();

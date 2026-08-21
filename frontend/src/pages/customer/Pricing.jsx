@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Icon from '../components/Icon';
-import { useStore } from '../context/StoreContext';
-import { useModal } from '../context/ModalContext';
+import Icon from '../../components/Icon';
+import { useStore } from '../../context/StoreContext';
+import { useModal } from '../../context/ModalContext';
 
 export default function Pricing() {
   const [tab, setTab] = useState('student');

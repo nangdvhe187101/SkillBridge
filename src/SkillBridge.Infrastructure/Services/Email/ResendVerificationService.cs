@@ -41,7 +41,8 @@ namespace SkillBridge.Infrastructure.Services.Email
 
         public async Task<string> ResendAsync(string email)
         {
-            var user = await userRepository.GetByEmailAsync(email);
+            var normalizedEmail = email?.Trim().ToLowerInvariant() ?? string.Empty;
+            var user = await userRepository.GetByEmailAsync(normalizedEmail);
             if (user is null || user.AccountStatus != "pending")
                 return GenericMessage;
 
@@ -50,6 +51,8 @@ namespace SkillBridge.Infrastructure.Services.Email
             {
                 return GenericMessage;
             }
+
+            await authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.EmailVerify);
 
             var verifyTokenPlain = jwtService.GenerateRefreshTokenString();
             await authTokenRepository.AddAsync(new AuthToken

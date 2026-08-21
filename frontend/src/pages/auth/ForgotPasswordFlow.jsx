@@ -126,7 +126,7 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
     return (
         <div className="auth-form is-active">
             {forgotStep === 'email' && (
-                <>
+                <form onSubmit={(e) => { e.preventDefault(); handleRequestOtp(); }}>
                     <h2>Quên mật khẩu</h2>
                     <div className="sub">Nhập email đã đăng ký — chúng tôi sẽ gửi mã OTP xác thực gồm 6 chữ số.</div>
                     <div className={'field' + (emailError ? ' has-error' : '')}>
@@ -144,17 +144,17 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                         {emailError && <div className="field-error">{emailError}</div>}
                     </div>
                     {formError && <div className="field-error" style={{ marginBottom: 12 }}>{formError}</div>}
-                    <button className="btn btn-primary btn-block" onClick={handleRequestOtp} disabled={loading}>
+                    <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
                         {loading ? 'Đang gửi...' : 'Gửi mã OTP'}
                     </button>
                     <div className="auth-foot">
                         <a onClick={() => { resetForgotFlow(); onBackToLogin(); }}>← Quay lại đăng nhập</a>
                     </div>
-                </>
+                </form>
             )}
 
             {forgotStep === 'otp' && (
-                <>
+                <form onSubmit={(e) => { e.preventDefault(); handleVerifyOtp(); }}>
                     <h2>Nhập mã OTP</h2>
                     <div className="sub">Mã 6 chữ số đã được gửi tới <b>{forgotEmail}</b>, có hiệu lực trong 10 phút.</div>
                     {infoMessage && <div className="sub" style={{ color: 'var(--success, #16a34a)' }}>{infoMessage}</div>}
@@ -173,7 +173,7 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                         />
                     </div>
                     {formError && <div className="field-error" style={{ marginBottom: 12 }}>{formError}</div>}
-                    <button className="btn btn-primary btn-block" onClick={handleVerifyOtp} disabled={loading}>
+                    <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
                         {loading ? 'Đang xác thực...' : 'Xác nhận mã OTP'}
                     </button>
                     <div className="auth-foot">
@@ -181,11 +181,11 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                         {' · '}
                         <a onClick={() => { setForgotStep('email'); setFormError(''); setInfoMessage(''); }}>← Nhập email khác</a>
                     </div>
-                </>
+                </form>
             )}
 
             {forgotStep === 'reset' && (
-                <>
+                <form onSubmit={(e) => { e.preventDefault(); handleResetPassword(); }}>
                     <h2>Đặt mật khẩu mới</h2>
                     <div className="sub">Xác thực thành công. Nhập mật khẩu mới cho tài khoản của bạn.</div>
 
@@ -240,10 +240,10 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
 
                     {formError && <div className="field-error" style={{ marginBottom: 12 }}>{formError}</div>}
 
-                    <button className="btn btn-primary btn-block" onClick={handleResetPassword} disabled={loading}>
+                    <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
                         {loading ? 'Đang đổi mật khẩu...' : 'Đặt lại mật khẩu'}
                     </button>
-                </>
+                </form>
             )}
         </div>
     );
