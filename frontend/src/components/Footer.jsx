@@ -8,10 +8,16 @@ export default function Footer() {
       <div className="wrap">
         <div className="footer-grid">
           <div className="footer-brand">
-            <div className="logo"><span className="logo-mark">S</span> SkillBridge</div>
-            <p>
-              Chợ việc làm micro-job dành riêng cho sinh viên Việt Nam — xác thực bằng email trường,
-              minh bạch và không cần kinh nghiệm dày dạn để bắt đầu.
+            <div className="logo" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <img
+                src="/logo.png"
+                alt="SkillBridge Logo"
+                style={{ height: 40, width: 'auto', borderRadius: 8, objectFit: 'contain' }}
+              />
+              <span style={{ fontWeight: 800, fontSize: 20, color: 'var(--ink)' }}>SkillBridge</span>
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
+              Micro-jobs. Connect. Sustainable. — Nền tảng việc làm vi mô kết nối sinh viên và doanh nghiệp với cơ chế Ký quỹ Escrow và Quỹ Bảo hiểm cộng đồng.
             </p>
             <div className="social-row">
               <a className="social-ico" href="#" aria-label="Facebook"><Icon name="fb" /></a>

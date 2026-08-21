@@ -209,7 +209,7 @@ export function DeliverableReviewModal({ onClose, jobId }) {
           ✓ Xác nhận & Giải ngân
         </button>
         <button className="btn btn-outline" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} disabled={limitReached}
-          onClick={() => openModal('revision', { jobId: job.id })}>
+          onClick={() => { onClose(); openModal('revision', { jobId: job.id }); }}>
           ✏️ Yêu cầu sửa
         </button>
         <button className="btn btn-outline" onClick={onClose}>Để sau</button>

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import ModalShell from './ModalShell';
 import PaymentMethods, { payMethodLabel } from './PaymentMethods';
 import { useStore, commissionRate, fmtVND } from '../../context/StoreContext';
+import { useModal } from '../../context/ModalContext';
 
 export function TopupModal({ onClose }) {
   const { topup, state } = useStore();
@@ -93,21 +94,44 @@ export function SubscribeModal({ onClose }) {
   );
 }
 
-export function HireModal({ onClose, jobId, applicantIdx }) {
+export function HireModal({ onClose, jobId, applicantIdx, applicantName }) {
   const { state, hire } = useStore();
-  const job = state.myJobs.find((j) => j.id === jobId);
-  const a = job?.applicants[applicantIdx];
-  const [method, setMethod] = useState('wallet');
-  const [days, setDays] = useState(3);
-  if (!job || !a) return null;
+  const { openModal } = useModal();
+  const job = state.myJobs.find((j) => String(j.id) === String(jobId));
+  const a = applicantName
+    ? job?.applicants?.find((x) => x.name === applicantName)
+    : (applicantIdx !== undefined ? job?.applicants?.[applicantIdx] : job?.applicants?.[0]);
+
   const rate = commissionRate(state);
-  const commission = Math.round(job.budget * rate);
-  const total = job.budget + commission;
+  const commission = Math.round((job?.budget || 0) * rate);
+  const total = (job?.budget || 0) + commission;
+
+  // Smart default: If wallet has enough funds use 'wallet', else default to 'bank' (QR)
+  const [method, setMethod] = useState(() => (state.balance >= total ? 'wallet' : 'bank'));
+  const [days, setDays] = useState(3);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  if (!job || !a) return null;
+
+  const isWalletInsufficient = method === 'wallet' && state.balance < total;
 
   const confirm = () => {
-    if (method === 'wallet' && state.balance < total) return;
-    hire({ jobId, applicantIdx, days: days || 3, method });
+    setErrorMsg('');
+    if (!days || days <= 0) {
+      setErrorMsg('Vui lòng nhập số ngày hoàn thành hợp lệ.');
+      return;
+    }
+    if (isWalletInsufficient) {
+      setErrorMsg(`Số dư ví hiện tại (${fmtVND(state.balance)}) không đủ để ký quỹ ${fmtVND(total)}. Vui lòng nạp thêm hoặc chọn phương thức thanh toán khác.`);
+      return;
+    }
+    hire({ jobId: job.id, applicantIdx, applicantName: a.name, days: Number(days), method });
     onClose();
+  };
+
+  const handleTopup = () => {
+    onClose();
+    openModal('topup');
   };
 
   return (
@@ -121,9 +145,24 @@ export function HireModal({ onClose, jobId, applicantIdx }) {
       </div>
       <div className="field">
         <label>Hạn hoàn thành (số ngày)</label>
-        <input type="number" min="0.01" step="0.01" defaultValue={3} onChange={(e) => setDays(Number(e.target.value))} />
+        <input type="number" min="1" step="1" value={days} onChange={(e) => { setDays(e.target.value); setErrorMsg(''); }} />
       </div>
-      <PaymentMethods selected={method} onSelect={setMethod} walletBalance={state.balance} />
+      <PaymentMethods selected={method} onSelect={(m) => { setMethod(m); setErrorMsg(''); }} walletBalance={state.balance} />
+
+      {isWalletInsufficient && (
+        <div style={{ background: 'rgba(255, 92, 122, 0.12)', border: '1px solid var(--coral)', borderRadius: 10, padding: 12, margin: '12px 0', fontSize: 13 }}>
+          <b style={{ color: 'var(--coral)' }}>⚠️ Số dư ví không đủ ({fmtVND(state.balance)} / {fmtVND(total)})</b>
+          <p style={{ marginTop: 4, color: 'var(--ink-soft)' }}>Bạn có thể chọn thanh toán qua <b>QR ngân hàng</b> hoặc nạp thêm tiền vào ví.</p>
+          <button type="button" className="btn btn-outline btn-sm" style={{ marginTop: 8 }} onClick={handleTopup}>
+            💳 Nạp thêm vào ví →
+          </button>
+        </div>
+      )}
+
+      {errorMsg && !isWalletInsufficient && (
+        <div className="field-error" style={{ margin: '10px 0' }}>{errorMsg}</div>
+      )}
+
       <div className="modal-actions">
         <button className="btn btn-primary" onClick={confirm}>Xác nhận thuê & ký quỹ</button>
         <button className="btn btn-outline" onClick={onClose}>Hủy</button>

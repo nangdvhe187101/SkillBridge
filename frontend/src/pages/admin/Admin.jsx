@@ -9,10 +9,12 @@ import AdminAnalytics from '../../components/admin/AdminAnalytics';
 import AdminOps from '../../components/admin/AdminOps';
 import AdminRoles from '../../components/admin/AdminRoles';
 
+import AdminMessages from '../../components/admin/AdminMessages';
+
 const ROLE_MODULES = {
-  super: ['users', 'content', 'disputes', 'finance', 'partners', 'analytics', 'ops', 'roles'],
-  moderator: ['content'],
-  dispute: ['disputes'],
+  super: ['users', 'content', 'disputes', 'finance', 'partners', 'messages', 'analytics', 'ops', 'roles'],
+  moderator: ['content', 'messages'],
+  dispute: ['disputes', 'messages'],
   finance: ['finance'],
 };
 const ROLE_WHOAMI = {
@@ -25,13 +27,14 @@ const TABS = [
   { id: 'disputes', ic: '⚖️', label: 'Tranh chấp' },
   { id: 'finance', ic: '💰', label: 'Tài chính' },
   { id: 'partners', ic: '🤝', label: 'Đối tác & Quảng cáo' },
+  { id: 'messages', ic: '💬', label: 'Tin nhắn & Giám sát' },
   { id: 'analytics', ic: '📊', label: 'Báo cáo & Phân tích' },
   { id: 'ops', ic: '🎧', label: 'Vận hành & CS' },
-  { id: 'roles', ic: '🔑', label: 'Phân quyền' },
+  { id: 'roles', ic: '🔑', label: 'Phân quyền & URL Matrix' },
 ];
 
 function AdminInner() {
-  const { viewRole, setViewRole, queue, disputes, tickets } = useAdmin();
+  const { viewRole, setViewRole, queue, disputes, tickets, adminChats } = useAdmin();
   const allowed = ROLE_MODULES[viewRole];
   const [tab, setTab] = useState(allowed[0]);
   const activeTab = allowed.includes(tab) ? tab : allowed[0];
@@ -40,15 +43,23 @@ function AdminInner() {
     content: queue.length,
     disputes: disputes.filter((d) => d.status === 'open').length,
     ops: tickets.filter((t) => t.status === 'open').length,
+    messages: adminChats.filter((c) => c.status === 'warned').length,
   };
 
   return (
     <div className="page active">
       <div className="admin-topbar">
         <div className="wrap">
-          <div>
-            <h1>Bảng điều khiển Quản trị SkillBridge</h1>
-            <p>Đăng nhập với vai trò: {ROLE_WHOAMI[viewRole]}</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <img
+              src="/logo.png"
+              alt="SkillBridge Logo"
+              style={{ height: 44, width: 'auto', borderRadius: 10, background: '#fff', padding: 3 }}
+            />
+            <div>
+              <h1 style={{ fontSize: 20, margin: 0 }}>Bảng điều khiển Quản trị SkillBridge</h1>
+              <p style={{ margin: 0, fontSize: 13 }}>Đăng nhập với vai trò: {ROLE_WHOAMI[viewRole]}</p>
+            </div>
           </div>
           <div className="admin-role-switch">
             <span style={{ paddingLeft: 10, fontSize: 12, color: '#A9A4CC' }}>Vai trò xem thử</span>
@@ -78,6 +89,7 @@ function AdminInner() {
           {activeTab === 'disputes' && <AdminDisputes />}
           {activeTab === 'finance' && <AdminFinance />}
           {activeTab === 'partners' && <AdminPartners />}
+          {activeTab === 'messages' && <AdminMessages />}
           {activeTab === 'analytics' && <AdminAnalytics />}
           {activeTab === 'ops' && <AdminOps />}
           {activeTab === 'roles' && <AdminRoles />}

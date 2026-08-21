@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -24,6 +24,10 @@ public partial class Notification
     [Column("message_text")]
     [StringLength(255)]
     public string MessageText { get; set; } = null!;
+
+    [Column("link")]
+    [StringLength(255)]
+    public string? Link { get; set; }
 
     [Column("is_read")]
     public bool IsRead { get; set; }

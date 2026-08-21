@@ -81,8 +81,15 @@ export default function TopNav() {
   return (
     <nav className="topnav">
       <div className="wrap">
-        <NavLink to="/" className="logo">
-          <span className="logo-mark">S</span> SkillBridge
+        <NavLink to="/" className="logo" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
+          <img
+            src="/logo.png"
+            alt="SkillBridge Logo"
+            style={{ height: 36, width: 'auto', borderRadius: 8, objectFit: 'contain' }}
+          />
+          <span style={{ fontWeight: 800, fontSize: 19, letterSpacing: -0.4, color: 'var(--ink)' }}>
+            SkillBridge
+          </span>
         </NavLink>
 
         <div className={'navlinks' + (navOpen ? ' open' : '')} id="navlinks">

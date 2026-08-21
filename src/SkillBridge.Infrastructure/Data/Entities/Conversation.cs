@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -24,6 +24,15 @@ public partial class Conversation
 
     [Column("job_id")]
     public int? JobId { get; set; }
+
+    [Column("last_message_at", TypeName = "datetime")]
+    public DateTime? LastMessageAt { get; set; }
+
+    [Column("unread_count_user_a")]
+    public int UnreadCountUserA { get; set; }
+
+    [Column("unread_count_user_b")]
+    public int UnreadCountUserB { get; set; }
 
     [Column("created_at", TypeName = "datetime")]
     public DateTime CreatedAt { get; set; }

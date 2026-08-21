@@ -26,12 +26,37 @@ function fmtTimeNow() {
   return new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
+const initialTransactionsSeed = [
+  { id: 1, type: 'topup', label: 'Nạp tiền qua Chuyển khoản QR MB Bank', amount: 500000, sign: 1, date: '21/08/2026 14:30' },
+  { id: 2, type: 'escrow_hold', label: 'Tạm giữ Ký quỹ Escrow — Job #12 Dựng video TikTok', amount: 250000, sign: -1, date: '21/08/2026 15:00' },
+  { id: 3, type: 'escrow_release', label: 'Nhận thù lao giải ngân — Thiết kế logo quán cafe', amount: 400000, sign: 1, date: '20/08/2026 18:45' },
+  { id: 4, type: 'insurance_payout', label: 'Bồi thường 40% Quỹ Bảo hiểm — Job #9 Sự cố hủy đơn', amount: 120000, sign: 1, date: '19/08/2026 10:15' },
+  { id: 5, type: 'withdraw', label: 'Rút tiền về MB Bank *6666', amount: 300000, sign: -1, date: '18/08/2026 09:20' },
+];
+
+const initialReceiptsSeed = [
+  { id: 'REC-901', code: 'SB-REC-2026-08901', jobTitle: 'Thiết kế logo & Menu A4 quán cafe', employer: 'Trà Sữa Mộc', student: 'Minh Anh', total: 400000, fee: 0, net: 400000, date: '20/08/2026 18:45', status: 'completed' },
+  { id: 'REC-902', code: 'SB-REC-2026-08902', jobTitle: 'Dịch thuật tài liệu Tiếng Anh 1500 từ', employer: 'Cỏ May Media', student: 'Hoàng Long', total: 350000, fee: 0, net: 350000, date: '17/08/2026 11:20', status: 'completed' },
+];
+
+const initialClaimsSeed = [
+  { id: 'CLM-101', jobTitle: 'Biên tập 5 bài viết SEO Website', desc: 'Nhà tuyển dụng không phản hồi sau khi nhận bài 7 ngày', payout: 150000, status: 'resolved', statusLabel: '✅ Đã bồi thường 40%', date: '19/08/2026' },
+  { id: 'CLM-102', jobTitle: 'Dựng motion graphic intro 10s', desc: 'Đang gửi bằng chứng đối soát video demo', payout: 0, status: 'pending', statusLabel: '⏳ Đang chờ HĐ Bảo hiểm duyệt', date: '21/08/2026' },
+];
+
 const initialState = {
   balance: 350000,
-  transactions: [],
-  receipts: [],
+  escrowLocked: 250000,
+  transactions: initialTransactionsSeed,
+  receipts: initialReceiptsSeed,
   insuranceFund: 8200000,
-  claims: [],
+  claims: initialClaimsSeed,
+  bankAccount: {
+    bankName: 'MB Bank (Ngân hàng Quân Đội)',
+    accountNumber: '999988886666',
+    accountHolder: 'NGUYEN VAN A',
+    branch: 'Chi nhánh Hà Nội'
+  },
   subscriptionPro: false,
   vipBusiness: false,
   myReliability: 96,
@@ -58,6 +83,20 @@ const initialState = {
   conversations: conversationsSeed,
   openChatIds: [],
   messengerPanelOpen: false,
+  adsSettings: JSON.parse(localStorage.getItem('adsSettings') || JSON.stringify({
+    adsOn: true,
+    budget: 120000,
+    audience: 'Sinh viên khối Kinh tế / Marketing',
+    title: 'Tuyển Thực tập sinh Content & Video Creator (Remote)',
+    desc: 'Làm việc linh hoạt theo thời gian rảnh, nhận trợ cấp 2.500.000đ/tháng + cấp chứng nhận thực tập chính quy.',
+    sponsor: 'Trà Sữa Mộc F&B',
+    ctaText: 'Ứng tuyển nhanh qua One-Touch Portfolio'
+  })),
+  affiliateLeads: [
+    { id: 'lead-1', name: 'Minh Anh', school: 'FPT University', email: 'anh.nm@fpt.edu.vn', time: '10 phút trước', skills: ['Canva', 'CapCut', 'Content Writing'], reliability: 96, avatar: 'M' },
+    { id: 'lead-2', name: 'Nguyễn Hoàng Long', school: 'ĐH Kinh Tế TP.HCM (UEH)', email: 'long.nh@ueh.edu.vn', time: '1 giờ trước', skills: ['SEO', 'Copywriting', 'Tiktok Ads'], reliability: 94, avatar: 'L' },
+    { id: 'lead-3', name: 'Trần Thị Thu Thảo', school: 'ĐH Ngoại Thương (FTU)', email: 'thao.ttt@ftu.edu.vn', time: '3 giờ trước', skills: ['Content Marketing', 'Translation', 'Event'], reliability: 98, avatar: 'T' },
+  ],
 };
 
 function addNotifTo(list, icon, text, link = null) {
@@ -90,19 +129,52 @@ function reducer(state, action) {
       return { ...state, currentUser };
     }
 
+    case 'SWITCH_ROLE': {
+      const nextRole = state.role === 'employer' ? 'student' : 'employer';
+      let currentUser = state.currentUser;
+      if (currentUser) {
+        currentUser = { ...currentUser, roleCode: nextRole };
+        localStorage.setItem('user', JSON.stringify(currentUser));
+      }
+      return { ...state, role: nextRole, currentUser };
+    }
+
     case 'SUBMIT_JOB_FORM': {
-      const { title, cat, budget, desc, urgent, editingId } = action.payload;
+      const { title, cat, budget, desc, req, urgent, attachments, editingId } = action.payload;
+      const fileList = attachments || [];
       if (editingId) {
-        const myJobs = state.myJobs.map((j) => (j.id === editingId ? { ...j, title, cat, budget, desc, urgent } : j));
-        const jobs = state.jobs.map((j) => (j.dashJobId === editingId ? { ...j, title, cat, budget, desc, urgent } : j));
+        const myJobs = state.myJobs.map((j) => (j.id === editingId ? { ...j, title, cat, budget, desc, req: req || j.req, urgent, attachments: fileList } : j));
+        const jobs = state.jobs.map((j) => (j.dashJobId === editingId ? { ...j, title, cat, budget, desc, req: req || j.req, urgent, attachments: fileList } : j));
         return { ...state, myJobs, jobs, editingJobId: null };
       }
       const newId = state.nextJobId;
-      const newDashJob = { id: newId, title, cat, budget, desc, urgent, status: 'open', posted: 'Vừa đăng', applicants: [] };
+      const newDashJob = {
+        id: newId,
+        title,
+        cat,
+        budget,
+        desc,
+        req: req || ['Hoàn thành đúng deadline', 'Giao sản phẩm qua hệ thống SkillBridge'],
+        urgent,
+        status: 'open',
+        posted: 'Vừa đăng',
+        applicants: [],
+        attachments: fileList,
+      };
       const newPublicJob = {
-        id: 1000 + newId, title, emp: 'Bạn (Nhà tuyển dụng)', loc: 'TP.HCM', cat, budget, urgent, time: 'Vừa đăng',
-        desc, req: ['Hoàn thành đúng deadline', 'Giao sản phẩm qua hệ thống SkillBridge'],
-        status: 'open', dashJobId: newId,
+        id: 1000 + newId,
+        title,
+        emp: 'Bạn (Nhà tuyển dụng)',
+        loc: 'TP.HCM',
+        cat,
+        budget,
+        urgent,
+        time: 'Vừa đăng',
+        desc,
+        req: req || ['Hoàn thành đúng deadline', 'Giao sản phẩm qua hệ thống SkillBridge'],
+        status: 'open',
+        dashJobId: newId,
+        attachments: fileList,
       };
       return {
         ...state,
@@ -175,58 +247,68 @@ function reducer(state, action) {
       };
     }
 
+    case 'UPDATE_ADS_SETTINGS': {
+      const adsSettings = { ...state.adsSettings, ...action.payload };
+      localStorage.setItem('adsSettings', JSON.stringify(adsSettings));
+      return { ...state, adsSettings };
+    }
+
     case 'HIRE': {
-      const { jobId, applicantIdx, days, method } = action.payload;
-      const job = state.myJobs.find((j) => j.id === jobId);
+      const { jobId, applicantIdx, applicantName, days, method } = action.payload;
+      const job = state.myJobs.find((j) => String(j.id) === String(jobId));
       if (!job) return state;
-      const a = job.applicants[applicantIdx];
+      const a = applicantName
+        ? job.applicants.find((x) => x.name === applicantName)
+        : (applicantIdx !== undefined ? job.applicants[applicantIdx] : job.applicants[0]);
       if (!a) return state;
       const rate = commissionRate(state);
       const commission = Math.round(job.budget * rate);
       const hireAmount = job.budget + commission;
       if (method === 'wallet' && state.balance < hireAmount) return state;
 
-      const updatedApplicants = job.applicants.map((app, idx) =>
-        idx === applicantIdx ? app : { ...app, rejected: true }
+      const updatedApplicants = job.applicants.map((app) =>
+        app.name === a.name ? app : { ...app, rejected: true }
       );
       const updatedJob = {
         ...job,
         status: 'in_progress',
         hiredApplicant: a.name,
-        hiredApplicantIsMe: true,
+        hiredApplicantIsMe: false,
         commissionAmount: commission,
         escrowAmount: hireAmount,
-        deadlineDays: days,
-        deadlineAt: Date.now() + days * 86400000,
+        deadlineDays: days || 3,
+        deadlineAt: Date.now() + (days || 3) * 86400000,
         deliverable: null,
         deliverableFeedback: [],
         revisionLimit: 2,
         revisionCount: 0,
         applicants: updatedApplicants,
       };
-      const myJobs = state.myJobs.map((j) => (j.id === jobId ? updatedJob : j));
-      const jobs = state.jobs.map((pj) => (pj.dashJobId === jobId ? { ...pj, status: 'filled' } : pj));
+      const myJobs = state.myJobs.map((j) => (String(j.id) === String(jobId) ? updatedJob : j));
+      const jobs = state.jobs.map((pj) => (String(pj.dashJobId) === String(jobId) ? { ...pj, status: 'filled' } : pj));
 
       let balance = state.balance;
       let transactions = state.transactions;
       if (method === 'wallet') {
         balance -= hireAmount;
         transactions = addTxTo(transactions, 'escrow_hold', 'Ký quỹ thuê ' + a.name + ' · ' + job.title, hireAmount, -1);
+      } else {
+        transactions = addTxTo(transactions, 'escrow_hold', 'Ký quỹ thuê ' + a.name + ' · ' + job.title + ' (Thanh toán trực tiếp)', hireAmount, -1);
       }
 
       let myApplications = state.myApplications;
-      const existingIdx = myApplications.findIndex((x) => x.dashJobId === jobId);
+      const existingIdx = myApplications.findIndex((x) => String(x.dashJobId) === String(jobId));
       if (existingIdx >= 0) {
         myApplications = myApplications.map((x, i) => (i === existingIdx ? { ...x, status: 'hired' } : x));
       } else {
-        const publicJob = jobs.find((pj) => pj.dashJobId === jobId);
+        const publicJob = jobs.find((pj) => String(pj.dashJobId) === String(jobId));
         myApplications = [
-          { id: 'ap' + Date.now(), jobId: publicJob ? publicJob.id : null, dashJobId: jobId, title: job.title, emp: publicJob ? publicJob.emp : 'Bạn', budget: job.budget, status: 'hired', appliedAt: 'Vừa xong' },
+          { id: 'ap' + Date.now(), jobId: publicJob ? publicJob.id : null, dashJobId: job.id, title: job.title, emp: publicJob ? publicJob.emp : 'Bạn', budget: job.budget, status: 'hired', appliedAt: 'Vừa xong' },
           ...myApplications,
         ];
       }
 
-      let notifications = addNotifTo(state.notifications, '🔒', `Đã thuê ${a.name} và giữ ${hireAmount.toLocaleString('vi-VN')}đ trong ví ký quỹ. Hạn: ${days} ngày.`, '/dashboard');
+      let notifications = addNotifTo(state.notifications, '🔒', `Đã thuê ${a.name} và giữ ${hireAmount.toLocaleString('vi-VN')}đ trong ví ký quỹ. Hạn: ${days || 3} ngày.`, '/dashboard');
       notifications = addNotifTo(notifications, '🎉', `Ứng viên "${a.name}" đã trúng tuyển "${job.title}".`, '/mywork');
 
       return { ...state, myJobs, jobs, balance, transactions, myApplications, notifications };
@@ -333,6 +415,29 @@ function reducer(state, action) {
       const claims = [{ id: 'c' + Date.now(), jobTitle, desc, payout, status: 'approved', date: 'Vừa xong' }, ...state.claims];
       const notifications = addNotifTo(state.notifications, '🛡️', msg, '/wallet');
       return { ...state, insuranceFund, balance, transactions, claims, notifications };
+    }
+
+    case 'UPDATE_BANK_ACCOUNT': {
+      const notifications = addNotifTo(state.notifications, '🏦', 'Đã cập nhật thông tin tài khoản ngân hàng nhận tiền.', '/wallet');
+      return { ...state, bankAccount: action.payload, notifications };
+    }
+
+    case 'SUBMIT_ONE_TOUCH_LEAD': {
+      const newLead = {
+        id: 'lead-' + Date.now(),
+        name: action.payload.name || (state.currentUser?.fullName || 'Sinh viên'),
+        school: state.currentUser?.school || 'FPT University',
+        email: state.currentUser?.email || 'student@fpt.edu.vn',
+        time: 'Vừa xong',
+        skills: ['Canva', 'Video Editing', 'Content Marketing', 'English'],
+        reliability: state.myReliability || 96,
+        avatar: (action.payload.name || state.currentUser?.fullName || 'S').charAt(0).toUpperCase(),
+        note: action.payload.note || '',
+        sponsor: action.payload.sponsor || 'Doanh nghiệp'
+      };
+      const affiliateLeads = [newLead, ...(state.affiliateLeads || [])];
+      const notifications = addNotifTo(state.notifications, '⚡', `Đã gửi hồ sơ One-Touch Portfolio tới ${action.payload.sponsor || 'Doanh nghiệp'}!`, '/mywork');
+      return { ...state, affiliateLeads, notifications };
     }
 
     /* ---- profile uploads ---- */
@@ -498,9 +603,11 @@ export function StoreProvider({ children }) {
       requestRevision: (payload) => dispatch({ type: 'REQUEST_REVISION', payload }),
       topup: (amount, methodLabel) => { dispatch({ type: 'TOPUP', amount, methodLabel }); showToast(`Nạp ${amount.toLocaleString('vi-VN')}đ thành công!`, '✓'); },
       withdraw: (amount) => { dispatch({ type: 'WITHDRAW', amount }); showToast(`Đã gửi yêu cầu rút ${amount.toLocaleString('vi-VN')}đ.`, '✓'); },
+      updateBankAccount: (payload) => { dispatch({ type: 'UPDATE_BANK_ACCOUNT', payload }); showToast('Cập nhật tài khoản ngân hàng thành công!', '✓'); },
       subscribePro: (amount, method) => dispatch({ type: 'SUBSCRIBE_PRO', amount, method }),
       upgradeVip: () => { dispatch({ type: 'UPGRADE_VIP' }); showToast('Đã nâng cấp VIP Business Suite!', '👑'); },
       submitClaim: (payload) => { dispatch({ type: 'SUBMIT_CLAIM', payload }); showToast('Đội ngũ Dispute Resolution đã xử lý khiếu nại của bạn!', '🛡️'); },
+      submitOneTouchLead: (payload) => { dispatch({ type: 'SUBMIT_ONE_TOUCH_LEAD', payload }); showToast('⚡ Đã gửi hồ sơ One-Touch Portfolio thành công!', '🚀'); },
       setCv: (file) => { dispatch({ type: 'SET_CV', file }); showToast('Đã tải CV lên hồ sơ.', '✓'); },
       removeCv: () => { dispatch({ type: 'REMOVE_CV' }); showToast('Đã xoá CV khỏi hồ sơ.', '🗑️'); },
       addEmployerDocs: (files) => { dispatch({ type: 'ADD_EMPLOYER_DOCS', files }); showToast('Đã cập nhật hồ sơ công ty.', '✓'); },
@@ -551,6 +658,13 @@ export function StoreProvider({ children }) {
       },
       register: async (fullName, email, password, phoneNumber, roleCode) => {
         return registerApi(fullName, email, password, phoneNumber, roleCode);
+      },
+      updateAdsSettings: (patch) => {
+        dispatch({ type: 'UPDATE_ADS_SETTINGS', payload: patch });
+        showToast('Đã lưu cài đặt chiến dịch quảng cáo.', '📢');
+      },
+      switchRole: () => {
+        dispatch({ type: 'SWITCH_ROLE' });
       }
     }),
     [showToast]

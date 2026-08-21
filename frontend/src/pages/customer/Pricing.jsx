@@ -34,7 +34,12 @@ export default function Pricing() {
               <li><Icon name="check" /> Hồ sơ & portfolio cơ bản</li>
               <li><Icon name="check" /> Bảo vệ bởi Quỹ Bảo hiểm Tương hỗ</li>
             </ul>
-            <button className="btn btn-outline btn-block" onClick={() => navigate('/auth?tab=register')}>Bắt đầu miễn phí</button>
+            <button
+              className="btn btn-outline btn-block"
+              onClick={() => navigate(state.currentUser ? '/jobs' : '/auth?tab=register')}
+            >
+              {state.currentUser ? (state.subscriptionPro ? 'Chuyển về Free' : '✓ Gói hiện tại') : 'Bắt đầu miễn phí'}
+            </button>
           </div>
 
           <div className="price-card popular">

@@ -60,6 +60,9 @@ export default function App() {
           <Route path="/account-settings" element={
             <ProtectedRoute><AccountSettings /></ProtectedRoute>
           } />
+          <Route path="/settings" element={
+            <ProtectedRoute><AccountSettings /></ProtectedRoute>
+          } />
           <Route path="/admin" element={
             <ProtectedRoute><Admin /></ProtectedRoute>
           } />

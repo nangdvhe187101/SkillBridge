@@ -1,4 +1,6 @@
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import Pagination from '../../components/Pagination';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 
@@ -12,9 +14,25 @@ function formatDeadline(ts) {
   return `còn ${hours} giờ`;
 }
 
+// Map trạng thái ứng tuyển hiển thị cho SV
 const APP_STATUS_LABEL = {
-  pending: 'Đang chờ duyệt', hired: '🎉 Đã được chọn', rejected: 'Chưa được chọn', submitted: 'Đã nộp bàn giao',
-  revision_requested: 'Đang chờ sửa lại', completed: '✅ Hoàn thành', cancelled: 'Đã hủy',
+  pending: 'Đang chờ duyệt',
+  hired: '🎉 Đã được chọn',
+  rejected: 'Chưa được chọn',
+  submitted: 'Đã nộp bàn giao',
+  revision_requested: 'Cần sửa lại',
+  completed: '✅ Hoàn thành',
+  cancelled: 'Đã hủy',
+};
+
+const APP_STATUS_COLOR = {
+  hired: 'var(--lime)',
+  submitted: 'var(--accent)',
+  revision_requested: 'var(--coral)',
+  completed: '#4B2FD1',
+  pending: 'var(--ink-soft)',
+  rejected: 'var(--ink-soft)',
+  cancelled: 'var(--coral)',
 };
 
 export default function MyWork() {
@@ -22,14 +40,25 @@ export default function MyWork() {
   const { openModal } = useModal();
   const navigate = useNavigate();
 
-  const active = state.myJobs.filter((j) => ['in_progress', 'submitted', 'revision_requested'].includes(j.status));
+  const [appsPage, setAppsPage] = useState(1);
+  const appsPageSize = 5;
+
+  const activeWork = useMemo(() => state.myJobs.filter((j) =>
+    ['in_progress', 'submitted', 'revision_requested'].includes(j.status) && j.hiredApplicant
+  ), [state.myJobs]);
+
+  const appsTotalPages = Math.ceil(state.myApplications.length / appsPageSize) || 1;
+  const pagedApplications = useMemo(() => {
+    const start = (appsPage - 1) * appsPageSize;
+    return state.myApplications.slice(start, start + appsPageSize);
+  }, [state.myApplications, appsPage]);
 
   return (
     <div className="page active">
       <div className="jobs-head">
         <div className="wrap">
           <h1>Việc của tôi</h1>
-          <p>Theo dõi đơn ứng tuyển, việc đang làm và nộp bàn giao sản phẩm — tách riêng khỏi Hồ sơ cá nhân.</p>
+          <p>Theo dõi đơn ứng tuyển, việc đang làm và nộp bàn giao sản phẩm.</p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 18 }}>
             <button className="btn btn-primary btn-sm" onClick={() => navigate('/jobs')}>Tìm việc mới</button>
           </div>
@@ -38,45 +67,68 @@ export default function MyWork() {
 
       <div className="wrap" style={{ paddingTop: 36, paddingBottom: 80 }}>
         <div className="pb-grid">
+
+          {/* Cột trái: Việc đang làm */}
           <div>
             <div className="pcard">
               <h4>🎯 Việc đang làm / chờ nộp sản phẩm</h4>
               <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14, lineHeight: 1.55 }}>
                 Khi được thuê, công việc sẽ hiện ở đây để bạn nộp link sản phẩm và theo dõi hạn hoàn thành.
               </p>
-              {active.length === 0 ? (
-                <div className="empty-state">Chưa có việc đang thực hiện. Khi bạn được thuê, việc sẽ hiện ở đây để nộp sản phẩm.</div>
+              {activeWork.length === 0 ? (
+                <div className="empty-state">Bạn chưa được chọn vào công việc nào đang thực hiện. Ứng tuyển nhiều hơn để tăng cơ hội!</div>
               ) : (
-                active.map((j) => {
+                activeWork.map((j) => {
                   const isSubmitted = j.status === 'submitted';
                   const isRevision = j.status === 'revision_requested';
-                  const chipLabel = isRevision ? 'Cần sửa lại' : (isSubmitted ? 'Đã nộp' : 'Đang làm');
+                  const isInProgress = j.status === 'in_progress';
                   const empName = state.jobs.find((pj) => pj.dashJobId === j.id)?.emp || 'Nhà tuyển dụng';
                   return (
                     <div className="tx-row" style={{ flexWrap: 'wrap', alignItems: 'flex-start' }} key={j.id}>
                       <div className="tx-ic">{isRevision ? '✏️' : (isSubmitted ? '📤' : '🎯')}</div>
                       <div className="tx-main" style={{ flex: 1, minWidth: 140 }}>
                         <b>{j.title}</b>
-                        <span>{j.hiredApplicant || 'Bạn'} · {fmtVND(j.budget)} · Hạn: {formatDeadline(j.deadlineAt)}</span>
+                        <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 2 }}>
+                          <span>{fmtVND(j.budget)}</span>
+                          {j.deadlineAt && (
+                            <span style={{ color: '#0284c7', fontWeight: 600 }}>⏰ Hạn: {formatDeadline(j.deadlineAt)}</span>
+                          )}
+                        </span>
                         <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           {isRevision && (
-                            <button className="btn btn-primary btn-sm" style={{ background: 'var(--coral)' }} onClick={() => openModal('deliverable', { jobId: j.id })}>
-                              📤 Nộp lại bàn giao (lượt {j.revisionCount}/{j.revisionLimit})
+                            <button className="btn btn-primary btn-sm" style={{ background: 'var(--coral)' }}
+                              onClick={() => openModal('deliverable', { jobId: j.id })}>
+                              📤 Nộp lại ({j.revisionCount}/{j.revisionLimit} lần sửa)
                             </button>
                           )}
                           {isSubmitted && (
-                            <>
-                              <button className="btn btn-outline btn-sm" onClick={() => openModal('deliverable', { jobId: j.id })}>✏️ Cập nhật bàn giao</button>
-                              <button className="btn btn-primary btn-sm" onClick={() => openModal('deliverableReview', { jobId: j.id })}>📥 Xem & giải ngân (NTD)</button>
-                            </>
+                            <button className="btn btn-outline btn-sm"
+                              onClick={() => openModal('deliverable', { jobId: j.id })}>
+                              ✏️ Cập nhật bàn giao
+                            </button>
                           )}
-                          {!isSubmitted && !isRevision && (
-                            <button className="btn btn-primary btn-sm" onClick={() => openModal('deliverable', { jobId: j.id })}>📤 Nộp bàn giao / sản phẩm</button>
+                          {isInProgress && (
+                            <button className="btn btn-primary btn-sm"
+                              onClick={() => openModal('deliverable', { jobId: j.id })}>
+                              📤 Nộp bàn giao / sản phẩm
+                            </button>
                           )}
-                          <button className="btn btn-outline btn-sm" onClick={() => openChatWithPerson(empName)}>💬 Chat với NTD</button>
+                          <button className="btn btn-outline btn-sm" onClick={() => openChatWithPerson(empName)}>
+                            💬 Chat với NTD
+                          </button>
                         </div>
+                        {isRevision && j.deliverableFeedback?.length > 0 && (
+                          <div style={{ marginTop: 8, padding: 10, background: 'rgba(255,92,122,0.08)', borderRadius: 8, fontSize: 12.5 }}>
+                            <b style={{ color: 'var(--coral)' }}>Góp ý mới nhất:</b>
+                            <p style={{ marginTop: 4 }}>{j.deliverableFeedback[j.deliverableFeedback.length - 1].text}</p>
+                          </div>
+                        )}
                       </div>
-                      <div><span className={'djr-status ' + j.status} style={{ display: 'inline-block' }}>{chipLabel}</span></div>
+                      <div>
+                        <span className={'djr-status ' + j.status} style={{ display: 'inline-block' }}>
+                          {isRevision ? 'Cần sửa lại' : (isSubmitted ? 'Đã nộp' : 'Đang làm')}
+                        </span>
+                      </div>
                     </div>
                   );
                 })
@@ -84,6 +136,7 @@ export default function MyWork() {
             </div>
           </div>
 
+          {/* Cột phải: Đơn ứng tuyển */}
           <div>
             <div className="pcard">
               <h4>📨 Đơn ứng tuyển của bạn</h4>
@@ -93,14 +146,41 @@ export default function MyWork() {
               {state.myApplications.length === 0 ? (
                 <div className="empty-state">Bạn chưa ứng tuyển công việc nào.</div>
               ) : (
-                state.myApplications.map((a) => (
-                  <div className="tx-row" style={{ cursor: 'pointer', alignItems: 'center' }} key={a.id}
-                    onClick={() => a.jobId != null && navigate(`/jobs/${a.jobId}`)}>
-                    <div className="tx-ic">📨</div>
-                    <div className="tx-main" style={{ flex: 1, minWidth: 140 }}><b>{a.title}</b><span>{a.emp} · {fmtVND(a.budget)} · {a.appliedAt}</span></div>
-                    <div><span className={'djr-status ' + a.status} style={{ display: 'inline-block' }}>{APP_STATUS_LABEL[a.status] || a.status}</span></div>
-                  </div>
-                ))
+                <>
+                  {pagedApplications.map((a) => (
+                    <div
+                      className="tx-row"
+                      style={{ cursor: a.jobId != null ? 'pointer' : 'default', alignItems: 'center' }}
+                      key={a.id}
+                      onClick={() => a.jobId != null && navigate(`/jobs/${a.jobId}`)}
+                    >
+                      <div className="tx-ic">📨</div>
+                      <div className="tx-main" style={{ flex: 1, minWidth: 140 }}>
+                        <b>{a.title}</b>
+                        <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+                          {a.emp} · {fmtVND(a.budget)} · {a.appliedAt}
+                        </span>
+                      </div>
+                      <div>
+                        <span
+                          className={'djr-status ' + a.status}
+                          style={{ display: 'inline-block', color: APP_STATUS_COLOR[a.status] }}
+                        >
+                          {APP_STATUS_LABEL[a.status] || a.status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+
+                  <Pagination
+                    currentPage={appsPage}
+                    totalPages={appsTotalPages}
+                    totalItems={state.myApplications.length}
+                    pageSize={appsPageSize}
+                    onPageChange={setAppsPage}
+                    itemLabel="đơn ứng tuyển"
+                  />
+                </>
               )}
             </div>
           </div>

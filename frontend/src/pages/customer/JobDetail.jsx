@@ -5,8 +5,10 @@ import Avatar from '../../components/Avatar';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import { useConfirm } from '../../context/ConfirmContext';
+import { useToast } from '../../context/ToastContext';
 import { DeliverablePreview } from '../../components/modals/DeliverableModals';
 import { slugify } from '../../data/companies';
+import { downloadJobAttachment } from '../../utils/fileDownloader';
 
 function formatDeadline(ts) {
   if (!ts) return '—';
@@ -35,6 +37,8 @@ export default function JobDetail() {
   const { state, applyJob, studentAbandonJob, openChatWithPerson } = useStore();
   const { openModal } = useModal();
   const confirm = useConfirm();
+  const { showToast } = useToast();
+  const [saved, setSaved] = useState(false);
   useTick(30000);
 
   const j = state.jobs.find((x) => x.id === jobId);
@@ -65,7 +69,9 @@ export default function JobDetail() {
     applyDisabled = true;
   }
 
-  const showWorkArea = dashJob && ['in_progress', 'submitted', 'revision_requested', 'completed', 'cancelled'].includes(dashJob.status) && (dashJob.hiredApplicant || dashJob.hiredApplicantIsMe);
+  // showWorkArea: hiển thị khu vực làm việc khi job đang được thực hiện (hiredApplicantIsMe=false là góc NTD)
+  // Với SV demo: job có hiredApplicant (nghĩa là SV đó đã được thuê) và dashJob tồn tại
+  const showWorkArea = dashJob && ['in_progress', 'submitted', 'revision_requested', 'completed', 'cancelled'].includes(dashJob.status) && !!dashJob.hiredApplicant;
 
   return (
     <div className="page active">
@@ -90,6 +96,39 @@ export default function JobDetail() {
                 <h4>Yêu cầu</h4>
                 <ul>{j.req.map((r, i) => <li key={i}><Icon name="check" /> {r}</li>)}</ul>
               </div>
+
+              {((j.attachments && j.attachments.length > 0) || (dashJob?.attachments && dashJob.attachments.length > 0)) && (
+                <div className="jd-block">
+                  <h4>📎 Tài liệu & Đề bài đính kèm</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                    {(j.attachments || dashJob.attachments).map((f, i) => (
+                      <div key={f.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <span style={{ fontSize: 22 }}>📁</span>
+                          <div>
+                            <b style={{ fontSize: 13.5, display: 'block' }}>{f.name}</b>
+                            <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                              {f.size ? (f.size > 1024 * 1024 ? (f.size / (1024 * 1024)).toFixed(1) + ' MB' : (f.size / 1024).toFixed(0) + ' KB') : 'Tài liệu đề bài'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          onClick={() => {
+                            downloadJobAttachment(f, j.title);
+                            showToast(`Đang tải xuống: ${f.name}`, '⬇️');
+                          }}
+                        >
+                          ⬇ Tải file về
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="jd-block">
                 <h4>Bảo vệ từ SkillBridge</h4>
                 <ul>
@@ -157,7 +196,13 @@ export default function JobDetail() {
                 <button className="btn btn-outline btn-block" style={{ marginBottom: 10 }} onClick={() => openChatWithPerson(j.emp)}>
                   <span className="msg-btn-inline"><Icon name="chat" style={{ width: 14, height: 14 }} /> Nhắn tin với nhà tuyển dụng</span>
                 </button>
-                <button className="btn btn-outline btn-block" style={{ marginBottom: 10 }}>Lưu công việc</button>
+                <button
+                  className={'btn btn-block ' + (saved ? 'btn-outline' : 'btn-outline')}
+                  style={{ marginBottom: 10, color: saved ? 'var(--lime)' : undefined, borderColor: saved ? 'var(--lime)' : undefined }}
+                  onClick={() => { setSaved((s) => !s); showToast(saved ? 'Đã bỏ lưu công việc.' : 'Đã lưu công việc vào danh sách yêu thích!', saved ? '🗑' : '❤️'); }}
+                >
+                  {saved ? '❤️ Đã lưu' : '🤍 Lưu công việc'}
+                </button>
                 <button className="btn btn-outline btn-block" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
                   onClick={() => openModal('report', { withName: j.emp })}>🚩 Báo cáo nhà tuyển dụng</button>
               </div>

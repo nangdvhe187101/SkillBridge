@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -31,6 +31,10 @@ public partial class JobDeliverable
     [Column("final_file_url")]
     [StringLength(255)]
     public string? FinalFileUrl { get; set; }
+
+    [Column("external_url")]
+    [StringLength(500)]
+    public string? ExternalUrl { get; set; }
 
     [Column("file_name")]
     [StringLength(255)]

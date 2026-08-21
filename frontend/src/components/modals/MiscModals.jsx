@@ -3,6 +3,7 @@ import Icon from '../Icon';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import { useNavigate } from 'react-router-dom';
+import { downloadJobAttachment } from '../../utils/fileDownloader';
 
 export function ReceiptModal({ onClose, justCompletedId }) {
   const { state } = useStore();
@@ -40,18 +41,63 @@ export function ViewJobModal({ onClose, jobId }) {
   const navigate = useNavigate();
   const job = state.myJobs.find((j) => j.id === jobId);
   if (!job) return null;
+  const hasHired = !!job.hiredApplicant;
+
   return (
     <ModalShell onClose={onClose}>
       <h3>{job.title}</h3>
-      <div className="modal-tags">
-        <span className="chip">{job.cat}</span>
-        <span className="chip">{fmtVND(job.budget)}</span>
-        {job.urgent && <span className="chip chip-coral">Gấp</span>}
-        <span className="djr-status" style={{ display: 'inline-block' }}>{job.status === 'open' ? 'Đang tuyển' : job.status}</span>
+      <div className="modal-tags" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '10px 0 14px' }}>
+        <span className="chip chip-lime">📂 {job.cat}</span>
+        <span className="chip">💰 {fmtVND(job.budget)}</span>
+        {job.urgent && <span className="chip chip-coral">⚡ Tuyển gấp</span>}
+        <span className={'djr-status ' + job.status} style={{ display: 'inline-block' }}>
+          {job.status === 'open' ? 'Đang tuyển' : job.status === 'in_progress' ? 'Đang thực hiện' : job.status === 'submitted' ? 'Chờ xác nhận bàn giao' : job.status === 'completed' ? 'Đã hoàn thành' : job.status}
+        </span>
       </div>
-      <p>{job.desc}</p>
+
+      <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+        <h4 style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 6 }}>MÔ TẢ CÔNG VIỆC</h4>
+        <p style={{ fontSize: 13.5, lineHeight: 1.5, whiteSpace: 'pre-line' }}>{job.desc}</p>
+      </div>
+
+      {job.req && job.req.length > 0 && (
+        <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+          <h4 style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 6 }}>YÊU CẦU CÔNG VIỆC</h4>
+          <ul style={{ paddingLeft: 18, fontSize: 13, lineHeight: 1.5 }}>
+            {job.req.map((r, idx) => <li key={idx} style={{ marginBottom: 4 }}>{r}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {job.attachments && job.attachments.length > 0 && (
+        <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
+          <h4 style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8 }}>📎 TÀI LIỆU ĐÍNH KÈM ({job.attachments.length})</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {job.attachments.map((f, idx) => (
+              <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--surface-card, rgba(255,255,255,0.05))', borderRadius: 6, fontSize: 12.5 }}>
+                <span>📁 <b>{f.name}</b> {f.size ? `(${f.size > 1024*1024 ? (f.size/(1024*1024)).toFixed(1)+' MB' : (f.size/1024).toFixed(0)+' KB'})` : ''}</span>
+                <span className="chip" style={{ fontSize: 11, cursor: 'pointer' }} onClick={() => downloadJobAttachment(f, job.title)}>⬇ Tải về</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {job.hiredApplicant && (
+        <div style={{ background: 'rgba(87, 199, 255, 0.1)', border: '1px solid var(--accent)', borderRadius: 10, padding: 12, marginBottom: 14 }}>
+          <b style={{ color: 'var(--accent)', fontSize: 13 }}>👤 Đã thuê: {job.hiredApplicant}</b>
+        </div>
+      )}
+
       <div className="modal-actions">
-        <button className="btn btn-primary" onClick={() => { onClose(); startEditJob(job.id); navigate('/dashboard?tab=post'); }}>Chỉnh sửa tin</button>
+        {!hasHired && (
+          <button className="btn btn-primary" onClick={() => { onClose(); startEditJob(job.id); navigate('/dashboard?tab=post'); }}>
+            ✏️ Chỉnh sửa tin
+          </button>
+        )}
+        <button className="btn btn-outline" onClick={() => { onClose(); navigate(`/dashboard/jobs/${job.id}`); }}>
+          👥 Xem ứng viên ({job.applicants?.length || 0})
+        </button>
         <button className="btn btn-outline" onClick={onClose}>Đóng</button>
       </div>
     </ModalShell>

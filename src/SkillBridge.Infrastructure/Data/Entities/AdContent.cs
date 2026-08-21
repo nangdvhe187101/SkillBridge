@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -14,12 +14,28 @@ public partial class AdContent
     [Column("id")]
     public int Id { get; set; }
 
+
     [Column("campaign_id")]
     public int CampaignId { get; set; }
 
     [Column("title")]
     [StringLength(255)]
     public string Title { get; set; } = null!;
+
+    [Column("description", TypeName = "text")]
+    public string? Description { get; set; }
+
+    [Column("sponsor_name")]
+    [StringLength(150)]
+    public string? SponsorName { get; set; }
+
+    [Column("target_audience")]
+    [StringLength(150)]
+    public string? TargetAudience { get; set; }
+
+    [Column("cta_text")]
+    [StringLength(100)]
+    public string? CtaText { get; set; }
 
     [Column("status", TypeName = "enum('pending','approved','rejected')")]
     public string Status { get; set; } = null!;

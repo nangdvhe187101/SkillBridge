@@ -24,6 +24,9 @@ export function AdminProvider({ children }) {
     commission: 10, vipCommission: 5, featuredFee: 20000, revisionLimit: 2, reliabilityLockThreshold: 50,
   });
 
+  const [features, setFeatures] = useState(seed.featuresSeed);
+  const [adminChats, setAdminChats] = useState(seed.adminChatsSeed);
+
   const log = (action) => setAuditLog((l) => [{ time: new Date().toLocaleString('vi-VN'), actor: seed.rolesSeed.find((r) => r.id === viewRole)?.name || 'Admin', action }, ...l]);
 
   const actions = {
@@ -99,11 +102,57 @@ export function AdminProvider({ children }) {
       log(`Đã huỷ gói ${s?.plan} của ${s?.user}.`);
       showToast('Đã huỷ gói.', '🚫');
     },
+
+    // Feature RBAC Matrix
+    toggleFeatureRole: (featureId, roleCode) => {
+      setFeatures((list) => list.map((f) => {
+        if (f.id !== featureId) return f;
+        const exists = f.roles.includes(roleCode);
+        const nextRoles = exists ? f.roles.filter((r) => r !== roleCode) : [...f.roles, roleCode];
+        return { ...f, roles: nextRoles };
+      }));
+      showToast('Đã cập nhật quyền truy cập tính năng.', '🔑');
+    },
+    addFeature: (feat) => {
+      setFeatures((list) => [...list, { ...feat, id: 'f_' + Date.now() }]);
+      log(`Thêm tính năng URL mới: ${feat.name} (${feat.url})`);
+      showToast('Đã thêm tính năng/URL vào ma trận phân quyền.', '✓');
+    },
+    removeFeature: (featureId) => {
+      setFeatures((list) => list.filter((f) => f.id !== featureId));
+      showToast('Đã xoá tính năng khỏi ma trận phân quyền.', '🗑️');
+    },
+
+    // Admin Chat & Communications Monitor
+    warnChatThread: (chatId) => {
+      setAdminChats((list) => list.map((c) => {
+        if (c.id !== chatId) return c;
+        const warningMsg = {
+          id: 'w_' + Date.now(),
+          sender: 'Hệ thống Quản trị SkillBridge',
+          text: '⚠️ CẢNH BÁO: Cuộc hội thoại này có dấu hiệu vi phạm chính sách giao dịch ngoài sàn. Vui lòng giao dịch qua Escrow để được bảo vệ.',
+          time: 'Vừa xong',
+          isSystem: true
+        };
+        return { ...c, status: 'warned', messages: [...c.messages, warningMsg] };
+      }));
+      log(`Gửi cảnh báo gian lận phòng chat #${chatId}`);
+      showToast('Đã gửi cảnh báo gian lận vào phòng chat.', '⚠️');
+    },
+    lockChatThread: (chatId) => {
+      setAdminChats((list) => list.map((c) => (c.id === chatId ? { ...c, status: 'locked' } : c)));
+      log(`Khoá phòng chat #${chatId}`);
+      showToast('Đã khoá phòng chat vi phạm.', '🔒');
+    },
+    sendAdminBroadcast: (title, message, targetRole = 'all') => {
+      log(`Phát thông báo hệ thống "${title}" tới ${targetRole}`);
+      showToast(`Đã phát thông báo toàn sàn tới nhóm: ${targetRole === 'all' ? 'Tất cả người dùng' : targetRole}.`, '📢');
+    },
   };
 
   const value = {
     viewRole, users, blacklist, queue, categories, featured, disputes, subscriptions,
-    partners, campaigns, adQueue, tickets, auditLog, team, config, ...actions,
+    partners, campaigns, adQueue, tickets, auditLog, team, config, features, adminChats, ...actions,
   };
 
   return <AdminContext.Provider value={value}>{children}</AdminContext.Provider>;
