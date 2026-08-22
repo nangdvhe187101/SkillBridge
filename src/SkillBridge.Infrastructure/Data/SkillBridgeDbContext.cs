@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using SkillBridge.Infrastructure.Data.Entities;
@@ -77,6 +77,8 @@ public partial class SkillBridgeDbContext : DbContext
     public virtual DbSet<Review> Reviews { get; set; }
 
     public virtual DbSet<Role> Roles { get; set; }
+
+    public virtual DbSet<SavedJob> SavedJobs { get; set; }
 
     public virtual DbSet<RolePermission> RolePermissions { get; set; }
 
@@ -179,6 +181,10 @@ public partial class SkillBridgeDbContext : DbContext
             entity.HasOne(d => d.Student).WithMany(p => p.Applications)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_applications_student");
+
+            entity.HasOne(d => d.CvFile).WithMany(p => p.JobApplications)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_applications_cvfile");
         });
 
         modelBuilder.Entity<AuditLog>(entity =>

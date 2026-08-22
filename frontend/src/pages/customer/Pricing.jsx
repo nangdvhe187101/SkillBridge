@@ -100,7 +100,7 @@ export default function Pricing() {
               <li><Icon name="check" /> Featured Listing miễn phí hàng tháng</li>
               <li><Icon name="check" /> Quản lý nhóm sub-contracting</li>
             </ul>
-            <button className="btn btn-primary btn-block" disabled={state.vipBusiness} onClick={upgradeVip}>
+            <button className="btn btn-primary btn-block" disabled={state.vipBusiness} onClick={() => openModal('upgradeVip')}>
               {state.vipBusiness ? '✓ Đã là VIP Business' : 'Nâng cấp ngay'}
             </button>
           </div>

@@ -94,6 +94,45 @@ export function SubscribeModal({ onClose }) {
   );
 }
 
+export function UpgradeVipModal({ onClose }) {
+  const { upgradeVip, state } = useStore();
+  const amount = 199000;
+  const [method, setMethod] = useState(() => (state.balance >= amount ? 'wallet' : 'bank'));
+  const confirm = () => {
+    if (method === 'wallet' && state.balance < amount) return;
+    upgradeVip(amount, method);
+    onClose();
+  };
+  return (
+    <ModalShell onClose={onClose}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <div style={{ fontSize: 32 }}>👑</div>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 18 }}>Nâng cấp VIP Business Suite</h3>
+          <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Dành cho Doanh nghiệp & Agency</span>
+        </div>
+      </div>
+
+      <div className="checkout-summary">
+        <div className="cs-row"><span>Gói VIP Business Suite (1 tháng)</span><span>{fmtVND(amount)}</span></div>
+        <div className="cs-row"><span>Hoa hồng ký quỹ</span><span style={{ color: '#16a34a', fontWeight: 700 }}>Giảm 50% (còn 5%)</span></div>
+        <div className="cs-row"><span>Ghim tin Featured tặng kèm</span><span style={{ color: '#16a34a', fontWeight: 700 }}>Miễn phí 1 tin/tháng</span></div>
+        <div className="cs-row"><span>Trích Quỹ Bảo hiểm (10%)</span><span>{fmtVND(Math.round(amount * 0.1))}</span></div>
+        <div className="cs-row total"><span>Tổng thanh toán</span><span>{fmtVND(amount)}</span></div>
+      </div>
+
+      <PaymentMethods selected={method} onSelect={setMethod} walletBalance={state.balance} />
+
+      <div className="modal-actions">
+        <button className="btn btn-primary" onClick={confirm}>
+          👑 Thanh toán & Kích hoạt VIP
+        </button>
+        <button className="btn btn-outline" onClick={onClose}>Hủy</button>
+      </div>
+    </ModalShell>
+  );
+}
+
 export function HireModal({ onClose, jobId, applicantIdx, applicantName }) {
   const { state, hire } = useStore();
   const { openModal } = useModal();

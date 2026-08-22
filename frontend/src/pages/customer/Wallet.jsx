@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore, fmtVND, TX_ICON } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import Pagination from '../../components/Pagination';
-import { downloadJobAttachment } from '../../utils/fileDownloader';
+import { downloadJobAttachment, exportTransactionsToCSV } from '../../utils/fileDownloader';
 
 const TX_FILTER_MAP = {
   all: 'Tất cả',
@@ -190,9 +190,19 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
             <div className="pcard">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
                 <h4 style={{ margin: 0 }}>📊 Lịch sử giao dịch</h4>
-                <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
-                  Tổng cộng: <b>{filteredTransactions.length}</b> giao dịch
-                </span>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button
+                    className="btn btn-outline btn-sm"
+                    style={{ fontSize: 11.5, padding: '3px 9px', display: 'flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => exportTransactionsToCSV(filteredTransactions, `Sao_ke_vi_${state.currentUser?.fullName || 'User'}.csv`)}
+                    title="Xuất danh sách giao dịch ra file Excel/CSV"
+                  >
+                    📥 Xuất Excel/CSV
+                  </button>
+                  <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+                    Tổng: <b>{filteredTransactions.length}</b> mục
+                  </span>
+                </div>
               </div>
 
               {/* Transaction Filter Chips */}

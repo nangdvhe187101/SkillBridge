@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
+import ModalShell from '../../components/modals/ModalShell';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import { useConfirm } from '../../context/ConfirmContext';
@@ -34,11 +35,12 @@ export default function JobDetail() {
   const { id } = useParams();
   const jobId = Number(id);
   const navigate = useNavigate();
-  const { state, applyJob, studentAbandonJob, openChatWithPerson } = useStore();
+  const { state, applyJob, toggleSaveJob, studentAbandonJob, openChatWithPerson } = useStore();
   const { openModal } = useModal();
   const confirm = useConfirm();
   const { showToast } = useToast();
-  const [saved, setSaved] = useState(false);
+  const [applyModalOpen, setApplyModalOpen] = useState(false);
+  const [selectedCvId, setSelectedCvId] = useState(null);
   useTick(30000);
 
   const j = state.jobs.find((x) => x.id === jobId);
@@ -53,6 +55,14 @@ export default function JobDetail() {
   const dashJob = j.dashJobId ? state.myJobs.find((dj) => dj.id === j.dashJobId) : null;
   const myApp = state.myApplications.find((x) => x.jobId === jobId);
   const appStatus = myApp?.status;
+
+  const availableCvList = (state.cvFiles && state.cvFiles.length > 0)
+    ? state.cvFiles
+    : [
+        { id: 1, name: 'CV_NguyenVanAn_WebDev.pdf', label: 'CV Lập trình Web Frontend', category: 'Lập trình web', size: '245 KB' },
+        { id: 2, name: 'CV_NguyenVanAn_GraphicDesign.pdf', label: 'CV Thiết kế Đồ họa & Video', category: 'Thiết kế đồ hoạ', size: '1.2 MB' },
+        { id: 3, name: 'CV_NguyenVanAn_ContentWriter.pdf', label: 'CV Viết bài SEO & Dịch thuật', category: 'Viết nội dung', size: '198 KB' },
+      ];
 
   let applyLabel = 'Ứng tuyển ngay';
   let applyDisabled = false;
@@ -191,17 +201,38 @@ export default function JobDetail() {
               <div className="jd-card">
                 <div className="jd-price">{fmtVND(j.budget)}</div>
                 <div className="jd-price-lbl">Ngân sách công việc</div>
-                <button className="btn btn-primary btn-block" style={{ marginBottom: 10 }} disabled={applyDisabled}
-                  onClick={() => applyJob(j.id)}>{applyLabel}</button>
+
+                <button
+                  className="btn btn-primary btn-block"
+                  style={{ marginBottom: 10 }}
+                  disabled={applyDisabled}
+                  onClick={() => {
+                    const defaultCv = availableCvList.find((c) => c.category === j.cat) || availableCvList[0];
+                    setSelectedCvId(defaultCv?.id || availableCvList[0].id);
+                    setApplyModalOpen(true);
+                  }}
+                >
+                  {applyLabel}
+                </button>
+
                 <button className="btn btn-outline btn-block" style={{ marginBottom: 10 }} onClick={() => openChatWithPerson(j.emp)}>
                   <span className="msg-btn-inline"><Icon name="chat" style={{ width: 14, height: 14 }} /> Nhắn tin với nhà tuyển dụng</span>
                 </button>
                 <button
-                  className={'btn btn-block ' + (saved ? 'btn-outline' : 'btn-outline')}
-                  style={{ marginBottom: 10, color: saved ? 'var(--lime)' : undefined, borderColor: saved ? 'var(--lime)' : undefined }}
-                  onClick={() => { setSaved((s) => !s); showToast(saved ? 'Đã bỏ lưu công việc.' : 'Đã lưu công việc vào danh sách yêu thích!', saved ? '🗑' : '❤️'); }}
+                  className="btn btn-outline btn-block"
+                  style={{
+                    marginBottom: 10,
+                    color: (state.savedJobIds || []).includes(jobId) ? '#ef4444' : undefined,
+                    borderColor: (state.savedJobIds || []).includes(jobId) ? '#ef4444' : undefined,
+                    background: (state.savedJobIds || []).includes(jobId) ? 'rgba(239, 68, 68, 0.08)' : undefined
+                  }}
+                  onClick={() => {
+                    const isJobSaved = (state.savedJobIds || []).includes(jobId);
+                    toggleSaveJob(jobId);
+                    showToast(isJobSaved ? 'Đã bỏ lưu công việc.' : 'Đã lưu công việc vào danh sách yêu thích!', isJobSaved ? '🗑' : '❤️');
+                  }}
                 >
-                  {saved ? '❤️ Đã lưu' : '🤍 Lưu công việc'}
+                  {(state.savedJobIds || []).includes(jobId) ? '❤️ Đã lưu vào yêu thích' : '🤍 Lưu công việc'}
                 </button>
                 <button className="btn btn-outline btn-block" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
                   onClick={() => openModal('report', { withName: j.emp })}>🚩 Báo cáo nhà tuyển dụng</button>
@@ -224,6 +255,96 @@ export default function JobDetail() {
           </div>
         </div>
       </div>
+
+      {/* Dedicated Application Modal with CV Selector */}
+      {applyModalOpen && (
+        <ModalShell onClose={() => setApplyModalOpen(false)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: 28 }}>📨</div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18 }}>Chọn bản CV ứng tuyển</h3>
+              <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                Vị trí: <b>{j.title}</b> · {j.emp}
+              </span>
+            </div>
+          </div>
+
+          <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14, lineHeight: 1.5 }}>
+            Vui lòng chọn bản CV chuyên môn phù hợp nhất để gửi đến nhà tuyển dụng (chỉ bản CV được chọn sẽ hiển thị với nhà tuyển dụng):
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 280, overflowY: 'auto', marginBottom: 16 }}>
+            {availableCvList.map((cv) => {
+              const isSelected = selectedCvId === cv.id;
+              const isMatch = cv.category === j.cat;
+
+              return (
+                <div
+                  key={cv.id}
+                  onClick={() => setSelectedCvId(cv.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    background: isSelected ? 'rgba(108, 76, 255, 0.08)' : 'var(--surface)',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        border: isSelected ? '6px solid var(--primary)' : '2px solid var(--border)',
+                        background: '#fff',
+                        flexShrink: 0
+                      }}
+                    />
+                    <div>
+                      <b style={{ display: 'block', fontSize: 13.5, color: isSelected ? 'var(--primary)' : 'var(--ink)' }}>
+                        {cv.label || cv.name}
+                      </b>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 3 }}>
+                        <span className="chip" style={{ fontSize: 10.5, padding: '1px 7px' }}>{cv.category}</span>
+                        <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{cv.size}</span>
+                        {isMatch && (
+                          <span className="chip chip-lime" style={{ fontSize: 10.5, padding: '1px 6px' }}>
+                            🎯 Khớp ngành tuyển dụng
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <span style={{ fontSize: 18 }}>📄</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button className="btn btn-outline" onClick={() => setApplyModalOpen(false)}>
+              Huỷ
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                applyJob(j.id);
+                setApplyModalOpen(false);
+                const chosenCv = (state.cvFiles || []).find((c) => c.id === selectedCvId);
+                showToast(`Đã gửi đơn ứng tuyển kèm ${chosenCv?.label || 'CV'} tới ${j.emp}!`, '🚀');
+              }}
+            >
+              🚀 Xác nhận nộp hồ sơ
+            </button>
+          </div>
+        </ModalShell>
+      )}
     </div>
   );
 }

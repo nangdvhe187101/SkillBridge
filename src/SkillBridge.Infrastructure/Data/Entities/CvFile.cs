@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -57,4 +57,7 @@ public partial class CvFile
     [ForeignKey("StudentId")]
     [InverseProperty("CvFiles")]
     public virtual User Student { get; set; } = null!;
+
+    [InverseProperty("CvFile")]
+    public virtual ICollection<JobApplication> JobApplications { get; set; } = new List<JobApplication>();
 }

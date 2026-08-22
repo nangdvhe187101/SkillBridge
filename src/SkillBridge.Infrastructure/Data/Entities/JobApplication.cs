@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -21,6 +21,9 @@ public partial class JobApplication
     [Column("student_id")]
     public int StudentId { get; set; }
 
+    [Column("cv_file_id")]
+    public int? CvFileId { get; set; }
+
     [Column("status", TypeName = "enum('pending','hired','submitted','completed','rejected','cancelled')")]
     public string Status { get; set; } = null!;
 
@@ -29,6 +32,10 @@ public partial class JobApplication
 
     [Column("updated_at", TypeName = "datetime")]
     public DateTime UpdatedAt { get; set; }
+
+    [ForeignKey("CvFileId")]
+    [InverseProperty("JobApplications")]
+    public virtual CvFile? CvFile { get; set; }
 
     [ForeignKey("JobId")]
     [InverseProperty("Applications")]

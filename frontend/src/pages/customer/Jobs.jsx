@@ -19,7 +19,7 @@ const CAT_ICON = {
 };
 
 export default function Jobs() {
-  const { state, submitOneTouchLead } = useStore();
+  const { state, submitOneTouchLead, toggleSaveJob } = useStore();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('Tất cả');
@@ -31,6 +31,7 @@ export default function Jobs() {
   const [submittedAd, setSubmittedAd] = useState(false);
 
   const allJobs = state.jobs;
+  const savedCount = (state.savedJobIds || []).length;
 
   // Reset to page 1 on filter/search/sort change
   useEffect(() => {
@@ -43,15 +44,16 @@ export default function Jobs() {
     allJobs.forEach((j) => { if (j.cat) seen.add(j.cat); });
     return [
       { cat: 'Tất cả', label: 'Tất cả' },
+      { cat: 'saved', label: `❤️ Đã lưu (${savedCount})` },
       ...[...seen].sort().map((cat) => ({ cat, label: (CAT_ICON[cat] || '📌') + ' ' + cat })),
     ];
-  }, [allJobs]);
+  }, [allJobs, savedCount]);
 
   const list = useMemo(() => {
     let l = allJobs.filter(
       (j) =>
         (j.status === 'open' || state.appliedJobIds.includes(j.id)) &&
-        (filter === 'Tất cả' || j.cat === filter) &&
+        (filter === 'Tất cả' || (filter === 'saved' ? (state.savedJobIds || []).includes(j.id) : j.cat === filter)) &&
         (q === '' || j.title.toLowerCase().includes(q.toLowerCase().trim()) ||
           (j.cat && j.cat.toLowerCase().includes(q.toLowerCase().trim())) ||
           (j.emp && j.emp.toLowerCase().includes(q.toLowerCase().trim())))
@@ -59,7 +61,7 @@ export default function Jobs() {
     if (sort === 'high') l = [...l].sort((a, b) => b.budget - a.budget);
     if (sort === 'low') l = [...l].sort((a, b) => a.budget - b.budget);
     return l;
-  }, [allJobs, state.appliedJobIds, filter, q, sort]);
+  }, [allJobs, state.appliedJobIds, state.savedJobIds, filter, q, sort]);
 
   const totalPages = Math.ceil(list.length / pageSize) || 1;
   const pagedList = useMemo(() => {
@@ -88,14 +90,39 @@ export default function Jobs() {
   const items = [];
   let adCounter = (currentPage - 1);
   pagedList.forEach((j, i) => {
+    const isJobSaved = (state.savedJobIds || []).includes(j.id);
     items.push(
       <div className="job-card" key={j.id} onClick={() => navigate(`/jobs/${j.id}`)}>
-        <div className="jc-top">
+        <div className="jc-top" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div className="jc-emp" onClick={(e) => { e.stopPropagation(); navigate(`/company/${slugify(j.emp)}`); }} style={{ cursor: 'pointer' }}>
             <Avatar name={j.emp} className="jc-av" fontSize={13} />
             <div><b>{j.emp} <Icon name="check" style={{ width: 12, height: 12, display: 'inline' }} /></b><span>{j.loc}</span></div>
           </div>
-          {j.urgent && <span className="chip chip-coral">Gấp</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {j.urgent && <span className="chip chip-coral">Gấp</span>}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleSaveJob(j.id);
+              }}
+              style={{
+                border: 'none',
+                background: isJobSaved ? 'rgba(239, 68, 68, 0.12)' : 'rgba(0,0,0,0.04)',
+                borderRadius: '50%',
+                width: 28,
+                height: 28,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                fontSize: 14,
+                transition: 'all 0.15s ease'
+              }}
+              title={isJobSaved ? 'Bỏ lưu khỏi danh sách yêu thích' : 'Lưu công việc vào yêu thích'}
+            >
+              {isJobSaved ? '❤️' : '🤍'}
+            </button>
+          </div>
         </div>
         <h3>{j.title}</h3>
         <div className="jc-tags" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

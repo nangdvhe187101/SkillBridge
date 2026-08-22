@@ -5,6 +5,7 @@ import ModalShell from '../../components/modals/ModalShell';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
+import { downloadJobAttachment } from '../../utils/fileDownloader';
 
 function tierFromScore(score) {
   if (score >= 90) return 'gold';
@@ -28,7 +29,7 @@ const SAMPLE_PORTFOLIO = [
 ];
 
 export default function Profile() {
-  const { state, setCv, removeCv, addEmployerDocs, removeEmployerDoc, addPortfolio, removePortfolio } = useStore();
+  const { state, setCv, removeCv, addCvFile, removeCvFile, addEmployerDocs, removeEmployerDoc, addPortfolio, removePortfolio } = useStore();
   const { showToast } = useToast();
   const confirm = useConfirm();
   const navigate = useNavigate();
@@ -62,8 +63,12 @@ export default function Profile() {
   const onCvChange = (e) => {
     const f = e.target.files[0];
     if (f) {
-      setCv({ name: f.name, size: f.size });
-      showToast(`Đã tải lên CV: ${f.name}`, '📄');
+      addCvFile({
+        name: f.name,
+        label: f.name.replace(/\.[^/.]+$/, ''),
+        category: 'Lập trình web',
+        size: f.size
+      });
     }
     e.target.value = '';
   };
@@ -171,13 +176,77 @@ export default function Profile() {
       <div className="wrap profile-body">
         <div className="pb-grid">
           <div>
+            {/* Reliability Score & In-Page Tier Roadmap Card */}
             <div className="pcard">
-              <h4>Điểm Reliability (Uy tín bàn giao)</h4>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h4 style={{ margin: 0 }}>Điểm Reliability & Lộ trình Thăng Hạng</h4>
+                <span className="chip chip-lime" style={{ fontSize: 11 }}>
+                  {tier === 'gold' ? '🥇 Đang đạt Hạng Vàng' : (tier === 'silver' ? '🥈 Đang đạt Hạng Bạc' : '🥉 Hạng Đồng')}
+                </span>
+              </div>
+
               <div className="score-wrap">
                 <div className="score-num">{state.myReliability} / 100</div>
                 <div className="score-bar"><div className="score-fill" style={{ width: `${state.myReliability}%` }} /></div>
               </div>
-              <div className="score-note">Bắt đầu ở 100 điểm · Giữ trên 90 điểm để duy trì quyền ưu tiên Gold Tier</div>
+              <div className="score-note" style={{ marginBottom: 16 }}>
+                Bắt đầu ở 100 điểm · Giữ trên 90 điểm để duy trì quyền ưu tiên Gold Tier.
+              </div>
+
+              {/* 3-Tier Milestone Stepper */}
+              <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'var(--surface-2, rgba(0,0,0,0.02))', marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 10 }}>
+                  🏆 3 Mốc Hạng Uy tín Nền tảng:
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+                  {/* Bronze */}
+                  <div style={{ padding: 10, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#b45309' }}>
+                      🥉 Đồng (Bronze)
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>
+                      • Dưới 85 điểm<br />
+                      • Hạng khởi đầu cơ bản
+                    </div>
+                  </div>
+
+                  {/* Silver */}
+                  <div style={{ padding: 10, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#64748b' }}>
+                      🥈 Bạc (Silver)
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>
+                      • 85 – 94 điểm + ≥ 3 việc<br />
+                      • Mở khóa Ứng tuyển 1 chạm
+                    </div>
+                  </div>
+
+                  {/* Gold */}
+                  <div style={{ padding: 10, borderRadius: 10, border: '1px solid #16a34a', background: 'rgba(34, 197, 94, 0.08)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#16a34a' }}>
+                      🥇 Vàng (Gold) ✓
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>
+                      • 95 – 100 điểm + ≥ 10 việc<br />
+                      • Ưu tiên ghim hồ sơ đầu bảng
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Scoring Rules Table */}
+              <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'var(--surface)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 }}>
+                  ⚖️ Quy tắc Tự động Cộng / Trừ Điểm:
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12 }}>
+                  <div style={{ color: '#16a34a' }}>🟢 <b>+5 điểm:</b> Giao việc đúng hạn & 5★</div>
+                  <div style={{ color: '#16a34a' }}>🟢 <b>+3 điểm:</b> Phản hồi & giải ngân nhanh</div>
+                  <div style={{ color: '#e11d48' }}>🔴 <b>-10 điểm:</b> Trễ hạn không báo trước</div>
+                  <div style={{ color: '#e11d48' }}>🔴 <b>-15 điểm:</b> Tự ý hủy / bỏ việc</div>
+                </div>
+              </div>
             </div>
 
             <div className="pcard">
@@ -191,9 +260,29 @@ export default function Profile() {
             </div>
 
             <div className="pcard">
-              <h4>Huy hiệu kỹ năng đã kiểm định</h4>
-              <div className="badge-row">
-                {SKILL_BADGES.map((b) => <span className="chip chip-dark" key={b}>{b}</span>)}
+              <h4>Huy hiệu kỹ năng đã kiểm định ({SKILL_BADGES.length})</h4>
+              <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 10 }}>
+                Huy hiệu chứng nhận năng lực do Hệ thống & Nhà tuyển dụng đánh giá.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8 }}>
+                {SKILL_BADGES.map((b) => (
+                  <div
+                    key={b}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '8px 10px',
+                      background: 'var(--surface-2, rgba(0,0,0,0.02))',
+                      border: '1px solid var(--border)',
+                      borderRadius: 10,
+                      fontSize: 12
+                    }}
+                  >
+                    <span>{b}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 11, color: '#16a34a', fontWeight: 700 }}>✓</span>
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -222,23 +311,72 @@ export default function Profile() {
           <div>
             {state.role !== 'employer' && (
               <div className="pcard">
-                <h4>CV / Hồ sơ năng lực</h4>
-                <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12, lineHeight: 1.55 }}>
-                  Tải lên CV để nhà tuyển dụng xem ngay khi bạn gửi hồ sơ ứng tuyển.
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <h4 style={{ margin: 0 }}>📁 Danh sách CV Chuyên môn ({(state.cvFiles || []).length})</h4>
+                  <span className="chip chip-lime" style={{ fontSize: 10.5 }}>Đa lĩnh vực</span>
+                </div>
+                <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 12, lineHeight: 1.5 }}>
+                  Tải lên các bản CV theo từng chuyên môn để hệ thống tự động trích xuất đúng CV khi ứng tuyển.
                 </p>
+
+                {/* Multiple CVs List */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                  {(state.cvFiles || []).map((cv) => (
+                    <div
+                      key={cv.id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 12px',
+                        background: 'var(--surface-2, rgba(0,0,0,0.02))',
+                        border: '1px solid var(--border)',
+                        borderRadius: 10,
+                        fontSize: 12.5
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ fontSize: 18 }}>📄</div>
+                        <div>
+                          <b style={{ display: 'block', fontSize: 13 }}>{cv.label || cv.name}</b>
+                          <div style={{ fontSize: 11, color: 'var(--ink-soft)', display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
+                            <span className="chip" style={{ fontSize: 10, padding: '1px 6px' }}>{cv.category}</span>
+                            <span>{cv.size}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <button
+                          className="btn btn-outline btn-sm"
+                          style={{ fontSize: 11, padding: '2px 8px' }}
+                          onClick={() => downloadJobAttachment(cv, cv.label)}
+                          title="Xem / Tải file CV"
+                        >
+                          Tải về
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (await confirm(`Xóa "${cv.label}" khỏi hồ sơ?`, { danger: true, confirmLabel: 'Xóa CV' })) {
+                              removeCvFile(cv.id);
+                            }
+                          }}
+                          style={{ border: 'none', background: 'none', color: 'var(--coral)', cursor: 'pointer', padding: '4px 6px', fontSize: 13 }}
+                          title="Xóa CV"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="upload-zone" onClick={() => cvInputRef.current.click()}>
                   <input ref={cvInputRef} type="file" accept=".pdf,.doc,.docx,image/*" onChange={onCvChange} />
                   <div className="uz-ic">📄</div>
-                  <b>Bấm để tải lên file CV mới</b>
-                  <span>Hỗ trợ PDF, DOC, DOCX (Tối đa 10MB)</span>
+                  <b>+ Tải thêm bản CV chuyên môn mới</b>
+                  <span>Hỗ trợ PDF, DOCX (Gắn theo từng ngành nghề)</span>
                 </div>
-                {state.cvFile && (
-                  <div className="file-chip-row" style={{ marginTop: 10 }}>
-                    <span className="chip chip-lime">📄 {state.cvFile.name}
-                      <button onClick={(e) => { e.stopPropagation(); removeCv(); }} style={{ marginLeft: 6, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--coral)' }}>✕</button>
-                    </span>
-                  </div>
-                )}
               </div>
             )}
 

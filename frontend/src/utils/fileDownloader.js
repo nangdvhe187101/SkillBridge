@@ -26,3 +26,27 @@ Thời gian tải về: ${new Date().toLocaleString('vi-VN')}
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
 }
+
+export function exportTransactionsToCSV(transactions, fileName = 'Sao_ke_giao_dich_SkillBridge.csv') {
+    const headers = ['Mã Giao Dịch', 'Thời Gian', 'Loại Giao Dịch', 'Diễn Giải', 'Biến Động (VNĐ)', 'Chiều Tiền'];
+    const rows = transactions.map((t, idx) => {
+        const id = t.id || `TX-${1000 + idx}`;
+        const date = t.date || '—';
+        const type = t.type || 'Khác';
+        const label = `"${(t.label || '').replace(/"/g, '""')}"`;
+        const amount = t.amount || 0;
+        const sign = t.sign === 1 ? '+ Tăng' : '- Giảm';
+        return [id, date, type, label, amount, sign].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}

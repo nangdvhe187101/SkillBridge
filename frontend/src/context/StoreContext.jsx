@@ -72,11 +72,17 @@ const initialState = {
   currentUser: JSON.parse(localStorage.getItem('user') || 'null'),
   role: 'student',
   cvFile: null,
+  cvFiles: [
+    { id: 1, name: 'CV_NguyenVanAn_WebDev.pdf', label: 'CV Lập trình Web Frontend', category: 'Lập trình web', size: '245 KB', date: '10/08/2026' },
+    { id: 2, name: 'CV_NguyenVanAn_GraphicDesign.pdf', label: 'CV Thiết kế Đồ họa & Video', category: 'Thiết kế đồ hoạ', size: '1.2 MB', date: '12/08/2026' },
+    { id: 3, name: 'CV_NguyenVanAn_ContentWriter.pdf', label: 'CV Viết bài SEO & Dịch thuật', category: 'Viết nội dung', size: '198 KB', date: '15/08/2026' },
+  ],
   employerDocs: [],
   portfolioUploads: [],
   jobs: jobsSeed,
   myJobs: myJobsSeed,
   appliedJobIds: [],
+  savedJobIds: JSON.parse(localStorage.getItem('savedJobIds') || '[101, 103]'),
   nextJobId: 200,
   editingJobId: null,
   triZeroUsed: 2,
@@ -247,6 +253,19 @@ function reducer(state, action) {
       };
     }
 
+    case 'TOGGLE_SAVE_JOB': {
+      const isSaved = (state.savedJobIds || []).includes(action.jobId);
+      const savedJobIds = isSaved
+        ? (state.savedJobIds || []).filter((id) => id !== action.jobId)
+        : [...(state.savedJobIds || []), action.jobId];
+      localStorage.setItem('savedJobIds', JSON.stringify(savedJobIds));
+      const job = state.jobs.find((j) => j.id === action.jobId);
+      const notifications = !isSaved
+        ? addNotifTo(state.notifications, '❤️', `Đã lưu công việc "${job?.title || '#' + action.jobId}" vào danh sách yêu thích.`, `/jobs/${action.jobId}`)
+        : state.notifications;
+      return { ...state, savedJobIds, notifications };
+    }
+
     case 'UPDATE_ADS_SETTINGS': {
       const adsSettings = { ...state.adsSettings, ...action.payload };
       localStorage.setItem('adsSettings', JSON.stringify(adsSettings));
@@ -393,8 +412,15 @@ function reducer(state, action) {
       return { ...state, balance, transactions, subscriptionPro: true, insuranceFund, notifications };
     }
     case 'UPGRADE_VIP': {
-      const notifications = addNotifTo(state.notifications, '👑', 'Chúc mừng! Tài khoản của bạn đã là VIP Business Suite — hoa hồng giảm còn 5%.', '/pricing');
-      return { ...state, vipBusiness: true, notifications };
+      const amount = action.amount || 199000;
+      if (action.method === 'wallet' && state.balance < amount) return state;
+      const balance = action.method === 'wallet' ? state.balance - amount : state.balance;
+      let transactions = addTxTo(state.transactions, 'subscription', 'Đăng ký gói VIP Business Suite (1 tháng)', amount, -1);
+      const fundAlloc = Math.round(amount * 0.1);
+      const insuranceFund = state.insuranceFund + fundAlloc;
+      let notifications = addNotifTo(state.notifications, '👑', 'Chúc mừng! Tài khoản của bạn đã là VIP Business Suite — hoa hồng giảm còn 5%.', '/pricing');
+      notifications = addNotifTo(notifications, '🛡️', `${fundAlloc.toLocaleString('vi-VN')}đ (10% gói VIP) vừa được trích vào Quỹ Bảo hiểm.`, '/wallet');
+      return { ...state, balance, transactions, vipBusiness: true, insuranceFund, notifications };
     }
     case 'SUBMIT_CLAIM': {
       const { jobTitle, jobBudget, desc } = action.payload;
@@ -440,11 +466,23 @@ function reducer(state, action) {
       return { ...state, affiliateLeads, notifications };
     }
 
-    /* ---- profile uploads ---- */
     case 'SET_CV':
       return { ...state, cvFile: action.file, notifications: addNotifTo(state.notifications, '📄', `Đã cập nhật CV: ${action.file.name}`, '/profile') };
     case 'REMOVE_CV':
       return { ...state, cvFile: null };
+    case 'ADD_CV_FILE': {
+      const newCv = {
+        id: Date.now(),
+        name: action.payload.name,
+        label: action.payload.label || action.payload.name,
+        category: action.payload.category || 'Lập trình web',
+        size: action.payload.size ? (action.payload.size > 1024 * 1024 ? (action.payload.size / (1024 * 1024)).toFixed(1) + ' MB' : (action.payload.size / 1024).toFixed(0) + ' KB') : '250 KB',
+        date: fmtNow()
+      };
+      return { ...state, cvFiles: [newCv, ...(state.cvFiles || [])], notifications: addNotifTo(state.notifications, '📄', `Đã thêm CV mới: ${newCv.label}`, '/profile') };
+    }
+    case 'REMOVE_CV_FILE':
+      return { ...state, cvFiles: (state.cvFiles || []).filter((c) => c.id !== action.id) };
     case 'ADD_EMPLOYER_DOCS':
       return { ...state, employerDocs: [...action.files, ...state.employerDocs], notifications: addNotifTo(state.notifications, '🏢', `Đã tải ${action.files.length} file hồ sơ nhà tuyển dụng.`, '/profile') };
     case 'REMOVE_EMPLOYER_DOC':
@@ -597,6 +635,7 @@ export function StoreProvider({ children }) {
       cancelJob: (id) => dispatch({ type: 'CANCEL_JOB', id }),
       studentAbandonJob: (id) => dispatch({ type: 'STUDENT_ABANDON_JOB', id }),
       applyJob: (id) => dispatch({ type: 'APPLY_JOB', id }),
+      toggleSaveJob: (jobId) => dispatch({ type: 'TOGGLE_SAVE_JOB', jobId }),
       hire: (payload) => dispatch({ type: 'HIRE', payload }),
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),
       submitDeliverable: (payload) => dispatch({ type: 'SUBMIT_DELIVERABLE', payload }),
@@ -605,11 +644,13 @@ export function StoreProvider({ children }) {
       withdraw: (amount) => { dispatch({ type: 'WITHDRAW', amount }); showToast(`Đã gửi yêu cầu rút ${amount.toLocaleString('vi-VN')}đ.`, '✓'); },
       updateBankAccount: (payload) => { dispatch({ type: 'UPDATE_BANK_ACCOUNT', payload }); showToast('Cập nhật tài khoản ngân hàng thành công!', '✓'); },
       subscribePro: (amount, method) => dispatch({ type: 'SUBSCRIBE_PRO', amount, method }),
-      upgradeVip: () => { dispatch({ type: 'UPGRADE_VIP' }); showToast('Đã nâng cấp VIP Business Suite!', '👑'); },
+      upgradeVip: (amount, method) => { dispatch({ type: 'UPGRADE_VIP', amount, method }); showToast('Đã nâng cấp VIP Business Suite!', '👑'); },
       submitClaim: (payload) => { dispatch({ type: 'SUBMIT_CLAIM', payload }); showToast('Đội ngũ Dispute Resolution đã xử lý khiếu nại của bạn!', '🛡️'); },
       submitOneTouchLead: (payload) => { dispatch({ type: 'SUBMIT_ONE_TOUCH_LEAD', payload }); showToast('⚡ Đã gửi hồ sơ One-Touch Portfolio thành công!', '🚀'); },
       setCv: (file) => { dispatch({ type: 'SET_CV', file }); showToast('Đã tải CV lên hồ sơ.', '✓'); },
       removeCv: () => { dispatch({ type: 'REMOVE_CV' }); showToast('Đã xoá CV khỏi hồ sơ.', '🗑️'); },
+      addCvFile: (payload) => { dispatch({ type: 'ADD_CV_FILE', payload }); showToast('Đã thêm CV chuyên môn mới!', '📄'); },
+      removeCvFile: (id) => { dispatch({ type: 'REMOVE_CV_FILE', id }); showToast('Đã xóa CV.', '🗑️'); },
       addEmployerDocs: (files) => { dispatch({ type: 'ADD_EMPLOYER_DOCS', files }); showToast('Đã cập nhật hồ sơ công ty.', '✓'); },
       removeEmployerDoc: (idx) => dispatch({ type: 'REMOVE_EMPLOYER_DOC', idx }),
       addPortfolio: (item) => { dispatch({ type: 'ADD_PORTFOLIO', item }); showToast('Đã thêm vào portfolio.', '✓'); },

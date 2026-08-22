@@ -3,6 +3,7 @@ import { useStore, fmtVND } from '../../context/StoreContext';
 import { revenueBarsSeed } from '../../data/adminSeed';
 import { useToast } from '../../context/ToastContext';
 import { useConfirm } from '../../context/ConfirmContext';
+import { exportTransactionsToCSV } from '../../utils/fileDownloader';
 
 export default function AdminFinance() {
   const { subscriptions, renewSubscription, cancelSubscription } = useAdmin();
@@ -19,8 +20,9 @@ export default function AdminFinance() {
   ];
 
   const exportReport = (period) => {
-    const labels = { week: 'tuần', month: 'tháng', quarter: 'quý' };
-    showToast(`Đã xuất báo cáo tài chính theo ${labels[period]} (mô phỏng demo).`, '📄');
+    const labels = { week: 'tuan', month: 'thang', quarter: 'quy' };
+    exportTransactionsToCSV(state.transactions, `Bao_cao_tai_chinh_SkillBridge_${labels[period]}.csv`);
+    showToast(`Đã xuất báo cáo tài chính theo ${period} thành công!`, '📊');
   };
 
   return (

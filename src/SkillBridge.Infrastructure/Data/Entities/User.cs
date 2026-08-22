@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -218,4 +218,7 @@ public partial class User
 
     [InverseProperty("User")]
     public virtual ICollection<WithdrawalRequest> WithdrawalRequests { get; set; } = new List<WithdrawalRequest>();
+
+    [InverseProperty("Student")]
+    public virtual ICollection<SavedJob> SavedJobs { get; set; } = new List<SavedJob>();
 }

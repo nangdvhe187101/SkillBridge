@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -119,4 +119,7 @@ public partial class Job
 
     [InverseProperty("Job")]
     public virtual ICollection<Review> Reviews { get; set; } = new List<Review>();
+
+    [InverseProperty("Job")]
+    public virtual ICollection<SavedJob> SavedJobs { get; set; } = new List<SavedJob>();
 }

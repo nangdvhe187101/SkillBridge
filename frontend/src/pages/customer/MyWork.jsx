@@ -164,7 +164,7 @@ export default function MyWork() {
                       <div>
                         <span
                           className={'djr-status ' + a.status}
-                          style={{ display: 'inline-block', color: APP_STATUS_COLOR[a.status] }}
+                          style={{ display: 'inline-block', fontWeight: 600, fontSize: 12 }}
                         >
                           {APP_STATUS_LABEL[a.status] || a.status}
                         </span>

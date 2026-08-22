@@ -4337,7 +4337,7 @@ footer {
 .wallet-hero {
   background: var(--panel-dark);
   color: #fff;
-  padding: 44px 0 80px;
+  padding: 36px 0 36px;
 }
 
 [data-theme="dark"] .wallet-hero {
@@ -4390,7 +4390,7 @@ footer {
 }
 
 .wallet-body {
-  margin-top: -46px;
+  margin-top: 24px;
   padding-bottom: 60px;
 }
 

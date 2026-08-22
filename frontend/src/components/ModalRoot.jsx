@@ -1,5 +1,5 @@
 import { useModal } from '../context/ModalContext';
-import { TopupModal, WithdrawModal, SubscribeModal, HireModal, ClaimModal } from './modals/PayModals';
+import { TopupModal, WithdrawModal, SubscribeModal, UpgradeVipModal, HireModal, ClaimModal } from './modals/PayModals';
 import { DeliverableModal, RevisionModal, DeliverableReviewModal } from './modals/DeliverableModals';
 import { ReceiptModal, ViewJobModal, ReportModal, SuccessModal } from './modals/MiscModals';
 import ChatModal from './modals/ChatModal';
@@ -14,6 +14,7 @@ export default function ModalRoot() {
     case 'topup': return <TopupModal {...props} />;
     case 'withdraw': return <WithdrawModal {...props} />;
     case 'subscribe': return <SubscribeModal {...props} />;
+    case 'upgradeVip': return <UpgradeVipModal {...props} />;
     case 'hire': return <HireModal {...props} />;
     case 'claim': return <ClaimModal {...props} />;
     case 'deliverable': return <DeliverableModal {...props} />;
