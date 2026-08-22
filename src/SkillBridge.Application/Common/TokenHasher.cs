@@ -11,6 +11,9 @@ namespace SkillBridge.Application.Common
     {
         public static string HashToken(string token)
         {
+            if (string.IsNullOrWhiteSpace(token))
+                return string.Empty;
+
             var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
             return Convert.ToBase64String(bytes);
         }

@@ -1,6 +1,6 @@
 import { getAccessToken, setAccessToken, clearAccessToken } from "./tokenStore";
 
-const API_URL = "http://localhost:5004/api";
+const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
 
 async function handleResponse(response) {
     let data = null;
@@ -55,12 +55,21 @@ export async function resendVerification(email) {
     return handleResponse(res);
 }
 
+let refreshPromise = null;
 export async function refreshToken() {
-    const res = await fetch(`${API_URL}/auth/refresh`, {
-        method: "POST",
-        credentials: "include",
+    if (refreshPromise) {
+        return refreshPromise;
+    }
+    refreshPromise = (async () => {
+        const res = await fetch(`${API_URL}/auth/refresh`, {
+            method: "POST",
+            credentials: "include",
+        });
+        return handleResponse(res);
+    })().finally(() => {
+        refreshPromise = null;
     });
-    return handleResponse(res);
+    return refreshPromise;
 }
 
 export async function requestPasswordResetOtp(email) {
@@ -90,14 +99,23 @@ export async function resetPassword(resetToken, newPassword) {
     return handleResponse(res);
 }
 
-let refreshPromise = null;
+export async function changePassword(currentPassword, newPassword) {
+    return apiFetch("/auth/change-password", {
+        method: "POST",
+        body: JSON.stringify({ currentPassword, newPassword }),
+    });
+}
+
 export async function apiFetch(path, options = {}) {
+    const isFormData = options.body instanceof FormData;
+    const defaultHeaders = isFormData ? {} : { "Content-Type": "application/json" };
+
     const doFetch = (accessToken) =>
         fetch(`${API_URL}${path}`, {
             ...options,
             credentials: "include",
             headers: {
-                "Content-Type": "application/json",
+                ...defaultHeaders,
                 ...(options.headers || {}),
                 ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
             },
@@ -107,11 +125,11 @@ export async function apiFetch(path, options = {}) {
 
     if (res.status === 401) {
         try {
-            if (!refreshPromise) {
-                refreshPromise = refreshToken().finally(() => { refreshPromise = null; });
-            }
-            const result = await refreshPromise;
+            const result = await refreshToken();
             setAccessToken(result.token);
+            if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('auth:token_refreshed', { detail: { token: result.token } }));
+            }
             res = await doFetch(result.token);
         } catch (err) {
             handleAuthExpired();

@@ -3,7 +3,7 @@ import { useStore } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import '../../styles/account-settings.css';
 
-const PHONE_REGEX = /^0\d{9,10}$/;
+const PHONE_REGEX = /^0\d{9}$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
 // ==========================================
@@ -30,7 +30,7 @@ function EmployerProfileTab({ currentUser, updateProfile }) {
             return;
         }
         if (form.phone && !PHONE_REGEX.test(form.phone)) {
-            setError('Số điện thoại phải gồm 10-11 chữ số và bắt đầu bằng số 0.');
+            setError('Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.');
             return;
         }
         setSaving(true);
@@ -134,7 +134,7 @@ function EmployerProfileTab({ currentUser, updateProfile }) {
                         <input
                             type="tel"
                             inputMode="numeric"
-                            maxLength={11}
+                            maxLength={10}
                             placeholder="09xxxxxxxx"
                             value={form.phone}
                             onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })}
@@ -189,7 +189,7 @@ function StudentProfileTab({ currentUser, updateProfile }) {
             return;
         }
         if (form.phone && !PHONE_REGEX.test(form.phone)) {
-            setError('Số điện thoại phải gồm 10-11 chữ số và bắt đầu bằng số 0.');
+            setError('Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.');
             return;
         }
         setSaving(true);
@@ -266,7 +266,7 @@ function StudentProfileTab({ currentUser, updateProfile }) {
                         <input
                             type="tel"
                             inputMode="numeric"
-                            maxLength={11}
+                            maxLength={10}
                             placeholder="0xxxxxxxxx"
                             value={form.phone}
                             onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })}
@@ -483,7 +483,7 @@ function StudentSocialsTab() {
 // ==========================================
 // 5. PASSWORD TAB
 // ==========================================
-function PasswordTab({ changePassword }) {
+function PasswordTab({ changePassword, logout }) {
     const [form, setForm] = useState({ current: '', next: '', next2: '' });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -507,8 +507,11 @@ function PasswordTab({ changePassword }) {
         setSaving(true);
         try {
             await changePassword(form.current, form.next);
-            setSuccess('Đã đổi mật khẩu thành công!');
+            setSuccess('Đổi mật khẩu thành công! Hệ thống sẽ chuyển hướng để bạn đăng nhập lại sau 2 giây...');
             setForm({ current: '', next: '', next2: '' });
+            setTimeout(() => {
+                if (logout) logout();
+            }, 2000);
         } catch (err) {
             setError(err?.message || 'Không thể đổi mật khẩu. Vui lòng kiểm tra lại mật khẩu hiện tại.');
         } finally {
@@ -657,7 +660,7 @@ export default function AccountSettings() {
                         )}
 
                         {tab === 'password' && (
-                            <PasswordTab changePassword={changePassword} />
+                            <PasswordTab changePassword={changePassword} logout={logout} />
                         )}
                     </div>
                 </div>

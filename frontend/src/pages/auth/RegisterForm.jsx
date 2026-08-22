@@ -3,7 +3,7 @@ import { useStore } from '../../context/StoreContext';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
-const PHONE_REGEX = /^0\d{9,10}$/;
+const PHONE_REGEX = /^0\d{9}$/;
 
 export default function RegisterForm({ onSwitchTab }) {
     const [role, setRole] = useState('student');
@@ -17,11 +17,12 @@ export default function RegisterForm({ onSwitchTab }) {
     const { register: doRegister } = useStore();
 
     const validateEmail = (value) => {
-        if (!value) {
+        const email = (value || '').trim();
+        if (!email) {
             setEmailError('');
             return;
         }
-        setEmailError(EMAIL_REGEX.test(value) ? '' : 'Email không đúng định dạng');
+        setEmailError(EMAIL_REGEX.test(email) ? '' : 'Email không đúng định dạng');
     };
 
     const updateField = (patch) => {
@@ -31,33 +32,39 @@ export default function RegisterForm({ onSwitchTab }) {
 
     const handleRegister = async () => {
         setFormError('');
-        if (!regForm.name || !regForm.email || !regForm.password) {
+        const name = (regForm.name || '').trim();
+        const email = (regForm.email || '').trim();
+        const password = regForm.password || '';
+        const password2 = regForm.password2 || '';
+        const phone = (regForm.phone || '').trim();
+
+        if (!name || !email || !password) {
             setFormError('Vui lòng điền đầy đủ thông tin bắt buộc.');
             return;
         }
-        if (!EMAIL_REGEX.test(regForm.email)) {
+        if (!EMAIL_REGEX.test(email)) {
             setEmailError('Email không đúng định dạng');
             return;
         }
-        if (regForm.password !== regForm.password2) {
+        if (password !== password2) {
             setFormError('Mật khẩu xác nhận không khớp.');
             return;
         }
-        if (!PASSWORD_REGEX.test(regForm.password)) {
+        if (!PASSWORD_REGEX.test(password)) {
             setFormError('Mật khẩu phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt.');
             return;
         }
-        if (regForm.phone && !PHONE_REGEX.test(regForm.phone)) {
-            setFormError('Số điện thoại phải gồm 10-11 chữ số và bắt đầu bằng số 0.');
+        if (phone && !PHONE_REGEX.test(phone)) {
+            setFormError('Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.');
             return;
         }
         setLoading(true);
         try {
             const result = await doRegister(
-                regForm.name,
-                regForm.email,
-                regForm.password,
-                regForm.phone || null,
+                name,
+                email,
+                password,
+                phone || null,
                 role
             );
             setRegisterMessage(result.message);
@@ -128,12 +135,12 @@ export default function RegisterForm({ onSwitchTab }) {
                 <input
                     type="tel"
                     inputMode="numeric"
-                    maxLength={11}
+                    maxLength={10}
                     placeholder="0xxxxxxxxx"
                     value={regForm.phone}
                     onChange={(e) => updateField({ phone: e.target.value.replace(/\D/g, '') })}
                 />
-                <div className="hint">10-11 chữ số, bắt đầu bằng số 0.</div>
+                <div className="hint">10 chữ số, bắt đầu bằng số 0.</div>
             </div>
 
             <div className="field">

@@ -27,20 +27,47 @@ namespace SkillBridge.Infrastructure.Services
                 throw new BusinessException("Refresh token không hợp lệ");
 
             var tokenHash = TokenHasher.HashToken(refreshToken);
-            var existing = await authTokenRepository.GetValidTokenAsync(tokenHash, "refresh");
+            var token = await authTokenRepository.GetTokenByHashAsync(tokenHash, TokenTypes.Refresh);
 
-            if (existing is null) throw new BusinessException("Đã hết hạn phiên làm việc");
+            if (token is null)
+                throw new BusinessException("Đã hết hạn phiên làm việc");
 
-            existing.UsedAt = DateTime.UtcNow;
+            if (token.UsedAt != null)
+            {
+                if (token.UsedAt < DateTime.UtcNow.AddSeconds(-30))
+                {
+                    await authTokenRepository.InvalidateAllActiveTokensAsync(token.UserId, TokenTypes.Refresh);
+                    throw new BusinessException("Phiên làm việc đã bị thu hồi do phát hiện bất thường.");
+                }
+                throw new BusinessException("Phiên làm việc vừa được làm mới, vui lòng tải lại trang.", isGraceWindow: true);
+            }
 
-            var user = existing.User;
+            if (token.ExpiresAt <= DateTime.UtcNow)
+                throw new BusinessException("Đã hết hạn phiên làm việc");
+
+            var user = token.User;
+
+            if (user.AccountStatus == "locked" || user.AccountStatus == "blacklisted")
+            {
+                await authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.Refresh);
+                throw new BusinessException("Tài khoản đã bị khóa, vui lòng liên hệ hỗ trợ");
+            }
+
+            if (user.AccountStatus == "pending")
+                throw new BusinessException("Tài khoản chưa được kích hoạt, vui lòng kiểm tra email để xác thực trước khi sử dụng");
+
+            if (user.LockoutUntil.HasValue && user.LockoutUntil > DateTime.UtcNow)
+                throw new BusinessException("Tài khoản đang bị tạm khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau.");
+
+            token.UsedAt = DateTime.UtcNow;
+
             var newAccessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code);
             var newRefreshToken = jwtService.GenerateRefreshTokenString();
 
             await authTokenRepository.AddAsync(new AuthToken
             {
                 UserId = user.Id,
-                TokenType = "refresh",
+                TokenType = TokenTypes.Refresh,
                 TokenHash = TokenHasher.HashToken(newRefreshToken),
                 ExpiresAt = DateTime.UtcNow.AddDays(7),
                 CreatedAt = DateTime.UtcNow

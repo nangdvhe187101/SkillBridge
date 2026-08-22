@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -17,7 +17,7 @@ public partial class AuthToken
     [Column("user_id")]
     public int UserId { get; set; }
 
-    [Column("token_type", TypeName = "enum('email_verify','password_reset','refresh','withdraw_otp','change_bank_otp','login_otp','sensitive_action')")]
+    [Column("token_type", TypeName = "enum('email_verify','password_reset','refresh','withdraw_otp','change_bank_otp','login_otp','sensitive_action','password_reset_otp')")]
     public string TokenType { get; set; } = null!;
 
     [Column("token_hash")]

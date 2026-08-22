@@ -61,10 +61,14 @@ namespace SkillBridge.Infrastructure.Services.Auth
             }
 
             var lastOtp = await authTokenRepository.GetLatestTokenByUserAsync(user.Id, TokenTypes.PasswordResetOtp);
-            if (lastOtp != null && lastOtp.CreatedAt.AddSeconds(otpResendCooldownSeconds) > DateTime.UtcNow)
+            if (lastOtp != null)
             {
-                var secondsLeft = (int)(lastOtp.CreatedAt.AddSeconds(otpResendCooldownSeconds) - DateTime.UtcNow).TotalSeconds;
-                throw new BusinessException($"Vui lòng đợi {secondsLeft} giây trước khi yêu cầu gửi lại mã OTP.");
+                var cooldownEnd = lastOtp.CreatedAt.AddSeconds(otpResendCooldownSeconds);
+                if (cooldownEnd > DateTime.UtcNow)
+                {
+                    var waitSeconds = (int)Math.Ceiling((cooldownEnd - DateTime.UtcNow).TotalSeconds);
+                    throw new BusinessException($"Vui lòng đợi {waitSeconds} giây trước khi yêu cầu mã OTP mới.");
+                }
             }
 
             await authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.PasswordResetOtp);
@@ -96,6 +100,11 @@ namespace SkillBridge.Infrastructure.Services.Auth
         public async Task<VerifyOtpResultDto> VerifyOtpAsync(VerifyOtpDto dto)
         {
             var email = dto.Email?.Trim().ToLowerInvariant() ?? string.Empty;
+            var otp = dto.Otp?.Trim() ?? string.Empty;
+
+            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(otp))
+                throw new BusinessException(InvalidOtpMessage);
+
             var user = await userRepository.GetByEmailAsync(email);
             if (user is null)
                 throw new BusinessException(InvalidOtpMessage);
@@ -107,7 +116,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
             if (activeOtp.AttemptCount >= maxOtpAttempts)
                 throw new BusinessException("Mã OTP đã bị khóa do nhập sai quá nhiều lần. Vui lòng yêu cầu mã mới.");
 
-            var inputHash = TokenHasher.HashToken(dto.Otp);
+            var inputHash = TokenHasher.HashToken(otp);
             if (!ConstantTimeEquals(inputHash, activeOtp.TokenHash))
             {
                 activeOtp.AttemptCount += 1;
@@ -133,25 +142,34 @@ namespace SkillBridge.Infrastructure.Services.Auth
 
         public async Task<string> ResetPasswordAsync(ResetPasswordDto dto)
         {
-            if (!ValidationPatterns.Password.IsMatch(dto.NewPassword))
-                throw new BusinessException("Mật khẩu phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt");
+            var resetToken = dto.ResetToken?.Trim() ?? string.Empty;
+            var newPassword = dto.NewPassword ?? string.Empty;
 
-            var tokenHash = TokenHasher.HashToken(dto.ResetToken);
+            if (string.IsNullOrEmpty(resetToken))
+                throw new BusinessException("Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn");
+
+            if (string.IsNullOrEmpty(newPassword) || newPassword.Length > 100 || !ValidationPatterns.Password.IsMatch(newPassword))
+                throw new BusinessException("Mật khẩu phải có ít nhất 8 ký tự và tối đa 100 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt");
+
+            var tokenHash = TokenHasher.HashToken(resetToken);
             var tokenEntity = await authTokenRepository.GetValidTokenAsync(tokenHash, TokenTypes.PasswordReset);
             if (tokenEntity is null)
                 throw new BusinessException("Liên kết đặt lại mật khẩu không hợp lệ hoặc đã hết hạn");
 
             var user = tokenEntity.User;
 
-            if (BCrypt.Net.BCrypt.Verify(dto.NewPassword, user.PasswordHash))
+            var isDuplicate = await Task.Run(() => BCrypt.Net.BCrypt.Verify(dto.NewPassword, user.PasswordHash));
+            if (isDuplicate)
                 throw new BusinessException("Mật khẩu mới không được trùng với mật khẩu cũ");
 
-            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
+            user.PasswordHash = await Task.Run(() => BCrypt.Net.BCrypt.HashPassword(dto.NewPassword));
             user.FailedLoginAttempts = 0;
             user.LockoutUntil = null;
             tokenEntity.UsedAt = DateTime.UtcNow;
 
             await authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.Refresh);
+            await authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.PasswordReset);
+            await authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.PasswordResetOtp);
 
             await authTokenRepository.SaveChangesAsync();
 

@@ -54,7 +54,6 @@ public class ResendVerificationDto
 }
 
 
-//forgot password 
 public class ForgotPasswordRequestDto
 {
     public string Email { get; set; } = string.Empty;
@@ -74,5 +73,11 @@ public class VerifyOtpResultDto
 public class ResetPasswordDto
 {
     public string ResetToken { get; set; } = string.Empty;
+    public string NewPassword { get; set; } = string.Empty;
+}
+
+public class ChangePasswordDto
+{
+    public string CurrentPassword { get; set; } = string.Empty;
     public string NewPassword { get; set; } = string.Empty;
 }

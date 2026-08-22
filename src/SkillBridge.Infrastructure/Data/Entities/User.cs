@@ -92,13 +92,11 @@ public partial class User
     [Column("joined_at", TypeName = "datetime")]
     public DateTime JoinedAt { get; set; }
 
-    // ==== MỚI: chống brute-force login theo tài khoản ====
     [Column("failed_login_attempts")]
     public int FailedLoginAttempts { get; set; } = 0;
 
     [Column("lockout_until")]
     public DateTime? LockoutUntil { get; set; }
-    // ======================================================
 
     [InverseProperty("Business")]
     public virtual ICollection<AdCampaign> AdCampaigns { get; set; } = new List<AdCampaign>();

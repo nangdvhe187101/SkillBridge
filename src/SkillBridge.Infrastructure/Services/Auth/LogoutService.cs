@@ -10,7 +10,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
 {
     public class LogoutService : ILogoutService
     {
-        public readonly IAuthTokenRepository authTokenRepository;
+        private readonly IAuthTokenRepository authTokenRepository;
         public LogoutService(IAuthTokenRepository _authTokenRepository)
         {
             authTokenRepository = _authTokenRepository;
@@ -23,7 +23,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
 
             var tokenHash = TokenHasher.HashToken(refreshToken);
 
-            var existing = await authTokenRepository.GetValidTokenAsync(tokenHash, "refresh");
+            var existing = await authTokenRepository.GetValidTokenAsync(tokenHash, TokenTypes.Refresh);
             if (existing is null)
                 return;
 

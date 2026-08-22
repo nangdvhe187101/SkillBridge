@@ -42,6 +42,19 @@ builder.Services.AddAuthentication(options =>
         ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 }, // chặn alg:none và alg confusion
         ClockSkew = TimeSpan.FromMinutes(1)
     };
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            var accessToken = context.Request.Query["access_token"];
+            var path = context.HttpContext.Request.Path;
+            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            {
+                context.Token = accessToken;
+            }
+            return Task.CompletedTask;
+        }
+    };
 });
 builder.Services.AddAuthorization();
 
@@ -60,13 +73,14 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+var frontendBaseUrl = builder.Configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins(frontendBaseUrl, "http://localhost:5173")
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials()); // cần thiết cho SignalR
+              .AllowCredentials()); // cần thiết cho SignalR và Cookie
 });
 
 builder.Services.AddRateLimiter(
@@ -79,12 +93,20 @@ builder.Services.AddRateLimiter(
         {
             PermitLimit = 30,
             Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 10,
+            QueueLimit = 0,
             QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst
         }));
         options.RejectionStatusCode = 429;
     }
 );
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor |
+                               Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
 {
@@ -92,6 +114,8 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 });
 
 var app = builder.Build();
+
+app.UseForwardedHeaders();
 
 app.UseMiddleware<SkillBridge.API.Middleware.ExceptionHandlingMiddleware>();
 
@@ -120,28 +144,4 @@ app.MapControllers();
 // app.MapHub<ChatHub>("/hubs/chat");
 // app.MapHub<NotificationHub>("/hubs/notification");
 
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast = Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast");
-
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}

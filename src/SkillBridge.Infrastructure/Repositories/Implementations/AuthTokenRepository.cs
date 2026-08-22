@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using SkillBridge.Application.Common;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
@@ -28,6 +29,13 @@ namespace SkillBridge.Infrastructure.Repositories.Implementations
                 t.UsedAt == null &&
                 t.ExpiresAt > DateTime.UtcNow);
         }
+
+        public async Task<AuthToken?> GetTokenByHashAsync(string tokenHash, string tokenType)
+        {
+            return await context.AuthTokens.Include(t => t.User).ThenInclude(u => u.Role)
+                .FirstOrDefaultAsync(t => t.TokenHash == tokenHash && t.TokenType == tokenType);
+        }
+
         public async Task<AuthToken?> GetLatestTokenByUserAsync(int userId, string tokenType)
         {
             return await context.AuthTokens
@@ -37,17 +45,26 @@ namespace SkillBridge.Infrastructure.Repositories.Implementations
         }
         public async Task<int> MarkTokenAsUsedIfValidAsync(string tokenHash, string tokenType)
         {
-            var rowsAffected = await context.AuthTokens.Where(t => t.TokenHash == tokenHash
-            && t.TokenType == tokenType
-            && t.UsedAt == null
-            && t.ExpiresAt > DateTime.UtcNow).ExecuteUpdateAsync(setters => setters.SetProperty(t => t.UsedAt, DateTime.UtcNow));
-            if (rowsAffected > 0 && tokenType == "email_verify")
+            var token = await context.AuthTokens
+                .Include(t => t.User)
+                .FirstOrDefaultAsync(t =>
+                    t.TokenHash == tokenHash &&
+                    t.TokenType == tokenType &&
+                    t.UsedAt == null &&
+                    t.ExpiresAt > DateTime.UtcNow);
+
+            if (token == null)
+                return 0;
+
+            token.UsedAt = DateTime.UtcNow;
+
+            if (tokenType == TokenTypes.EmailVerify && token.User.AccountStatus == "pending")
             {
-                var token = await context.AuthTokens.Include(t => t.User).FirstAsync(t => t.TokenHash == tokenHash && t.TokenType == tokenType);
                 token.User.AccountStatus = "active";
-                await context.SaveChangesAsync();
             }
-            return rowsAffected;
+
+            await context.SaveChangesAsync();
+            return 1;
         }
 
         public async Task SaveChangesAsync() => await context.SaveChangesAsync();

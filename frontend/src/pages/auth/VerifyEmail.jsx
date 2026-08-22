@@ -13,8 +13,18 @@ export default function VerifyEmail() {
     const [resendEmail, setResendEmail] = useState('');
     const [resendLoading, setResendLoading] = useState(false);
     const [resendDone, setResendDone] = useState(false);
+    const [resendError, setResendError] = useState('');
+    const [countdown, setCountdown] = useState(0);
 
     const calledRef = useRef(false);
+
+    useEffect(() => {
+        if (countdown <= 0) return;
+        const timer = setInterval(() => {
+            setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [countdown]);
 
     useEffect(() => {
         if (calledRef.current) return;
@@ -39,16 +49,20 @@ export default function VerifyEmail() {
     }, [searchParams]);
 
     const handleResend = async () => {
-        if (!resendEmail) {
-            alert('Vui lòng nhập email đã đăng ký.');
+        if (countdown > 0) return;
+        setResendError('');
+        const email = (resendEmail || '').trim();
+        if (!email) {
+            setResendError('Vui lòng nhập email đã đăng ký.');
             return;
         }
         setResendLoading(true);
         try {
-            await resendVerification(resendEmail);
+            await resendVerification(email);
             setResendDone(true);
+            setCountdown(60);
         } catch (err) {
-            alert(err.message);
+            setResendError(err.message || 'Không thể gửi lại email xác thực. Vui lòng thử lại sau.');
         } finally {
             setResendLoading(false);
         }
@@ -104,16 +118,29 @@ export default function VerifyEmail() {
                                             type="email"
                                             placeholder="ban@fpt.edu.vn"
                                             value={resendEmail}
-                                            onChange={(e) => setResendEmail(e.target.value)}
+                                            onChange={(e) => {
+                                                setResendEmail(e.target.value);
+                                                if (resendError) setResendError('');
+                                            }}
                                         />
                                     </div>
-                                    <button className="btn btn-primary btn-block" onClick={handleResend} disabled={resendLoading}>
-                                        {resendLoading ? 'Đang gửi...' : 'Gửi lại liên kết xác thực'}
+                                    {resendError && <div className="field-error" style={{ marginBottom: 12, textAlign: 'left' }}>{resendError}</div>}
+                                    <button className="btn btn-primary btn-block" onClick={handleResend} disabled={resendLoading || countdown > 0}>
+                                        {resendLoading ? 'Đang gửi...' : countdown > 0 ? `Thử lại sau ${countdown}s` : 'Gửi lại liên kết xác thực'}
                                     </button>
                                 </>
                             ) : (
-                                <div className="auth-mobile-trust" style={{ display: 'flex', marginTop: 4 }}>
-                                    ✉️ <span>Đã gửi liên kết xác thực mới tới <b>{resendEmail}</b>. Vui lòng kiểm tra hộp thư.</span>
+                                <div style={{ marginTop: 12 }}>
+                                    <div className="auth-mobile-trust" style={{ display: 'flex', marginBottom: 12 }}>
+                                        ✉️ <span>Đã gửi liên kết xác thực mới tới <b>{resendEmail}</b>. Vui lòng kiểm tra hộp thư.</span>
+                                    </div>
+                                    {countdown > 0 ? (
+                                        <div className="sub" style={{ fontSize: 13 }}>Bạn có thể gửi lại sau <b>{countdown}s</b>.</div>
+                                    ) : (
+                                        <button className="btn btn-outline btn-block" onClick={() => setResendDone(false)}>
+                                            Gửi lại email khác
+                                        </button>
+                                    )}
                                 </div>
                             )}
 

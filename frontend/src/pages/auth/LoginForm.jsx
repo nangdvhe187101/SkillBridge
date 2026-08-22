@@ -14,26 +14,30 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
     const { login: doLogin } = useStore();
 
     const validateEmail = (value) => {
-        if (!value) {
+        const email = (value || '').trim();
+        if (!email) {
             setEmailError('');
             return;
         }
-        setEmailError(EMAIL_REGEX.test(value) ? '' : 'Email không đúng định dạng');
+        setEmailError(EMAIL_REGEX.test(email) ? '' : 'Email không đúng định dạng');
     };
 
     const handleLogin = async () => {
         setFormError('');
-        if (!loginForm.email || !loginForm.password) {
+        const email = (loginForm.email || '').trim();
+        const password = loginForm.password || '';
+
+        if (!email || !password) {
             setFormError('Vui lòng nhập email và mật khẩu.');
             return;
         }
-        if (!EMAIL_REGEX.test(loginForm.email)) {
+        if (!EMAIL_REGEX.test(email)) {
             setEmailError('Email không đúng định dạng');
             return;
         }
         setLoading(true);
         try {
-            await doLogin(loginForm.email, loginForm.password);
+            await doLogin(email, password);
             navigate('/');
         } catch (err) {
             setFormError(err.message);

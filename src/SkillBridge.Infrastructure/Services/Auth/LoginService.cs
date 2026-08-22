@@ -18,6 +18,7 @@ namespace SkillBridge.Infrastructure.Services
 
         private const int MaxFailedAttempts = 5;
         private const int LockoutMinutes = 15;
+        private static readonly string DummyPasswordHash = "$2a$11$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
         public LoginService(IUserRepository _userRepository, IJwtService _jwtService, IAuthTokenRepository _authTokenRepository)
         {
@@ -35,7 +36,10 @@ namespace SkillBridge.Infrastructure.Services
             var user = await userRepository.GetByEmailWithRoleAsync(email);
 
             if (user is null)
+            {
+                await Task.Run(() => BCrypt.Net.BCrypt.Verify(dto.Password, DummyPasswordHash));
                 throw new BusinessException("Email hoặc mật khẩu không đúng");
+            }
 
             if (user.LockoutUntil.HasValue && user.LockoutUntil > DateTime.UtcNow)
             {
@@ -66,6 +70,7 @@ namespace SkillBridge.Infrastructure.Services
             {
                 user.FailedLoginAttempts = 0;
                 user.LockoutUntil = null;
+                await userRepository.SaveChangesAsync();
             }
 
             var accessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code);
@@ -74,7 +79,7 @@ namespace SkillBridge.Infrastructure.Services
             await authTokenRepository.AddAsync(new AuthToken
             {
                 UserId = user.Id,
-                TokenType = "refresh",
+                TokenType = TokenTypes.Refresh,
                 TokenHash = TokenHasher.HashToken(refreshToken),
                 ExpiresAt = DateTime.UtcNow.AddDays(7),
                 CreatedAt = DateTime.UtcNow

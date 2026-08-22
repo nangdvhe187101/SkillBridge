@@ -12,9 +12,8 @@ namespace SkillBridge.Application.Common
        @"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$",
        RegexOptions.Compiled);
 
-        // 10-11 chữ số, bắt đầu bằng số 0 (tính cả số 0 đầu)
         public static readonly Regex Phone = new(
-            @"^0\d{9,10}$",
+            @"^0\d{9}$",
             RegexOptions.Compiled);
 
         public static readonly Regex Email = new(

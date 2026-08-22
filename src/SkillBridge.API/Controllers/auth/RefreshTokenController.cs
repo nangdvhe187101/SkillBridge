@@ -34,8 +34,11 @@ namespace SkillBridge.API.Controllers
             }
             catch (BusinessException ex)
             {
-                Response.ClearRefreshTokenCookie();
-                return BadRequest(new { message = ex.Message });
+                if (!ex.IsGraceWindow)
+                {
+                    Response.ClearRefreshTokenCookie();
+                }
+                return Unauthorized(new { message = ex.Message });
             }
         }
     }

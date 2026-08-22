@@ -22,7 +22,7 @@ namespace SkillBridge.Infrastructure.Services.Email
         {
             var tokenHash = TokenHasher.HashToken(token);
 
-            var rowsAffected = await authTokenRepository.MarkTokenAsUsedIfValidAsync(tokenHash, "email_verify");
+            var rowsAffected = await authTokenRepository.MarkTokenAsUsedIfValidAsync(tokenHash, TokenTypes.EmailVerify);
             if (rowsAffected == 0)
             {
                 logger.LogWarning("Verify email thất bại: token không hợp lệ/hết hạn/đã dùng");

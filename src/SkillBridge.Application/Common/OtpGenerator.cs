@@ -10,10 +10,7 @@ namespace SkillBridge.Application.Common
     {
         public static string GenerateOtp()
         {
-            using var rng = RandomNumberGenerator.Create();
-            var bytes = new byte[4];
-            rng.GetBytes(bytes);
-            var number = System.BitConverter.ToUInt32(bytes, 0) % 1000000;
+            var number = RandomNumberGenerator.GetInt32(100000, 1000000);
             return number.ToString("D6");
         }
     }

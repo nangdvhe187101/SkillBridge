@@ -60,7 +60,7 @@ public class RegisterService : IRegisterService
             throw new BusinessException("Họ tên không hợp lệ");
 
         if (!string.IsNullOrEmpty(dto.PhoneNumber) && !ValidationPatterns.Phone.IsMatch(dto.PhoneNumber))
-            throw new BusinessException("Số điện thoại phải gồm 10-11 chữ số và bắt đầu bằng số 0");
+            throw new BusinessException("Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0");
 
         if (dto.RoleCode != RoleCode.Student && dto.RoleCode != RoleCode.Employer)
             throw new BusinessException("Vai trò phải là 'student' hoặc 'employer'");
@@ -70,14 +70,18 @@ public class RegisterService : IRegisterService
             var allowedDomains = config.GetSection("Auth:AllowedStudentEmailDomains")
                 .GetChildren()
                 .Select(c => c.Value)
-                .Where(v => v != null)
+                .Where(v => !string.IsNullOrWhiteSpace(v))
                 .ToArray();
 
-            var isAllowed = allowedDomains.Any(domain =>
-                dto.Email.EndsWith("@" + domain, StringComparison.OrdinalIgnoreCase));
+            var emailParts = dto.Email.Split('@');
+            var domain = emailParts.Length > 1 ? emailParts[1] : string.Empty;
+
+            var isAllowed = allowedDomains.Length == 0 || allowedDomains.Any(allowed =>
+                domain.Equals(allowed, StringComparison.OrdinalIgnoreCase) ||
+                domain.EndsWith("." + allowed, StringComparison.OrdinalIgnoreCase));
 
             if (!isAllowed)
-                throw new BusinessException("Sinh viên phải đăng ký bằng email trường (ví dụ: @fpt.edu.vn)");
+                throw new BusinessException("Sinh viên phải đăng ký bằng email trường (ví dụ: @fpt.edu.vn hoặc @fe.edu.vn)");
         }
 
         if (await userRepository.EmailExistsAsync(dto.Email))
@@ -121,7 +125,7 @@ public class RegisterService : IRegisterService
         await authTokenRepository.AddAsync(new AuthToken
         {
             UserId = user.Id,
-            TokenType = "email_verify",
+            TokenType = TokenTypes.EmailVerify,
             TokenHash = TokenHasher.HashToken(verifyTokenPlain),
             ExpiresAt = DateTime.UtcNow.AddHours(24),
             CreatedAt = DateTime.UtcNow

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { requestPasswordResetOtp, verifyPasswordResetOtp, resetPassword as resetPasswordApi } from '../../api/authApi';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
@@ -17,13 +17,23 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
     const [showNewPassword2, setShowNewPassword2] = useState(false);
     const [formError, setFormError] = useState('');
     const [infoMessage, setInfoMessage] = useState('');
+    const [countdown, setCountdown] = useState(0);
+
+    useEffect(() => {
+        if (countdown <= 0) return;
+        const timer = setInterval(() => {
+            setCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [countdown]);
 
     const validateEmail = (value) => {
-        if (!value) {
+        const email = (value || '').trim();
+        if (!email) {
             setEmailError('');
             return;
         }
-        setEmailError(EMAIL_REGEX.test(value) ? '' : 'Email không đúng định dạng');
+        setEmailError(EMAIL_REGEX.test(email) ? '' : 'Email không đúng định dạng');
     };
 
     const resetForgotFlow = () => {
@@ -38,24 +48,27 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
         setShowNewPassword2(false);
         setFormError('');
         setInfoMessage('');
+        setCountdown(0);
     };
 
     const handleRequestOtp = async () => {
         setFormError('');
         setInfoMessage('');
-        if (!forgotEmail) {
+        const email = (forgotEmail || '').trim();
+        if (!email) {
             setFormError('Vui lòng nhập email.');
             return;
         }
-        if (!EMAIL_REGEX.test(forgotEmail)) {
+        if (!EMAIL_REGEX.test(email)) {
             setEmailError('Email không đúng định dạng');
             return;
         }
         setLoading(true);
         try {
-            const result = await requestPasswordResetOtp(forgotEmail);
+            const result = await requestPasswordResetOtp(email);
             setInfoMessage(result.message);
             setForgotStep('otp');
+            setCountdown(60);
         } catch (err) {
             setFormError(err.message);
         } finally {
@@ -64,12 +77,19 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
     };
 
     const handleResendOtp = async () => {
+        if (countdown > 0) return;
         setFormError('');
         setInfoMessage('');
+        const email = (forgotEmail || '').trim();
+        if (!email) {
+            setFormError('Vui lòng nhập email.');
+            return;
+        }
         setLoading(true);
         try {
-            const result = await requestPasswordResetOtp(forgotEmail);
+            const result = await requestPasswordResetOtp(email);
             setInfoMessage(result.message);
+            setCountdown(60);
         } catch (err) {
             setFormError(err.message);
         } finally {
@@ -113,9 +133,9 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
         }
         setLoading(true);
         try {
-            await resetPasswordApi(resetToken, newPassword);
-            resetForgotFlow();
-            onBackToLogin();
+            const result = await resetPasswordApi(resetToken, newPassword);
+            setInfoMessage(result?.message || 'Đã đặt lại mật khẩu thành công. Bạn có thể đăng nhập ngay.');
+            setForgotStep('success');
         } catch (err) {
             setFormError(err.message);
         } finally {
@@ -177,9 +197,15 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                         {loading ? 'Đang xác thực...' : 'Xác nhận mã OTP'}
                     </button>
                     <div className="auth-foot">
-                        <a onClick={handleResendOtp}>Gửi lại mã</a>
+                        {countdown > 0 ? (
+                            <span style={{ color: 'var(--ink-subtle, #888)' }}>
+                                Gửi lại mã sau <b>{countdown}s</b>
+                            </span>
+                        ) : (
+                            <a onClick={handleResendOtp} style={{ cursor: 'pointer' }}>Gửi lại mã</a>
+                        )}
                         {' · '}
-                        <a onClick={() => { setForgotStep('email'); setFormError(''); setInfoMessage(''); }}>← Nhập email khác</a>
+                        <a onClick={() => { setForgotStep('email'); setFormError(''); setInfoMessage(''); }} style={{ cursor: 'pointer' }}>← Nhập email khác</a>
                     </div>
                 </form>
             )}
@@ -244,6 +270,25 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                         {loading ? 'Đang đổi mật khẩu...' : 'Đặt lại mật khẩu'}
                     </button>
                 </form>
+            )}
+
+            {forgotStep === 'success' && (
+                <div>
+                    <h2>Đặt lại mật khẩu thành công</h2>
+                    <div className="sub" style={{ marginBottom: 20 }}>
+                        {infoMessage || 'Mật khẩu của bạn đã được cập nhật thành công. Vui lòng đăng nhập bằng mật khẩu mới.'}
+                    </div>
+                    <button
+                        type="button"
+                        className="btn btn-primary btn-block"
+                        onClick={() => {
+                            resetForgotFlow();
+                            onBackToLogin();
+                        }}
+                    >
+                        Đến trang đăng nhập
+                    </button>
+                </div>
             )}
         </div>
     );

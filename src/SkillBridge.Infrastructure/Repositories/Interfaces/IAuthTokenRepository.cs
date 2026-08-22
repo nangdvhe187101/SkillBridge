@@ -10,6 +10,7 @@ namespace SkillBridge.Infrastructure.Repositories.Interfaces
     {
         Task AddAsync(AuthToken token);
         Task<AuthToken?> GetValidTokenAsync(string tokenHash, string tokenType);
+        Task<AuthToken?> GetTokenByHashAsync(string tokenHash, string tokenType);
         Task<int> MarkTokenAsUsedIfValidAsync(string tokenHash, string tokenType);
         Task SaveChangesAsync();
         Task<AuthToken?> GetActiveTokenByUserAsync(int userId, string tokenType);

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
 using SkillBridge.Application.Interfaces.Email;
 
@@ -22,8 +23,15 @@ namespace SkillBridge.API.Controllers
         [HttpPost("resend-verification")]
         public async Task<IActionResult> Resend([FromBody] ResendVerificationDto dto)
         {
-            var message = await resendVerificationService.ResendAsync(dto.Email);
-            return Ok(new { message });
+            try
+            {
+                var message = await resendVerificationService.ResendAsync(dto.Email);
+                return Ok(new { message });
+            }
+            catch (BusinessException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
         }
     }
 }

@@ -4,7 +4,7 @@ import { myJobsSeed } from '../data/myJobs';
 import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
 import { useToast } from './ToastContext';
 
-import { login as loginApi, register as registerApi, logout as logoutApi } from '../api/authApi';
+import { login as loginApi, register as registerApi, logout as logoutApi, refreshToken as refreshTokenApi, changePassword as changePasswordApi } from '../api/authApi';
 import { setAccessToken, clearAccessToken } from '../api/tokenStore';
 
 const StoreContext = createContext(null);
@@ -67,10 +67,11 @@ const initialState = {
   ],
   reviews: [],
   employerReviews: [],
-  token: localStorage.getItem('token') || null,
-  refreshToken: localStorage.getItem('refreshToken') || null,
+  token: null, // token chỉ lưu trong memory (tokenStore.js), không còn persist localStorage
   currentUser: JSON.parse(localStorage.getItem('user') || 'null'),
-  role: 'student',
+  role: JSON.parse(localStorage.getItem('user') || 'null')?.roleCode || 'student',
+  // isInitializing: true khi app đang chờ refresh token lúc khởi động
+  isInitializing: !!JSON.parse(localStorage.getItem('user') || 'null'),
   cvFile: null,
   cvFiles: [
     { id: 1, name: 'CV_NguyenVanAn_WebDev.pdf', label: 'CV Lập trình Web Frontend', category: 'Lập trình web', size: '245 KB', date: '10/08/2026' },
@@ -115,17 +116,20 @@ function addTxTo(list, type, label, amount, sign) {
 function reducer(state, action) {
   switch (action.type) {
     case 'AUTH_LOGIN_SUCCESS': {
-      const { token, refreshToken, userId, fullName, email, roleCode } = action.payload;
+      const { token, userId, fullName, email, roleCode } = action.payload;
       setAccessToken(token);
       localStorage.setItem('user', JSON.stringify({ userId, fullName, email, roleCode }));
-      return { ...state, token, refreshToken, currentUser: { userId, fullName, email, roleCode }, role: roleCode };
+      return { ...state, token, currentUser: { userId, fullName, email, roleCode }, role: roleCode, isInitializing: false };
     }
 
     case 'AUTH_LOGOUT': {
       clearAccessToken();
-      localStorage.removeItem('refreshToken');
       localStorage.removeItem('user');
-      return { ...state, token: null, refreshToken: null, currentUser: null, role: 'student' };
+      return { ...state, token: null, currentUser: null, role: 'student', isInitializing: false };
+    }
+
+    case 'SET_ACCESS_TOKEN': {
+      return { ...state, token: action.token, isInitializing: false };
     }
 
     case 'UPDATE_PROFILE': {
@@ -621,9 +625,34 @@ export function StoreProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { showToast } = useToast();
 
+  // Khi app khởi động: thử refresh để phục hồi session từ HttpOnly cookie
+  useEffect(() => {
+    if (!state.currentUser) return; // Không có user trong localStorage → chưa đăng nhập
+    refreshTokenApi()
+      .then((result) => {
+        setAccessToken(result.token);
+        dispatch({ type: 'AUTH_LOGIN_SUCCESS', payload: result });
+      })
+      .catch(() => {
+        // Refresh thất bại (cookie hết hạn hoặc không tồn tại) → xóa user cũ
+        dispatch({ type: 'AUTH_LOGOUT' });
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     const id = setInterval(() => dispatch({ type: 'CHECK_DEADLINES' }), 30000);
-    return () => clearInterval(id);
+    const onTokenRefreshed = (e) => {
+      if (e.detail?.token) {
+        dispatch({ type: 'SET_ACCESS_TOKEN', token: e.detail.token });
+      }
+    };
+    window.addEventListener('auth:token_refreshed', onTokenRefreshed);
+
+    return () => {
+      clearInterval(id);
+      window.removeEventListener('auth:token_refreshed', onTokenRefreshed);
+    };
   }, []);
 
   const actions = useMemo(
@@ -678,8 +707,12 @@ export function StoreProvider({ children }) {
         showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, '👋');
         return result;
       },
-      logout: () => {
-        logoutApi();
+      logout: async () => {
+        try {
+          await logoutApi();
+        } catch {
+          // bỏ qua lỗi mạng khi logout
+        }
         clearAccessToken();
         dispatch({ type: 'AUTH_LOGOUT' });
         showToast(`Đã đăng xuất`, '👋');
@@ -688,14 +721,10 @@ export function StoreProvider({ children }) {
         dispatch({ type: 'UPDATE_PROFILE', patch });
         showToast('Đã cập nhật thông tin tài khoản.', '✓');
       },
-      changePassword: (currentPassword, newPassword) => {
-        // TODO: nối API đổi mật khẩu thật (POST /auth/change-password) khi backend sẵn sàng.
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            showToast('Đã đổi mật khẩu thành công.', '✓');
-            resolve({ message: 'Đổi mật khẩu thành công.' });
-          }, 600);
-        });
+      changePassword: async (currentPassword, newPassword) => {
+        const result = await changePasswordApi(currentPassword, newPassword);
+        showToast(result?.message || 'Đã đổi mật khẩu thành công.', '✓');
+        return result;
       },
       register: async (fullName, email, password, phoneNumber, roleCode) => {
         return registerApi(fullName, email, password, phoneNumber, roleCode);

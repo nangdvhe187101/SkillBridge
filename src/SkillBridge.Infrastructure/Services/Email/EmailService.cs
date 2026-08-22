@@ -79,9 +79,10 @@ namespace SkillBridge.Infrastructure.Services.Email
         private async Task SendAsync(MimeMessage message)
         {
             using var client = new SmtpClient();
+            var port = int.TryParse(config["Smtp:Port"], out var p) ? p : 587;
             await client.ConnectAsync(
                 config["Smtp:Host"] ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:Host"),
-                int.Parse(config["Smtp:Port"] ?? "587"),
+                port,
                 SecureSocketOptions.StartTls);
             await client.AuthenticateAsync(
                 config["Smtp:Username"] ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:Username"),

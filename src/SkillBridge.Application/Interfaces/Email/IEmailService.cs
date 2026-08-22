@@ -9,10 +9,8 @@ namespace SkillBridge.Application.Interfaces
     {
         Task SendVerificationEmailAsync(string toEmail, string fullName, string verificationLink);
 
-        //gửi mã OTP quên mật khẩu
         Task SendPasswordResetOtpAsync(string toEmail, string fullName, string otp);
 
-        //thông báo mật khẩu vừa được đổi
         Task SendPasswordChangedNotificationAsync(string toEmail, string fullName);
     }
 }

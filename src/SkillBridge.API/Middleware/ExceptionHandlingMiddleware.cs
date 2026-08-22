@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
+using SkillBridge.Application.Common;
 
 namespace SkillBridge.API.Middleware
 {
@@ -23,6 +24,14 @@ namespace SkillBridge.API.Middleware
             try
             {
                 await next(context);
+            }
+            catch (BusinessException ex)
+            {
+                logger.LogWarning("Business exception tại {Path}: {Message}", context.Request.Path, ex.Message);
+                context.Response.ContentType = "application/json";
+                context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+                var payload = JsonSerializer.Serialize(new { message = ex.Message });
+                await context.Response.WriteAsync(payload);
             }
             catch (Exception ex)
             {
