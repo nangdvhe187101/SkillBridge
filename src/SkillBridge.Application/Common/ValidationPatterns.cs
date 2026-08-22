@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace SkillBridge.Application.Common
 {
-    public class ValidationPatterns
+    public static class ValidationPatterns
     {
         public static readonly Regex Password = new(
        @"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$",

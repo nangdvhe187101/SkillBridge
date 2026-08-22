@@ -27,7 +27,7 @@ namespace SkillBridge.API.Middleware
             }
             catch (BusinessException ex)
             {
-                logger.LogWarning("Business exception tại {Path}: {Message}", context.Request.Path, ex.Message);
+                logger.LogWarning(ex, "Business exception tại {Path}: {Message}", context.Request.Path, ex.Message);
                 context.Response.ContentType = "application/json";
                 context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
                 var payload = JsonSerializer.Serialize(new { message = ex.Message });
