@@ -88,5 +88,12 @@ namespace SkillBridge.Infrastructure.Repositories.Implementations
                     && t.ExpiresAt > DateTime.UtcNow)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(t => t.UsedAt, DateTime.UtcNow));
         }
+
+        public async Task<int> MarkTokenAsUsedAsync(int tokenId, DateTime usedAt)
+        {
+            return await context.AuthTokens
+                .Where(t => t.Id == tokenId && t.UsedAt == null)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(t => t.UsedAt, usedAt));
+        }
     }
 }

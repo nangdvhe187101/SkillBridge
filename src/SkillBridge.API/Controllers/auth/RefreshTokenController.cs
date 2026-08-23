@@ -38,7 +38,7 @@ namespace SkillBridge.API.Controllers
                 {
                     Response.ClearRefreshTokenCookie();
                 }
-                return Unauthorized(new { message = ex.Message });
+                return Unauthorized(new { message = ex.Message, isGraceWindow = ex.IsGraceWindow });
             }
         }
     }

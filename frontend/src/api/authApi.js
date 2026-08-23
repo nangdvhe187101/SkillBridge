@@ -10,10 +10,16 @@ async function handleResponse(response) {
     }
     if (!response.ok) {
         if (response.status === 429) {
-            throw new Error("Bạn đã thao tác quá nhiều lần, vui lòng thử lại sau ít phút.");
+            const err = new Error("Bạn đã thao tác quá nhiều lần, vui lòng thử lại sau ít phút.");
+            err.status = 429;
+            throw err;
         }
         const fallback = `Lỗi ${response.status}: không thể kết nối tới máy chủ hoặc endpoint không tồn tại.`;
-        throw new Error(data?.message || fallback);
+        const err = new Error(data?.message || fallback);
+        err.status = response.status;
+        err.data = data;
+        err.isGraceWindow = !!data?.isGraceWindow;
+        throw err;
     }
     return data;
 }
@@ -132,6 +138,18 @@ export async function apiFetch(path, options = {}) {
             }
             res = await doFetch(result.token);
         } catch (err) {
+            if (err?.isGraceWindow) {
+                // Grace window: Một request/tab khác vừa làm mới token trong vòng 30s.
+                // Đợi ngắn để token mới được đồng bộ và thử gọi lại trước khi logout
+                await new Promise((resolve) => setTimeout(resolve, 400));
+                const currentToken = getAccessToken();
+                if (currentToken) {
+                    res = await doFetch(currentToken);
+                    if (res.ok) {
+                        return handleResponse(res);
+                    }
+                }
+            }
             handleAuthExpired();
             throw new Error("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
         }
