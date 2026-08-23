@@ -16,5 +16,6 @@ namespace SkillBridge.Infrastructure.Repositories.Interfaces
         Task<AuthToken?> GetActiveTokenByUserAsync(int userId, string tokenType);
         Task<AuthToken?> GetLatestTokenByUserAsync(int userId, string tokenType);
         Task InvalidateAllActiveTokensAsync(int userId, string tokenType);
+        Task<int> MarkTokenAsUsedAsync(int tokenId, DateTime usedAt);
     }
 }

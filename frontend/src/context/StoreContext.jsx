@@ -139,16 +139,6 @@ function reducer(state, action) {
       return { ...state, currentUser };
     }
 
-    case 'SWITCH_ROLE': {
-      const nextRole = state.role === 'employer' ? 'student' : 'employer';
-      let currentUser = state.currentUser;
-      if (currentUser) {
-        currentUser = { ...currentUser, roleCode: nextRole };
-        localStorage.setItem('user', JSON.stringify(currentUser));
-      }
-      return { ...state, role: nextRole, currentUser };
-    }
-
     case 'SUBMIT_JOB_FORM': {
       const { title, cat, budget, desc, req, urgent, attachments, editingId } = action.payload;
       const fileList = attachments || [];
@@ -633,7 +623,11 @@ export function StoreProvider({ children }) {
         setAccessToken(result.token);
         dispatch({ type: 'AUTH_LOGIN_SUCCESS', payload: result });
       })
-      .catch(() => {
+      .catch((err) => {
+        if (err?.isGraceWindow) {
+          // Token vừa được refresh bởi request/tab khác, không logout
+          return;
+        }
         // Refresh thất bại (cookie hết hạn hoặc không tồn tại) → xóa user cũ
         dispatch({ type: 'AUTH_LOGOUT' });
       });
@@ -732,9 +726,6 @@ export function StoreProvider({ children }) {
       updateAdsSettings: (patch) => {
         dispatch({ type: 'UPDATE_ADS_SETTINGS', payload: patch });
         showToast('Đã lưu cài đặt chiến dịch quảng cáo.', '📢');
-      },
-      switchRole: () => {
-        dispatch({ type: 'SWITCH_ROLE' });
       }
     }),
     [showToast]

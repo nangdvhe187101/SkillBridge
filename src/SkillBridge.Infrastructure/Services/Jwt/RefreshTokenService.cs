@@ -59,7 +59,21 @@ namespace SkillBridge.Infrastructure.Services
             if (user.LockoutUntil.HasValue && user.LockoutUntil > DateTime.UtcNow)
                 throw new BusinessException("Tài khoản đang bị tạm khóa do đăng nhập sai nhiều lần. Vui lòng thử lại sau.");
 
-            token.UsedAt = DateTime.UtcNow;
+            var updatedRows = await authTokenRepository.MarkTokenAsUsedAsync(token.Id, DateTime.UtcNow);
+            if (updatedRows == 0)
+            {
+                var currentToken = await authTokenRepository.GetTokenByHashAsync(tokenHash, TokenTypes.Refresh);
+                if (currentToken?.UsedAt != null)
+                {
+                    if (currentToken.UsedAt < DateTime.UtcNow.AddSeconds(-30))
+                    {
+                        await authTokenRepository.InvalidateAllActiveTokensAsync(token.UserId, TokenTypes.Refresh);
+                        throw new BusinessException("Phiên làm việc đã bị thu hồi do phát hiện bất thường.");
+                    }
+                    throw new BusinessException("Phiên làm việc vừa được làm mới, vui lòng tải lại trang.", isGraceWindow: true);
+                }
+                throw new BusinessException("Đã hết hạn phiên làm việc");
+            }
 
             var newAccessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code);
             var newRefreshToken = jwtService.GenerateRefreshTokenString();

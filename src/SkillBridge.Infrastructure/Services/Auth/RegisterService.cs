@@ -73,10 +73,16 @@ public class RegisterService : IRegisterService
                 .Where(v => !string.IsNullOrWhiteSpace(v))
                 .ToArray();
 
+            if (allowedDomains.Length == 0)
+            {
+                logger.LogError("Cấu hình 'Auth:AllowedStudentEmailDomains' bị thiếu hoặc rỗng. Từ chối đăng ký tài khoản sinh viên.");
+                throw new BusinessException("Hệ thống chưa cấu hình danh sách domain email sinh viên hợp lệ. Vui lòng liên hệ quản trị viên.");
+            }
+
             var emailParts = dto.Email.Split('@');
             var domain = emailParts.Length > 1 ? emailParts[1] : string.Empty;
 
-            var isAllowed = allowedDomains.Length == 0 || allowedDomains.Any(allowed =>
+            var isAllowed = allowedDomains.Any(allowed =>
                 domain.Equals(allowed, StringComparison.OrdinalIgnoreCase) ||
                 domain.EndsWith("." + allowed, StringComparison.OrdinalIgnoreCase));
 
