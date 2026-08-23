@@ -506,7 +506,6 @@ function reducer(state, action) {
       };
     }
 
-    /* ---- deadline reminders ---- */
     case 'CHECK_DEADLINES': {
       let notifications = state.notifications;
       let changed = false;
@@ -530,13 +529,11 @@ function reducer(state, action) {
       return { ...state, myJobs, notifications };
     }
 
-    /* ---- notifications ---- */
     case 'MARK_ALL_NOTIF_READ':
       return { ...state, notifications: state.notifications.map((n) => ({ ...n, read: true })) };
     case 'MARK_NOTIF_READ':
       return { ...state, notifications: state.notifications.map((n) => (n.id === action.id ? { ...n, read: true } : n)) };
 
-    /* ---- messenger ---- */
     case 'TOGGLE_MESSENGER_PANEL':
       return { ...state, messengerPanelOpen: action.open !== undefined ? action.open : !state.messengerPanelOpen };
 
@@ -611,27 +608,77 @@ function reducer(state, action) {
   }
 }
 
+const authBroadcast = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('skillbridge_auth_sync')
+  : null;
+
 export function StoreProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { showToast } = useToast();
 
-  // Khi app khởi động: thử refresh để phục hồi session từ HttpOnly cookie
+  // Lắng nghe sự kiện đăng nhập/đăng xuất từ các tab khác
   useEffect(() => {
-    if (!state.currentUser) return; // Không có user trong localStorage → chưa đăng nhập
-    refreshTokenApi()
-      .then((result) => {
+    if (!authBroadcast) return;
+    const handleAuthMessage = (e) => {
+      if (e.data?.type === 'AUTH_LOGIN_SUCCESS') {
+        setAccessToken(e.data.payload.token);
+        dispatch({ type: 'AUTH_LOGIN_SUCCESS', payload: e.data.payload });
+      } else if (e.data?.type === 'AUTH_LOGOUT') {
+        clearAccessToken();
+        dispatch({ type: 'AUTH_LOGOUT' });
+      }
+    };
+    authBroadcast.addEventListener('message', handleAuthMessage);
+    return () => {
+      authBroadcast.removeEventListener('message', handleAuthMessage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!state.currentUser) {
+      dispatch({ type: 'SET_ACCESS_TOKEN', token: null });
+      return;
+    }
+
+    let isMounted = true;
+    const MAX_RETRIES = 4;
+
+    const tryInitSession = async (retryCount = 0) => {
+      try {
+        const result = await refreshTokenApi();
+        if (!isMounted) return;
         setAccessToken(result.token);
         dispatch({ type: 'AUTH_LOGIN_SUCCESS', payload: result });
-      })
-      .catch((err) => {
+        authBroadcast?.postMessage({ type: 'AUTH_LOGIN_SUCCESS', payload: result });
+      } catch (err) {
+        if (!isMounted) return;
+
         if (err?.isGraceWindow) {
-          // Token vừa được refresh bởi request/tab khác, không logout
+          if (retryCount < MAX_RETRIES) {
+            const baseDelay = Math.min(3200, 400 * Math.pow(2, retryCount));
+            const jitter = Math.floor(Math.random() * 200);
+            setTimeout(() => {
+              if (isMounted) {
+                tryInitSession(retryCount + 1);
+              }
+            }, baseDelay + jitter);
+            return;
+          }
+
+          dispatch({ type: 'AUTH_LOGOUT' });
+          authBroadcast?.postMessage({ type: 'AUTH_LOGOUT' });
           return;
         }
-        // Refresh thất bại (cookie hết hạn hoặc không tồn tại) → xóa user cũ
+
         dispatch({ type: 'AUTH_LOGOUT' });
-      });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+      }
+    };
+
+    tryInitSession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -698,6 +745,7 @@ export function StoreProvider({ children }) {
         const result = await loginApi(email, password);
         setAccessToken(result.token);
         dispatch({ type: "AUTH_LOGIN_SUCCESS", payload: result });
+        authBroadcast?.postMessage({ type: 'AUTH_LOGIN_SUCCESS', payload: result });
         showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, '👋');
         return result;
       },
@@ -709,6 +757,7 @@ export function StoreProvider({ children }) {
         }
         clearAccessToken();
         dispatch({ type: 'AUTH_LOGOUT' });
+        authBroadcast?.postMessage({ type: 'AUTH_LOGOUT' });
         showToast(`Đã đăng xuất`, '👋');
       },
       updateProfile: (patch) => {
