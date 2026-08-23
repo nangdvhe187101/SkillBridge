@@ -130,26 +130,40 @@ export async function apiFetch(path, options = {}) {
     let res = await doFetch(getAccessToken());
 
     if (res.status === 401) {
-        try {
-            const result = await refreshToken();
-            setAccessToken(result.token);
-            if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('auth:token_refreshed', { detail: { token: result.token } }));
-            }
-            res = await doFetch(result.token);
-        } catch (err) {
-            if (err?.isGraceWindow) {
-                // Grace window: Một request/tab khác vừa làm mới token trong vòng 30s.
-                // Đợi ngắn để token mới được đồng bộ và thử gọi lại trước khi logout
-                await new Promise((resolve) => setTimeout(resolve, 400));
-                const currentToken = getAccessToken();
-                if (currentToken) {
-                    res = await doFetch(currentToken);
-                    if (res.ok) {
-                        return handleResponse(res);
-                    }
+        let refreshSuccess = false;
+
+        for (let attempt = 0; attempt <= 3; attempt++) {
+            try {
+                const result = await refreshToken();
+                setAccessToken(result.token);
+                if (typeof window !== 'undefined') {
+                    window.dispatchEvent(new CustomEvent('auth:token_refreshed', { detail: { token: result.token } }));
                 }
+                res = await doFetch(result.token);
+                refreshSuccess = true;
+                break;
+            } catch (err) {
+                if (err?.isGraceWindow && attempt < 3) {
+                    // Grace window: Tab/request khác vừa refresh token trong 30s.
+                    // Backoff: 400ms, 800ms, 1600ms (+ jitter)
+                    const delay = 400 * Math.pow(2, attempt) + Math.floor(Math.random() * 150);
+                    await new Promise((resolve) => setTimeout(resolve, delay));
+                    // Kiểm tra nếu token đã được đồng bộ từ broadcast/event
+                    const currentToken = getAccessToken();
+                    if (currentToken) {
+                        res = await doFetch(currentToken);
+                        if (res.ok) {
+                            refreshSuccess = true;
+                            break;
+                        }
+                    }
+                    continue;
+                }
+                break;
             }
+        }
+
+        if (!refreshSuccess) {
             handleAuthExpired();
             throw new Error("Phiên đăng nhập đã hết hạn, vui lòng đăng nhập lại.");
         }
