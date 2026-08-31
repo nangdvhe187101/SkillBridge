@@ -660,6 +660,7 @@ public partial class SkillBridgeDbContext : DbContext
             entity.Property(e => e.JoinedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.KycStatus).HasDefaultValueSql("'pending'");
             entity.Property(e => e.ReliabilityScore).HasDefaultValueSql("'100'");
+            entity.Property(e => e.TokenVersion).HasDefaultValueSql("'1'");
 
             entity.HasOne(d => d.Role).WithMany(p => p.Users)
                 .OnDelete(DeleteBehavior.ClientSetNull)

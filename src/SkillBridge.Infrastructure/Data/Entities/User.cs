@@ -98,6 +98,9 @@ public partial class User
     [Column("lockout_until")]
     public DateTime? LockoutUntil { get; set; }
 
+    [Column("token_version")]
+    public int TokenVersion { get; set; } = 1;
+
     [InverseProperty("Business")]
     public virtual ICollection<AdCampaign> AdCampaigns { get; set; } = new List<AdCampaign>();
 

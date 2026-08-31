@@ -20,6 +20,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
         private readonly IAuthTokenRepository authTokenRepository;
         private readonly IEmailService emailService;
         private readonly IJwtService jwtService;
+        private readonly ITokenVersionService tokenVersionService;
         private readonly IConfiguration config;
         private readonly ILogger<ForgotPasswordService> logger;
 
@@ -33,6 +34,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
             IAuthTokenRepository _authTokenRepository,
             IEmailService _emailService,
             IJwtService _jwtService,
+            ITokenVersionService _tokenVersionService,
             IConfiguration _config,
             ILogger<ForgotPasswordService> _logger)
         {
@@ -40,6 +42,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
             authTokenRepository = _authTokenRepository;
             emailService = _emailService;
             jwtService = _jwtService;
+            tokenVersionService = _tokenVersionService;
             config = _config;
             logger = _logger;
 
@@ -158,13 +161,14 @@ namespace SkillBridge.Infrastructure.Services.Auth
 
             var user = tokenEntity.User;
 
-            var isDuplicate = await Task.Run(() => BCrypt.Net.BCrypt.Verify(dto.NewPassword, user.PasswordHash));
+            var isDuplicate = BCrypt.Net.BCrypt.Verify(dto.NewPassword, user.PasswordHash);
             if (isDuplicate)
                 throw new BusinessException("Mật khẩu mới không được trùng với mật khẩu cũ");
 
-            user.PasswordHash = await Task.Run(() => BCrypt.Net.BCrypt.HashPassword(dto.NewPassword));
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.NewPassword);
             user.FailedLoginAttempts = 0;
             user.LockoutUntil = null;
+            user.TokenVersion += 1; // Thu hồi toàn bộ JWT Access Token cũ
             tokenEntity.UsedAt = DateTime.UtcNow;
 
             await authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.Refresh);
@@ -172,6 +176,9 @@ namespace SkillBridge.Infrastructure.Services.Auth
             await authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.PasswordResetOtp);
 
             await authTokenRepository.SaveChangesAsync();
+
+            // Invalidate/Update cache ngay lập tức
+            await tokenVersionService.InvalidateOrUpdateVersionAsync(user.Id, user.TokenVersion);
 
             try
             {

@@ -14,17 +14,20 @@ namespace SkillBridge.Infrastructure.Services.Auth
         private readonly IUserRepository userRepository;
         private readonly IAuthTokenRepository authTokenRepository;
         private readonly IEmailService emailService;
+        private readonly ITokenVersionService tokenVersionService;
         private readonly ILogger<ChangePasswordService> logger;
 
         public ChangePasswordService(
             IUserRepository _userRepository,
             IAuthTokenRepository _authTokenRepository,
             IEmailService _emailService,
+            ITokenVersionService _tokenVersionService,
             ILogger<ChangePasswordService> _logger)
         {
             userRepository = _userRepository;
             authTokenRepository = _authTokenRepository;
             emailService = _emailService;
+            tokenVersionService = _tokenVersionService;
             logger = _logger;
         }
 
@@ -46,19 +49,23 @@ namespace SkillBridge.Infrastructure.Services.Auth
             if (user is null)
                 throw new BusinessException("Không tìm thấy thông tin người dùng");
 
-            var currentValid = await Task.Run(() => BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash));
+            var currentValid = BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash);
             if (!currentValid)
                 throw new BusinessException("Mật khẩu hiện tại không chính xác");
 
-            var isDuplicate = await Task.Run(() => BCrypt.Net.BCrypt.Verify(newPassword, user.PasswordHash));
+            var isDuplicate = BCrypt.Net.BCrypt.Verify(newPassword, user.PasswordHash);
             if (isDuplicate)
                 throw new BusinessException("Mật khẩu mới không được trùng với mật khẩu cũ");
 
-            user.PasswordHash = await Task.Run(() => BCrypt.Net.BCrypt.HashPassword(newPassword));
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
             user.FailedLoginAttempts = 0;
             user.LockoutUntil = null;
+            user.TokenVersion += 1; // Thu hồi toàn bộ JWT Access Token cũ
 
             await userRepository.SaveChangesAsync();
+
+            // Cập nhật / Invalidate cache ngay lập tức để chặn cửa sổ trễ
+            await tokenVersionService.InvalidateOrUpdateVersionAsync(user.Id, user.TokenVersion);
 
             await authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.Refresh);
             await authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.PasswordReset);

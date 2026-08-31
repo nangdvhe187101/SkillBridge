@@ -19,13 +19,14 @@ namespace SkillBridge.Infrastructure.Services
         {
             config = _config;
         }
-        public string GenerateToken(int userId, string email, string roleCode)
+        public string GenerateToken(int userId, string email, string roleCode, int tokenVersion)
         {
             var claim = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
                 new Claim(ClaimTypes.Email, email),
-                new Claim(ClaimTypes.Role, roleCode)
+                new Claim(ClaimTypes.Role, roleCode),
+                new Claim("token_version", tokenVersion.ToString())
             };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
