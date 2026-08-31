@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
 import ModalShell from '../../components/modals/ModalShell';
@@ -10,6 +10,7 @@ import { useToast } from '../../context/ToastContext';
 import { DeliverablePreview } from '../../components/modals/DeliverableModals';
 import { slugify } from '../../data/companies';
 import { downloadJobAttachment } from '../../utils/fileDownloader';
+import * as jobApi from '../../api/jobApi';
 
 function formatDeadline(ts) {
   if (!ts) return '—';
@@ -35,34 +36,71 @@ export default function JobDetail() {
   const { id } = useParams();
   const jobId = Number(id);
   const navigate = useNavigate();
-  const { state, applyJob, toggleSaveJob, studentAbandonJob, openChatWithPerson } = useStore();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { state, applyJobAsync, toggleSaveJob, toggleSaveJobAsync, uploadCvAsync, studentAbandonJob, openChatWithPerson } = useStore();
   const { openModal } = useModal();
   const confirm = useConfirm();
   const { showToast } = useToast();
+
   const [applyModalOpen, setApplyModalOpen] = useState(false);
+  const [uploadCvModalOpen, setUploadCvModalOpen] = useState(false);
   const [selectedCvId, setSelectedCvId] = useState(null);
+  const [coverLetter, setCoverLetter] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Form upload CV nhanh
+  const [uploadLabel, setUploadLabel] = useState('');
+  const [uploadCategory, setUploadCategory] = useState('');
+  const [uploadFile, setUploadFile] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const [apiJob, setApiJob] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
   useTick(30000);
 
-  const j = state.jobs.find((x) => x.id === jobId);
-  if (!j) {
-    return (
-      <div className="page active">
-        <div className="wrap" style={{ padding: '100px 0', textAlign: 'center' }}>Không tìm thấy công việc.</div>
-      </div>
-    );
-  }
+  const localJob = state.jobs.find((x) => x.id === jobId);
 
-  const dashJob = j.dashJobId ? state.myJobs.find((dj) => dj.id === j.dashJobId) : null;
+  useEffect(() => {
+    if (!localJob && jobId) {
+      setIsLoading(true);
+      jobApi.getJobById(jobId)
+        .then((data) => {
+          setApiJob(data);
+        })
+        .catch((err) => {
+          console.error("Không thể tải chi tiết công việc:", err);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }
+  }, [jobId, localJob]);
+
+  const j = localJob || (apiJob ? {
+    id: apiJob.id,
+    title: apiJob.title,
+    desc: apiJob.description,
+    cat: apiJob.categoryName,
+    categoryId: apiJob.categoryId,
+    emp: apiJob.employerName,
+    loc: apiJob.location || 'Toàn quốc',
+    budget: apiJob.budget,
+    urgent: apiJob.isUrgent,
+    time: apiJob.postedAt ? new Date(apiJob.postedAt).toLocaleDateString('vi-VN') : 'Vừa đăng',
+    req: apiJob.requirements ? apiJob.requirements.map(r => r.requirementText) : [],
+    status: apiJob.status,
+    companyDesc: apiJob.employerCompanyDescription,
+    industry: apiJob.employerIndustry,
+    reliability: apiJob.employerReliabilityScore,
+    dashJobId: apiJob.dashJobId,
+    attachments: apiJob.attachments
+  } : null);
+
+  const dashJob = j?.dashJobId ? state.myJobs.find((dj) => dj.id === j.dashJobId) : null;
   const myApp = state.myApplications.find((x) => x.jobId === jobId);
   const appStatus = myApp?.status;
 
-  const availableCvList = (state.cvFiles && state.cvFiles.length > 0)
-    ? state.cvFiles
-    : [
-        { id: 1, name: 'CV_NguyenVanAn_WebDev.pdf', label: 'CV Lập trình Web Frontend', category: 'Lập trình web', size: '245 KB' },
-        { id: 2, name: 'CV_NguyenVanAn_GraphicDesign.pdf', label: 'CV Thiết kế Đồ họa & Video', category: 'Thiết kế đồ hoạ', size: '1.2 MB' },
-        { id: 3, name: 'CV_NguyenVanAn_ContentWriter.pdf', label: 'CV Viết bài SEO & Dịch thuật', category: 'Viết nội dung', size: '198 KB' },
-      ];
+  const availableCvList = state.cvFiles || [];
 
   let applyLabel = 'Ứng tuyển ngay';
   let applyDisabled = false;
@@ -74,13 +112,105 @@ export default function JobDetail() {
     else if (appStatus === 'rejected') applyLabel = 'Rất tiếc, bạn chưa được chọn';
     else if (appStatus === 'cancelled') applyLabel = 'Đã hủy';
     else applyLabel = '✓ Đã ứng tuyển';
-  } else if (j.status && j.status !== 'open') {
+  } else if (j?.status && j.status !== 'open') {
     applyLabel = 'Đã đóng tuyển';
     applyDisabled = true;
   }
 
-  // showWorkArea: hiển thị khu vực làm việc khi job đang được thực hiện (hiredApplicantIsMe=false là góc NTD)
-  // Với SV demo: job có hiredApplicant (nghĩa là SV đó đã được thuê) và dashJob tồn tại
+  const handleStartApply = () => {
+    if (!state.currentUser) {
+      showToast('Vui lòng đăng nhập tài khoản Sinh viên để ứng tuyển.', '🔒');
+      navigate(`/auth?tab=login&redirect=${encodeURIComponent(`/jobs/${jobId}?action=apply`)}`);
+      return;
+    }
+
+    if (state.currentUser.roleCode === 'employer') {
+      showToast('Tài khoản Nhà tuyển dụng không thể ứng tuyển công việc.', '⚠️');
+      return;
+    }
+
+    const cvList = state.cvFiles || [];
+    if (cvList.length === 0) {
+      setUploadLabel(`CV_${state.currentUser.fullName ? state.currentUser.fullName.replace(/\s+/g, '') : 'UngTuyen'}_${j.cat || 'ChuyenMon'}`);
+      setUploadCvModalOpen(true);
+    } else {
+      const defaultCv = cvList.find((c) => c.category === j.cat || c.categoryId === j.categoryId) || cvList[0];
+      setSelectedCvId(defaultCv?.id || cvList[0].id);
+      setApplyModalOpen(true);
+    }
+  };
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'apply' && j && !applyDisabled) {
+      setSearchParams({}, { replace: true });
+      handleStartApply();
+    }
+  }, [searchParams, j, applyDisabled, state.currentUser]);
+
+  const handleUploadCvSubmit = async (e) => {
+    e.preventDefault();
+    if (!uploadFile && !uploadLabel) {
+      showToast('Vui lòng chọn file CV hoặc đặt tên bản CV.', '⚠️');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      const fileName = uploadFile ? uploadFile.name : `${uploadLabel || 'CV_UngTuyen'}.pdf`;
+      const catObj = (state.categories || []).find(c => String(c.id) === String(uploadCategory)) ||
+                     (state.categories || []).find(c => c.name === j.cat);
+
+      const createdCv = await uploadCvAsync({
+        file: uploadFile,
+        fileName: fileName,
+        label: uploadLabel || fileName,
+        categoryId: catObj?.id || (state.categories?.[0]?.id || 1),
+        fileSize: uploadFile?.size || 1024 * 250
+      });
+
+      setUploadCvModalOpen(false);
+      setSelectedCvId(createdCv.id);
+      setApplyModalOpen(true);
+    } catch (err) {
+      showToast(err.message || 'Không thể tải lên CV.', '❌');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmApply = async () => {
+    if (!selectedCvId) {
+      showToast('Vui lòng chọn một bản CV để ứng tuyển.', '⚠️');
+      return;
+    }
+    setIsSubmitting(true);
+    try {
+      await applyJobAsync(jobId, selectedCvId, coverLetter);
+      setApplyModalOpen(false);
+      const chosenCv = (state.cvFiles || []).find((c) => c.id === selectedCvId);
+      showToast(`Đã gửi đơn ứng tuyển kèm ${chosenCv?.label || 'CV'} tới ${j.emp}!`, '🚀');
+    } catch (err) {
+      showToast(err.message || 'Không thể gửi đơn ứng tuyển.', '❌');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="page active">
+        <div className="wrap" style={{ padding: '100px 0', textAlign: 'center' }}>Đang tải thông tin công việc...</div>
+      </div>
+    );
+  }
+
+  if (!j) {
+    return (
+      <div className="page active">
+        <div className="wrap" style={{ padding: '100px 0', textAlign: 'center' }}>Không tìm thấy công việc.</div>
+      </div>
+    );
+  }
+
   const showWorkArea = dashJob && ['in_progress', 'submitted', 'revision_requested', 'completed', 'cancelled'].includes(dashJob.status) && !!dashJob.hiredApplicant;
 
   return (
@@ -153,33 +283,34 @@ export default function JobDetail() {
               {showWorkArea && (
                 <div id="jdWorkArea">
                   {dashJob.status === 'in_progress' && (
-                    <div className="jd-card" style={{ border: '1.5px solid var(--primary)', background: 'var(--surface)' }}>
-                      <h4 style={{ marginBottom: 8 }}>🎯 Đã trúng tuyển — hãy nộp sản phẩm</h4>
-                      <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 6 }}>Người được thuê: <b>{dashJob.hiredApplicant || 'Bạn'}</b></p>
-                      <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 6 }}>Hạn bàn giao: <b>{formatDeadline(dashJob.deadlineAt)}</b></p>
-                      <button className="btn btn-primary btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('deliverable', { jobId: dashJob.id })}>📤 Nộp bàn giao / sản phẩm</button>
-                      <button className="btn btn-outline btn-block" style={{ marginBottom: 8 }} onClick={() => openChatWithPerson(j.emp)}>💬 Nhắn tin NTD</button>
-                      <button className="btn btn-outline btn-block" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
-                        onClick={async () => { if (await confirm(`Bạn chắc chắn muốn bỏ ngang công việc "${j.title}"? Điểm uy tín của bạn sẽ bị trừ và nhà tuyển dụng sẽ được hoàn tiền ký quỹ.`, { danger: true, confirmLabel: 'Bỏ việc' })) studentAbandonJob(dashJob.id); }}>
-                        Bỏ việc giữa chừng
+                    <div className="jd-card jd-work-card" style={{ border: '1.5px solid var(--primary)', background: 'var(--surface)' }}>
+                      <div className="jdw-head">
+                        <div>
+                          <span className="chip chip-cyan" style={{ marginBottom: 6 }}>Đang thực hiện</span>
+                          <h4 style={{ margin: 0 }}>Khu vực bàn giao công việc</h4>
+                        </div>
+                        <div className="jdw-dl"><Icon name="clock" /> Hạn chót: <b>{formatDeadline(dashJob.deadlineAt)}</b></div>
+                      </div>
+                      <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '10px 0' }}>Sau khi hoàn thành, hãy nộp sản phẩm kèm bản xem trước có đóng dấu bản quyền.</p>
+                      <button className="btn btn-primary btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('deliverable', { jobId: dashJob.id })}>
+                        📤 Nộp sản phẩm bàn giao
                       </button>
+                      <button className="btn btn-outline btn-block" onClick={() => openChatWithPerson(j.emp)}>💬 Trao đổi với NTD</button>
                     </div>
                   )}
                   {dashJob.status === 'submitted' && (
-                    <div className="jd-card" style={{ border: '1.5px solid var(--lime)' }}>
-                      <h4 style={{ marginBottom: 8 }}>📤 Đã nộp bàn giao{dashJob.deliverable?.version > 1 ? ' — phiên bản ' + dashJob.deliverable.version : ''}</h4>
-                      <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8 }}>Đang chờ nhà tuyển dụng xác nhận và giải ngân <b>{fmtVND(dashJob.escrowAmount || dashJob.budget)}</b>.</p>
-                      <DeliverablePreview d={dashJob.deliverable} />
-                      <button className="btn btn-outline btn-block" onClick={() => openModal('deliverable', { jobId: dashJob.id })}>✏️ Cập nhật lại bàn giao</button>
+                    <div className="jd-card">
+                      <h4>⏳ Đã nộp bàn giao</h4>
+                      <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '6px 0 12px' }}>Đang chờ nhà tuyển dụng xác nhận hoặc yêu cầu sửa.</p>
+                      {dashJob.deliverable && <DeliverablePreview d={dashJob.deliverable} />}
                     </div>
                   )}
                   {dashJob.status === 'revision_requested' && (
-                    <div className="jd-card" style={{ border: '1.5px solid var(--coral)' }}>
-                      <h4 style={{ marginBottom: 8 }}>✏️ Nhà tuyển dụng yêu cầu sửa lại</h4>
-                      <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 8 }}>Lượt {dashJob.revisionCount}/{dashJob.revisionLimit}.</p>
-                      {dashJob.deliverableFeedback?.length > 0 && (
-                        <div className="empty-state" style={{ textAlign: 'left', background: 'var(--surface)', borderRadius: 10, padding: 12, marginBottom: 10 }}>
-                          <b style={{ fontSize: 12.5, color: 'var(--coral)' }}>Góp ý mới nhất:</b>
+                    <div className="jd-card" style={{ borderColor: 'var(--coral)' }}>
+                      <h4>⚠️ Yêu cầu sửa đổi bàn giao</h4>
+                      {dashJob.deliverableFeedback && dashJob.deliverableFeedback.length > 0 && (
+                        <div className="feedback-box" style={{ background: 'var(--coral-dim)', padding: 10, borderRadius: 8, margin: '8px 0' }}>
+                          <b>Góp ý từ NTD:</b>
                           <p style={{ marginTop: 4, fontSize: 13 }}>{dashJob.deliverableFeedback[dashJob.deliverableFeedback.length - 1].text}</p>
                         </div>
                       )}
@@ -206,11 +337,7 @@ export default function JobDetail() {
                   className="btn btn-primary btn-block"
                   style={{ marginBottom: 10 }}
                   disabled={applyDisabled}
-                  onClick={() => {
-                    const defaultCv = availableCvList.find((c) => c.category === j.cat) || availableCvList[0];
-                    setSelectedCvId(defaultCv?.id || availableCvList[0].id);
-                    setApplyModalOpen(true);
-                  }}
+                  onClick={handleStartApply}
                 >
                   {applyLabel}
                 </button>
@@ -256,7 +383,120 @@ export default function JobDetail() {
         </div>
       </div>
 
-      {/* Dedicated Application Modal with CV Selector */}
+      {uploadCvModalOpen && (
+        <ModalShell onClose={() => setUploadCvModalOpen(false)}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: 28 }}>📄</div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18 }}>Tải lên CV Ứng tuyển</h3>
+              <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                Vị trí: <b>{j.title}</b> · {j.emp}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ background: 'rgba(255, 158, 87, 0.12)', border: '1px solid rgba(255, 158, 87, 0.35)', padding: '12px 14px', borderRadius: 10, marginBottom: 16 }}>
+            <b style={{ color: '#FF9E57', fontSize: 13.5, display: 'block', marginBottom: 2 }}>⚠️ Bạn chưa có bản CV nào trong hồ sơ</b>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-soft)', lineHeight: 1.4 }}>
+              Nhà tuyển dụng yêu cầu xem CV chuyên ngành để duyệt hồ sơ. Vui lòng tải lên CV (PDF hoặc Word) của bạn để tiếp tục ứng tuyển.
+            </span>
+          </div>
+
+          <form onSubmit={handleUploadCvSubmit}>
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                File CV của bạn (.pdf, .docx, .doc) <span style={{ color: 'var(--coral)' }}>*</span>
+              </label>
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept=".pdf,.doc,.docx"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  if (e.target.files && e.target.files[0]) {
+                    const f = e.target.files[0];
+                    setUploadFile(f);
+                    if (!uploadLabel) {
+                      setUploadLabel(f.name.replace(/\.[^/.]+$/, ''));
+                    }
+                  }
+                }}
+              />
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                style={{
+                  border: '2px dashed var(--primary)',
+                  borderRadius: 12,
+                  padding: '20px 16px',
+                  textAlign: 'center',
+                  background: 'rgba(108, 76, 255, 0.04)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {uploadFile ? (
+                  <div>
+                    <span style={{ fontSize: 26 }}>📄</span>
+                    <b style={{ display: 'block', marginTop: 6, fontSize: 14 }}>{uploadFile.name}</b>
+                    <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                      {(uploadFile.size / 1024).toFixed(0)} KB · Bấm để đổi file khác
+                    </span>
+                  </div>
+                ) : (
+                  <div>
+                    <span style={{ fontSize: 28 }}>☁️</span>
+                    <b style={{ display: 'block', marginTop: 6, fontSize: 13.5 }}>Nhấn để chọn file CV từ thiết bị</b>
+                    <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Hỗ trợ PDF, DOC, DOCX dung lượng tối đa 10MB</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                Tên / Nhãn chuyên môn bản CV
+              </label>
+              <input
+                type="text"
+                className="input"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}
+                placeholder="VD: CV Lập trình Frontend, CV Video Creator..."
+                value={uploadLabel}
+                onChange={(e) => setUploadLabel(e.target.value)}
+              />
+            </div>
+
+            <div style={{ marginBottom: 18 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                Chuyên ngành / Danh mục
+              </label>
+              <select
+                className="input"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)' }}
+                value={uploadCategory}
+                onChange={(e) => setUploadCategory(e.target.value)}
+              >
+                <option value="">Khớp với vị trí này: {j.cat}</option>
+                {(state.categories || []).map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" className="btn btn-outline" onClick={() => setUploadCvModalOpen(false)}>
+                Huỷ
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                {isSubmitting ? 'Đang tải lên...' : 'Tải lên & Tiếp tục ứng tuyển →'}
+              </button>
+            </div>
+          </form>
+        </ModalShell>
+      )}
+
       {applyModalOpen && (
         <ModalShell onClose={() => setApplyModalOpen(false)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -273,10 +513,10 @@ export default function JobDetail() {
             Vui lòng chọn bản CV chuyên môn phù hợp nhất để gửi đến nhà tuyển dụng (chỉ bản CV được chọn sẽ hiển thị với nhà tuyển dụng):
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 280, overflowY: 'auto', marginBottom: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 240, overflowY: 'auto', marginBottom: 14 }}>
             {availableCvList.map((cv) => {
               const isSelected = selectedCvId === cv.id;
-              const isMatch = cv.category === j.cat;
+              const isMatch = cv.category === j.cat || cv.categoryId === j.categoryId;
 
               return (
                 <div
@@ -311,7 +551,6 @@ export default function JobDetail() {
                       </b>
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 3 }}>
                         <span className="chip" style={{ fontSize: 10.5, padding: '1px 7px' }}>{cv.category}</span>
-                        <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{cv.size}</span>
                         {isMatch && (
                           <span className="chip chip-lime" style={{ fontSize: 10.5, padding: '1px 6px' }}>
                             🎯 Khớp ngành tuyển dụng
@@ -327,20 +566,44 @@ export default function JobDetail() {
             })}
           </div>
 
+          <div style={{ marginBottom: 14 }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              style={{ width: '100%', borderStyle: 'dashed' }}
+              onClick={() => {
+                setApplyModalOpen(false);
+                setUploadCvModalOpen(true);
+              }}
+            >
+              + Tải lên một bản CV khác
+            </button>
+          </div>
+
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+              Lời nhắn / Đề xuất gửi nhà tuyển dụng (tùy chọn)
+            </label>
+            <textarea
+              className="input"
+              rows={3}
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: 13 }}
+              placeholder="Nêu ngắn gọn thế mạnh hoặc kinh nghiệm liên quan của bạn đối với công việc này..."
+              value={coverLetter}
+              onChange={(e) => setCoverLetter(e.target.value)}
+            />
+          </div>
+
           <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
             <button className="btn btn-outline" onClick={() => setApplyModalOpen(false)}>
               Huỷ
             </button>
             <button
               className="btn btn-primary"
-              onClick={() => {
-                applyJob(j.id);
-                setApplyModalOpen(false);
-                const chosenCv = (state.cvFiles || []).find((c) => c.id === selectedCvId);
-                showToast(`Đã gửi đơn ứng tuyển kèm ${chosenCv?.label || 'CV'} tới ${j.emp}!`, '🚀');
-              }}
+              disabled={isSubmitting || !selectedCvId}
+              onClick={handleConfirmApply}
             >
-              🚀 Xác nhận nộp hồ sơ
+              {isSubmitting ? 'Đang nộp...' : '🚀 Xác nhận nộp hồ sơ'}
             </button>
           </div>
         </ModalShell>

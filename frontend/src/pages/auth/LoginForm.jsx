@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
@@ -11,6 +11,7 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
     const [loading, setLoading] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { login: doLogin } = useStore();
 
     const validateEmail = (value) => {
@@ -38,7 +39,8 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
         setLoading(true);
         try {
             await doLogin(email, password);
-            navigate('/');
+            const redirectUrl = searchParams.get('redirect') || '/';
+            navigate(redirectUrl);
         } catch (err) {
             setFormError(err.message);
         } finally {

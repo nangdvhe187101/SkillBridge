@@ -56,7 +56,7 @@
 }
 
 .acct-content-inner {
-    max-width: 720px;
+    max-width: 760px;
 }
 
 .acct-content-title {
@@ -104,7 +104,9 @@
     margin-bottom: 6px;
 }
 
-.acct-field input {
+.acct-field input,
+.acct-field textarea,
+.acct-field select {
     width: 100%;
     padding: 10px 12px;
     border-radius: 8px;
@@ -127,6 +129,161 @@
 
 .acct-error {
     margin-bottom: 14px;
+}
+
+/* ========================================= */
+/* AVATAR UPLOAD COMPONENT STYLES            */
+/* ========================================= */
+.acct-avatar-card {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 16px 20px;
+    background: var(--surface-2, rgba(91, 76, 245, 0.03));
+    border: 1px dashed var(--border, #d1d5db);
+    border-radius: 14px;
+    margin-bottom: 24px;
+}
+
+.acct-avatar-wrapper {
+    position: relative;
+    width: 84px;
+    height: 84px;
+    border-radius: 50%;
+    overflow: hidden;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    border: 2px solid var(--primary, #5b4cf5);
+    flex-shrink: 0;
+}
+
+.acct-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.acct-avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #6c4cff, #57c7ff);
+    color: #fff;
+    font-size: 32px;
+    font-weight: 700;
+}
+
+.acct-avatar-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    color: #fff;
+    font-size: 11px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.acct-avatar-wrapper:hover .acct-avatar-overlay {
+    opacity: 1;
+}
+
+.acct-avatar-info {
+    flex: 1;
+}
+
+.acct-avatar-info h4 {
+    margin: 0 0 4px;
+    font-size: 15px;
+}
+
+.acct-avatar-info p {
+    margin: 0 0 10px;
+    font-size: 12.5px;
+    color: var(--muted, #666);
+}
+
+/* ========================================= */
+/* CV MANAGEMENT TAB STYLES                  */
+/* ========================================= */
+.cv-dropzone {
+    border: 2px dashed rgba(91, 76, 245, 0.35);
+    background: rgba(91, 76, 245, 0.02);
+    border-radius: 14px;
+    padding: 32px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 24px;
+}
+
+.cv-dropzone:hover {
+    border-color: var(--primary, #5b4cf5);
+    background: rgba(91, 76, 245, 0.05);
+}
+
+.cv-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cv-item-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 18px;
+    background: var(--surface, #fff);
+    border: 1px solid var(--border, #e5e5ea);
+    border-radius: 12px;
+    transition: box-shadow 0.2s ease;
+}
+
+.cv-item-card:hover {
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+}
+
+.cv-item-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.cv-item-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: rgba(91, 76, 245, 0.1);
+    color: var(--primary, #5b4cf5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+}
+
+.cv-item-meta b {
+    display: block;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.cv-item-sub {
+    font-size: 12px;
+    color: var(--muted, #777);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.cv-item-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 @media (max-width: 800px) {
@@ -167,5 +324,16 @@
 
     .acct-field-row {
         grid-template-columns: 1fr;
+    }
+
+    .cv-item-card {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .cv-item-actions {
+        width: 100%;
+        justify-content: flex-end;
     }
 }

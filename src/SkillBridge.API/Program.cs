@@ -106,7 +106,11 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("RequireEmployerRole", policy => policy.RequireRole("employer"));
+    options.AddPolicy("RequireStudentRole", policy => policy.RequireRole("student"));
+});
 
 builder.Services.Scan(scan => scan
     .FromAssemblies(
