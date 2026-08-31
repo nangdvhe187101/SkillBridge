@@ -69,6 +69,7 @@ export async function refreshToken() {
     refreshPromise = (async () => {
         const res = await fetch(`${API_URL}/auth/refresh`, {
             method: "POST",
+            headers: { "X-Requested-With": "XMLHttpRequest" },
             credentials: "include",
         });
         return handleResponse(res);
@@ -184,6 +185,7 @@ export async function logout() {
     try {
         await fetch(`${API_URL}/auth/logout`, {
             method: "POST",
+            headers: { "X-Requested-With": "XMLHttpRequest" },
             credentials: "include",
         });
     } catch {

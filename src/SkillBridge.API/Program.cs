@@ -1,16 +1,21 @@
+using System.Security.Claims;
+using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scrutor;
 using Serilog;
+using SkillBridge.Application.Interfaces.Auth;
 using SkillBridge.Infrastructure.Data;
-using System.Text;
-using System.Threading.RateLimiting;
-
-ThreadPool.SetMinThreads(workerThreads: 200, completionPortThreads: 200);
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Cấu hình ThreadPool linh hoạt (không hard-code, mặc định 50)
+var minWorkerThreads = builder.Configuration.GetValue<int>("ThreadPool:MinWorkerThreads", 50);
+var minIocpThreads = builder.Configuration.GetValue<int>("ThreadPool:MinCompletionPortThreads", 50);
+ThreadPool.SetMinThreads(minWorkerThreads, minIocpThreads);
 
 builder.Host.UseSerilog((context, config) =>
 {
@@ -18,11 +23,21 @@ builder.Host.UseSerilog((context, config) =>
           .MinimumLevel.Information();
 });
 
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+// Fail-fast Startup Configuration Validation
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' chưa được cấu hình.");
+
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey) || Encoding.UTF8.GetByteCount(jwtKey) < 32)
+{
+    throw new InvalidOperationException("Cấu hình 'Jwt:Key' không hợp lệ hoặc có độ dài < 32 bytes (256 bits).");
+}
+
 builder.Services.AddDbContext<SkillBridgeDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
-var jwtKey = builder.Configuration["Jwt:Key"]!;
+builder.Services.AddMemoryCache();
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -53,6 +68,41 @@ builder.Services.AddAuthentication(options =>
                 context.Token = accessToken;
             }
             return Task.CompletedTask;
+        },
+        OnTokenValidated = async context =>
+        {
+            var tokenVersionService = context.HttpContext.RequestServices.GetRequiredService<ITokenVersionService>();
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+
+            var userIdClaim = context.Principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var tokenVersionClaim = context.Principal?.FindFirst("token_version")?.Value;
+
+            if (string.IsNullOrEmpty(userIdClaim) || string.IsNullOrEmpty(tokenVersionClaim))
+            {
+                context.Fail("Missing token version claims.");
+                return;
+            }
+
+            try
+            {
+                if (!int.TryParse(userIdClaim, out int userId) || !int.TryParse(tokenVersionClaim, out int tokenVersion))
+                {
+                    context.Fail("Invalid token claims format.");
+                    return;
+                }
+
+                var currentVersion = await tokenVersionService.GetTokenVersionAsync(userId);
+
+                if (currentVersion == -1 || tokenVersion != currentVersion)
+                {
+                    context.Fail("Token has been revoked or is no longer valid.");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Lỗi kiểm tra TokenVersion cho UserId {UserId}. Áp dụng Fail-Closed.", userIdClaim);
+                context.Fail("Authentication verification service temporarily unavailable.");
+            }
         }
     };
 });
@@ -83,22 +133,34 @@ builder.Services.AddCors(options =>
               .AllowCredentials()); // cần thiết cho SignalR và Cookie
 });
 
-builder.Services.AddRateLimiter(
-    options =>
-    {
-        options.AddPolicy("AuthPolicy", httpContext =>
+builder.Services.AddRateLimiter(options =>
+{
+    // AuthPolicy (login, register, forgot-password, v.v.): 10 req/phút per IP
+    options.AddPolicy("AuthPolicy", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
-        partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-        factory: _ => new FixedWindowRateLimiterOptions
-        {
-            PermitLimit = 30,
-            Window = TimeSpan.FromMinutes(1),
-            QueueLimit = 0,
-            QueueProcessingOrder = System.Threading.RateLimiting.QueueProcessingOrder.OldestFirst
-        }));
-        options.RejectionStatusCode = 429;
-    }
-);
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    // RefreshTokenPolicy (refresh, logout): 30 req/phút per IP
+    options.AddPolicy("RefreshTokenPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+});
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -124,13 +186,18 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+else
+{
+    app.UseHsts();
+}
 
 app.UseHttpsRedirection();
 app.Use(async (context, next) =>
 {
     context.Response.Headers.Append("X-Content-Type-Options", "nosniff");
     context.Response.Headers.Append("X-Frame-Options", "DENY");
-    context.Response.Headers.Append("Referrer-Policy", "no-referrer");
+    context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
+    context.Response.Headers.Append("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     await next();
 });
 

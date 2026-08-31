@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
 using SkillBridge.Application.Interfaces;
+using SkillBridge.Application.Interfaces.Auth;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
 
@@ -15,16 +16,22 @@ namespace SkillBridge.Infrastructure.Services
         private readonly IUserRepository userRepository;
         private readonly IJwtService jwtService;
         private readonly IAuthTokenRepository authTokenRepository;
+        private readonly ITokenVersionService tokenVersionService;
 
         private const int MaxFailedAttempts = 5;
         private const int LockoutMinutes = 15;
         private static readonly string DummyPasswordHash = "$2a$11$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy";
 
-        public LoginService(IUserRepository _userRepository, IJwtService _jwtService, IAuthTokenRepository _authTokenRepository)
+        public LoginService(
+            IUserRepository _userRepository,
+            IJwtService _jwtService,
+            IAuthTokenRepository _authTokenRepository,
+            ITokenVersionService _tokenVersionService)
         {
             userRepository = _userRepository;
             jwtService = _jwtService;
             authTokenRepository = _authTokenRepository;
+            tokenVersionService = _tokenVersionService;
         }
 
         public async Task<(AuthResponseDto Result, string RefreshToken)> LoginAsync(LoginDto dto)
@@ -35,30 +42,32 @@ namespace SkillBridge.Infrastructure.Services
 
             var user = await userRepository.GetByEmailWithRoleAsync(email);
 
+            // 1. Nếu user không tồn tại -> Chạy Dummy Hash để chống Timing Attack
             if (user is null)
             {
-                await Task.Run(() => BCrypt.Net.BCrypt.Verify(dto.Password, DummyPasswordHash));
+                BCrypt.Net.BCrypt.Verify(dto.Password, DummyPasswordHash);
                 throw new BusinessException("Email hoặc mật khẩu không đúng");
             }
 
-            if (user.LockoutUntil.HasValue && user.LockoutUntil > DateTime.UtcNow)
-            {
-                throw new BusinessException(BuildLockoutMessage(user.LockoutUntil.Value));
-            }
-
-            var passwordValid = await Task.Run(() => BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash));
+            // 2. Xác thực mật khẩu trước
+            var passwordValid = BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash);
 
             if (!passwordValid)
             {
-                var justLockedOut = await RegisterFailedAttemptAsync(user);
-
-                if (justLockedOut)
+                // Chỉ ghi nhận lần thử nếu tài khoản hiện tại chưa bị khóa
+                if (!user.LockoutUntil.HasValue || user.LockoutUntil <= DateTime.UtcNow)
                 {
-                    throw new BusinessException(BuildLockoutMessage(user.LockoutUntil!.Value));
+                    await RegisterFailedAttemptAsync(user);
                 }
 
-                var remaining = MaxFailedAttempts - user.FailedLoginAttempts;
-                throw new BusinessException($"Email hoặc mật khẩu không đúng. Bạn còn {remaining} lần thử trước khi tài khoản bị tạm khóa.");
+                // Trả về thông báo đồng nhất để chống user enumeration
+                throw new BusinessException("Email hoặc mật khẩu không đúng");
+            }
+
+            // 3. Mật khẩu ĐÚNG -> Kiểm tra trạng thái tài khoản
+            if (user.LockoutUntil.HasValue && user.LockoutUntil > DateTime.UtcNow)
+            {
+                throw new BusinessException(BuildLockoutMessage(user.LockoutUntil.Value));
             }
 
             if (user.AccountStatus == "pending")
@@ -66,6 +75,7 @@ namespace SkillBridge.Infrastructure.Services
             if (user.AccountStatus == "locked" || user.AccountStatus == "blacklisted")
                 throw new BusinessException("Tài khoản đã bị khóa, vui lòng liên hệ hỗ trợ");
 
+            // 4. Đăng nhập thành công -> Reset failed login attempts & lockout
             if (user.FailedLoginAttempts > 0 || user.LockoutUntil.HasValue)
             {
                 user.FailedLoginAttempts = 0;
@@ -73,7 +83,7 @@ namespace SkillBridge.Infrastructure.Services
                 await userRepository.SaveChangesAsync();
             }
 
-            var accessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code);
+            var accessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code, user.TokenVersion);
             var refreshToken = jwtService.GenerateRefreshTokenString();
 
             await authTokenRepository.AddAsync(new AuthToken
@@ -108,10 +118,17 @@ namespace SkillBridge.Infrastructure.Services
             {
                 user.LockoutUntil = DateTime.UtcNow.AddMinutes(LockoutMinutes);
                 user.FailedLoginAttempts = 0;
+                user.TokenVersion += 1; // Thu hồi toàn bộ token đang lưu hành khi bị lockout
                 justLockedOut = true;
             }
 
             await userRepository.SaveChangesAsync();
+
+            if (justLockedOut)
+            {
+                await tokenVersionService.InvalidateOrUpdateVersionAsync(user.Id, user.TokenVersion);
+            }
+
             return justLockedOut;
         }
 

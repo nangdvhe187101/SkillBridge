@@ -11,7 +11,8 @@ namespace SkillBridge.API.Controllers
 {
     [ApiController]
     [Route("api/auth")]
-    [EnableRateLimiting("AuthPolicy")]
+    [EnableRateLimiting("RefreshTokenPolicy")]
+    [ValidateCsrfHeader]
     public class LogoutController : ControllerBase
     {
         private readonly ILogoutService logoutService;

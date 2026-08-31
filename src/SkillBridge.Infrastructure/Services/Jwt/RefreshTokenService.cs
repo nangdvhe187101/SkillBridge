@@ -75,7 +75,7 @@ namespace SkillBridge.Infrastructure.Services
                 throw new BusinessException("Đã hết hạn phiên làm việc");
             }
 
-            var newAccessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code);
+            var newAccessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code, user.TokenVersion);
             var newRefreshToken = jwtService.GenerateRefreshTokenString();
 
             await authTokenRepository.AddAsync(new AuthToken
