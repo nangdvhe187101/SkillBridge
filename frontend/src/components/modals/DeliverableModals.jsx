@@ -2,6 +2,7 @@ import { useState } from 'react';
 import ModalShell from './ModalShell';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
+import { submitJobDeliverable } from '../../api/deliverableApi';
 
 function watermarkImageFile(file) {
   return new Promise((resolve, reject) => {
@@ -41,35 +42,42 @@ function watermarkImageFile(file) {
 
 function DeliverablePreview({ d, revealFinal }) {
   if (!d) return null;
-  if (d.mode === 'link') {
+  if (d.mode === 'link' || (!d.previewFileUrl && d.externalUrl)) {
+    const url = d.url || d.externalUrl;
     return (
       <>
-        <p style={{ margin: '6px 0', fontSize: 13 }}><b>Link:</b> <a href={d.url} target="_blank" rel="noopener noreferrer">{d.url}</a></p>
+        <p style={{ margin: '6px 0', fontSize: 13 }}><b>Link:</b> <a href={url} target="_blank" rel="noopener noreferrer">{url}</a></p>
         <p style={{ fontSize: 11.5, color: 'var(--coral)' }}>⚠️ Link ngoài — SkillBridge không kiểm soát/bảo vệ được nội dung ở đây, 2 bên tự chịu rủi ro.</p>
       </>
     );
   }
-  if (d.previewDataUrl) {
+
+  const previewUrl = d.previewFileUrl || d.previewDataUrl;
+  const finalUrl = d.finalFileUrl || d.finalDataUrl;
+
+  if (previewUrl && (previewUrl.startsWith('data:image') || previewUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i))) {
     return revealFinal ? (
       <>
-        <div style={{ margin: '8px 0' }}><img src={d.finalDataUrl} style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid var(--border)' }} alt="Bàn giao" /></div>
-        <a className="btn btn-outline btn-sm" href={d.finalDataUrl} download={d.fileName || 'deliverable'}>⬇️ Tải bản gốc (không watermark)</a>
+        <div style={{ margin: '8px 0' }}><img src={finalUrl || previewUrl} style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid var(--border)' }} alt="Bàn giao" /></div>
+        <a className="btn btn-outline btn-sm" href={finalUrl || previewUrl} target="_blank" rel="noreferrer" download={d.fileName || 'deliverable'}>⬇️ Tải bản gốc</a>
       </>
     ) : (
       <>
         <div style={{ margin: '8px 0' }}>
-          <img src={d.previewDataUrl} onContextMenu={(e) => e.preventDefault()} style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid var(--border)', userSelect: 'none', pointerEvents: 'none' }} alt="Xem trước có watermark" />
+          <img src={previewUrl} onContextMenu={(e) => e.preventDefault()} style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid var(--border)', userSelect: 'none', pointerEvents: 'none' }} alt="Xem trước có watermark" />
         </div>
         <p style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>🔒 Bản xem trước có watermark — bản gốc chỉ mở khi xác nhận & giải ngân.</p>
       </>
     );
   }
-  return revealFinal && d.finalDataUrl ? (
-    <div style={{ margin: '8px 0' }}><a className="btn btn-outline btn-sm" href={d.finalDataUrl} download={d.fileName || 'deliverable'}>⬇️ Tải {d.fileName || 'file bàn giao'}</a></div>
+
+  return revealFinal && finalUrl ? (
+    <div style={{ margin: '8px 0' }}><a className="btn btn-outline btn-sm" href={finalUrl} target="_blank" rel="noreferrer" download={d.fileName || 'deliverable'}>⬇️ Tải {d.fileName || 'file bàn giao'}</a></div>
   ) : (
     <div className="empty-state" style={{ textAlign: 'left', background: 'var(--surface)', borderRadius: 10, padding: 12, margin: '8px 0' }}>
       🔒 <b>{d.fileName || 'Tệp đính kèm'}</b>{d.fileSize ? ` (${Math.round(d.fileSize / 1024)} KB)` : ''}
-      <br /><span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Nội dung đầy đủ được khoá — chỉ mở khi xác nhận & giải ngân.</span>
+      <br /><span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Nội dung đầy đủ được lưu trên Cloudflare R2 và bảo vệ an toàn.</span>
+      {finalUrl && <div style={{ marginTop: 8 }}><a href={finalUrl} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">Xem file</a></div>}
     </div>
   );
 }
@@ -80,34 +88,107 @@ export function DeliverableModal({ onClose, jobId }) {
   const job = state.myJobs.find((j) => j.id === jobId);
   const prev = job?.deliverable || {};
   const [mode, setMode] = useState(prev.mode || 'file');
-  const [url, setUrl] = useState(prev.url || '');
+  const [url, setUrl] = useState(prev.url || prev.externalUrl || '');
   const [note, setNote] = useState(prev.note || '');
   const [file, setFile] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
   if (!job) return null;
-  const isUpdate = ['submitted', 'revision_requested'].includes(job.status) && !!(prev.url || prev.fileName);
+  const isUpdate = ['submitted', 'revision_requested'].includes(job.status) && !!(prev.url || prev.fileName || prev.externalUrl);
   const lastFeedback = job.status === 'revision_requested' && job.deliverableFeedback?.length
     ? job.deliverableFeedback[job.deliverableFeedback.length - 1] : null;
 
   const submit = async () => {
+    setErrorMsg('');
     if (mode === 'link') {
-      if (!url.trim()) return;
-      submitDeliverable({ jobId, mode: 'link', url: url.trim(), note });
-      onClose();
+      if (!url.trim()) {
+        setErrorMsg('Vui lòng nhập đường dẫn sản phẩm.');
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        if (typeof jobId === 'number' && jobId > 0) {
+          const formData = new FormData();
+          formData.append('externalUrl', url.trim());
+          if (note) formData.append('note', note.trim());
+          await submitJobDeliverable(jobId, formData);
+        }
+        submitDeliverable({ jobId, mode: 'link', url: url.trim(), note });
+        onClose();
+      } catch (err) {
+        setErrorMsg(err?.message || 'Không thể gửi bàn giao.');
+      } finally {
+        setIsSubmitting(false);
+      }
       return;
     }
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert('File tối đa 5MB.'); return; }
-    if (file.type.startsWith('image/')) {
-      try {
-        const { previewDataUrl, finalDataUrl } = await watermarkImageFile(file);
-        submitDeliverable({ jobId, mode: 'file', fileName: file.name, fileSize: file.size, previewDataUrl, finalDataUrl, note });
-      } catch {
-        submitDeliverable({ jobId, mode: 'file', fileName: file.name, fileSize: file.size, note });
-      }
-    } else {
-      submitDeliverable({ jobId, mode: 'file', fileName: file.name, fileSize: file.size, note });
+
+    if (!file) {
+      setErrorMsg('Vui lòng chọn file sản phẩm để tải lên.');
+      return;
     }
-    onClose();
+
+    const blockedExts = ['exe', 'bat', 'cmd', 'sh', 'dll', 'vbs', 'msi', 'com', 'scr', 'ps1'];
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (blockedExts.includes(ext)) {
+      setErrorMsg('Định dạng file thực thi có rủi ro bảo mật và không được phép tải lên.');
+      return;
+    }
+
+    if (file.size > 25 * 1024 * 1024) {
+      setErrorMsg('Dung lượng file vượt quá giới hạn cho phép (tối đa 25MB).');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      let r2Result = null;
+      if (typeof jobId === 'number' && jobId > 0) {
+        const formData = new FormData();
+        formData.append('file', file);
+        if (note) formData.append('note', note.trim());
+        r2Result = await submitJobDeliverable(jobId, formData);
+      }
+
+      if (file.type.startsWith('image/')) {
+        try {
+          const { previewDataUrl, finalDataUrl } = await watermarkImageFile(file);
+          submitDeliverable({
+            jobId,
+            mode: 'file',
+            fileName: file.name,
+            fileSize: file.size,
+            previewDataUrl,
+            finalDataUrl: r2Result?.previewFileUrl || finalDataUrl,
+            note
+          });
+        } catch {
+          submitDeliverable({
+            jobId,
+            mode: 'file',
+            fileName: file.name,
+            fileSize: file.size,
+            finalDataUrl: r2Result?.previewFileUrl,
+            note
+          });
+        }
+      } else {
+        submitDeliverable({
+          jobId,
+          mode: 'file',
+          fileName: file.name,
+          fileSize: file.size,
+          finalDataUrl: r2Result?.previewFileUrl,
+          note
+        });
+      }
+      onClose();
+    } catch (err) {
+      setErrorMsg(err?.message || 'Không thể tải lên file bàn giao.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -124,20 +205,20 @@ export function DeliverableModal({ onClose, jobId }) {
         <label>Cách nộp bàn giao</label>
         <div style={{ display: 'flex', gap: 16, margin: '4px 0 10px', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
-            <input type="radio" checked={mode === 'file'} onChange={() => setMode('file')} /> 📁 Tải file lên
+            <input type="radio" checked={mode === 'file'} onChange={() => setMode('file')} /> 📁 Tải file lên Cloudflare R2
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
-            <input type="radio" checked={mode === 'link'} onChange={() => setMode('link')} /> 🔗 Dán link
+            <input type="radio" checked={mode === 'link'} onChange={() => setMode('link')} /> 🔗 Dán link ngoài
           </label>
         </div>
       </div>
       {mode === 'file' ? (
-        <div className="upload-zone">
-          <input type="file" onChange={(e) => setFile(e.target.files[0])} />
-          <div className="uz-ic">📁</div>
+        <div className="upload-zone" style={{ border: '2px dashed var(--primary, #5b4cf5)', borderRadius: 12, padding: 20, textAlign: 'center' }}>
+          <input type="file" onChange={(e) => setFile(e.target.files?.[0])} />
+          <div className="uz-ic" style={{ fontSize: 32, marginBottom: 6 }}>📁</div>
           <b>Kéo thả hoặc bấm để chọn file sản phẩm</b>
-          <span>Tối đa 5MB · demo lưu tên/kích thước file, không tải lên server thật</span>
-          {file && <div style={{ fontSize: 12.5, marginTop: 6, color: 'var(--ink-soft)' }}>Đã chọn: {file.name} ({Math.round(file.size / 1024)} KB)</div>}
+          <p style={{ fontSize: 12, color: 'var(--muted, #666)', margin: '4px 0 0' }}>Hỗ trợ mọi định dạng (Tối đa 25MB). File được lưu trực tiếp lên Cloudflare R2.</p>
+          {file && <div style={{ fontSize: 13, marginTop: 8, color: 'var(--primary, #5b4cf5)', fontWeight: 600 }}>Đã chọn: {file.name} ({Math.round(file.size / 1024)} KB)</div>}
         </div>
       ) : (
         <div className="field">
@@ -145,13 +226,18 @@ export function DeliverableModal({ onClose, jobId }) {
           <input type="text" placeholder="https://..." value={url} onChange={(e) => setUrl(e.target.value)} />
         </div>
       )}
-      <div className="field">
+      <div className="field" style={{ marginTop: 12 }}>
         <label>Ghi chú bàn giao</label>
         <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Mô tả những gì đã hoàn thành..." />
       </div>
+
+      {errorMsg && <div style={{ color: 'var(--coral, #f43f5e)', fontSize: 13, marginBottom: 12 }}>{errorMsg}</div>}
+
       <div className="modal-actions">
-        <button className="btn btn-primary" onClick={submit}>{isUpdate ? 'Cập nhật bàn giao' : 'Gửi bàn giao'}</button>
-        <button className="btn btn-outline" onClick={onClose}>Hủy</button>
+        <button className="btn btn-primary" onClick={submit} disabled={isSubmitting}>
+          {isSubmitting ? 'Đang tải lên Cloudflare R2...' : (isUpdate ? 'Cập nhật bàn giao' : 'Gửi bàn giao')}
+        </button>
+        <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Hủy</button>
       </div>
     </ModalShell>
   );
@@ -199,7 +285,7 @@ export function DeliverableReviewModal({ onClose, jobId }) {
       <DeliverablePreview d={job.deliverable} revealFinal={false} />
       <div className="checkout-summary" style={{ marginTop: 8 }}>
         <div className="cs-row"><span>Ghi chú</span><span>{job.deliverable.note || '—'}</span></div>
-        <div className="cs-row"><span>Nộp lúc</span><span>{job.deliverable.submittedAt}</span></div>
+        <div className="cs-row"><span>Nộp lúc</span><span>{job.deliverable.submittedAt || 'Vừa xong'}</span></div>
       </div>
       <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 10 }}>
         Xác nhận để giải ngân {fmtVND(job.escrowAmount || job.budget)} cho sinh viên, hoặc yêu cầu sửa lại nếu sản phẩm chưa đạt.

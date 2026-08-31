@@ -5,6 +5,9 @@ import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
 import { useToast } from './ToastContext';
 
 import { login as loginApi, register as registerApi, logout as logoutApi, refreshToken as refreshTokenApi, changePassword as changePasswordApi } from '../api/authApi';
+import * as jobApi from '../api/jobApi';
+import * as cvApi from '../api/cvApi';
+import * as applicationApi from '../api/applicationApi';
 import { setAccessToken, clearAccessToken } from '../api/tokenStore';
 
 const StoreContext = createContext(null);
@@ -78,6 +81,7 @@ const initialState = {
     { id: 2, name: 'CV_NguyenVanAn_GraphicDesign.pdf', label: 'CV Thiết kế Đồ họa & Video', category: 'Thiết kế đồ hoạ', size: '1.2 MB', date: '12/08/2026' },
     { id: 3, name: 'CV_NguyenVanAn_ContentWriter.pdf', label: 'CV Viết bài SEO & Dịch thuật', category: 'Viết nội dung', size: '198 KB', date: '15/08/2026' },
   ],
+  categories: [],
   employerDocs: [],
   portfolioUploads: [],
   jobs: jobsSeed,
@@ -137,6 +141,24 @@ function reducer(state, action) {
       const currentUser = { ...state.currentUser, ...action.patch };
       localStorage.setItem('user', JSON.stringify(currentUser));
       return { ...state, currentUser };
+    }
+
+    case 'SET_CATEGORIES': {
+      return { ...state, categories: action.categories || [] };
+    }
+
+    case 'SET_SAVED_JOB_IDS': {
+      return { ...state, savedJobIds: action.ids || [] };
+    }
+
+    case 'SET_CV_FILES': {
+      return { ...state, cvFiles: action.files || [] };
+    }
+
+    case 'SET_MY_APPLICATIONS': {
+      const apps = action.applications || [];
+      const appliedJobIds = apps.map((a) => a.jobId);
+      return { ...state, myApplications: apps, appliedJobIds };
     }
 
     case 'SUBMIT_JOB_FORM': {
@@ -682,6 +704,50 @@ export function StoreProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    // Tải danh sách Categories từ API
+    jobApi.getCategories()
+      .then((cats) => {
+        dispatch({ type: 'SET_CATEGORIES', categories: cats });
+      })
+      .catch((err) => {
+        console.error('Không thể tải danh mục từ backend:', err);
+      });
+
+    // Nếu là student đã đăng nhập, tải savedJobIds, cvFiles, myApplications từ API
+    if (state.currentUser?.roleCode === 'student') {
+      jobApi.getSavedJobIds()
+        .then((ids) => {
+          dispatch({ type: 'SET_SAVED_JOB_IDS', ids });
+        })
+        .catch(() => {});
+
+      cvApi.getMyCvFiles()
+        .then((files) => {
+          // Chuẩn hóa định dạng hiển thị nếu cần
+          const formatted = (files || []).map(c => ({
+            id: c.id,
+            name: c.fileName,
+            fileUrl: c.fileUrl,
+            label: c.label || c.fileName,
+            category: c.categoryName || 'Chung',
+            categoryId: c.categoryId,
+            size: c.fileSize > 1024 * 1024 ? (c.fileSize / (1024 * 1024)).toFixed(1) + ' MB' : Math.round(c.fileSize / 1024) + ' KB',
+            rawSize: c.fileSize,
+            uploadedAt: c.uploadedAt
+          }));
+          dispatch({ type: 'SET_CV_FILES', files: formatted });
+        })
+        .catch((err) => console.error('Lỗi tải danh sách CV:', err));
+
+      applicationApi.getMyApplications()
+        .then((apps) => {
+          dispatch({ type: 'SET_MY_APPLICATIONS', applications: apps });
+        })
+        .catch((err) => console.error('Lỗi tải danh sách ứng tuyển:', err));
+    }
+  }, [state.currentUser]);
+
+  useEffect(() => {
     const id = setInterval(() => dispatch({ type: 'CHECK_DEADLINES' }), 30000);
     const onTokenRefreshed = (e) => {
       if (e.detail?.token) {
@@ -699,12 +765,80 @@ export function StoreProvider({ children }) {
   const actions = useMemo(
     () => ({
       submitJobForm: (payload) => dispatch({ type: 'SUBMIT_JOB_FORM', payload }),
+      createJobPost: async (jobData) => {
+        const result = await jobApi.createJob(jobData);
+        showToast('Đăng tin tuyển dụng thành công!', '🚀');
+        return result;
+      },
+      updateJobPost: async (id, jobData) => {
+        const result = await jobApi.updateJob(id, jobData);
+        showToast('Cập nhật tin tuyển dụng thành công!', '✓');
+        return result;
+      },
+      cancelJobPost: async (id) => {
+        const result = await jobApi.cancelJob(id);
+        dispatch({ type: 'CANCEL_JOB', id });
+        showToast('Đã hủy tin tuyển dụng.', '🚫');
+        return result;
+      },
+      toggleSaveJobAsync: async (jobId) => {
+        const isSaved = (state.savedJobIds || []).includes(jobId);
+        if (isSaved) {
+          await jobApi.unsaveJob(jobId);
+          dispatch({ type: 'SET_SAVED_JOB_IDS', ids: (state.savedJobIds || []).filter((id) => id !== jobId) });
+          showToast('Đã bỏ lưu công việc.', '💔');
+        } else {
+          await jobApi.saveJob(jobId);
+          dispatch({ type: 'SET_SAVED_JOB_IDS', ids: [...(state.savedJobIds || []), jobId] });
+          showToast('Đã lưu công việc vào mục yêu thích!', '❤️');
+        }
+      },
       startEditJob: (id) => dispatch({ type: 'START_EDIT_JOB', id }),
       clearEditJob: () => dispatch({ type: 'CLEAR_EDIT_JOB' }),
       deleteJob: (id) => dispatch({ type: 'DELETE_JOB', id }),
       cancelJob: (id) => dispatch({ type: 'CANCEL_JOB', id }),
       studentAbandonJob: (id) => dispatch({ type: 'STUDENT_ABANDON_JOB', id }),
       applyJob: (id) => dispatch({ type: 'APPLY_JOB', id }),
+      applyJobAsync: async (jobId, cvFileId, coverLetter = '') => {
+        const result = await applicationApi.applyJob(jobId, cvFileId, coverLetter);
+        dispatch({ type: 'APPLY_JOB', id: jobId });
+        showToast('Nộp đơn ứng tuyển thành công!', '🚀');
+        return result;
+      },
+      uploadCvAsync: async (payload) => {
+        let created;
+        if (payload instanceof FormData) {
+          created = await cvApi.uploadCvFile(payload);
+        } else if (payload.file instanceof File || payload.file instanceof Blob) {
+          const formData = new FormData();
+          formData.append('file', payload.file);
+          if (payload.label) formData.append('label', payload.label);
+          if (payload.categoryId) formData.append('categoryId', payload.categoryId);
+          created = await cvApi.uploadCvFile(formData);
+        } else {
+          created = await cvApi.uploadCv(payload);
+        }
+
+        const formatted = {
+          id: created.id,
+          name: created.fileName,
+          fileUrl: created.fileUrl,
+          label: created.label || created.fileName,
+          category: created.categoryName || 'Chung',
+          categoryId: created.categoryId,
+          size: created.fileSize > 1024 * 1024 ? (created.fileSize / (1024 * 1024)).toFixed(1) + ' MB' : Math.round(created.fileSize / 1024) + ' KB',
+          rawSize: created.fileSize,
+          uploadedAt: created.uploadedAt
+        };
+        dispatch({ type: 'SET_CV_FILES', files: [formatted, ...(state.cvFiles || [])] });
+        showToast('Tải lên CV chuyên môn thành công!', '📄');
+        return formatted;
+      },
+      deleteCvAsync: async (id) => {
+        await cvApi.deleteCv(id);
+        dispatch({ type: 'SET_CV_FILES', files: (state.cvFiles || []).filter(c => c.id !== id) });
+        showToast('Đã xóa CV.', '🗑️');
+      },
       toggleSaveJob: (jobId) => dispatch({ type: 'TOGGLE_SAVE_JOB', jobId }),
       hire: (payload) => dispatch({ type: 'HIRE', payload }),
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),
@@ -777,7 +911,7 @@ export function StoreProvider({ children }) {
         showToast('Đã lưu cài đặt chiến dịch quảng cáo.', '📢');
       }
     }),
-    [showToast]
+    [showToast, state.savedJobIds]
   );
 
   const value = useMemo(() => ({ state, dispatch, ...actions }), [state, actions]);

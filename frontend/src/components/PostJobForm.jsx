@@ -3,15 +3,12 @@ import Icon from './Icon';
 import { useStore, fmtVND } from '../context/StoreContext';
 import { useToast } from '../context/ToastContext';
 
-const CATS = [
-    'Video Editing',
-    'Graphic Design',
-    'Content Marketing',
-    'Data Entry',
-    'Programming',
-    'Translation',
-    'Tutoring',
-    'Photography',
+const DEFAULT_CATS = [
+    { id: 1, name: 'Thiết kế đồ hoạ' },
+    { id: 2, name: 'Viết nội dung' },
+    { id: 3, name: 'Lập trình web' },
+    { id: 4, name: 'Dựng video' },
+    { id: 5, name: 'Dịch thuật' },
 ];
 
 function formatFileSize(bytes) {
@@ -34,30 +31,52 @@ function getFileIcon(fileName) {
 }
 
 export default function PostJobForm({ onDone, onCancelEdit }) {
-    const { state, submitJobForm, clearEditJob } = useStore();
+    const { state, submitJobForm, createJobPost, updateJobPost, clearEditJob } = useStore();
     const { showToast } = useToast();
     const fileInputRef = useRef(null);
+
+    const categoriesList = state.categories && state.categories.length > 0 ? state.categories : DEFAULT_CATS;
 
     const editingJob = state.editingJobId ? state.myJobs.find((j) => j.id === state.editingJobId) : null;
 
     const [title, setTitle] = useState('');
-    const [cat, setCat] = useState(CATS[0]);
+    const [categoryId, setCategoryId] = useState(categoriesList[0]?.id || 1);
     const [budget, setBudget] = useState('');
     const [desc, setDesc] = useState('');
     const [urgent, setUrgent] = useState(false);
+    const [location, setLocation] = useState('TP.HCM');
+    const [requirementsText, setRequirementsText] = useState('');
     const [attachments, setAttachments] = useState([]);
     const [isDragging, setIsDragging] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (categoriesList.length > 0 && !categoryId) {
+            setCategoryId(categoriesList[0].id);
+        }
+    }, [categoriesList]);
 
     useEffect(() => {
         if (editingJob) {
             setTitle(editingJob.title || '');
-            setCat(editingJob.cat || CATS[0]);
+            if (editingJob.categoryId) {
+                setCategoryId(editingJob.categoryId);
+            } else {
+                const found = categoriesList.find(c => c.name === editingJob.cat);
+                if (found) setCategoryId(found.id);
+            }
             setBudget(String(editingJob.budget || ''));
-            setDesc(editingJob.desc || '');
-            setUrgent(!!editingJob.urgent);
+            setDesc(editingJob.desc || editingJob.description || '');
+            setUrgent(!!editingJob.urgent || !!editingJob.isUrgent);
+            setLocation(editingJob.location || editingJob.loc || 'TP.HCM');
+            if (editingJob.requirements && Array.isArray(editingJob.requirements)) {
+                setRequirementsText(editingJob.requirements.map(r => r.requirementText || r).join('\n'));
+            } else if (editingJob.req && Array.isArray(editingJob.req)) {
+                setRequirementsText(editingJob.req.join('\n'));
+            }
             setAttachments(editingJob.attachments || []);
         }
-    }, [editingJob]);
+    }, [editingJob, categoriesList]);
 
     const triZeroLeft = Math.max(0, 3 - state.triZeroUsed);
 
@@ -101,23 +120,65 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
         }
     };
 
-    const submit = (e) => {
+    const submit = async (e) => {
         e.preventDefault();
         if (!title.trim() || !desc.trim() || !budget) {
             showToast('Vui lòng điền đầy đủ tiêu đề, ngân sách và mô tả.', '⚠️');
             return;
         }
-        submitJobForm({
+
+        const numBudget = Math.round(Number(budget));
+        if (isNaN(numBudget) || numBudget <= 0) {
+            showToast('Ngân sách phải là số nguyên dương (VNĐ).', '⚠️');
+            return;
+        }
+
+        const reqList = requirementsText
+            .split('\n')
+            .map(r => r.trim())
+            .filter(Boolean);
+
+        const currentCategory = categoriesList.find(c => c.id === Number(categoryId)) || categoriesList[0];
+
+        const jobPayload = {
             title: title.trim(),
-            cat,
-            budget: Number(budget),
-            desc: desc.trim(),
-            urgent,
-            attachments,
-            editingId: editingJob?.id || null,
-        });
-        showToast(editingJob ? 'Đã cập nhật tin tuyển dụng!' : 'Đã đăng tin tuyển dụng thành công!', '✓');
-        onDone?.();
+            description: desc.trim(),
+            categoryId: Number(categoryId) || currentCategory.id,
+            location: location.trim(),
+            budget: numBudget,
+            isUrgent: urgent,
+            requirements: reqList.length > 0 ? reqList : ['Hoàn thành đúng tiến độ cam kết', 'Bàn giao sản phẩm chất lượng'],
+        };
+
+        setIsSubmitting(true);
+        try {
+            if (editingJob) {
+                if (typeof updateJobPost === 'function') {
+                    await updateJobPost(editingJob.id, jobPayload);
+                }
+            } else {
+                if (typeof createJobPost === 'function') {
+                    await createJobPost(jobPayload);
+                }
+            }
+
+            // Sync state local
+            submitJobForm({
+                title: title.trim(),
+                cat: currentCategory.name,
+                budget: numBudget,
+                desc: desc.trim(),
+                urgent,
+                attachments,
+                editingId: editingJob?.id || null,
+            });
+
+            onDone?.();
+        } catch (err) {
+            showToast(err.message || 'Không thể lưu tin tuyển dụng, vui lòng thử lại.', '⚠️');
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     const cancelEdit = () => {
@@ -151,32 +212,52 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                 <div className="field-row">
                     <div className="field">
                         <label>Danh mục ngành nghề</label>
-                        <select value={cat} onChange={(e) => setCat(e.target.value)}>
-                            {CATS.map((c) => <option key={c} value={c}>{c}</option>)}
+                        <select value={categoryId} onChange={(e) => setCategoryId(Number(e.target.value))}>
+                            {categoriesList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                     </div>
                     <div className="field">
-                        <label>Ngân sách chi trả (VND) <span style={{ color: 'var(--coral)' }}>*</span></label>
+                        <label>Địa điểm / Hình thức</label>
                         <input
-                            type="number"
-                            min="50000"
-                            step="10000"
-                            placeholder="250000"
-                            value={budget}
-                            onChange={(e) => setBudget(e.target.value)}
-                            required
+                            type="text"
+                            placeholder="Ví dụ: TP.HCM / Remote"
+                            value={location}
+                            onChange={(e) => setLocation(e.target.value)}
                         />
                     </div>
                 </div>
 
                 <div className="field">
-                    <label>Mô tả chi tiết & Yêu cầu công việc <span style={{ color: 'var(--coral)' }}>*</span></label>
+                    <label>Ngân sách chi trả (VND) <span style={{ color: 'var(--coral)' }}>*</span></label>
+                    <input
+                        type="number"
+                        min="50000"
+                        step="10000"
+                        placeholder="250000"
+                        value={budget}
+                        onChange={(e) => setBudget(e.target.value)}
+                        required
+                    />
+                </div>
+
+                <div className="field">
+                    <label>Mô tả chi tiết công việc <span style={{ color: 'var(--coral)' }}>*</span></label>
                     <textarea
-                        placeholder="Mô tả cụ thể mục tiêu, định dạng bàn giao, yêu cầu kỹ năng, thời hạn hoàn thành..."
+                        placeholder="Mô tả cụ thể mục tiêu dự án, kết quả mong đợi..."
                         value={desc}
                         onChange={(e) => setDesc(e.target.value)}
-                        rows={5}
+                        rows={4}
                         required
+                    />
+                </div>
+
+                <div className="field">
+                    <label>Yêu cầu công việc (Mỗi dòng là một tiêu chí)</label>
+                    <textarea
+                        placeholder="Ví dụ:&#10;Có kỹ năng sử dụng Figma&#10;Đúng hẹn deadline&#10;Giao tiếp tốt"
+                        value={requirementsText}
+                        onChange={(e) => setRequirementsText(e.target.value)}
+                        rows={3}
                     />
                 </div>
 
@@ -275,11 +356,11 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                 </div>
 
                 <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
-                    <button type="submit" className="btn btn-primary btn-block">
-                        {editingJob ? 'Lưu thay đổi' : 'Đăng tin ngay'}
+                    <button type="submit" className="btn btn-primary btn-block" disabled={isSubmitting}>
+                        {isSubmitting ? 'Đang xử lý...' : (editingJob ? 'Lưu thay đổi' : 'Đăng tin ngay')}
                     </button>
                     {editingJob && (
-                        <button type="button" className="btn btn-outline" onClick={cancelEdit}>
+                        <button type="button" className="btn btn-outline" onClick={cancelEdit} disabled={isSubmitting}>
                             Hủy
                         </button>
                     )}
@@ -297,8 +378,8 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                         <div className="jc-emp">
                             <div className="jc-av" style={{ background: 'linear-gradient(135deg,var(--primary),var(--coral))' }} />
                             <div>
-                                <b>Doanh nghiệp của bạn <Icon name="check" style={{ width: 12, height: 12, display: 'inline' }} /></b>
-                                <span>TP.HCM · Đã xác thực</span>
+                                <b>{state.currentUser?.fullName || 'Doanh nghiệp của bạn'} <Icon name="check" style={{ width: 12, height: 12, display: 'inline' }} /></b>
+                                <span>{location || 'TP.HCM'} · Đã xác thực</span>
                             </div>
                         </div>
                         {urgent && <span className="chip chip-coral">Gấp</span>}
@@ -307,7 +388,7 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                     <h3>{title || 'Tiêu đề công việc sẽ hiển thị ở đây'}</h3>
 
                     <div className="jc-tags" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        <span className="chip">{cat}</span>
+                        <span className="chip">{categoriesList.find(c => c.id === categoryId)?.name || 'Danh mục'}</span>
                         {attachments.length > 0 && (
                             <span className="chip chip-lime" style={{ fontSize: 11 }}>
                                 📎 {attachments.length} file đính kèm
