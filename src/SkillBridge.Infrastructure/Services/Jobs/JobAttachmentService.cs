@@ -137,9 +137,41 @@ public class JobAttachmentService : IJobAttachmentService
             throw new BusinessException("Tài liệu đính kèm không tồn tại.");
         }
 
+        // Xóa file vật lý trên Cloudflare R2
+        var fileKey = ExtractFileKeyFromUrl(attachment.FileUrl);
+        if (!string.IsNullOrWhiteSpace(fileKey))
+        {
+            try
+            {
+                await _storageService.DeleteFileAsync(fileKey, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Không thể xóa file {FileKey} trên Cloudflare R2 khi xóa JobAttachment {AttachmentId}.", fileKey, attachmentId);
+            }
+        }
+
         _dbContext.JobAttachments.Remove(attachment);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         _logger.LogInformation("Nhà tuyển dụng {EmployerId} đã xóa tài liệu đính kèm {AttachmentId} khỏi Job {JobId}.", employerId, attachmentId, jobId);
+    }
+
+    private static string? ExtractFileKeyFromUrl(string? fileUrl)
+    {
+        if (string.IsNullOrWhiteSpace(fileUrl)) return null;
+
+        if (Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
+        {
+            var path = Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/');
+            var jobsIdx = path.IndexOf("jobs/", StringComparison.OrdinalIgnoreCase);
+            if (jobsIdx >= 0)
+            {
+                return path.Substring(jobsIdx);
+            }
+            return path;
+        }
+
+        return fileUrl;
     }
 }
