@@ -70,13 +70,11 @@ public class CvService : ICvService
         if (!string.IsNullOrWhiteSpace(request.FileUrl))
         {
             var trimmedUrl = request.FileUrl.Trim();
-            // Validate URL an toàn: chấp nhận relative /uploads/ hoặc absolute URL hợp lệ
+            // Validate URL an toàn: chấp nhận relative /uploads/ hoặc absolute URL với host được whitelist
             if (trimmedUrl.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase) ||
                 (Uri.TryCreate(trimmedUrl, UriKind.Absolute, out var parsedUri) &&
-                 (parsedUri.Scheme == Uri.UriSchemeHttps || parsedUri.Scheme == Uri.UriSchemeHttp) &&
-                 (parsedUri.Host.EndsWith("cloudflarestorage.com", StringComparison.OrdinalIgnoreCase) ||
-                  parsedUri.Host.EndsWith("r2.dev", StringComparison.OrdinalIgnoreCase) ||
-                  parsedUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))))
+                 (parsedUri.Scheme == Uri.UriSchemeHttps || (parsedUri.Scheme == Uri.UriSchemeHttp && parsedUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))) &&
+                 IsAllowedStorageHost(parsedUri.Host)))
             {
                 fileUrl = trimmedUrl;
             }
@@ -213,5 +211,14 @@ public class CvService : ICvService
             IsSearchable = entity.IsSearchable ?? true,
             UploadedAt = entity.UploadedAt
         };
+    }
+
+    private static bool IsAllowedStorageHost(string host)
+    {
+        return host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+               host.Equals("r2.dev", StringComparison.OrdinalIgnoreCase) ||
+               host.EndsWith(".r2.dev", StringComparison.OrdinalIgnoreCase) ||
+               host.Equals("cloudflarestorage.com", StringComparison.OrdinalIgnoreCase) ||
+               host.EndsWith(".cloudflarestorage.com", StringComparison.OrdinalIgnoreCase);
     }
 }
