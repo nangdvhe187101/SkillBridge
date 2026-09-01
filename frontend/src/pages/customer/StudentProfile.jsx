@@ -21,20 +21,31 @@ export default function StudentProfile() {
   const { openChatWithPerson } = useStore();
   const [selectedPf, setSelectedPf] = useState(null);
 
-  const student = studentsSeed.find((s) => slugify(s.name) === slug);
+  const matchedSeed = studentsSeed.find((s) => slugify(s.name) === slug);
+  const formattedName = slug
+    ? slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+    : 'Sinh viên SkillBridge';
 
-  if (!student) {
-    return (
-      <div className="page active">
-        <div className="wrap" style={{ padding: '100px 0', textAlign: 'center' }}>
-          <h2 style={{ marginBottom: 10 }}>Không tìm thấy hồ sơ sinh viên này</h2>
-          <button className="btn btn-primary" onClick={() => navigate('/dashboard')}>Về Dashboard</button>
-        </div>
-      </div>
-    );
-  }
+  const student = matchedSeed || {
+    name: formattedName,
+    school: 'Đại học FPT / Bách Khoa',
+    email: `${slug || 'student'}@edu.vn`,
+    phone: '0988 123 456',
+    reliability: 95,
+    completedJobs: 6,
+    avgRating: 4.9,
+    skills: ['✓ Verified Canva Operator', '✓ CapCut Speed Editor', '✓ Content Writing'],
+    bio: 'Sinh viên năng động, cam kết hoàn thành công việc đúng tiến độ với tinh thần trách nhiệm cao nhất trên nền tảng SkillBridge.',
+    portfolio: ['Video ngắn TikTok & Reels', 'Bộ ấn phẩm Banner & Poster sự kiện', 'Thiết kế nhận diện thương hiệu'],
+    reviews: [
+      { name: 'Công ty Đối tác', stars: 5, comment: 'Sinh viên làm việc rất có trách nhiệm, giao bài đúng hạn và chất lượng sản phẩm tốt.' }
+    ]
+  };
 
-  const tier = tierFromScore(student.reliability);
+  const tier = tierFromScore(student.reliability || 95);
+  const skillsList = student.skills || [];
+  const portfolioList = student.portfolio || [];
+  const reviewsList = student.reviews || [];
 
   return (
     <div className="page active">
@@ -59,7 +70,7 @@ export default function StudentProfile() {
                 </span>
               </div>
               <div className="ph-meta" style={{ marginTop: 8 }}>
-                {student.skills.slice(0, 2).map((s, i) => (
+                {skillsList.slice(0, 2).map((s, i) => (
                   <span className="chip" key={i} style={{ background: 'rgba(255,255,255,.1)', color: '#fff', borderColor: 'rgba(255,255,255,.2)' }}>{s}</span>
                 ))}
                 <span className="chip chip-lime">{TIER_LABEL[tier]}</span>
@@ -105,11 +116,11 @@ export default function StudentProfile() {
 
             <div className="pcard">
               <h4>Huy hiệu kỹ năng</h4>
-              {student.skills.length === 0 ? (
+              {skillsList.length === 0 ? (
                 <div className="empty-state">Chưa có huy hiệu kỹ năng nào.</div>
               ) : (
                 <div className="badge-row">
-                  {student.skills.map((b) => <span className="chip chip-dark" key={b}>{b}</span>)}
+                  {skillsList.map((b) => <span className="chip chip-dark" key={b}>{b}</span>)}
                 </div>
               )}
             </div>
@@ -143,7 +154,7 @@ export default function StudentProfile() {
                   <div>
                     <b style={{ display: 'block', fontSize: 13.5 }}>CV_{student.name.replace(/\s+/g, '')}_ChuyenMon.pdf</b>
                     <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                      Khối ngành: {student.skills[0] || 'Chuyên môn'} · 420 KB
+                      Khối ngành: {skillsList[0] || 'Chuyên môn'} · 420 KB
                     </span>
                   </div>
                 </div>
@@ -152,7 +163,7 @@ export default function StudentProfile() {
                   className="btn btn-primary btn-sm"
                   style={{ fontSize: 12, padding: '4px 10px' }}
                   onClick={() => {
-                    const blob = new Blob([`HỒ SƠ NĂNG LỰC / CV ỨNG TUYỂN\nSinh viên: ${student.name}\nTrường: ${student.school}\nKỹ năng: ${student.skills.join(', ')}\nReliability Score: ${student.reliability}/100\nĐược xác thực qua SkillBridge`], { type: 'text/plain;charset=utf-8' });
+                    const blob = new Blob([`HỒ SƠ NĂNG LỰC / CV ỨNG TUYỂN\nSinh viên: ${student.name}\nTrường: ${student.school}\nKỹ năng: ${skillsList.join(', ')}\nReliability Score: ${student.reliability}/100\nĐược xác thực qua SkillBridge`], { type: 'text/plain;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
@@ -173,13 +184,13 @@ export default function StudentProfile() {
             </div>
 
             <div className="pcard">
-              <h4>Portfolio & Dự án ({student.portfolio.length})</h4>
+              <h4>Portfolio & Dự án ({portfolioList.length})</h4>
               <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 }}>Bấm vào từng dự án để xem chi tiết.</p>
-              {student.portfolio.length === 0 ? (
+              {portfolioList.length === 0 ? (
                 <div className="empty-state">Sinh viên chưa thêm mục portfolio nào.</div>
               ) : (
                 <div className="portfolio-grid">
-                  {student.portfolio.map((cap, i) => (
+                  {portfolioList.map((cap, i) => (
                     <div
                       className="pf-item"
                       key={i}
@@ -207,11 +218,11 @@ export default function StudentProfile() {
             </div>
 
             <div className="pcard">
-              <h4>Đánh giá từ Nhà tuyển dụng ({student.reviews.length})</h4>
-              {student.reviews.length === 0 ? (
+              <h4>Đánh giá từ Nhà tuyển dụng ({reviewsList.length})</h4>
+              {reviewsList.length === 0 ? (
                 <div className="empty-state">Chưa có đánh giá nào.</div>
               ) : (
-                student.reviews.map((r, i) => (
+                reviewsList.map((r, i) => (
                   <div className="review" key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
                     <div className="rv-top" style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <b>{r.name}</b>

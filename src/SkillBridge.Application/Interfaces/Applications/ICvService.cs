@@ -11,5 +11,6 @@ public interface ICvService
     Task<CvFileDto> UploadCvAsync(int studentId, UploadCvRequest request);
     Task<CvFileDto> UploadCvBinaryAsync(int studentId, Stream stream, string fileName, string contentType, string? label, int? categoryId);
     Task DeleteCvAsync(int studentId, int cvId);
+    Task<(Stream Stream, string ContentType, string FileName)> GetCvFileStreamAsync(int currentUserId, int cvId);
 }
 

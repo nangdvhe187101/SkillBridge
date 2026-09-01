@@ -12,6 +12,20 @@ import { slugify } from '../../data/companies';
 import { downloadJobAttachment } from '../../utils/fileDownloader';
 import * as jobApi from '../../api/jobApi';
 
+function formatDurationDetail(deadlineAt, postedAt) {
+  if (!deadlineAt) return null;
+  const start = postedAt ? new Date(postedAt).getTime() : Date.now();
+  const end = new Date(deadlineAt).getTime();
+  const diffMs = end - start;
+  if (diffMs <= 0) return null;
+  const totalHours = Math.max(1, Math.round(diffMs / 3600000));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  if (days > 0 && hours > 0) return `${days} ngày ${hours} giờ`;
+  if (days > 0) return `${days} ngày`;
+  return `${hours} giờ`;
+}
+
 function formatDeadline(ts) {
   if (!ts) return '—';
   const diff = ts - Date.now();
@@ -54,15 +68,14 @@ export default function JobDetail() {
   const [uploadFile, setUploadFile] = useState(null);
   const fileInputRef = useRef(null);
 
+  const localJob = (state.jobs || []).find((x) => x.id === jobId);
   const [apiJob, setApiJob] = useState(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(!localJob);
   useTick(30000);
-
-  const localJob = state.jobs.find((x) => x.id === jobId);
 
   useEffect(() => {
     if (jobId) {
-      setIsLoading(true);
+      setIsLoading(!localJob);
       jobApi.getJobById(jobId)
         .then((data) => {
           setApiJob(data);
@@ -78,33 +91,67 @@ export default function JobDetail() {
 
   const j = apiJob ? {
     id: apiJob.id,
-    title: apiJob.title,
-    desc: apiJob.description,
-    cat: apiJob.categoryName,
+    title: apiJob.title || '',
+    desc: apiJob.description || '',
+    cat: apiJob.categoryName || 'Chung',
     categoryId: apiJob.categoryId,
-    emp: apiJob.employerName,
+    emp: apiJob.employerName || 'Nhà tuyển dụng',
     loc: apiJob.location || 'Toàn quốc',
-    budget: apiJob.budget,
-    urgent: apiJob.isUrgent,
+    budget: apiJob.budget || 0,
+    urgent: !!apiJob.isUrgent,
     time: apiJob.postedAt ? new Date(apiJob.postedAt).toLocaleDateString('vi-VN') : 'Vừa đăng',
-    req: apiJob.requirements ? apiJob.requirements.map(r => r.requirementText) : [],
-    status: apiJob.status,
-    companyDesc: apiJob.employerCompanyDescription,
-    industry: apiJob.employerIndustry,
-    reliability: apiJob.employerReliabilityScore,
+    req: Array.isArray(apiJob.requirements)
+      ? apiJob.requirements.map((r) => (typeof r === 'string' ? r : r.requirementText || r.text || ''))
+      : [],
+    status: apiJob.status || 'open',
+    deadlineAt: apiJob.deadlineAt,
+    postedAt: apiJob.postedAt,
+    companyDesc: apiJob.employerCompanyDescription || '',
+    industry: apiJob.employerIndustry || '',
+    reliability: apiJob.employerReliabilityScore || 95,
     dashJobId: apiJob.dashJobId,
-    attachments: apiJob.attachments || []
-  } : localJob;
+    attachments: Array.isArray(apiJob.attachments) ? apiJob.attachments : []
+  } : (localJob ? {
+    ...localJob,
+    deadlineAt: localJob.deadlineAt,
+    postedAt: localJob.postedAt,
+    req: Array.isArray(localJob.req) ? localJob.req : [],
+    attachments: Array.isArray(localJob.attachments) ? localJob.attachments : []
+  } : null);
 
-  const dashJob = j?.dashJobId ? state.myJobs.find((dj) => dj.id === j.dashJobId) : null;
-  const myApp = state.myApplications.find((x) => x.jobId === jobId);
+  const dashJob = j?.dashJobId ? (state.myJobs || []).find((dj) => dj.id === j.dashJobId) : null;
+
+  const isLoggedIn = !!state.currentUser;
+  const isStudent = isLoggedIn && state.currentUser.roleCode === 'student';
+  const isEmployer = isLoggedIn && (state.currentUser.roleCode === 'employer' || state.currentUser.roleCode === 'recruiter' || state.currentUser.roleCode === 'business');
+  const isOwner = isLoggedIn && (
+    (apiJob?.employerId && apiJob.employerId === state.currentUser?.userId) ||
+    (j?.emp && state.currentUser?.fullName && j.emp.toLowerCase() === state.currentUser.fullName.toLowerCase())
+  );
+
+  const myApp = isStudent ? (state.myApplications || []).find((x) => x.jobId === jobId) : null;
   const appStatus = myApp?.status;
+  const hasApplied = isStudent && (
+    (state.appliedJobIds || []).includes(jobId) ||
+    !!myApp
+  );
 
   const availableCvList = state.cvFiles || [];
 
   let applyLabel = 'Ứng tuyển ngay';
   let applyDisabled = false;
-  if (state.appliedJobIds.includes(jobId) || (appStatus && ['hired', 'submitted', 'completed', 'rejected', 'cancelled'].includes(appStatus))) {
+
+  if (isOwner) {
+    applyLabel = '💼 Tin đăng của bạn';
+    applyDisabled = true;
+  } else if (isEmployer) {
+    applyLabel = 'Nhà tuyển dụng không thể ứng tuyển';
+    applyDisabled = true;
+  } else if (!isLoggedIn) {
+    // Khách hoặc đã đăng xuất -> luôn hiển thị Ứng tuyển ngay
+    applyLabel = 'Ứng tuyển ngay';
+    applyDisabled = false;
+  } else if (hasApplied) {
     applyDisabled = true;
     if (appStatus === 'hired') applyLabel = '✓ Đã trúng tuyển — nộp bàn giao bên trên';
     else if (appStatus === 'submitted') applyLabel = '📤 Đã nộp bàn giao — chờ xác nhận';
@@ -225,6 +272,15 @@ export default function JobDetail() {
               <h1>{j.title}</h1>
               <div className="jd-tags">
                 <span className="chip">{j.cat}</span>
+                {(() => {
+                  const dur = formatDurationDetail(j.deadlineAt, j.postedAt);
+                  if (!dur) return null;
+                  return (
+                    <span className="chip" style={{ background: 'rgba(108, 76, 255, 0.1)', color: 'var(--primary)', fontWeight: 600 }}>
+                      ⏱️ Hoàn thành trong: {dur}
+                    </span>
+                  );
+                })()}
                 {j.urgent && <span className="chip chip-coral">Gấp</span>}
                 <span className="chip">{j.time}</span>
               </div>
@@ -234,14 +290,18 @@ export default function JobDetail() {
               </div>
               <div className="jd-block">
                 <h4>Yêu cầu</h4>
-                <ul>{j.req.map((r, i) => <li key={i}><Icon name="check" /> {r}</li>)}</ul>
+                {(j.req && j.req.length > 0) ? (
+                  <ul>{j.req.map((r, i) => <li key={i}><Icon name="check" /> {r}</li>)}</ul>
+                ) : (
+                  <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Theo tiêu chuẩn và trao đổi trực tiếp với nhà tuyển dụng.</p>
+                )}
               </div>
 
-              {((j.attachments && j.attachments.length > 0) || (dashJob?.attachments && dashJob.attachments.length > 0)) && (
+              {((j.attachments && j.attachments.length > 0) || (dashJob?.attachments && dashJob?.attachments?.length > 0)) && (
                 <div className="jd-block">
                   <h4>📎 Tài liệu & Đề bài đính kèm</h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
-                    {(j.attachments || dashJob.attachments).map((f, i) => (
+                    {(j.attachments || dashJob?.attachments || []).map((f, i) => (
                       <div key={f.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span style={{ fontSize: 22 }}>📁</span>
@@ -256,9 +316,9 @@ export default function JobDetail() {
                           type="button"
                           className="btn btn-outline btn-sm"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                          onClick={() => {
-                            downloadJobAttachment(f, j.title);
+                          onClick={async () => {
                             showToast(`Đang tải xuống: ${f.fileName || f.name}`, '⬇️');
+                            await downloadJobAttachment(f, j.title, j.id);
                           }}
                         >
                           ⬇ Tải file về
@@ -329,43 +389,159 @@ export default function JobDetail() {
                 </div>
               )}
 
-              <div className="jd-card">
-                <div className="jd-price">{fmtVND(j.budget)}</div>
-                <div className="jd-price-lbl">Ngân sách công việc</div>
+              {isOwner ? (
+                <div className="jd-card" style={{ border: '1.5px solid var(--primary)', background: 'rgba(108, 76, 255, 0.03)' }}>
+                  <div className="jd-price">{fmtVND(j.budget)}</div>
+                  <div className="jd-price-lbl">Ngân sách công việc</div>
 
-                <button
-                  className="btn btn-primary btn-block"
-                  style={{ marginBottom: 10 }}
-                  disabled={applyDisabled}
-                  onClick={handleStartApply}
-                >
-                  {applyLabel}
-                </button>
+                  {(() => {
+                    const dur = formatDurationDetail(j.deadlineAt, j.postedAt);
+                    if (!dur) return null;
+                    return (
+                      <div style={{ margin: '14px 0', padding: '10px 12px', background: 'rgba(108, 76, 255, 0.06)', borderRadius: 8, border: '1px solid rgba(108, 76, 255, 0.2)', fontSize: 13 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: 2 }}>
+                          ⏱️ Thời hạn hoàn thành: {dur}
+                        </div>
+                        <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                          Tính từ khi được nhà tuyển dụng xác nhận chọn làm việc
+                        </span>
+                      </div>
+                    );
+                  })()}
 
-                <button className="btn btn-outline btn-block" style={{ marginBottom: 10 }} onClick={() => openChatWithPerson(j.emp)}>
-                  <span className="msg-btn-inline"><Icon name="chat" style={{ width: 14, height: 14 }} /> Nhắn tin với nhà tuyển dụng</span>
-                </button>
-                <button
-                  className="btn btn-outline btn-block"
-                  style={{
-                    marginBottom: 10,
-                    color: (state.savedJobIds || []).includes(jobId) ? '#ef4444' : undefined,
-                    borderColor: (state.savedJobIds || []).includes(jobId) ? '#ef4444' : undefined,
-                    background: (state.savedJobIds || []).includes(jobId) ? 'rgba(239, 68, 68, 0.08)' : undefined
-                  }}
-                  onClick={async () => {
-                    try {
-                      await toggleSaveJobAsync(jobId);
-                    } catch (err) {
-                      console.error('Lỗi lưu công việc:', err);
-                    }
-                  }}
-                >
-                  {(state.savedJobIds || []).includes(jobId) ? '❤️ Đã lưu vào yêu thích' : '🤍 Lưu công việc'}
-                </button>
-                <button className="btn btn-outline btn-block" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
-                  onClick={() => openModal('report', { withName: j.emp })}>🚩 Báo cáo nhà tuyển dụng</button>
-              </div>
+                  <div style={{ padding: '12px 14px', background: 'rgba(108, 76, 255, 0.08)', borderRadius: 10, margin: '14px 0 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 24 }}>👑</span>
+                    <div>
+                      <b style={{ fontSize: 13.5, display: 'block', color: 'var(--ink)' }}>Tin tuyển dụng của bạn</b>
+                      <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Bạn là chủ sở hữu của tin đăng này</span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-block"
+                    style={{ marginBottom: 10, fontWeight: 700, padding: '10px 16px' }}
+                    onClick={() => navigate(`/employer/jobs/${jobId}`)}
+                  >
+                    👥 Quản lý ứng viên ({apiJob?.applicantCount || 0}) →
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-block"
+                    style={{ marginBottom: 10 }}
+                    onClick={() => navigate(`/employer/jobs/${jobId}/edit`)}
+                  >
+                    ✏️ Chỉnh sửa nội dung tin
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-block"
+                    onClick={() => navigate('/employer/jobs')}
+                  >
+                    📋 Về danh sách tin tuyển dụng
+                  </button>
+                </div>
+              ) : isEmployer ? (
+                <div className="jd-card" style={{ background: 'var(--surface)' }}>
+                  <div className="jd-price">{fmtVND(j.budget)}</div>
+                  <div className="jd-price-lbl">Ngân sách công việc</div>
+
+                  {(() => {
+                    const dur = formatDurationDetail(j.deadlineAt, j.postedAt);
+                    if (!dur) return null;
+                    return (
+                      <div style={{ margin: '14px 0', padding: '10px 12px', background: 'rgba(108, 76, 255, 0.06)', borderRadius: 8, border: '1px solid rgba(108, 76, 255, 0.2)', fontSize: 13 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: 2 }}>
+                          ⏱️ Thời hạn hoàn thành: {dur}
+                        </div>
+                        <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                          Tính từ khi được nhà tuyển dụng xác nhận chọn làm việc
+                        </span>
+                      </div>
+                    );
+                  })()}
+
+                  <div style={{ padding: '12px 14px', background: 'rgba(0, 0, 0, 0.03)', borderRadius: 10, margin: '14px 0 16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 24, marginBottom: 4 }}>🏢</div>
+                    <b style={{ fontSize: 13.5, display: 'block', color: 'var(--ink)' }}>Tài khoản Nhà tuyển dụng</b>
+                    <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginTop: 4 }}>
+                      Bạn đang đăng nhập với vai trò Nhà tuyển dụng. Các tính năng nộp CV và lưu việc chỉ dành cho tài khoản Sinh viên / Ứng viên.
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-block"
+                    style={{ marginBottom: 10 }}
+                    onClick={() => navigate('/employer/post')}
+                  >
+                    ➕ Đăng tin tuyển dụng mới
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-block"
+                    onClick={() => navigate('/employer/dashboard')}
+                  >
+                    ← Về Dashboard của bạn
+                  </button>
+                </div>
+              ) : (
+                <div className="jd-card">
+                  <div className="jd-price">{fmtVND(j.budget)}</div>
+                  <div className="jd-price-lbl">Ngân sách công việc</div>
+
+                  {(() => {
+                    const dur = formatDurationDetail(j.deadlineAt, j.postedAt);
+                    if (!dur) return null;
+                    return (
+                      <div style={{ margin: '14px 0', padding: '10px 12px', background: 'rgba(108, 76, 255, 0.06)', borderRadius: 8, border: '1px solid rgba(108, 76, 255, 0.2)', fontSize: 13 }}>
+                        <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: 2 }}>
+                          ⏱️ Thời hạn hoàn thành: {dur}
+                        </div>
+                        <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                          Tính từ khi được nhà tuyển dụng xác nhận chọn làm việc
+                        </span>
+                      </div>
+                    );
+                  })()}
+
+                  <button
+                    className="btn btn-primary btn-block"
+                    style={{ marginBottom: 10 }}
+                    disabled={applyDisabled}
+                    onClick={handleStartApply}
+                  >
+                    {applyLabel}
+                  </button>
+
+                  <button className="btn btn-outline btn-block" style={{ marginBottom: 10 }} onClick={() => openChatWithPerson(j.emp)}>
+                    <span className="msg-btn-inline"><Icon name="chat" style={{ width: 14, height: 14 }} /> Nhắn tin với nhà tuyển dụng</span>
+                  </button>
+                  <button
+                    className="btn btn-outline btn-block"
+                    style={{
+                      marginBottom: 10,
+                      color: (state.savedJobIds || []).includes(jobId) ? '#ef4444' : undefined,
+                      borderColor: (state.savedJobIds || []).includes(jobId) ? '#ef4444' : undefined,
+                      background: (state.savedJobIds || []).includes(jobId) ? 'rgba(239, 68, 68, 0.08)' : undefined
+                    }}
+                    onClick={async () => {
+                      try {
+                        await toggleSaveJobAsync(jobId);
+                      } catch (err) {
+                        console.error('Lỗi lưu công việc:', err);
+                      }
+                    }}
+                  >
+                    {(state.savedJobIds || []).includes(jobId) ? '❤️ Đã lưu vào yêu thích' : '🤍 Lưu công việc'}
+                  </button>
+                  <button className="btn btn-outline btn-block" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
+                    onClick={() => openModal('report', { withName: j.emp })}>🚩 Báo cáo nhà tuyển dụng</button>
+                </div>
+              )}
               <div className="jd-card">
                 <div className="jd-emp-row" style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${slugify(j.emp)}`)}>
                   <Avatar name={j.emp} className="jd-emp-av" fontSize={16} />

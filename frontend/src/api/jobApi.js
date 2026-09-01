@@ -51,6 +51,18 @@ export async function cancelJob(id) {
     });
 }
 
+export async function reopenJob(id) {
+    return apiFetch(`/jobs/${id}/reopen`, {
+        method: 'PATCH',
+    });
+}
+
+export async function deleteJob(id) {
+    return apiFetch(`/jobs/${id}`, {
+        method: 'DELETE',
+    });
+}
+
 export async function getMyJobs(status = null, page = 1, pageSize = 20) {
     const query = new URLSearchParams({ page, pageSize });
     if (status) query.append('status', status);

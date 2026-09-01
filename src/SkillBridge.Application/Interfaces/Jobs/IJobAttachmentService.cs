@@ -20,4 +20,9 @@ public interface IJobAttachmentService
         int jobId,
         int attachmentId,
         CancellationToken cancellationToken = default);
+
+    Task<(Stream Stream, string ContentType, string FileName)?> GetAttachmentFileStreamAsync(
+        int jobId,
+        int attachmentId,
+        CancellationToken cancellationToken = default);
 }

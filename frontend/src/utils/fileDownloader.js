@@ -1,17 +1,51 @@
-export function downloadJobAttachment(file, jobTitle = '') {
-    const fileUrl = file?.fileUrl || file?.url;
+export async function downloadJobAttachment(file, jobTitle = '', jobId = null) {
     const fileName = file?.fileName || file?.name || 'Tai_lieu_SkillBridge.pdf';
+    const effectiveJobId = jobId || file?.jobId;
+    const attachmentId = file?.id;
 
+    // 1. Tải trực tiếp qua Backend Stream API (an toàn 100%, không cần public R2, không bao giờ mở tab mới)
+    if (effectiveJobId && typeof attachmentId === 'number' && attachmentId > 0) {
+        try {
+            const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
+            const downloadUrl = `${API_URL}/jobs/${effectiveJobId}/attachments/${attachmentId}/download`;
+            const res = await fetch(downloadUrl);
+            if (res.ok) {
+                const blob = await res.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(blobUrl);
+                return;
+            }
+        } catch (err) {
+            console.warn("Lỗi tải qua Backend Proxy Stream, chuyển sang tải trực tiếp:", err);
+        }
+    }
+
+    // 2. Tải qua Blob từ URL gốc (nếu có URL hợp lệ)
+    const fileUrl = file?.fileUrl || file?.url;
     if (fileUrl && typeof fileUrl === 'string' && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://') || fileUrl.startsWith('/'))) {
-        const a = document.createElement('a');
-        a.href = fileUrl;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        return;
+        try {
+            const res = await fetch(fileUrl);
+            if (res.ok) {
+                const blob = await res.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(blobUrl);
+                return;
+            }
+        } catch {
+            // bỏ qua
+        }
     }
 
     const content = `=====================================================
@@ -39,6 +73,40 @@ Thời gian tải về: ${new Date().toLocaleString('vi-VN')}
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+}
+
+import { getAccessToken } from '../api/tokenStore';
+
+export async function downloadCandidateCv(cvFileId, originalFileName = 'CV_UngVien_SkillBridge.pdf') {
+    const fileName = originalFileName || 'CV_UngVien_SkillBridge.pdf';
+    if (!cvFileId) return;
+
+    try {
+        const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
+        const downloadUrl = `${API_URL}/cv-files/${cvFileId}/download`;
+        const token = getAccessToken();
+        const headers = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch(downloadUrl, { headers, credentials: 'include' });
+        if (res.ok) {
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+            return;
+        } else {
+            console.error(`Tải CV thất bại với HTTP status: ${res.status}`);
+        }
+    } catch (err) {
+        console.error("Lỗi khi tải file CV của ứng viên:", err);
+    }
 }
 
 export function exportTransactionsToCSV(transactions, fileName = 'Sao_ke_giao_dich_SkillBridge.csv') {

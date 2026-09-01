@@ -99,7 +99,7 @@ export default function TopNav() {
             <NavLink to="/mywork" className={linkClass} onClick={() => setNavOpen(false)}>Việc của tôi</NavLink>
           )}
           {isEmployer && (
-            <NavLink to="/dashboard" className={linkClass} onClick={() => setNavOpen(false)}>Dashboard NTD</NavLink>
+            <NavLink to="/employer/dashboard" className={linkClass} onClick={() => setNavOpen(false)}>Dashboard NTD</NavLink>
           )}
           <NavLink to="/pricing" className={linkClass} onClick={() => setNavOpen(false)}>Bảng giá</NavLink>
 
@@ -112,7 +112,7 @@ export default function TopNav() {
               </>
             ) : (
               <>
-                <button className="btn btn-outline btn-sm" onClick={() => { navigate('/post-job'); setNavOpen(false); }}>
+                <button className="btn btn-outline btn-sm" onClick={() => { navigate('/employer/post-job'); setNavOpen(false); }}>
                   Đăng tin tuyển dụng
                 </button>
                 <button className="btn btn-outline btn-sm" onClick={() => { navigate('/auth?tab=login'); setNavOpen(false); }}>
@@ -230,7 +230,7 @@ export default function TopNav() {
             </>
           ) : (
             <>
-              <button className="btn btn-ghost btn-sm btn-post" onClick={() => navigate('/post-job')}>
+              <button className="btn btn-ghost btn-sm btn-post" onClick={() => navigate('/employer/post-job')}>
                 Đăng tin tuyển dụng
               </button>
               <button className="btn btn-ghost btn-sm" onClick={() => navigate('/auth?tab=login')}>Đăng nhập</button>

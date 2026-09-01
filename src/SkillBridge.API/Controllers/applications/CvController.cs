@@ -11,7 +11,7 @@ namespace SkillBridge.API.Controllers.applications;
 
 [ApiController]
 [Route("api/cv-files")]
-[Authorize(Policy = "RequireStudentRole")]
+[Authorize]
 public class CvController : ControllerBase
 {
     private readonly ICvService _cvService;
@@ -22,6 +22,7 @@ public class CvController : ControllerBase
     }
 
     [HttpGet]
+    [Authorize(Policy = "RequireStudentRole")]
     [EnableRateLimiting("GeneralApiPolicy")]
     public async Task<IActionResult> GetMyCvFiles()
     {
@@ -31,6 +32,7 @@ public class CvController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Policy = "RequireStudentRole")]
     [EnableRateLimiting("UploadPolicy")]
     public async Task<IActionResult> UploadCv([FromBody] UploadCvRequest request)
     {
@@ -40,6 +42,7 @@ public class CvController : ControllerBase
     }
 
     [HttpPost("upload")]
+    [Authorize(Policy = "RequireStudentRole")]
     [Consumes("multipart/form-data")]
     [EnableRateLimiting("UploadPolicy")]
     public async Task<IActionResult> UploadCvFile(
@@ -66,11 +69,21 @@ public class CvController : ControllerBase
     }
 
     [HttpDelete("{id:int}")]
+    [Authorize(Policy = "RequireStudentRole")]
     [EnableRateLimiting("ResourceCreationPolicy")]
     public async Task<IActionResult> DeleteCv(int id)
     {
         var studentId = User.GetRequiredUserId();
         await _cvService.DeleteCvAsync(studentId, id);
         return Ok(new { message = "Đã xóa CV thành công." });
+    }
+
+    [HttpGet("{id:int}/download")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> DownloadCv(int id)
+    {
+        var userId = User.GetRequiredUserId();
+        var (stream, contentType, fileName) = await _cvService.GetCvFileStreamAsync(userId, id);
+        return File(stream, contentType, fileName);
     }
 }

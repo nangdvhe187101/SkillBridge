@@ -9,6 +9,8 @@ public interface IJobService
     Task<JobDetailDto> CreateJobAsync(int employerId, CreateJobRequest request);
     Task<JobDetailDto> UpdateJobAsync(int employerId, int jobId, UpdateJobRequest request);
     Task CancelJobAsync(int employerId, int jobId);
+    Task ReopenJobAsync(int employerId, int jobId);
+    Task DeleteJobAsync(int employerId, int jobId);
     Task<PagedResult<JobSummaryDto>> GetEmployerJobsAsync(int employerId, string? status, int page, int pageSize);
     Task<PagedResult<JobSummaryDto>> GetPublicJobsAsync(JobQueryParameters query, int? currentUserId = null);
     Task<JobDetailDto> GetJobDetailAsync(int jobId, int? currentUserId = null);

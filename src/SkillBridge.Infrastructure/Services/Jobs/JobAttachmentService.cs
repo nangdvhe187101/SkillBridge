@@ -157,6 +157,25 @@ public class JobAttachmentService : IJobAttachmentService
         _logger.LogInformation("Nhà tuyển dụng {EmployerId} đã xóa tài liệu đính kèm {AttachmentId} khỏi Job {JobId}.", employerId, attachmentId, jobId);
     }
 
+    public async Task<(Stream Stream, string ContentType, string FileName)?> GetAttachmentFileStreamAsync(
+        int jobId,
+        int attachmentId,
+        CancellationToken cancellationToken = default)
+    {
+        var attachment = await _dbContext.JobAttachments
+            .FirstOrDefaultAsync(a => a.Id == attachmentId && a.JobId == jobId, cancellationToken);
+
+        if (attachment == null) return null;
+
+        var fileKey = ExtractFileKeyFromUrl(attachment.FileUrl);
+        if (string.IsNullOrWhiteSpace(fileKey)) return null;
+
+        var downloadResult = await _storageService.DownloadFileAsync(fileKey, cancellationToken);
+        if (downloadResult == null) return null;
+
+        return (downloadResult.Value.Stream, attachment.FileType ?? downloadResult.Value.ContentType, attachment.FileName);
+    }
+
     private static string? ExtractFileKeyFromUrl(string? fileUrl)
     {
         if (string.IsNullOrWhiteSpace(fileUrl)) return null;
