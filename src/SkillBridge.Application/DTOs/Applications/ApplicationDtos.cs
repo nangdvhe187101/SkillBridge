@@ -45,3 +45,19 @@ public class ApplicantItemDto
     public string Status { get; set; } = null!;
     public DateTime AppliedAt { get; set; }
 }
+
+public class HireApplicantRequest
+{
+    public int? Days { get; set; }
+}
+
+public class HireApplicantResultDto
+{
+    public int JobId { get; set; }
+    public int ApplicationId { get; set; }
+    public int HiredStudentId { get; set; }
+    public string HiredStudentName { get; set; } = null!;
+    public string JobStatus { get; set; } = null!;
+    public DateTime? DeadlineAt { get; set; }
+    public decimal EscrowAmount { get; set; }
+}

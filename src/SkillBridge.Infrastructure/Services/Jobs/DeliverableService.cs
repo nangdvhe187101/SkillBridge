@@ -87,28 +87,26 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Công việc này đã bị hủy, không thể nộp sản phẩm.");
         }
 
+        if (job.Status == "completed")
+        {
+            throw new BusinessException("Công việc này đã hoàn thành và nghiệm thu xong.");
+        }
+
         if (job.EmployerId == studentId)
         {
             throw new BusinessException("Nhà tuyển dụng không thể nộp sản phẩm cho chính công việc của mình.");
         }
 
-        // Kiểm tra quyền nộp deliverable:
-        // Nếu đã có HiredApplicantId thì bắt buộc phải là người được tuyển dụng
-        if (job.HiredApplicantId.HasValue && job.HiredApplicantId.Value != studentId)
+        // Bắt buộc công việc phải đang trong giai đoạn thực hiện hoặc yêu cầu sửa đổi
+        if (job.Status != "in_progress" && job.Status != "revision_requested")
         {
-            throw new BusinessException("Bạn không phải ứng viên được tuyển dụng cho công việc này.");
+            throw new BusinessException("Công việc chưa được xác nhận thuê ứng viên hoặc hiện không ở trạng thái nhận sản phẩm bàn giao.");
         }
 
-        // Nếu chưa set HiredApplicantId, kiểm tra sinh viên đã nộp đơn ứng tuyển cho job này chưa
-        if (!job.HiredApplicantId.HasValue)
+        // Bắt buộc sinh viên nộp phải là người được nhà tuyển dụng thuê chính thức
+        if (!job.HiredApplicantId.HasValue || job.HiredApplicantId.Value != studentId)
         {
-            var hasApplied = await _dbContext.Applications
-                .AnyAsync(a => a.JobId == jobId && a.StudentId == studentId, cancellationToken);
-
-            if (!hasApplied)
-            {
-                throw new BusinessException("Bạn cần ứng tuyển công việc này trước khi nộp sản phẩm.");
-            }
+            throw new BusinessException("Chỉ ứng viên được nhà tuyển dụng chọn thuê chính thức mới có quyền nộp sản phẩm bàn giao cho công việc này.");
         }
 
         string previewUrl = externalUrl ?? string.Empty;

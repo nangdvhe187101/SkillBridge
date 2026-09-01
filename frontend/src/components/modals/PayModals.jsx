@@ -163,7 +163,15 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
       setErrorMsg(`Số dư ví hiện tại (${fmtVND(state.balance)}) không đủ để ký quỹ ${fmtVND(total)}. Vui lòng nạp thêm hoặc chọn phương thức thanh toán khác.`);
       return;
     }
-    hire({ jobId: job.id, applicantIdx, applicantName: a.name, days: Number(days), method });
+    hire({
+      jobId: job.id,
+      applicantIdx,
+      applicantName: a.name,
+      applicant: a,
+      applicationId: a.applicationId || a.id,
+      days: Number(days),
+      method
+    });
     onClose();
   };
 

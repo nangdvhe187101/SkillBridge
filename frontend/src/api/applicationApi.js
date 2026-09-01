@@ -14,3 +14,10 @@ export async function getJobApplicants(jobId, page = 1, pageSize = 20) {
 export async function getMyApplications(page = 1, pageSize = 50) {
     return apiFetch(`/applications/my?page=${page}&pageSize=${pageSize}`, { method: 'GET' });
 }
+
+export async function hireApplicant(jobId, applicationId, days = 3) {
+    return apiFetch(`/jobs/${jobId}/hire/${applicationId}`, {
+        method: 'POST',
+        body: JSON.stringify({ days }),
+    });
+}
