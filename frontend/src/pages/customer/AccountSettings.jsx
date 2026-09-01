@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { uploadAvatar } from '../../api/userApi';
@@ -626,25 +627,33 @@ function PasswordTab({ changePassword, logout }) {
 // ==========================================
 // MAIN COMPONENT
 // ==========================================
-export default function AccountSettings() {
+export default function AccountSettings({ forcedTab }) {
     const { state, updateProfile, changePassword, logout } = useStore();
     const { currentUser, role } = state;
+    const navigate = useNavigate();
+    const location = useLocation();
 
     const userRole = (currentUser?.roleCode || role || 'student').toLowerCase();
     const isEmployer = userRole === 'employer' || userRole === 'recruiter' || userRole === 'business';
 
     const tabs = isEmployer
         ? [
-            { id: 'profile', label: 'Thông tin Doanh nghiệp', icon: '🏢' },
-            { id: 'password', label: 'Đổi mật khẩu', icon: '🔑' },
+            { id: 'profile', path: '/settings/profile', label: 'Thông tin Doanh nghiệp', icon: '🏢' },
+            { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: '🔑' },
         ]
         : [
-            { id: 'profile', label: 'Thông tin Sinh viên', icon: '🎓' },
-            { id: 'cv_manager', label: 'Quản lý CV & Hồ sơ', icon: '📄' },
-            { id: 'password', label: 'Đổi mật khẩu', icon: '🔑' },
+            { id: 'profile', path: '/settings/profile', label: 'Thông tin Sinh viên', icon: '🎓' },
+            { id: 'cv_manager', path: '/settings/cv', label: 'Quản lý CV & Hồ sơ', icon: '📄' },
+            { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: '🔑' },
         ];
 
-    const [tab, setTab] = useState('profile');
+    const tab = useMemo(() => {
+        if (forcedTab) return forcedTab;
+        const p = location.pathname;
+        if (p === '/settings/cv' || p === '/account/cv') return 'cv_manager';
+        if (p === '/settings/password' || p === '/settings/security' || p === '/account/security') return 'password';
+        return 'profile';
+    }, [forcedTab, location.pathname]);
 
     const safeUser = currentUser || {
         fullName: isEmployer ? 'Công ty TNHH Sáng Tạo Mới' : 'Nguyễn Văn Năng',
@@ -675,7 +684,7 @@ export default function AccountSettings() {
                             <button
                                 key={t.id}
                                 className={'acct-tab' + (tab === t.id ? ' is-active' : '')}
-                                onClick={() => setTab(t.id)}
+                                onClick={() => navigate(t.path)}
                                 style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                             >
                                 <span>{t.icon}</span>

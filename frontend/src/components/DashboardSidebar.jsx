@@ -2,10 +2,10 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 
 export const DASHBOARD_TABS = [
-    { id: 'overview', label: 'Tổng quan', icon: '📊' },
-    { id: 'jobs', label: 'Tin đã đăng', icon: '📋' },
-    { id: 'post', label: 'Đăng tin mới', icon: '✍️' },
-    { id: 'ads', label: 'Quảng cáo Affiliate', icon: '📢' },
+    { id: 'overview', path: '/employer/dashboard', label: 'Tổng quan', icon: '📊' },
+    { id: 'jobs', path: '/employer/jobs', label: 'Tin đã đăng', icon: '📋' },
+    { id: 'post', path: '/employer/post-job', label: 'Đăng tin mới', icon: '✍️' },
+    { id: 'ads', path: '/employer/ads', label: 'Quảng cáo Affiliate', icon: '📢' },
 ];
 
 export default function DashboardSidebar({ activeTab, onTabClick }) {
@@ -15,9 +15,9 @@ export default function DashboardSidebar({ activeTab, onTabClick }) {
     const openCount = state.myJobs?.filter((j) => j.status === 'open').length || 0;
     const submittedCount = state.myJobs?.filter((j) => j.status === 'submitted').length || 0;
 
-    const handleClick = (id) => {
-        if (onTabClick) onTabClick(id);
-        else navigate(`/dashboard?tab=${id}`);
+    const handleClick = (tab) => {
+        if (onTabClick) onTabClick(tab.id);
+        navigate(tab.path);
     };
 
     return (
@@ -38,7 +38,7 @@ export default function DashboardSidebar({ activeTab, onTabClick }) {
                         <button
                             key={t.id}
                             className={'acct-tab' + (activeTab === t.id ? ' is-active' : '')}
-                            onClick={() => handleClick(t.id)}
+                            onClick={() => handleClick(t)}
                             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                         >
                             <span>{t.icon}</span>

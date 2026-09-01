@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AdminProvider, useAdmin } from '../../context/AdminContext';
 import AdminUsers from '../../components/admin/AdminUsers';
 import AdminContent from '../../components/admin/AdminContent';
@@ -8,7 +9,6 @@ import AdminPartners from '../../components/admin/AdminPartners';
 import AdminAnalytics from '../../components/admin/AdminAnalytics';
 import AdminOps from '../../components/admin/AdminOps';
 import AdminRoles from '../../components/admin/AdminRoles';
-
 import AdminMessages from '../../components/admin/AdminMessages';
 
 const ROLE_MODULES = {
@@ -22,28 +22,47 @@ const ROLE_WHOAMI = {
 };
 
 const TABS = [
-  { id: 'users', ic: '👥', label: 'Người dùng' },
-  { id: 'content', ic: '🛡️', label: 'Kiểm duyệt nội dung' },
-  { id: 'disputes', ic: '⚖️', label: 'Tranh chấp' },
-  { id: 'finance', ic: '💰', label: 'Tài chính' },
-  { id: 'partners', ic: '🤝', label: 'Đối tác & Quảng cáo' },
-  { id: 'messages', ic: '💬', label: 'Tin nhắn & Giám sát' },
-  { id: 'analytics', ic: '📊', label: 'Báo cáo & Phân tích' },
-  { id: 'ops', ic: '🎧', label: 'Vận hành & CS' },
-  { id: 'roles', ic: '🔑', label: 'Phân quyền & URL Matrix' },
+  { id: 'users', path: '/admin/users', ic: '👥', label: 'Người dùng' },
+  { id: 'content', path: '/admin/content', ic: '🛡️', label: 'Kiểm duyệt nội dung' },
+  { id: 'disputes', path: '/admin/disputes', ic: '⚖️', label: 'Tranh chấp' },
+  { id: 'finance', path: '/admin/finance', ic: '💰', label: 'Tài chính' },
+  { id: 'partners', path: '/admin/partners', ic: '🤝', label: 'Đối tác & Quảng cáo' },
+  { id: 'messages', path: '/admin/messages', ic: '💬', label: 'Tin nhắn & Giám sát' },
+  { id: 'analytics', path: '/admin/analytics', ic: '📊', label: 'Báo cáo & Phân tích' },
+  { id: 'ops', path: '/admin/ops', ic: '🎧', label: 'Vận hành & CS' },
+  { id: 'roles', path: '/admin/roles', ic: '🔑', label: 'Phân quyền & URL Matrix' },
 ];
 
-function AdminInner() {
+function AdminInner({ forcedTab }) {
   const { viewRole, setViewRole, queue, disputes, tickets, adminChats } = useAdmin();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams();
+  const [searchParams] = useSearchParams();
+
   const allowed = ROLE_MODULES[viewRole];
-  const [tab, setTab] = useState(allowed[0]);
-  const activeTab = allowed.includes(tab) ? tab : allowed[0];
+
+  const currentTabId = useMemo(() => {
+    if (forcedTab) return forcedTab;
+    if (params.module) return params.module;
+    const p = location.pathname.replace('/admin/', '').replace('/admin', '');
+    if (p && allowed.includes(p)) return p;
+    const queryTab = searchParams.get('tab');
+    if (queryTab && allowed.includes(queryTab)) return queryTab;
+    return allowed[0];
+  }, [forcedTab, params.module, location.pathname, searchParams, allowed]);
+
+  const activeTab = allowed.includes(currentTabId) ? currentTabId : allowed[0];
 
   const counts = {
     content: queue.length,
     disputes: disputes.filter((d) => d.status === 'open').length,
     ops: tickets.filter((t) => t.status === 'open').length,
     messages: adminChats.filter((c) => c.status === 'warned').length,
+  };
+
+  const handleTabClick = (t) => {
+    navigate(t.path);
   };
 
   return (
@@ -76,7 +95,11 @@ function AdminInner() {
       <div className="wrap admin-shell">
         <nav className="admin-side">
           {TABS.filter((t) => allowed.includes(t.id)).map((t) => (
-            <button key={t.id} className={'admin-tab' + (activeTab === t.id ? ' is-active' : '')} onClick={() => setTab(t.id)}>
+            <button
+              key={t.id}
+              className={'admin-tab' + (activeTab === t.id ? ' is-active' : '')}
+              onClick={() => handleTabClick(t)}
+            >
               <span className="adm-ic">{t.ic}</span> {t.label}
               {counts[t.id] > 0 && <span className="adm-count">{counts[t.id]}</span>}
             </button>
@@ -99,10 +122,10 @@ function AdminInner() {
   );
 }
 
-export default function Admin() {
+export default function Admin({ forcedTab }) {
   return (
     <AdminProvider>
-      <AdminInner />
+      <AdminInner forcedTab={forcedTab} />
     </AdminProvider>
   );
 }

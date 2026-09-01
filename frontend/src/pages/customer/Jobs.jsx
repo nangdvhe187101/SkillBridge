@@ -18,6 +18,20 @@ const CAT_ICON = {
   'Photography': '📸',
 };
 
+function formatDurationBadge(deadlineAt, postedAt) {
+  if (!deadlineAt) return null;
+  const start = postedAt ? new Date(postedAt).getTime() : Date.now();
+  const end = new Date(deadlineAt).getTime();
+  const diffMs = end - start;
+  if (diffMs <= 0) return null;
+  const totalHours = Math.max(1, Math.round(diffMs / 3600000));
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  if (days > 0 && hours > 0) return `${days} ngày ${hours}h`;
+  if (days > 0) return `${days} ngày`;
+  return `${hours} giờ`;
+}
+
 export default function Jobs() {
   const { state, submitOneTouchLead, toggleSaveJobAsync, refreshJobs } = useStore();
   const navigate = useNavigate();
@@ -135,15 +149,28 @@ export default function Jobs() {
         <h3>{j.title}</h3>
         <div className="jc-tags" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <span className="chip">{j.cat}</span>
-          {j.attachments && j.attachments.length > 0 && (
-            <span
-              className="chip chip-lime"
-              style={{ fontSize: 11, cursor: 'pointer' }}
-              title={`Bấm vào chi tiết để tải ${j.attachments.length} tài liệu đính kèm`}
-            >
-              📎 {j.attachments.length} file đính kèm
-            </span>
-          )}
+          {(() => {
+            const dur = formatDurationBadge(j.deadlineAt, j.postedAt);
+            if (!dur) return null;
+            return (
+              <span className="chip" style={{ background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', fontWeight: 600, fontSize: 11.5 }}>
+                ⏱️ {dur}
+              </span>
+            );
+          })()}
+          {(() => {
+            const count = j.attachmentCount || (j.attachments ? j.attachments.length : 0);
+            if (!count || count <= 0) return null;
+            return (
+              <span
+                className="chip chip-lime"
+                style={{ fontSize: 11.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                title={`Công việc có kèm ${count} tệp tài liệu/đề bài`}
+              >
+                📎 {count} tệp đính kèm
+              </span>
+            );
+          })()}
         </div>
         <div className="jc-foot"><span className="jc-price">{fmtVND(j.budget)}</span><span className="jc-time">{j.time}</span></div>
       </div>

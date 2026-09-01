@@ -14,6 +14,8 @@ public interface IJobRepository
     Task<Job> CreateJobWithRequirementsAsync(Job job, List<string> requirements);
     Task UpdateJobWithRequirementsAsync(Job job, List<string> requirements);
     Task CancelJobAsync(Job job);
+    Task ReopenJobAsync(Job job);
+    Task DeleteJobAsync(Job job);
     Task<bool> SaveJobAsync(int studentId, int jobId);
     Task<bool> UnsaveJobAsync(int studentId, int jobId);
     Task<PagedResult<JobSummaryDto>> GetSavedJobsPagedAsync(int studentId, int page, int pageSize);

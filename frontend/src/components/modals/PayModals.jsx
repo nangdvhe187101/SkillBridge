@@ -133,13 +133,12 @@ export function UpgradeVipModal({ onClose }) {
   );
 }
 
-export function HireModal({ onClose, jobId, applicantIdx, applicantName }) {
+export function HireModal({ onClose, jobId, applicantIdx, applicantName, applicant, job: propJob }) {
   const { state, hire } = useStore();
   const { openModal } = useModal();
-  const job = state.myJobs.find((j) => String(j.id) === String(jobId));
-  const a = applicantName
-    ? job?.applicants?.find((x) => x.name === applicantName)
-    : (applicantIdx !== undefined ? job?.applicants?.[applicantIdx] : job?.applicants?.[0]);
+  const localJob = state.myJobs.find((j) => String(j.id) === String(jobId));
+  const job = propJob || localJob || { id: jobId, title: 'Công việc', budget: 150000 };
+  const a = applicant || (applicantName ? { name: applicantName } : (job?.applicants?.[applicantIdx] || { name: 'Ứng viên' }));
 
   const rate = commissionRate(state);
   const commission = Math.round((job?.budget || 0) * rate);

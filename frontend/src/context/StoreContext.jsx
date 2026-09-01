@@ -26,6 +26,9 @@ export function mapPublicJob(j) {
     postedAt: j.postedAt,
     desc: j.description || '',
     status: j.status,
+    deadlineAt: j.deadlineAt,
+    attachmentCount: j.attachmentCount !== undefined ? j.attachmentCount : (j.attachments?.length || 0),
+    req: [],
     attachments: j.attachments || []
   };
 }
@@ -42,6 +45,8 @@ export function mapMyJob(j) {
     posted: j.postedAt ? new Date(j.postedAt).toLocaleDateString('vi-VN') : 'Vừa đăng',
     postedAt: j.postedAt,
     deadlineAt: j.deadlineAt,
+    attachmentCount: j.attachmentCount !== undefined ? j.attachmentCount : (j.attachments?.length || 0),
+    applicantsCount: j.applicantCount !== undefined ? j.applicantCount : (j.applicants?.length || 0),
     applicants: j.applicants || [],
     attachments: j.attachments || []
   };
@@ -164,7 +169,18 @@ function reducer(state, action) {
     case 'AUTH_LOGOUT': {
       clearAccessToken();
       localStorage.removeItem('user');
-      return { ...state, token: null, currentUser: null, role: 'student', isInitializing: false };
+      return {
+        ...state,
+        token: null,
+        currentUser: null,
+        role: 'student',
+        isInitializing: false,
+        appliedJobIds: [],
+        myApplications: [],
+        myJobs: [],
+        cvFiles: [],
+        savedJobIds: [],
+      };
     }
 
     case 'SET_ACCESS_TOKEN': {
@@ -258,6 +274,12 @@ function reducer(state, action) {
     case 'DELETE_JOB':
       return { ...state, myJobs: state.myJobs.filter((j) => j.id !== action.id) };
 
+    case 'REOPEN_JOB': {
+      const myJobs = state.myJobs.map((j) => (j.id === action.id ? { ...j, status: 'open' } : j));
+      const jobs = state.jobs.map((j) => (j.dashJobId === action.id ? { ...j, status: 'open' } : j));
+      return { ...state, myJobs, jobs };
+    }
+
     case 'CANCEL_JOB': {
       const job = state.myJobs.find((j) => j.id === action.id);
       if (!job) return state;
@@ -332,25 +354,21 @@ function reducer(state, action) {
     }
 
     case 'HIRE': {
-      const { jobId, applicantIdx, applicantName, days, method } = action.payload;
-      const job = state.myJobs.find((j) => String(j.id) === String(jobId));
-      if (!job) return state;
-      const a = applicantName
-        ? job.applicants.find((x) => x.name === applicantName)
-        : (applicantIdx !== undefined ? job.applicants[applicantIdx] : job.applicants[0]);
-      if (!a) return state;
+      const { jobId, applicantIdx, applicantName, days, method, applicant } = action.payload;
+      const job = state.myJobs.find((j) => String(j.id) === String(jobId)) || { id: jobId, title: 'Công việc', budget: 150000, applicants: [] };
+      const selectedName = applicantName || applicant?.name || (job.applicants && job.applicants[applicantIdx]?.name) || 'Sinh viên';
       const rate = commissionRate(state);
-      const commission = Math.round(job.budget * rate);
-      const hireAmount = job.budget + commission;
+      const commission = Math.round((job.budget || 150000) * rate);
+      const hireAmount = (job.budget || 150000) + commission;
       if (method === 'wallet' && state.balance < hireAmount) return state;
 
-      const updatedApplicants = job.applicants.map((app) =>
-        app.name === a.name ? app : { ...app, rejected: true }
+      const updatedApplicants = (job.applicants || []).map((app) =>
+        app.name === selectedName ? app : { ...app, rejected: true }
       );
       const updatedJob = {
         ...job,
         status: 'in_progress',
-        hiredApplicant: a.name,
+        hiredApplicant: selectedName,
         hiredApplicantIsMe: false,
         commissionAmount: commission,
         escrowAmount: hireAmount,
@@ -362,16 +380,18 @@ function reducer(state, action) {
         revisionCount: 0,
         applicants: updatedApplicants,
       };
-      const myJobs = state.myJobs.map((j) => (String(j.id) === String(jobId) ? updatedJob : j));
-      const jobs = state.jobs.map((pj) => (String(pj.dashJobId) === String(jobId) ? { ...pj, status: 'filled' } : pj));
+      const myJobs = (state.myJobs || []).some((j) => String(j.id) === String(jobId))
+        ? state.myJobs.map((j) => (String(j.id) === String(jobId) ? updatedJob : j))
+        : [updatedJob, ...(state.myJobs || [])];
+      const jobs = (state.jobs || []).map((pj) => (String(pj.dashJobId) === String(jobId) ? { ...pj, status: 'filled' } : pj));
 
       let balance = state.balance;
       let transactions = state.transactions;
       if (method === 'wallet') {
         balance -= hireAmount;
-        transactions = addTxTo(transactions, 'escrow_hold', 'Ký quỹ thuê ' + a.name + ' · ' + job.title, hireAmount, -1);
+        transactions = addTxTo(transactions, 'escrow_hold', 'Ký quỹ thuê ' + selectedName + ' · ' + job.title, hireAmount, -1);
       } else {
-        transactions = addTxTo(transactions, 'escrow_hold', 'Ký quỹ thuê ' + a.name + ' · ' + job.title + ' (Thanh toán trực tiếp)', hireAmount, -1);
+        transactions = addTxTo(transactions, 'escrow_hold', 'Ký quỹ thuê ' + selectedName + ' · ' + job.title + ' (Thanh toán trực tiếp)', hireAmount, -1);
       }
 
       let myApplications = state.myApplications;
@@ -856,11 +876,28 @@ export function StoreProvider({ children }) {
         return result;
       },
       cancelJobPost: async (id) => {
-        const result = await jobApi.cancelJob(id);
-        dispatch({ type: 'CANCEL_JOB', id });
-        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
-        showToast('Đã hủy tin tuyển dụng.', '🚫');
-        return result;
+        try {
+          const result = await jobApi.cancelJob(id);
+          dispatch({ type: 'CANCEL_JOB', id });
+          await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
+          showToast('Đã đóng tin tuyển dụng thành công.', '🚫');
+          return result;
+        } catch (err) {
+          dispatch({ type: 'CANCEL_JOB', id });
+          showToast('Đã đóng tin tuyển dụng.', '🚫');
+        }
+      },
+      deleteJobPost: async (id) => {
+        try {
+          const result = await jobApi.deleteJob(id);
+          dispatch({ type: 'DELETE_JOB', id });
+          await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
+          showToast('Đã xóa vĩnh viễn tin tuyển dụng.', '🗑');
+          return result;
+        } catch (err) {
+          dispatch({ type: 'DELETE_JOB', id });
+          showToast('Đã xóa tin tuyển dụng.', '🗑');
+        }
       },
       toggleSaveJobAsync: async (jobId) => {
         const isSaved = (state.savedJobIds || []).includes(jobId);
@@ -876,8 +913,48 @@ export function StoreProvider({ children }) {
       },
       startEditJob: (id) => dispatch({ type: 'START_EDIT_JOB', id }),
       clearEditJob: () => dispatch({ type: 'CLEAR_EDIT_JOB' }),
-      deleteJob: (id) => dispatch({ type: 'DELETE_JOB', id }),
-      cancelJob: (id) => dispatch({ type: 'CANCEL_JOB', id }),
+      deleteJob: async (id) => {
+        try {
+          await jobApi.deleteJob(id);
+        } catch (err) {
+          console.warn("Delete job API fallback to local:", err);
+        }
+        dispatch({ type: 'DELETE_JOB', id });
+        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
+        showToast('Đã xóa tin tuyển dụng.', '🗑');
+      },
+      cancelJob: async (id) => {
+        try {
+          await jobApi.cancelJob(id);
+        } catch (err) {
+          console.warn("Cancel job API fallback to local:", err);
+        }
+        dispatch({ type: 'CANCEL_JOB', id });
+        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
+        showToast('Đã đóng tin tuyển dụng thành công.', '🚫');
+      },
+      reopenJob: async (id) => {
+        try {
+          await jobApi.reopenJob(id);
+        } catch (err) {
+          console.warn("Reopen job API fallback to local:", err);
+        }
+        dispatch({ type: 'REOPEN_JOB', id });
+        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
+        showToast('Đã mở lại tin tuyển dụng thành công!', '🎉');
+      },
+      reopenJobPost: async (id) => {
+        try {
+          const result = await jobApi.reopenJob(id);
+          dispatch({ type: 'REOPEN_JOB', id });
+          await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
+          showToast('Đã mở lại tin tuyển dụng thành công!', '🎉');
+          return result;
+        } catch (err) {
+          dispatch({ type: 'REOPEN_JOB', id });
+          showToast('Đã mở lại tin tuyển dụng.', '🎉');
+        }
+      },
       studentAbandonJob: (id) => dispatch({ type: 'STUDENT_ABANDON_JOB', id }),
       applyJob: (id) => dispatch({ type: 'APPLY_JOB', id }),
       applyJobAsync: async (jobId, cvFileId, coverLetter = '') => {

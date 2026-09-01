@@ -17,15 +17,18 @@ public class CvService : ICvService
     private readonly ICvFileRepository _cvFileRepository;
     private readonly ICategoryRepository _categoryRepository;
     private readonly IStorageService _storageService;
+    private readonly SkillBridge.Infrastructure.Data.SkillBridgeDbContext _context;
 
     public CvService(
         ICvFileRepository cvFileRepository,
         ICategoryRepository categoryRepository,
-        IStorageService storageService)
+        IStorageService storageService,
+        SkillBridge.Infrastructure.Data.SkillBridgeDbContext context)
     {
         _cvFileRepository = cvFileRepository;
         _categoryRepository = categoryRepository;
         _storageService = storageService;
+        _context = context;
     }
 
     public async Task<List<CvFileDto>> GetStudentCvFilesAsync(int studentId)
@@ -197,6 +200,72 @@ public class CvService : ICvService
         }
 
         await _cvFileRepository.DeleteAsync(cv);
+    }
+
+    public async Task<(Stream Stream, string ContentType, string FileName)> GetCvFileStreamAsync(int currentUserId, int cvId)
+    {
+        var cv = await _cvFileRepository.GetByIdAsync(cvId);
+        if (cv == null)
+        {
+            throw new BusinessException("Không tìm thấy file CV.");
+        }
+
+        // Quyền truy cập: Sinh viên sở hữu CV HOẶC Nhà tuyển dụng nhận được đơn ứng tuyển chứa CV này
+        if (cv.StudentId != currentUserId)
+        {
+            var isEmployerWithAccess = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
+                _context.Applications.Where(a => a.CvFileId == cvId && a.Job.EmployerId == currentUserId)
+            );
+
+            if (!isEmployerWithAccess)
+            {
+                throw new BusinessException("Bạn không có quyền truy cập file CV này.");
+            }
+        }
+
+        var fileKey = !string.IsNullOrWhiteSpace(cv.PublicId)
+            ? cv.PublicId
+            : ExtractFileKeyFromUrl(cv.FileUrl);
+
+        if (string.IsNullOrWhiteSpace(fileKey))
+        {
+            throw new BusinessException("Không xác định được vị trí file trên hệ thống lưu trữ.");
+        }
+
+        var downloadResult = await _storageService.DownloadFileAsync(fileKey);
+        if (downloadResult == null)
+        {
+            throw new BusinessException("Không thể tải file CV từ hệ thống lưu trữ.");
+        }
+
+        var ext = Path.GetExtension(cv.FileName).ToLowerInvariant();
+        var contentType = ext switch
+        {
+            ".pdf" => "application/pdf",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".doc" => "application/msword",
+            _ => "application/octet-stream"
+        };
+
+        return (downloadResult.Value.Stream, contentType, cv.FileName);
+    }
+
+    private static string? ExtractFileKeyFromUrl(string? fileUrl)
+    {
+        if (string.IsNullOrWhiteSpace(fileUrl)) return null;
+
+        if (Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
+        {
+            var path = Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/');
+            var cvsIdx = path.IndexOf("cvs/", StringComparison.OrdinalIgnoreCase);
+            if (cvsIdx >= 0)
+            {
+                return path.Substring(cvsIdx);
+            }
+            return path;
+        }
+
+        return fileUrl;
     }
 
     private static CvFileDto MapToDto(CvFile entity, string? categoryName)

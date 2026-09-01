@@ -18,4 +18,6 @@ public interface IStorageService
     Task<bool> DeleteFileAsync(string fileKey, CancellationToken cancellationToken = default);
 
     Task<string> GetPresignedUrlAsync(string fileKey, TimeSpan expiry);
+
+    Task<(Stream Stream, string ContentType, string FileName)?> DownloadFileAsync(string fileKey, CancellationToken cancellationToken = default);
 }

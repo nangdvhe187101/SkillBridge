@@ -151,4 +151,35 @@ public class R2StorageService : IStorageService
             return Task.FromResult(string.Empty);
         }
     }
+
+    public async Task<(Stream Stream, string ContentType, string FileName)?> DownloadFileAsync(
+        string fileKey,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(fileKey)) return null;
+
+        try
+        {
+            var getRequest = new GetObjectRequest
+            {
+                BucketName = _bucketName,
+                Key = fileKey
+            };
+
+            var response = await _s3Client.GetObjectAsync(getRequest, cancellationToken);
+            var memoryStream = new MemoryStream();
+            await response.ResponseStream.CopyToAsync(memoryStream, cancellationToken);
+            memoryStream.Position = 0;
+
+            var fileName = Path.GetFileName(fileKey);
+            var contentType = response.Headers.ContentType ?? "application/octet-stream";
+
+            return (memoryStream, contentType, fileName);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi tải stream file {FileKey} từ Cloudflare R2.", fileKey);
+            return null;
+        }
+    }
 }

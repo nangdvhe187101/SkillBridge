@@ -166,7 +166,9 @@ public class JobRepository : IJobRepository
                 EmployerId = j.Employer.Id,
                 EmployerName = j.Employer.FullName,
                 EmployerAvatar = j.Employer.AvatarUrl,
-                IsSaved = currentUserId.HasValue && j.SavedJobs.Any(s => s.StudentId == currentUserId.Value)
+                IsSaved = currentUserId.HasValue && j.SavedJobs.Any(s => s.StudentId == currentUserId.Value),
+                ApplicantCount = j.Applications.Count(),
+                AttachmentCount = j.Attachments.Count()
             })
             .ToListAsync();
 
@@ -217,7 +219,9 @@ public class JobRepository : IJobRepository
                 EmployerId = j.Employer.Id,
                 EmployerName = j.Employer.FullName,
                 EmployerAvatar = j.Employer.AvatarUrl,
-                IsSaved = false
+                IsSaved = false,
+                ApplicantCount = j.Applications.Count(),
+                AttachmentCount = j.Attachments.Count()
             })
             .ToListAsync();
 
@@ -344,6 +348,76 @@ public class JobRepository : IJobRepository
         }
     }
 
+    public async Task ReopenJobAsync(Job job)
+    {
+        await using var tx = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            job.Status = "open";
+            job.UpdatedAt = DateTime.UtcNow;
+            _context.Jobs.Update(job);
+            await _context.SaveChangesAsync();
+
+            await _context.Categories
+                .Where(c => c.Id == job.CategoryId)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.JobCount, c => c.JobCount + 1));
+
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task DeleteJobAsync(Job job)
+    {
+        await using var tx = await _context.Database.BeginTransactionAsync();
+        try
+        {
+            var attachments = await _context.JobAttachments.Where(a => a.JobId == job.Id).ToListAsync();
+            if (attachments.Count > 0)
+            {
+                _context.JobAttachments.RemoveRange(attachments);
+            }
+
+            var reqs = await _context.JobRequirements.Where(r => r.JobId == job.Id).ToListAsync();
+            if (reqs.Count > 0)
+            {
+                _context.JobRequirements.RemoveRange(reqs);
+            }
+
+            var apps = await _context.Applications.Where(a => a.JobId == job.Id).ToListAsync();
+            if (apps.Count > 0)
+            {
+                _context.Applications.RemoveRange(apps);
+            }
+
+            var saved = await _context.SavedJobs.Where(s => s.JobId == job.Id).ToListAsync();
+            if (saved.Count > 0)
+            {
+                _context.SavedJobs.RemoveRange(saved);
+            }
+
+            if (job.Status != "cancelled")
+            {
+                await _context.Categories
+                    .Where(c => c.Id == job.CategoryId && c.JobCount > 0)
+                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.JobCount, c => c.JobCount - 1));
+            }
+
+            _context.Jobs.Remove(job);
+            await _context.SaveChangesAsync();
+            await tx.CommitAsync();
+        }
+        catch
+        {
+            await tx.RollbackAsync();
+            throw;
+        }
+    }
+
     public async Task<bool> SaveJobAsync(int studentId, int jobId)
     {
         var exists = await _context.SavedJobs.AnyAsync(s => s.StudentId == studentId && s.JobId == jobId);
@@ -411,7 +485,8 @@ public class JobRepository : IJobRepository
                 EmployerId = j.Employer.Id,
                 EmployerName = j.Employer.FullName,
                 EmployerAvatar = j.Employer.AvatarUrl,
-                IsSaved = true
+                IsSaved = true,
+                AttachmentCount = j.Attachments.Count()
             })
             .ToListAsync();
 

@@ -119,10 +119,53 @@ public class JobService : IJobService
 
         if (job.Status != "open")
         {
-            throw new BusinessException("Chỉ có thể hủy công việc khi đang ở trạng thái 'open'.");
+            throw new BusinessException("Chỉ có thể đóng/hủy công việc khi đang ở trạng thái 'open'.");
         }
 
         await _jobRepository.CancelJobAsync(job);
+    }
+
+    public async Task ReopenJobAsync(int employerId, int jobId)
+    {
+        var job = await _jobRepository.GetByIdAsync(jobId);
+        if (job == null)
+        {
+            throw new BusinessException("Không tìm thấy công việc.");
+        }
+
+        if (job.EmployerId != employerId)
+        {
+            throw new BusinessException("Bạn không có quyền mở lại công việc này.");
+        }
+
+        if (job.Status != "cancelled")
+        {
+            throw new BusinessException("Chỉ có thể mở lại công việc đang ở trạng thái đã đóng ('cancelled').");
+        }
+
+        await _jobRepository.ReopenJobAsync(job);
+    }
+
+    public async Task DeleteJobAsync(int employerId, int jobId)
+    {
+        var job = await _jobRepository.GetByIdAsync(jobId);
+        if (job == null)
+        {
+            throw new BusinessException("Không tìm thấy công việc.");
+        }
+
+        if (job.EmployerId != employerId)
+        {
+            throw new BusinessException("Bạn không có quyền xóa công việc này.");
+        }
+
+        var allowedDeleteStatuses = new[] { "open", "completed", "cancelled" };
+        if (!allowedDeleteStatuses.Contains(job.Status))
+        {
+            throw new BusinessException("Công việc đang trong quá trình thực hiện bởi sinh viên nên không thể xóa. Bạn chỉ có thể xóa sau khi hai bên đã hoàn thành giao dịch thành công (hoàn tất nghiệm thu) hoặc công việc chưa chọn người làm.");
+        }
+
+        await _jobRepository.DeleteJobAsync(job);
     }
 
     public async Task<PagedResult<JobSummaryDto>> GetEmployerJobsAsync(int employerId, string? status, int page, int pageSize)

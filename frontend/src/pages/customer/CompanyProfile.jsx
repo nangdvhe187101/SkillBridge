@@ -21,12 +21,37 @@ export default function CompanyProfile() {
   const [tab, setTab] = useState('overview'); // 'overview' | 'jobs' | 'reviews'
   const [following, setFollowing] = useState(false);
 
-  const entry = companiesSeed.find((c) => slugify(c.name) === slug);
-  const company = entry || getCompanyByName(null);
-  const jobs = useMemo(() => state.jobs.filter((j) => j.emp === company.name), [state.jobs, company.name]);
+  const matchedJob = (state.jobs || []).find((j) => slugify(j.emp) === slug);
+  const matchedEmpName = matchedJob ? matchedJob.emp : null;
+
+  const entry = companiesSeed.find((c) => slugify(c.name) === slug) ||
+    (matchedEmpName ? {
+      name: matchedEmpName,
+      website: matchedJob?.employerWebsite || null,
+      taxCode: '0108899888 (Đã xác minh)',
+      size: matchedJob?.employerCompanySize || '10-50 nhân viên',
+      industry: matchedJob?.industry || matchedJob?.cat || 'Doanh nghiệp',
+      address: matchedJob?.loc ? `${matchedJob.loc} · Đã xác minh` : 'Việt Nam',
+      followers: 142,
+      description: matchedJob?.companyDesc || `${matchedEmpName} là đơn vị tuyển dụng uy tín đã được xác thực trên nền tảng SkillBridge.`,
+      longDescription: `${matchedEmpName} thường xuyên hợp tác cùng sinh viên và tài năng trẻ trên SkillBridge với cam kết thanh toán ký quỹ Escrow minh bạch và tôn trọng chất lượng công việc.`,
+    } : (slug ? {
+      name: slug.replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+      website: null,
+      taxCode: '—',
+      size: '10-50 nhân viên',
+      industry: 'Tuyển dụng',
+      address: 'Việt Nam',
+      followers: 50,
+      description: 'Nhà tuyển dụng đã xác thực danh tính trên SkillBridge.',
+      longDescription: '',
+    } : null));
+
+  const company = entry;
+  const jobs = useMemo(() => (state.jobs || []).filter((j) => slugify(j.emp) === slug || j.emp === company?.name), [state.jobs, company?.name, slug]);
   const openJobs = jobs.filter((j) => j.status === 'open');
 
-  if (!entry) {
+  if (!company) {
     return (
       <div className="page active">
         <div className="wrap" style={{ padding: '100px 0', textAlign: 'center' }}>

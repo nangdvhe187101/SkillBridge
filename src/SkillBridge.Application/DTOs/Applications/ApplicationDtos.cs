@@ -30,8 +30,13 @@ public class ApplicantItemDto
     public int ApplicationId { get; set; }
     public int StudentId { get; set; }
     public string StudentName { get; set; } = null!;
+    public string? StudentEmail { get; set; }
+    public string? StudentPhone { get; set; }
     public string? StudentAvatarUrl { get; set; }
     public string? School { get; set; }
+    public int ReliabilityScore { get; set; } = 95;
+    public int JobsDoneCount { get; set; }
+    public string? KycStatus { get; set; }
     public int? CvFileId { get; set; }
     public string? CvFileName { get; set; }
     public string? CvFileUrl { get; set; }

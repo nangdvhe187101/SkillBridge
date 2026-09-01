@@ -66,7 +66,27 @@ public class JobController : ControllerBase
     {
         var employerId = User.GetRequiredUserId();
         await _jobService.CancelJobAsync(employerId, id);
-        return Ok(new { message = "Hủy công việc thành công." });
+        return Ok(new { message = "Đóng/hủy công việc thành công." });
+    }
+
+    [Authorize(Policy = "RequireEmployerRole")]
+    [HttpPatch("{id:int}/reopen")]
+    [EnableRateLimiting("ResourceCreationPolicy")]
+    public async Task<IActionResult> ReopenJob(int id)
+    {
+        var employerId = User.GetRequiredUserId();
+        await _jobService.ReopenJobAsync(employerId, id);
+        return Ok(new { message = "Mở lại tin tuyển dụng thành công." });
+    }
+
+    [Authorize(Policy = "RequireEmployerRole")]
+    [HttpDelete("{id:int}")]
+    [EnableRateLimiting("ResourceCreationPolicy")]
+    public async Task<IActionResult> DeleteJob(int id)
+    {
+        var employerId = User.GetRequiredUserId();
+        await _jobService.DeleteJobAsync(employerId, id);
+        return Ok(new { message = "Xóa tin tuyển dụng thành công." });
     }
 
     [Authorize(Policy = "RequireEmployerRole")]
@@ -150,5 +170,18 @@ public class JobController : ControllerBase
         var employerId = User.GetRequiredUserId();
         await _jobAttachmentService.DeleteJobAttachmentAsync(employerId, id, attachmentId);
         return Ok(new { message = "Xóa tệp đính kèm thành công." });
+    }
+
+    [HttpGet("{id:int}/attachments/{attachmentId:int}/download")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> DownloadJobAttachment(int id, int attachmentId, System.Threading.CancellationToken cancellationToken)
+    {
+        var fileResult = await _jobAttachmentService.GetAttachmentFileStreamAsync(id, attachmentId, cancellationToken);
+        if (fileResult == null)
+        {
+            return NotFound(new { message = "Không tìm thấy file đính kèm hoặc file không còn tồn tại trên bộ nhớ lưu trữ." });
+        }
+
+        return File(fileResult.Value.Stream, fileResult.Value.ContentType, fileResult.Value.FileName, enableRangeProcessing: true);
     }
 }

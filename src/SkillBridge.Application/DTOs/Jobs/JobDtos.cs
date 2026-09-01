@@ -53,6 +53,8 @@ public class JobSummaryDto
     public string EmployerName { get; set; } = string.Empty;
     public string? EmployerAvatar { get; set; }
     public bool IsSaved { get; set; }
+    public int ApplicantCount { get; set; }
+    public int AttachmentCount { get; set; }
 }
 
 public class JobDetailDto
