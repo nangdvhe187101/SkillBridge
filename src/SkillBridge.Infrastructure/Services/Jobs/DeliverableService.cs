@@ -97,8 +97,8 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Nhà tuyển dụng không thể nộp sản phẩm cho chính công việc của mình.");
         }
 
-        // Bắt buộc công việc phải đang trong giai đoạn thực hiện hoặc yêu cầu sửa đổi
-        if (job.Status != "in_progress" && job.Status != "revision_requested")
+        // Bắt buộc công việc phải đang trong giai đoạn thực hiện, đã nộp hoặc yêu cầu sửa đổi
+        if (job.Status != "in_progress" && job.Status != "revision_requested" && job.Status != "submitted")
         {
             throw new BusinessException("Công việc chưa được xác nhận thuê ứng viên hoặc hiện không ở trạng thái nhận sản phẩm bàn giao.");
         }
@@ -186,6 +186,11 @@ public class DeliverableService : IDeliverableService
             try
             {
                 await _dbContext.JobDeliverables.AddAsync(deliverable, cancellationToken);
+                
+                // Đồng bộ cập nhật trạng thái Job sang "submitted"
+                job.Status = "submitted";
+                job.UpdatedAt = DateTime.UtcNow;
+
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 createdEntity = deliverable;
                 break;
@@ -210,7 +215,7 @@ public class DeliverableService : IDeliverableService
                 .ThenInclude(f => f.Employer)
             .FirstAsync(d => d.Id == createdEntity.Id, cancellationToken);
 
-        _logger.LogInformation("Sinh viên {StudentId} nộp bài deliverable v{Version} cho Job {JobId}.", studentId, createdEntity.Version, jobId);
+        _logger.LogInformation("Sinh viên {StudentId} nộp bài deliverable v{Version} cho Job {JobId}. Trạng thái Job cập nhật: submitted.", studentId, createdEntity.Version, jobId);
         return MapToDeliverableDto(created);
     }
 
@@ -259,6 +264,34 @@ public class DeliverableService : IDeliverableService
                 throw new BusinessException($"Công việc này đã đạt giới hạn chỉnh sửa tối đa ({job.RevisionLimit} lần).");
             }
             job.RevisionCount += 1;
+            job.Status = "revision_requested";
+            job.UpdatedAt = DateTime.UtcNow;
+        }
+        else if (normalizedStatus == "accepted")
+        {
+            // Cập nhật trạng thái Job sang completed
+            job.Status = "completed";
+            job.UpdatedAt = DateTime.UtcNow;
+
+            // Cập nhật Application của sinh viên sang completed
+            var application = await _dbContext.Applications
+                .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == deliverable.StudentId, cancellationToken);
+            if (application != null)
+            {
+                application.Status = "completed";
+                application.UpdatedAt = DateTime.UtcNow;
+            }
+
+            // Tăng số việc đã xong (JobsDoneCount) và điểm uy tín (ReliabilityScore) của sinh viên
+            var student = await _dbContext.Users
+                .FirstOrDefaultAsync(u => u.Id == deliverable.StudentId, cancellationToken);
+            if (student != null)
+            {
+                student.JobsDoneCount += 1;
+                student.ReliabilityScore = Math.Min(100, student.ReliabilityScore + 3);
+                _logger.LogInformation("Sinh viên {StudentId} hoàn thành công việc {JobId}. JobsDoneCount: {JobsDone}, ReliabilityScore: {Score}.", 
+                    student.Id, jobId, student.JobsDoneCount, student.ReliabilityScore);
+            }
         }
 
         deliverable.Status = normalizedStatus;
@@ -278,7 +311,8 @@ public class DeliverableService : IDeliverableService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        _logger.LogInformation("Nhà tuyển dụng {EmployerId} đã duyệt deliverable {DeliverableId} với trạng thái {Status}.", employerId, deliverableId, normalizedStatus);
+        _logger.LogInformation("Nhà tuyển dụng {EmployerId} đã duyệt deliverable {DeliverableId} với trạng thái {Status}. Trạng thái Job: {JobStatus}.", 
+            employerId, deliverableId, normalizedStatus, job.Status);
         return MapToDeliverableDto(deliverable);
     }
 
