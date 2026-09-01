@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
@@ -123,7 +124,14 @@ public class JobRepository : IJobRepository
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var searchPattern = query.Search.Trim();
-            queryable = queryable.Where(j => EF.Functions.Match(new[] { j.Title, j.Description }, searchPattern, MySqlMatchSearchMode.NaturalLanguage) > 0 || j.Title.Contains(searchPattern) || j.Description.Contains(searchPattern));
+            if (searchPattern.Length >= 3)
+            {
+                queryable = queryable.Where(j => EF.Functions.Match(new[] { j.Title, j.Description }, searchPattern, MySqlMatchSearchMode.NaturalLanguage) > 0);
+            }
+            else
+            {
+                queryable = queryable.Where(j => j.Title.Contains(searchPattern) || j.Description.Contains(searchPattern));
+            }
         }
 
         // Sorting
@@ -135,7 +143,7 @@ public class JobRepository : IJobRepository
         };
 
         var page = query.Page <= 0 ? 1 : query.Page;
-        var pageSize = query.PageSize <= 0 ? 10 : Math.Min(query.PageSize, 50);
+        var pageSize = query.PageSize <= 0 ? PaginationConstants.DefaultPageSize : Math.Min(query.PageSize, PaginationConstants.MaxPageSize);
 
         var totalCount = await queryable.CountAsync();
 
@@ -186,7 +194,7 @@ public class JobRepository : IJobRepository
         queryable = queryable.OrderByDescending(j => j.PostedAt);
 
         page = page <= 0 ? 1 : page;
-        pageSize = pageSize <= 0 ? 10 : Math.Min(pageSize, 50);
+        pageSize = pageSize <= 0 ? PaginationConstants.DefaultPageSize : Math.Min(pageSize, PaginationConstants.MaxPageSize);
 
         var totalCount = await queryable.CountAsync();
 
@@ -374,7 +382,7 @@ public class JobRepository : IJobRepository
     public async Task<PagedResult<JobSummaryDto>> GetSavedJobsPagedAsync(int studentId, int page, int pageSize)
     {
         page = page <= 0 ? 1 : page;
-        pageSize = pageSize <= 0 ? 10 : Math.Min(pageSize, 50);
+        pageSize = pageSize <= 0 ? PaginationConstants.DefaultPageSize : Math.Min(pageSize, PaginationConstants.MaxPageSize);
 
         var queryable = _context.SavedJobs
             .AsNoTracking()

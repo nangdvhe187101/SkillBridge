@@ -218,7 +218,10 @@ public class DeliverableService : IDeliverableService
 
     private static bool IsDuplicateVersionError(DbUpdateException ex)
     {
-        return ex.InnerException is MySqlConnector.MySqlException mysqlEx && mysqlEx.Number == 1062;
+        return ex.InnerException is MySqlConnector.MySqlException mysqlEx 
+            && mysqlEx.Number == 1062 
+            && (mysqlEx.Message.Contains("uq_deliverables_job_version", StringComparison.OrdinalIgnoreCase)
+                || mysqlEx.Message.Contains("JobId_Version", StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<DeliverableDto> ReviewDeliverableAsync(
