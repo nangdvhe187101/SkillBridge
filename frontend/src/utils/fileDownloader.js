@@ -1,11 +1,25 @@
 export function downloadJobAttachment(file, jobTitle = '') {
-    const fileName = file?.name || 'Tai_lieu_SkillBridge.pdf';
+    const fileUrl = file?.fileUrl || file?.url;
+    const fileName = file?.fileName || file?.name || 'Tai_lieu_SkillBridge.pdf';
+
+    if (fileUrl && typeof fileUrl === 'string' && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://') || fileUrl.startsWith('/'))) {
+        const a = document.createElement('a');
+        a.href = fileUrl;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer';
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+    }
+
     const content = `=====================================================
 SKILLBRIDGE - TÀI LIỆU ĐÍNH KÈM & BRIEF CÔNG VIỆC
 =====================================================
 Dự án: ${jobTitle || 'Công việc trên SkillBridge'}
 Tên tài liệu: ${fileName}
-Dung lượng: ${file?.size ? (file.size > 1024 * 1024 ? (file.size / (1024 * 1024)).toFixed(1) + ' MB' : (file.size / 1024).toFixed(0) + ' KB') : 'Đính kèm'}
+Dung lượng: ${file?.size || file?.fileSize ? ((file.size || file.fileSize) > 1024 * 1024 ? ((file.size || file.fileSize) / (1024 * 1024)).toFixed(1) + ' MB' : ((file.size || file.fileSize) / 1024).toFixed(0) + ' KB') : 'Đính kèm'}
 Thời gian tải về: ${new Date().toLocaleString('vi-VN')}
 
 --- NỘI DUNG BRIEF & YÊU CẦU BÀN GIAO ---

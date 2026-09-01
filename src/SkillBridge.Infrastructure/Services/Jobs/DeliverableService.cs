@@ -141,6 +141,9 @@ public class DeliverableService : IDeliverableService
                 throw new BusinessException("Định dạng file không được hỗ trợ. Chỉ chấp nhận tài liệu (PDF, Word, Excel, PowerPoint), file nén (ZIP, RAR), hình ảnh (PNG, JPG), media hoặc file thiết kế.");
             }
 
+            // Validate denylist safe file signature
+            FileSignatureValidator.ValidateSafeFile(stream, cleanFileName);
+
             fileType = fileExt.TrimStart('.');
 
             // Tải file kết quả công việc lên Cloudflare R2
@@ -219,6 +222,15 @@ public class DeliverableService : IDeliverableService
         if (normalizedStatus != "accepted" && normalizedStatus != "revision_requested")
         {
             throw new BusinessException("Trạng thái đánh giá không hợp lệ (chỉ chấp nhận 'accepted' hoặc 'revision_requested').");
+        }
+
+        if (normalizedStatus == "revision_requested")
+        {
+            if (job.RevisionCount >= job.RevisionLimit)
+            {
+                throw new BusinessException($"Công việc này đã đạt giới hạn chỉnh sửa tối đa ({job.RevisionLimit} lần).");
+            }
+            job.RevisionCount += 1;
         }
 
         deliverable.Status = normalizedStatus;

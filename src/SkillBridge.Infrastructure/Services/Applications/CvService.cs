@@ -142,6 +142,9 @@ public class CvService : ICvService
             throw new BusinessException("Định dạng file không hợp lệ. Chỉ chấp nhận các định dạng tài liệu .pdf, .doc, .docx.");
         }
 
+        // Validate denylist safe file signature
+        FileSignatureValidator.ValidateSafeFile(stream, fileName);
+
         string? categoryName = null;
         if (categoryId.HasValue)
         {

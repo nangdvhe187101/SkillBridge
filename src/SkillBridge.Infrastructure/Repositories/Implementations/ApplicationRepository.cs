@@ -63,8 +63,20 @@ public class ApplicationRepository : IApplicationRepository
 
     public async Task AddAsync(JobApplication application)
     {
-        await _context.Applications.AddAsync(application);
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.Applications.AddAsync(application);
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (IsDuplicateKeyError(ex))
+        {
+            throw new SkillBridge.Application.Common.BusinessException("Bạn đã gửi đơn ứng tuyển cho công việc này rồi.");
+        }
+    }
+
+    private static bool IsDuplicateKeyError(DbUpdateException ex)
+    {
+        return ex.InnerException is MySqlConnector.MySqlException mysqlEx && mysqlEx.Number == 1062;
     }
 
     public async Task UpdateAsync(JobApplication application)

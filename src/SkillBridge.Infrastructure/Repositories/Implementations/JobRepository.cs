@@ -38,6 +38,7 @@ public class JobRepository : IJobRepository
                 CategoryName = j.Category.Name,
                 Employer = j.Employer,
                 Requirements = j.JobRequirements.OrderBy(r => r.SortOrder).ToList(),
+                Attachments = j.Attachments.OrderBy(a => a.CreatedAt).ToList(),
                 IsSaved = currentUserId.HasValue && j.SavedJobs.Any(s => s.StudentId == currentUserId.Value)
             })
             .FirstOrDefaultAsync();
@@ -73,6 +74,16 @@ public class JobRepository : IJobRepository
                 Id = r.Id,
                 RequirementText = r.RequirementText,
                 SortOrder = r.SortOrder
+            }).ToList(),
+            Attachments = job.Attachments.Select(a => new JobAttachmentDto
+            {
+                Id = a.Id,
+                JobId = a.JobId,
+                FileName = a.FileName,
+                FileUrl = a.FileUrl,
+                FileSize = a.FileSize,
+                FileType = a.FileType,
+                CreatedAt = a.CreatedAt
             }).ToList()
         };
     }

@@ -62,7 +62,29 @@ public class UserService : IUserService
             user.FullName = request.FullName.Trim();
 
         if (request.PhoneNumber != null)
-            user.PhoneNumber = string.IsNullOrWhiteSpace(request.PhoneNumber) ? null : request.PhoneNumber.Trim();
+        {
+            var rawPhone = request.PhoneNumber.Trim();
+            if (string.IsNullOrWhiteSpace(rawPhone))
+            {
+                user.PhoneNumber = null; // Cho phép xóa số điện thoại
+            }
+            else
+            {
+                if (!ValidationPatterns.Phone.IsMatch(rawPhone))
+                {
+                    throw new BusinessException("Số điện thoại không hợp lệ (cần đúng định dạng 10 số di động VN).");
+                }
+
+                var isDuplicate = await _dbContext.Users
+                    .AnyAsync(u => u.PhoneNumber == rawPhone && u.Id != userId, cancellationToken);
+                if (isDuplicate)
+                {
+                    throw new BusinessException("Số điện thoại này đã được sử dụng bởi một tài khoản khác.");
+                }
+
+                user.PhoneNumber = rawPhone;
+            }
+        }
 
         if (request.School != null)
             user.School = string.IsNullOrWhiteSpace(request.School) ? null : request.School.Trim();
@@ -106,6 +128,9 @@ public class UserService : IUserService
         {
             throw new BusinessException("Định dạng file ảnh không được hỗ trợ. Vui lòng chọn JPG, PNG, WEBP hoặc GIF.");
         }
+
+        // Validate denylist dangerous signatures
+        FileSignatureValidator.ValidateSafeFile(stream, fileName);
 
         var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
         if (user == null)

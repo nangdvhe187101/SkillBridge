@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import Icon from './Icon';
 import { useStore, fmtVND } from '../context/StoreContext';
 import { useToast } from '../context/ToastContext';
+import { uploadJobAttachment, deleteJobAttachment } from '../api/jobApi';
 
 const DEFAULT_CATS = [
     { id: 1, name: 'Thiết kế đồ hoạ' },
@@ -86,6 +87,7 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
             name: f.name,
             size: f.size,
             type: f.type,
+            fileObject: f,
         }));
         setAttachments((prev) => [...prev, ...newFiles]);
         showToast(`Đã thêm ${newFiles.length} tài liệu đính kèm.`, '📎');
@@ -98,7 +100,14 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
         }
     };
 
-    const handleRemoveFile = (fileId) => {
+    const handleRemoveFile = async (fileId) => {
+        if (editingJob?.id && typeof fileId === 'number') {
+            try {
+                await deleteJobAttachment(editingJob.id, fileId);
+            } catch (e) {
+                console.error('Lỗi xóa attachment trên server:', e);
+            }
+        }
         setAttachments((prev) => prev.filter((f) => f.id !== fileId));
     };
 
@@ -152,13 +161,28 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
 
         setIsSubmitting(true);
         try {
+            let savedJobResult = null;
             if (editingJob) {
                 if (typeof updateJobPost === 'function') {
-                    await updateJobPost(editingJob.id, jobPayload);
+                    savedJobResult = await updateJobPost(editingJob.id, jobPayload);
                 }
             } else {
                 if (typeof createJobPost === 'function') {
-                    await createJobPost(jobPayload);
+                    savedJobResult = await createJobPost(jobPayload);
+                }
+            }
+
+            const targetJobId = editingJob?.id || savedJobResult?.id;
+
+            // Upload pending file attachments to R2
+            const pendingFiles = attachments.filter(f => f.fileObject);
+            if (targetJobId && pendingFiles.length > 0) {
+                for (const f of pendingFiles) {
+                    try {
+                        await uploadJobAttachment(targetJobId, f.fileObject);
+                    } catch (uploadErr) {
+                        console.error('Lỗi khi tải lên file đính kèm:', uploadErr);
+                    }
                 }
             }
 
