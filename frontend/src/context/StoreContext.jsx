@@ -406,8 +406,8 @@ function reducer(state, action) {
         ];
       }
 
-      let notifications = addNotifTo(state.notifications, '🔒', `Đã thuê ${a.name} và giữ ${hireAmount.toLocaleString('vi-VN')}đ trong ví ký quỹ. Hạn: ${days || 3} ngày.`, '/dashboard');
-      notifications = addNotifTo(notifications, '🎉', `Ứng viên "${a.name}" đã trúng tuyển "${job.title}".`, '/mywork');
+      let notifications = addNotifTo(state.notifications, '🔒', `Đã thuê ${selectedName} và giữ ${hireAmount.toLocaleString('vi-VN')}đ trong ví ký quỹ. Hạn: ${days || 3} ngày.`, '/dashboard');
+      notifications = addNotifTo(notifications, '🎉', `Ứng viên "${selectedName}" đã trúng tuyển "${job.title}".`, '/mywork');
 
       return { ...state, myJobs, jobs, balance, transactions, myApplications, notifications };
     }
@@ -998,7 +998,18 @@ export function StoreProvider({ children }) {
         showToast('Đã xóa CV.', '🗑️');
       },
       toggleSaveJob: (jobId) => dispatch({ type: 'TOGGLE_SAVE_JOB', jobId }),
-      hire: (payload) => dispatch({ type: 'HIRE', payload }),
+      hire: async (payload) => {
+        const { jobId, applicationId, applicant, days } = payload;
+        const appId = applicationId || applicant?.applicationId || applicant?.id;
+        if (jobId && appId && !isNaN(Number(jobId)) && !isNaN(Number(appId))) {
+          try {
+            await applicationApi.hireApplicant(Number(jobId), Number(appId), days || 3);
+          } catch (err) {
+            console.warn('Backend hire API warning:', err);
+          }
+        }
+        dispatch({ type: 'HIRE', payload });
+      },
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),
       submitDeliverable: (payload) => dispatch({ type: 'SUBMIT_DELIVERABLE', payload }),
       requestRevision: (payload) => dispatch({ type: 'REQUEST_REVISION', payload }),

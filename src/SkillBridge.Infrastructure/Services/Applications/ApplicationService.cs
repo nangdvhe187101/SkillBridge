@@ -158,4 +158,72 @@ public class ApplicationService : IApplicationService
             PageSize = pageSize <= 0 ? PaginationConstants.DefaultLargePageSize : Math.Min(pageSize, PaginationConstants.MaxPageSize)
         };
     }
+
+    public async Task<HireApplicantResultDto> HireApplicantAsync(int employerId, int jobId, int applicationId, HireApplicantRequest? request = null)
+    {
+        var job = await _jobRepository.GetByIdAsync(jobId);
+        if (job == null)
+        {
+            throw new BusinessException("Công việc không tồn tại.");
+        }
+
+        if (job.EmployerId != employerId)
+        {
+            throw new BusinessException("Bạn không có quyền thực hiện hành động này trên công việc đã chọn.");
+        }
+
+        if (job.Status != "open")
+        {
+            throw new BusinessException("Công việc này không ở trạng thái đang mở nhận ứng viên.");
+        }
+
+        var application = await _applicationRepository.GetByIdAsync(applicationId);
+        if (application == null || application.JobId != jobId)
+        {
+            throw new BusinessException("Hồ sơ ứng tuyển không tồn tại hoặc không thuộc công việc này.");
+        }
+
+        if (application.Status == "rejected")
+        {
+            throw new BusinessException("Hồ sơ ứng tuyển này đã bị từ chối trước đó.");
+        }
+
+        // Cập nhật trạng thái công việc
+        job.HiredApplicantId = application.StudentId;
+        job.Status = "in_progress";
+        if (request != null && request.Days.HasValue && request.Days.Value > 0)
+        {
+            job.DeadlineAt = DateTime.UtcNow.AddDays(request.Days.Value);
+        }
+        job.UpdatedAt = DateTime.UtcNow;
+        await _jobRepository.UpdateJobAsync(job);
+
+        // Cập nhật trạng thái ứng viên được chọn
+        application.Status = "hired";
+        application.UpdatedAt = DateTime.UtcNow;
+        await _applicationRepository.UpdateAsync(application);
+
+        // Đánh dấu từ chối các ứng viên khác cho công việc này
+        var otherApplications = await _applicationRepository.GetByJobIdAsync(jobId);
+        foreach (var other in otherApplications)
+        {
+            if (other.Id != applicationId && other.Status == "pending")
+            {
+                other.Status = "rejected";
+                other.UpdatedAt = DateTime.UtcNow;
+                await _applicationRepository.UpdateAsync(other);
+            }
+        }
+
+        return new HireApplicantResultDto
+        {
+            JobId = job.Id,
+            ApplicationId = application.Id,
+            HiredStudentId = application.StudentId,
+            HiredStudentName = application.Student?.FullName ?? "Sinh viên",
+            JobStatus = job.Status,
+            DeadlineAt = job.DeadlineAt,
+            EscrowAmount = job.Budget
+        };
+    }
 }

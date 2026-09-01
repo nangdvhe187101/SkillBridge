@@ -324,6 +324,13 @@ public class JobRepository : IJobRepository
         }
     }
 
+    public async Task UpdateJobAsync(Job job)
+    {
+        job.UpdatedAt = DateTime.UtcNow;
+        _context.Jobs.Update(job);
+        await _context.SaveChangesAsync();
+    }
+
     public async Task CancelJobAsync(Job job)
     {
         await using var tx = await _context.Database.BeginTransactionAsync();

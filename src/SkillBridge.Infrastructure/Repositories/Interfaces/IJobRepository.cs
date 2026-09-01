@@ -13,6 +13,7 @@ public interface IJobRepository
     Task<PagedResult<JobSummaryDto>> GetEmployerJobsPagedAsync(int employerId, string? status, int page, int pageSize);
     Task<Job> CreateJobWithRequirementsAsync(Job job, List<string> requirements);
     Task UpdateJobWithRequirementsAsync(Job job, List<string> requirements);
+    Task UpdateJobAsync(Job job);
     Task CancelJobAsync(Job job);
     Task ReopenJobAsync(Job job);
     Task DeleteJobAsync(Job job);

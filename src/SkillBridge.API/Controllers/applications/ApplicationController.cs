@@ -43,6 +43,19 @@ public class ApplicationController : ControllerBase
         return Ok(applicants);
     }
 
+    [Authorize(Policy = "RequireEmployerRole")]
+    [HttpPost("jobs/{jobId:int}/hire/{applicationId:int}")]
+    [EnableRateLimiting("ResourceCreationPolicy")]
+    public async Task<IActionResult> HireApplicant(
+        int jobId,
+        int applicationId,
+        [FromBody] HireApplicantRequest? request = null)
+    {
+        var employerId = User.GetRequiredUserId();
+        var result = await _applicationService.HireApplicantAsync(employerId, jobId, applicationId, request);
+        return Ok(result);
+    }
+
     [Authorize(Policy = "RequireStudentRole")]
     [HttpGet("applications/my")]
     [EnableRateLimiting("GeneralApiPolicy")]
