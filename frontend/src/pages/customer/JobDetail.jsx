@@ -61,22 +61,22 @@ export default function JobDetail() {
   const localJob = state.jobs.find((x) => x.id === jobId);
 
   useEffect(() => {
-    if (!localJob && jobId) {
+    if (jobId) {
       setIsLoading(true);
       jobApi.getJobById(jobId)
         .then((data) => {
           setApiJob(data);
         })
         .catch((err) => {
-          console.error("Không thể tải chi tiết công việc:", err);
+          console.error("Không thể tải chi tiết công việc từ backend:", err);
         })
         .finally(() => {
           setIsLoading(false);
         });
     }
-  }, [jobId, localJob]);
+  }, [jobId]);
 
-  const j = localJob || (apiJob ? {
+  const j = apiJob ? {
     id: apiJob.id,
     title: apiJob.title,
     desc: apiJob.description,
@@ -93,8 +93,8 @@ export default function JobDetail() {
     industry: apiJob.employerIndustry,
     reliability: apiJob.employerReliabilityScore,
     dashJobId: apiJob.dashJobId,
-    attachments: apiJob.attachments
-  } : null);
+    attachments: apiJob.attachments || []
+  } : localJob;
 
   const dashJob = j?.dashJobId ? state.myJobs.find((dj) => dj.id === j.dashJobId) : null;
   const myApp = state.myApplications.find((x) => x.jobId === jobId);
@@ -353,10 +353,12 @@ export default function JobDetail() {
                     borderColor: (state.savedJobIds || []).includes(jobId) ? '#ef4444' : undefined,
                     background: (state.savedJobIds || []).includes(jobId) ? 'rgba(239, 68, 68, 0.08)' : undefined
                   }}
-                  onClick={() => {
-                    const isJobSaved = (state.savedJobIds || []).includes(jobId);
-                    toggleSaveJob(jobId);
-                    showToast(isJobSaved ? 'Đã bỏ lưu công việc.' : 'Đã lưu công việc vào danh sách yêu thích!', isJobSaved ? '🗑' : '❤️');
+                  onClick={async () => {
+                    try {
+                      await toggleSaveJobAsync(jobId);
+                    } catch (err) {
+                      console.error('Lỗi lưu công việc:', err);
+                    }
                   }}
                 >
                   {(state.savedJobIds || []).includes(jobId) ? '❤️ Đã lưu vào yêu thích' : '🤍 Lưu công việc'}

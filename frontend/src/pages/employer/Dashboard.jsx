@@ -705,12 +705,16 @@ function AdsTab({ state, updateAdsSettings, openChatWithPerson }) {
 }
 
 export default function Dashboard() {
-  const { state, updateAdsSettings, openChatWithPerson } = useStore();
+  const { state, updateAdsSettings, openChatWithPerson, refreshMyJobs } = useStore();
   const { openModal } = useModal();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const validTabIds = TABS.map((t) => t.id);
   const [tab, setTab] = useState(validTabIds.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'overview');
+
+  useEffect(() => {
+    if (refreshMyJobs) refreshMyJobs();
+  }, [refreshMyJobs]);
 
   useEffect(() => {
     const urlTab = searchParams.get('tab');
