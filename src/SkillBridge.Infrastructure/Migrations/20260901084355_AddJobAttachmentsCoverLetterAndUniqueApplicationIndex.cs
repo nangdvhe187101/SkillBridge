@@ -12,6 +12,18 @@ namespace SkillBridge.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.AddColumn<string>(
+                name: "cover_letter",
+                table: "applications",
+                type: "text",
+                nullable: true);
+
+            migrationBuilder.CreateIndex(
+                name: "uq_applications_job_student",
+                table: "applications",
+                columns: new[] { "job_id", "student_id" },
+                unique: true);
+
             migrationBuilder.CreateTable(
                 name: "job_attachments",
                 columns: table => new
