@@ -1,11 +1,13 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using SkillBridge.Application.Interfaces.Jobs;
 
 namespace SkillBridge.API.Controllers.jobs;
 
 [ApiController]
 [Route("api/categories")]
+[EnableRateLimiting("GeneralApiPolicy")]
 public class CategoryController : ControllerBase
 {
     private readonly ICategoryService _categoryService;
