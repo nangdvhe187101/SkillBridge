@@ -19,7 +19,7 @@ const CAT_ICON = {
 };
 
 export default function Jobs() {
-  const { state, submitOneTouchLead, toggleSaveJob } = useStore();
+  const { state, submitOneTouchLead, toggleSaveJobAsync, refreshJobs } = useStore();
   const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('Tất cả');
@@ -29,6 +29,10 @@ export default function Jobs() {
   const [adModal, setAdModal] = useState(null); // Ad object
   const [leadNote, setLeadNote] = useState('');
   const [submittedAd, setSubmittedAd] = useState(false);
+
+  useEffect(() => {
+    if (refreshJobs) refreshJobs();
+  }, [refreshJobs]);
 
   const allJobs = state.jobs;
   const savedCount = (state.savedJobIds || []).length;
@@ -101,9 +105,13 @@ export default function Jobs() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             {j.urgent && <span className="chip chip-coral">Gấp</span>}
             <button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                toggleSaveJob(j.id);
+                try {
+                  await toggleSaveJobAsync(j.id);
+                } catch (err) {
+                  console.error('Lỗi lưu công việc:', err);
+                }
               }}
               style={{
                 border: 'none',

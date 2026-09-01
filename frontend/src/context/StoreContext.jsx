@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer, useCallback } from 'react';
 import { jobsSeed } from '../data/jobs';
 import { myJobsSeed } from '../data/myJobs';
 import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
@@ -11,6 +11,41 @@ import * as applicationApi from '../api/applicationApi';
 import { setAccessToken, clearAccessToken } from '../api/tokenStore';
 
 const StoreContext = createContext(null);
+
+export function mapPublicJob(j) {
+  return {
+    id: j.id,
+    title: j.title,
+    emp: j.employerName || 'Nhà tuyển dụng',
+    loc: j.location || 'Toàn quốc',
+    cat: j.categoryName || 'Chung',
+    categoryId: j.categoryId,
+    budget: j.budget,
+    urgent: j.isUrgent,
+    time: j.postedAt ? new Date(j.postedAt).toLocaleDateString('vi-VN') : 'Vừa đăng',
+    postedAt: j.postedAt,
+    desc: j.description || '',
+    status: j.status,
+    attachments: j.attachments || []
+  };
+}
+
+export function mapMyJob(j) {
+  return {
+    id: j.id,
+    title: j.title,
+    cat: j.categoryName || 'Chung',
+    categoryId: j.categoryId,
+    budget: j.budget,
+    urgent: j.isUrgent,
+    status: j.status,
+    posted: j.postedAt ? new Date(j.postedAt).toLocaleDateString('vi-VN') : 'Vừa đăng',
+    postedAt: j.postedAt,
+    deadlineAt: j.deadlineAt,
+    applicants: j.applicants || [],
+    attachments: j.attachments || []
+  };
+}
 
 export function commissionRate(state) {
   return state.vipBusiness ? 0.05 : 0.1;
@@ -145,6 +180,14 @@ function reducer(state, action) {
 
     case 'SET_CATEGORIES': {
       return { ...state, categories: action.categories || [] };
+    }
+
+    case 'SET_JOBS': {
+      return { ...state, jobs: action.jobs || [] };
+    }
+
+    case 'SET_MY_JOBS': {
+      return { ...state, myJobs: action.myJobs || [] };
     }
 
     case 'SET_SAVED_JOB_IDS': {
@@ -703,6 +746,30 @@ export function StoreProvider({ children }) {
     };
   }, []);
 
+  const refreshJobs = useCallback(async () => {
+    try {
+      const res = await jobApi.getJobs({ page: 1, pageSize: 50 });
+      const items = res?.items || (Array.isArray(res) ? res : []);
+      if (items.length > 0) {
+        dispatch({ type: 'SET_JOBS', jobs: items.map(mapPublicJob) });
+      }
+    } catch (err) {
+      console.error('Không thể tải danh sách công việc từ backend:', err);
+    }
+  }, []);
+
+  const refreshMyJobs = useCallback(async () => {
+    try {
+      const res = await jobApi.getMyJobs(null, 1, 50);
+      const items = res?.items || (Array.isArray(res) ? res : []);
+      if (items.length > 0) {
+        dispatch({ type: 'SET_MY_JOBS', myJobs: items.map(mapMyJob) });
+      }
+    } catch (err) {
+      console.error('Không thể tải công việc của tôi từ backend:', err);
+    }
+  }, []);
+
   useEffect(() => {
     // Tải danh sách Categories từ API
     jobApi.getCategories()
@@ -712,6 +779,14 @@ export function StoreProvider({ children }) {
       .catch((err) => {
         console.error('Không thể tải danh mục từ backend:', err);
       });
+
+    // Tải danh sách Jobs công khai từ backend
+    refreshJobs();
+
+    // Nếu là employer, tải danh sách myJobs từ backend
+    if (state.currentUser?.roleCode === 'employer') {
+      refreshMyJobs();
+    }
 
     // Nếu là student đã đăng nhập, tải savedJobIds, cvFiles, myApplications từ API
     if (state.currentUser?.roleCode === 'student') {
@@ -746,7 +821,7 @@ export function StoreProvider({ children }) {
         })
         .catch((err) => console.error('Lỗi tải danh sách ứng tuyển:', err));
     }
-  }, [state.currentUser]);
+  }, [state.currentUser, refreshJobs, refreshMyJobs]);
 
   useEffect(() => {
     const id = setInterval(() => dispatch({ type: 'CHECK_DEADLINES' }), 30000);
@@ -766,19 +841,24 @@ export function StoreProvider({ children }) {
   const actions = useMemo(
     () => ({
       submitJobForm: (payload) => dispatch({ type: 'SUBMIT_JOB_FORM', payload }),
+      refreshJobs,
+      refreshMyJobs,
       createJobPost: async (jobData) => {
         const result = await jobApi.createJob(jobData);
+        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
         showToast('Đăng tin tuyển dụng thành công!', '🚀');
         return result;
       },
       updateJobPost: async (id, jobData) => {
         const result = await jobApi.updateJob(id, jobData);
+        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
         showToast('Cập nhật tin tuyển dụng thành công!', '✓');
         return result;
       },
       cancelJobPost: async (id) => {
         const result = await jobApi.cancelJob(id);
         dispatch({ type: 'CANCEL_JOB', id });
+        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
         showToast('Đã hủy tin tuyển dụng.', '🚫');
         return result;
       },
@@ -912,7 +992,7 @@ export function StoreProvider({ children }) {
         showToast('Đã lưu cài đặt chiến dịch quảng cáo.', '📢');
       }
     }),
-    [showToast, state.savedJobIds]
+    [showToast, state.savedJobIds, refreshJobs, refreshMyJobs]
   );
 
   const value = useMemo(() => ({ state, dispatch, ...actions }), [state, actions]);

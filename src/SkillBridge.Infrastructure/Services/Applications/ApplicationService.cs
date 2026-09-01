@@ -122,7 +122,7 @@ public class ApplicationService : IApplicationService
             Items = items,
             TotalCount = totalCount,
             Page = page <= 0 ? 1 : page,
-            PageSize = pageSize <= 0 ? 20 : pageSize
+            PageSize = pageSize <= 0 ? PaginationConstants.DefaultLargePageSize : Math.Min(pageSize, PaginationConstants.MaxPageSize)
         };
     }
 
@@ -150,7 +150,7 @@ public class ApplicationService : IApplicationService
             Items = items,
             TotalCount = totalCount,
             Page = page <= 0 ? 1 : page,
-            PageSize = pageSize <= 0 ? 20 : pageSize
+            PageSize = pageSize <= 0 ? PaginationConstants.DefaultLargePageSize : Math.Min(pageSize, PaginationConstants.MaxPageSize)
         };
     }
 }
