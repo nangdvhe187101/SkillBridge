@@ -123,7 +123,7 @@ public class JobRepository : IJobRepository
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var searchPattern = query.Search.Trim();
-            queryable = queryable.Where(j => j.Title.Contains(searchPattern));
+            queryable = queryable.Where(j => EF.Functions.Match(new[] { j.Title, j.Description }, searchPattern, MySqlMatchSearchMode.NaturalLanguage) > 0 || j.Title.Contains(searchPattern) || j.Description.Contains(searchPattern));
         }
 
         // Sorting

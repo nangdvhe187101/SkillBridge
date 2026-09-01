@@ -33,20 +33,25 @@ public class ApplicationController : ControllerBase
     [Authorize(Policy = "RequireEmployerRole")]
     [HttpGet("jobs/{jobId:int}/applications")]
     [EnableRateLimiting("GeneralApiPolicy")]
-    public async Task<IActionResult> GetJobApplicants(int jobId)
+    public async Task<IActionResult> GetJobApplicants(
+        int jobId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         var employerId = User.GetRequiredUserId();
-        var applicants = await _applicationService.GetJobApplicantsAsync(employerId, jobId);
+        var applicants = await _applicationService.GetJobApplicantsAsync(employerId, jobId, page, pageSize);
         return Ok(applicants);
     }
 
     [Authorize(Policy = "RequireStudentRole")]
     [HttpGet("applications/my")]
     [EnableRateLimiting("GeneralApiPolicy")]
-    public async Task<IActionResult> GetMyApplications()
+    public async Task<IActionResult> GetMyApplications(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20)
     {
         var studentId = User.GetRequiredUserId();
-        var applications = await _applicationService.GetMyApplicationsAsync(studentId);
+        var applications = await _applicationService.GetMyApplicationsAsync(studentId, page, pageSize);
         return Ok(applications);
     }
 }

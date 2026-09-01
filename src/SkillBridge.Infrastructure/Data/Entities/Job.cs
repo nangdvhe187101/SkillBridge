@@ -11,6 +11,7 @@ namespace SkillBridge.Infrastructure.Data.Entities;
 [Index("HiredApplicantId", Name = "fk_jobs_hired_applicant")]
 [Index("EmployerId", "Status", Name = "idx_jobs_employer_status")]
 [Index("Status", "CategoryId", Name = "idx_jobs_status_category")]
+[Index("Title", "Description", Name = "idx_jobs_fulltext")]
 public partial class Job
 {
     [Key]

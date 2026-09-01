@@ -9,6 +9,7 @@ namespace SkillBridge.Infrastructure.Data.Entities;
 [Table("job_deliverables")]
 [Index("JobId", Name = "fk_deliverables_job")]
 [Index("StudentId", Name = "fk_deliverables_student")]
+[Index("JobId", "Version", Name = "uq_deliverables_job_version", IsUnique = true)]
 public partial class JobDeliverable
 {
     [Key]

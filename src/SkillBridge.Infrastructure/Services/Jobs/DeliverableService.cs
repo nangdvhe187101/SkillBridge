@@ -161,37 +161,64 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Vui lòng đính kèm file sản phẩm hoặc đường dẫn liên kết ngoài (GitHub/Figma/Drive).");
         }
 
-        var currentMaxVersion = await _dbContext.JobDeliverables
-            .Where(d => d.JobId == jobId)
-            .MaxAsync(d => (int?)d.Version, cancellationToken) ?? 0;
+        JobDeliverable? createdEntity = null;
+        const int maxRetries = 3;
 
-        var deliverable = new JobDeliverable
+        for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
-            JobId = jobId,
-            StudentId = studentId,
-            Version = currentMaxVersion + 1,
-            PreviewFileUrl = previewUrl,
-            FinalFileUrl = previewUrl,
-            ExternalUrl = externalUrl,
-            FileName = cleanFileName,
-            FileType = string.IsNullOrWhiteSpace(fileType) ? "binary" : fileType,
-            Note = note?.Trim(),
-            Status = "submitted",
-            SubmittedAt = DateTime.UtcNow
-        };
+            var currentMaxVersion = await _dbContext.JobDeliverables
+                .Where(d => d.JobId == jobId)
+                .MaxAsync(d => (int?)d.Version, cancellationToken) ?? 0;
 
-        await _dbContext.JobDeliverables.AddAsync(deliverable, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+            var deliverable = new JobDeliverable
+            {
+                JobId = jobId,
+                StudentId = studentId,
+                Version = currentMaxVersion + 1,
+                PreviewFileUrl = previewUrl,
+                FinalFileUrl = previewUrl,
+                ExternalUrl = externalUrl,
+                FileName = cleanFileName,
+                FileType = string.IsNullOrWhiteSpace(fileType) ? "binary" : fileType,
+                Note = note?.Trim(),
+                Status = "submitted",
+                SubmittedAt = DateTime.UtcNow
+            };
+
+            try
+            {
+                await _dbContext.JobDeliverables.AddAsync(deliverable, cancellationToken);
+                await _dbContext.SaveChangesAsync(cancellationToken);
+                createdEntity = deliverable;
+                break;
+            }
+            catch (DbUpdateException ex) when (IsDuplicateVersionError(ex) && attempt < maxRetries)
+            {
+                _dbContext.Entry(deliverable).State = EntityState.Detached;
+                _logger.LogWarning("Phát hiện xung đột version khi nộp deliverable cho Job {JobId}. Đang thử lại lần {Attempt}...", jobId, attempt);
+                await Task.Delay(50 * attempt, cancellationToken);
+            }
+        }
+
+        if (createdEntity == null)
+        {
+            throw new BusinessException("Không thể hoàn tất nộp sản phẩm do xung đột phiên bản. Vui lòng thử lại.");
+        }
 
         // Load lại với quan hệ
         var created = await _dbContext.JobDeliverables
             .Include(d => d.Student)
             .Include(d => d.DeliverableFeedbacks)
                 .ThenInclude(f => f.Employer)
-            .FirstAsync(d => d.Id == deliverable.Id, cancellationToken);
+            .FirstAsync(d => d.Id == createdEntity.Id, cancellationToken);
 
-        _logger.LogInformation("Sinh viên {StudentId} nộp bài deliverable v{Version} cho Job {JobId}.", studentId, deliverable.Version, jobId);
+        _logger.LogInformation("Sinh viên {StudentId} nộp bài deliverable v{Version} cho Job {JobId}.", studentId, createdEntity.Version, jobId);
         return MapToDeliverableDto(created);
+    }
+
+    private static bool IsDuplicateVersionError(DbUpdateException ex)
+    {
+        return ex.InnerException is MySqlConnector.MySqlException mysqlEx && mysqlEx.Number == 1062;
     }
 
     public async Task<DeliverableDto> ReviewDeliverableAsync(

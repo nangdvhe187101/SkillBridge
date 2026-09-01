@@ -741,7 +741,8 @@ export function StoreProvider({ children }) {
 
       applicationApi.getMyApplications()
         .then((apps) => {
-          dispatch({ type: 'SET_MY_APPLICATIONS', applications: apps });
+          const list = Array.isArray(apps) ? apps : (apps?.items || []);
+          dispatch({ type: 'SET_MY_APPLICATIONS', applications: list });
         })
         .catch((err) => console.error('Lỗi tải danh sách ứng tuyển:', err));
     }

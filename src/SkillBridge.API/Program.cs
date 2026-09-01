@@ -37,6 +37,7 @@ builder.Services.AddDbContext<SkillBridgeDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
 builder.Services.AddMemoryCache();
+builder.Services.AddDistributedMemoryCache();
 
 builder.Services.AddAuthentication(options =>
 {

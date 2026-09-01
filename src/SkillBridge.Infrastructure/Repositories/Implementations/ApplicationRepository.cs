@@ -50,6 +50,26 @@ public class ApplicationRepository : IApplicationRepository
             .ToListAsync();
     }
 
+    public async Task<(List<JobApplication> Items, int TotalCount)> GetByJobIdPagedAsync(int jobId, int page, int pageSize)
+    {
+        var query = _context.Applications
+            .Include(a => a.Student)
+            .Include(a => a.CvFile)
+            .Where(a => a.JobId == jobId);
+
+        var totalCount = await query.CountAsync();
+        var safePage = page <= 0 ? 1 : page;
+        var safePageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
+
+        var items = await query
+            .OrderByDescending(a => a.AppliedAt)
+            .Skip((safePage - 1) * safePageSize)
+            .Take(safePageSize)
+            .ToListAsync();
+
+        return (items, totalCount);
+    }
+
     public async Task<List<JobApplication>> GetByStudentIdAsync(int studentId)
     {
         return await _context.Applications
@@ -59,6 +79,27 @@ public class ApplicationRepository : IApplicationRepository
             .Where(a => a.StudentId == studentId)
             .OrderByDescending(a => a.AppliedAt)
             .ToListAsync();
+    }
+
+    public async Task<(List<JobApplication> Items, int TotalCount)> GetByStudentIdPagedAsync(int studentId, int page, int pageSize)
+    {
+        var query = _context.Applications
+            .Include(a => a.Job)
+                .ThenInclude(j => j.Employer)
+            .Include(a => a.CvFile)
+            .Where(a => a.StudentId == studentId);
+
+        var totalCount = await query.CountAsync();
+        var safePage = page <= 0 ? 1 : page;
+        var safePageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
+
+        var items = await query
+            .OrderByDescending(a => a.AppliedAt)
+            .Skip((safePage - 1) * safePageSize)
+            .Take(safePageSize)
+            .ToListAsync();
+
+        return (items, totalCount);
     }
 
     public async Task AddAsync(JobApplication application)

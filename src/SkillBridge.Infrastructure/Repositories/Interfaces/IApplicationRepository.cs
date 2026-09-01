@@ -10,7 +10,9 @@ public interface IApplicationRepository
     Task<JobApplication?> GetByJobAndStudentAsync(int jobId, int studentId);
     Task<bool> ExistsAsync(int jobId, int studentId);
     Task<List<JobApplication>> GetByJobIdAsync(int jobId);
+    Task<(List<JobApplication> Items, int TotalCount)> GetByJobIdPagedAsync(int jobId, int page, int pageSize);
     Task<List<JobApplication>> GetByStudentIdAsync(int studentId);
+    Task<(List<JobApplication> Items, int TotalCount)> GetByStudentIdPagedAsync(int studentId, int page, int pageSize);
     Task AddAsync(JobApplication application);
     Task UpdateAsync(JobApplication application);
 }

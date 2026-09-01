@@ -7,10 +7,10 @@ export async function applyJob(jobId, cvFileId, coverLetter = '') {
     });
 }
 
-export async function getJobApplicants(jobId) {
-    return apiFetch(`/jobs/${jobId}/applications`, { method: 'GET' });
+export async function getJobApplicants(jobId, page = 1, pageSize = 20) {
+    return apiFetch(`/jobs/${jobId}/applications?page=${page}&pageSize=${pageSize}`, { method: 'GET' });
 }
 
-export async function getMyApplications() {
-    return apiFetch('/applications/my', { method: 'GET' });
+export async function getMyApplications(page = 1, pageSize = 50) {
+    return apiFetch(`/applications/my?page=${page}&pageSize=${pageSize}`, { method: 'GET' });
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Applications;
+using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.Interfaces.Applications;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
@@ -86,7 +87,7 @@ public class ApplicationService : IApplicationService
         };
     }
 
-    public async Task<List<ApplicantItemDto>> GetJobApplicantsAsync(int employerId, int jobId)
+    public async Task<PagedResult<ApplicantItemDto>> GetJobApplicantsAsync(int employerId, int jobId, int page = 1, int pageSize = 20)
     {
         var job = await _jobRepository.GetByIdAsync(jobId);
         if (job == null)
@@ -99,8 +100,8 @@ public class ApplicationService : IApplicationService
             throw new BusinessException("Bạn không có quyền xem danh sách ứng viên của công việc này.");
         }
 
-        var applications = await _applicationRepository.GetByJobIdAsync(jobId);
-        return applications.Select(a => new ApplicantItemDto
+        var (applications, totalCount) = await _applicationRepository.GetByJobIdPagedAsync(jobId, page, pageSize);
+        var items = applications.Select(a => new ApplicantItemDto
         {
             ApplicationId = a.Id,
             StudentId = a.StudentId,
@@ -115,12 +116,20 @@ public class ApplicationService : IApplicationService
             Status = a.Status,
             AppliedAt = a.AppliedAt
         }).ToList();
+
+        return new SkillBridge.Application.DTOs.Jobs.PagedResult<ApplicantItemDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page <= 0 ? 1 : page,
+            PageSize = pageSize <= 0 ? 20 : pageSize
+        };
     }
 
-    public async Task<List<JobApplicationResponseDto>> GetMyApplicationsAsync(int studentId)
+    public async Task<PagedResult<JobApplicationResponseDto>> GetMyApplicationsAsync(int studentId, int page = 1, int pageSize = 20)
     {
-        var applications = await _applicationRepository.GetByStudentIdAsync(studentId);
-        return applications.Select(a => new JobApplicationResponseDto
+        var (applications, totalCount) = await _applicationRepository.GetByStudentIdPagedAsync(studentId, page, pageSize);
+        var items = applications.Select(a => new JobApplicationResponseDto
         {
             Id = a.Id,
             JobId = a.JobId,
@@ -135,5 +144,13 @@ public class ApplicationService : IApplicationService
             Status = a.Status,
             AppliedAt = a.AppliedAt
         }).ToList();
+
+        return new SkillBridge.Application.DTOs.Jobs.PagedResult<JobApplicationResponseDto>
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page <= 0 ? 1 : page,
+            PageSize = pageSize <= 0 ? 20 : pageSize
+        };
     }
 }
