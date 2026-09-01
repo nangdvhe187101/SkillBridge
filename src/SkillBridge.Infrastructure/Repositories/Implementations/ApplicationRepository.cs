@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using SkillBridge.Application.Common;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
@@ -59,7 +60,7 @@ public class ApplicationRepository : IApplicationRepository
 
         var totalCount = await query.CountAsync();
         var safePage = page <= 0 ? 1 : page;
-        var safePageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
+        var safePageSize = pageSize <= 0 ? PaginationConstants.DefaultLargePageSize : Math.Min(pageSize, PaginationConstants.MaxPageSize);
 
         var items = await query
             .OrderByDescending(a => a.AppliedAt)
@@ -91,7 +92,7 @@ public class ApplicationRepository : IApplicationRepository
 
         var totalCount = await query.CountAsync();
         var safePage = page <= 0 ? 1 : page;
-        var safePageSize = pageSize <= 0 ? 20 : Math.Min(pageSize, 100);
+        var safePageSize = pageSize <= 0 ? PaginationConstants.DefaultLargePageSize : Math.Min(pageSize, PaginationConstants.MaxPageSize);
 
         var items = await query
             .OrderByDescending(a => a.AppliedAt)

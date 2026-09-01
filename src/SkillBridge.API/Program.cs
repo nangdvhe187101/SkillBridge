@@ -37,7 +37,20 @@ builder.Services.AddDbContext<SkillBridgeDbContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
 
 builder.Services.AddMemoryCache();
-builder.Services.AddDistributedMemoryCache();
+
+var redisConnection = builder.Configuration.GetConnectionString("Redis");
+if (!string.IsNullOrWhiteSpace(redisConnection))
+{
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnection;
+        options.InstanceName = "SkillBridge:";
+    });
+}
+else
+{
+    builder.Services.AddDistributedMemoryCache();
+}
 
 builder.Services.AddAuthentication(options =>
 {
