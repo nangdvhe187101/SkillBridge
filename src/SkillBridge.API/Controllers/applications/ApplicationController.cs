@@ -1,8 +1,8 @@
-using System;
-using System.Security.Claims;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using SkillBridge.API.Common;
 using SkillBridge.Application.DTOs.Applications;
 using SkillBridge.Application.Interfaces.Applications;
 
@@ -21,9 +21,10 @@ public class ApplicationController : ControllerBase
 
     [Authorize(Policy = "RequireStudentRole")]
     [HttpPost("jobs/{jobId:int}/apply")]
+    [EnableRateLimiting("ResourceCreationPolicy")]
     public async Task<IActionResult> ApplyJob(int jobId, [FromBody] ApplyJobRequest request)
     {
-        var studentId = GetRequiredUserId();
+        var studentId = User.GetRequiredUserId();
         request.JobId = jobId;
         var result = await _applicationService.ApplyJobAsync(studentId, request);
         return Ok(result);
@@ -31,29 +32,21 @@ public class ApplicationController : ControllerBase
 
     [Authorize(Policy = "RequireEmployerRole")]
     [HttpGet("jobs/{jobId:int}/applications")]
+    [EnableRateLimiting("GeneralApiPolicy")]
     public async Task<IActionResult> GetJobApplicants(int jobId)
     {
-        var employerId = GetRequiredUserId();
+        var employerId = User.GetRequiredUserId();
         var applicants = await _applicationService.GetJobApplicantsAsync(employerId, jobId);
         return Ok(applicants);
     }
 
     [Authorize(Policy = "RequireStudentRole")]
     [HttpGet("applications/my")]
+    [EnableRateLimiting("GeneralApiPolicy")]
     public async Task<IActionResult> GetMyApplications()
     {
-        var studentId = GetRequiredUserId();
+        var studentId = User.GetRequiredUserId();
         var applications = await _applicationService.GetMyApplicationsAsync(studentId);
         return Ok(applications);
-    }
-
-    private int GetRequiredUserId()
-    {
-        var idClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (string.IsNullOrEmpty(idClaim) || !int.TryParse(idClaim, out var userId))
-        {
-            throw new UnauthorizedAccessException("Không xác định được danh tính người dùng.");
-        }
-        return userId;
     }
 }
