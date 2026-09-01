@@ -53,6 +53,43 @@ public class CvService : ICvService
             throw new BusinessException("Tên file không được để trống.");
         }
 
+        var cleanFileName = Path.GetFileName(request.FileName.Trim());
+        var ext = Path.GetExtension(cleanFileName).ToLowerInvariant();
+        var allowedExtensions = new[] { ".pdf", ".doc", ".docx" };
+        if (!allowedExtensions.Contains(ext))
+        {
+            throw new BusinessException("Định dạng file không hợp lệ. Chỉ chấp nhận các định dạng tài liệu .pdf, .doc, .docx.");
+        }
+
+        if (request.FileSize <= 0 || request.FileSize > 10 * 1024 * 1024)
+        {
+            throw new BusinessException("Dung lượng file CV không hợp lệ hoặc vượt quá giới hạn cho phép (tối đa 10MB).");
+        }
+
+        string fileUrl;
+        if (!string.IsNullOrWhiteSpace(request.FileUrl))
+        {
+            var trimmedUrl = request.FileUrl.Trim();
+            // Validate URL an toàn: chấp nhận relative /uploads/ hoặc absolute URL hợp lệ
+            if (trimmedUrl.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase) ||
+                (Uri.TryCreate(trimmedUrl, UriKind.Absolute, out var parsedUri) &&
+                 (parsedUri.Scheme == Uri.UriSchemeHttps || parsedUri.Scheme == Uri.UriSchemeHttp) &&
+                 (parsedUri.Host.EndsWith("cloudflarestorage.com", StringComparison.OrdinalIgnoreCase) ||
+                  parsedUri.Host.EndsWith("r2.dev", StringComparison.OrdinalIgnoreCase) ||
+                  parsedUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))))
+            {
+                fileUrl = trimmedUrl;
+            }
+            else
+            {
+                throw new BusinessException("Đường dẫn file CV không hợp lệ hoặc không thuộc hệ thống lưu trữ được tin cậy.");
+            }
+        }
+        else
+        {
+            fileUrl = $"/uploads/cv/{Guid.NewGuid()}_{cleanFileName}";
+        }
+
         string? categoryName = null;
         if (request.CategoryId.HasValue)
         {
@@ -67,11 +104,11 @@ public class CvService : ICvService
         var entity = new CvFile
         {
             StudentId = studentId,
-            FileName = request.FileName.Trim(),
-            FileUrl = request.FileUrl ?? $"/uploads/cv/{Guid.NewGuid()}_{request.FileName.Trim()}",
+            FileName = cleanFileName,
+            FileUrl = fileUrl,
             PublicId = Guid.NewGuid().ToString("N"),
-            FileSize = request.FileSize > 0 ? request.FileSize : 1024 * 100, // fallback
-            Label = string.IsNullOrWhiteSpace(request.Label) ? request.FileName.Trim() : request.Label.Trim(),
+            FileSize = request.FileSize,
+            Label = string.IsNullOrWhiteSpace(request.Label) ? cleanFileName : request.Label.Trim(),
             CategoryId = request.CategoryId,
             IsSearchable = request.IsSearchable,
             UploadedAt = DateTime.UtcNow,
@@ -79,20 +116,7 @@ public class CvService : ICvService
         };
 
         await _cvFileRepository.AddAsync(entity);
-
-        return new CvFileDto
-        {
-            Id = entity.Id,
-            StudentId = entity.StudentId,
-            FileName = entity.FileName,
-            FileUrl = entity.FileUrl,
-            FileSize = entity.FileSize,
-            Label = entity.Label,
-            CategoryId = entity.CategoryId,
-            CategoryName = categoryName,
-            IsSearchable = entity.IsSearchable ?? true,
-            UploadedAt = entity.UploadedAt
-        };
+        return MapToDto(entity, categoryName);
     }
 
     public async Task<CvFileDto> UploadCvBinaryAsync(
@@ -154,20 +178,7 @@ public class CvService : ICvService
         };
 
         await _cvFileRepository.AddAsync(entity);
-
-        return new CvFileDto
-        {
-            Id = entity.Id,
-            StudentId = entity.StudentId,
-            FileName = entity.FileName,
-            FileUrl = entity.FileUrl,
-            FileSize = entity.FileSize,
-            Label = entity.Label,
-            CategoryId = entity.CategoryId,
-            CategoryName = categoryName,
-            IsSearchable = entity.IsSearchable ?? true,
-            UploadedAt = entity.UploadedAt
-        };
+        return MapToDto(entity, categoryName);
     }
 
     public async Task DeleteCvAsync(int studentId, int cvId)
@@ -185,5 +196,22 @@ public class CvService : ICvService
         }
 
         await _cvFileRepository.DeleteAsync(cv);
+    }
+
+    private static CvFileDto MapToDto(CvFile entity, string? categoryName)
+    {
+        return new CvFileDto
+        {
+            Id = entity.Id,
+            StudentId = entity.StudentId,
+            FileName = entity.FileName,
+            FileUrl = entity.FileUrl,
+            FileSize = entity.FileSize,
+            Label = entity.Label,
+            CategoryId = entity.CategoryId,
+            CategoryName = categoryName ?? entity.Category?.Name,
+            IsSearchable = entity.IsSearchable ?? true,
+            UploadedAt = entity.UploadedAt
+        };
     }
 }

@@ -45,11 +45,21 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Công việc không tồn tại.");
         }
 
-        var deliverables = await _dbContext.JobDeliverables
+        var isEmployer = job.EmployerId == userId;
+
+        var query = _dbContext.JobDeliverables
             .Include(d => d.Student)
             .Include(d => d.DeliverableFeedbacks)
                 .ThenInclude(f => f.Employer)
-            .Where(d => d.JobId == jobId)
+            .Where(d => d.JobId == jobId);
+
+        if (!isEmployer)
+        {
+            // Sinh viên chỉ được xem deliverables do chính mình nộp cho job này (chặn IDOR)
+            query = query.Where(d => d.StudentId == userId);
+        }
+
+        var deliverables = await query
             .OrderByDescending(d => d.Version)
             .ToListAsync(cancellationToken);
 
@@ -72,6 +82,35 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Công việc không tồn tại.");
         }
 
+        if (job.Status == "cancelled")
+        {
+            throw new BusinessException("Công việc này đã bị hủy, không thể nộp sản phẩm.");
+        }
+
+        if (job.EmployerId == studentId)
+        {
+            throw new BusinessException("Nhà tuyển dụng không thể nộp sản phẩm cho chính công việc của mình.");
+        }
+
+        // Kiểm tra quyền nộp deliverable:
+        // Nếu đã có HiredApplicantId thì bắt buộc phải là người được tuyển dụng
+        if (job.HiredApplicantId.HasValue && job.HiredApplicantId.Value != studentId)
+        {
+            throw new BusinessException("Bạn không phải ứng viên được tuyển dụng cho công việc này.");
+        }
+
+        // Nếu chưa set HiredApplicantId, kiểm tra sinh viên đã nộp đơn ứng tuyển cho job này chưa
+        if (!job.HiredApplicantId.HasValue)
+        {
+            var hasApplied = await _dbContext.Applications
+                .AnyAsync(a => a.JobId == jobId && a.StudentId == studentId, cancellationToken);
+
+            if (!hasApplied)
+            {
+                throw new BusinessException("Bạn cần ứng tuyển công việc này trước khi nộp sản phẩm.");
+            }
+        }
+
         string previewUrl = externalUrl ?? string.Empty;
         string cleanFileName = fileName != null ? Path.GetFileName(fileName) : "external_link";
         string fileType = "url";
@@ -86,10 +125,20 @@ public class DeliverableService : IDeliverableService
             cleanFileName = Path.GetFileName(fileName);
             var fileExt = Path.GetExtension(cleanFileName).ToLowerInvariant();
 
-            var blockedExtensions = new[] { ".exe", ".bat", ".cmd", ".sh", ".dll", ".vbs", ".msi", ".com", ".scr", ".ps1" };
-            if (blockedExtensions.Contains(fileExt))
+            // Danh sách trắng (Whitelist) các định dạng file được phép tải lên
+            var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                throw new BusinessException("Định dạng file thực thi có rủi ro bảo mật và không được phép tải lên.");
+                // Tài liệu & dữ liệu
+                ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".json",
+                // Nén & Thiết kế
+                ".zip", ".rar", ".7z", ".tar", ".gz", ".png", ".jpg", ".jpeg", ".webp", ".psd", ".ai", ".fig",
+                // Đa phương tiện
+                ".mp4", ".mp3", ".wav"
+            };
+
+            if (!allowedExtensions.Contains(fileExt))
+            {
+                throw new BusinessException("Định dạng file không được hỗ trợ. Chỉ chấp nhận tài liệu (PDF, Word, Excel, PowerPoint), file nén (ZIP, RAR), hình ảnh (PNG, JPG), media hoặc file thiết kế.");
             }
 
             fileType = fileExt.TrimStart('.');

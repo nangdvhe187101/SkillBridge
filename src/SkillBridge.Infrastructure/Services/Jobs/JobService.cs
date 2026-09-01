@@ -22,7 +22,7 @@ public class JobService : IJobService
 
     public async Task<JobDetailDto> CreateJobAsync(int employerId, CreateJobRequest request)
     {
-        ValidateJobInput(request.Title, request.Description, request.Budget, request.DeadlineAt);
+        ValidateJobInput(request.Title, request.Description, request.Budget, request.DeadlineAt, request.Location, request.Requirements);
 
         var category = await _categoryRepository.GetByIdAsync(request.CategoryId);
         if (category == null)
@@ -75,7 +75,7 @@ public class JobService : IJobService
             throw new BusinessException("Chỉ có thể chỉnh sửa thông tin khi công việc đang ở trạng thái 'open'.");
         }
 
-        ValidateJobInput(request.Title, request.Description, request.Budget, request.DeadlineAt);
+        ValidateJobInput(request.Title, request.Description, request.Budget, request.DeadlineAt, request.Location, request.Requirements);
 
         if (job.CategoryId != request.CategoryId)
         {
@@ -171,7 +171,13 @@ public class JobService : IJobService
         return await _jobRepository.GetSavedJobIdsAsync(studentId);
     }
 
-    private static void ValidateJobInput(string title, string description, decimal budget, DateTime? deadlineAt)
+    private static void ValidateJobInput(
+        string title,
+        string description,
+        decimal budget,
+        DateTime? deadlineAt,
+        string? location,
+        List<string>? requirements)
     {
         if (string.IsNullOrWhiteSpace(title))
         {
@@ -188,6 +194,16 @@ public class JobService : IJobService
             throw new BusinessException("Mô tả chi tiết công việc không được để trống.");
         }
 
+        if (description.Trim().Length > 10000)
+        {
+            throw new BusinessException("Mô tả công việc không được vượt quá 10.000 ký tự.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(location) && location.Trim().Length > 100)
+        {
+            throw new BusinessException("Địa điểm làm việc không được vượt quá 100 ký tự.");
+        }
+
         if (budget <= 0 || budget % 1 != 0)
         {
             throw new BusinessException("Ngân sách phải là số nguyên dương (VNĐ).");
@@ -196,6 +212,27 @@ public class JobService : IJobService
         if (deadlineAt.HasValue && deadlineAt.Value <= DateTime.UtcNow)
         {
             throw new BusinessException("Hạn chót công việc phải lớn hơn thời điểm hiện tại.");
+        }
+
+        if (requirements != null)
+        {
+            if (requirements.Count > 30)
+            {
+                throw new BusinessException("Số lượng yêu cầu công việc không được vượt quá 30 mục.");
+            }
+
+            foreach (var req in requirements)
+            {
+                if (string.IsNullOrWhiteSpace(req))
+                {
+                    throw new BusinessException("Nội dung yêu cầu công việc không được để trống.");
+                }
+
+                if (req.Trim().Length > 500)
+                {
+                    throw new BusinessException("Mỗi yêu cầu công việc không được vượt quá 500 ký tự.");
+                }
+            }
         }
     }
 }

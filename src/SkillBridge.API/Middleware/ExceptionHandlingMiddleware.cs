@@ -33,6 +33,22 @@ namespace SkillBridge.API.Middleware
                 var payload = JsonSerializer.Serialize(new { message = ex.Message });
                 await context.Response.WriteAsync(payload);
             }
+            catch (UnauthorizedAccessException ex)
+            {
+                logger.LogWarning(ex, "Unauthorized access tại {Path}: {Message}", context.Request.Path, ex.Message);
+                context.Response.ContentType = "application/json";
+                context.Response.StatusCode = (int)HttpStatusCode.Unauthorized;
+                var payload = JsonSerializer.Serialize(new { message = ex.Message });
+                await context.Response.WriteAsync(payload);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                logger.LogWarning(ex, "Resource not found tại {Path}: {Message}", context.Request.Path, ex.Message);
+                context.Response.ContentType = "application/json";
+                context.Response.StatusCode = (int)HttpStatusCode.NotFound;
+                var payload = JsonSerializer.Serialize(new { message = ex.Message });
+                await context.Response.WriteAsync(payload);
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Lỗi chưa được xử lý {Path}", context.Request.Path);

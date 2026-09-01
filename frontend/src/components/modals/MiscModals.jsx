@@ -136,7 +136,7 @@ export function SuccessModal({ onClose, title, message }) {
           <Icon name="check" style={{ width: 28, height: 28, color: 'var(--ink-fixed)' }} />
         </div>
         <h3>{title}</h3>
-        <p style={{ color: 'var(--ink-soft)', marginTop: 8 }} dangerouslySetInnerHTML={{ __html: message }} />
+        <p style={{ color: 'var(--ink-soft)', marginTop: 8 }}>{message}</p>
       </div>
       <div className="modal-actions"><button className="btn btn-primary btn-block" onClick={onClose}>Đóng</button></div>
     </ModalShell>
