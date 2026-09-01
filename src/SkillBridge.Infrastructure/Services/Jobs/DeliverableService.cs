@@ -251,6 +251,26 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Bản nộp sản phẩm không tồn tại.");
         }
 
+        if (job.Status == "completed")
+        {
+            throw new BusinessException("Công việc này đã hoàn thành và nghiệm thu xong, không thể đánh giá lại sản phẩm.");
+        }
+
+        if (job.Status == "cancelled")
+        {
+            throw new BusinessException("Công việc này đã bị hủy, không thể đánh giá sản phẩm.");
+        }
+
+        if (job.Status != "submitted")
+        {
+            throw new BusinessException("Công việc hiện không ở trạng thái chờ duyệt sản phẩm.");
+        }
+
+        if (deliverable.Status != "submitted")
+        {
+            throw new BusinessException("Bản nộp sản phẩm này đã được đánh giá trước đó.");
+        }
+
         var normalizedStatus = request.Status.ToLowerInvariant().Trim();
         if (normalizedStatus != "accepted" && normalizedStatus != "revision_requested")
         {
