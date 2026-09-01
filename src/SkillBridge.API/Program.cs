@@ -214,8 +214,19 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor |
                                Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Clear();
-    options.KnownProxies.Clear();
+    // Giữ loopback mặc định (127.0.0.1, ::1) để chỉ chấp nhận proxy nội bộ tin cậy.
+    // KHÔNG clear KnownNetworks/KnownProxies để ngăn kẻ tấn công giả mạo X-Forwarded-For bypass rate limit.
+    var knownProxiesConfig = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>();
+    if (knownProxiesConfig != null)
+    {
+        foreach (var proxy in knownProxiesConfig)
+        {
+            if (System.Net.IPAddress.TryParse(proxy, out var ipAddress))
+            {
+                options.KnownProxies.Add(ipAddress);
+            }
+        }
+    }
 });
 
 builder.WebHost.ConfigureKestrel(serverOptions =>

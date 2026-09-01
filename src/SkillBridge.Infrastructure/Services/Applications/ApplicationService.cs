@@ -61,6 +61,7 @@ public class ApplicationService : IApplicationService
             JobId = request.JobId,
             StudentId = studentId,
             CvFileId = request.CvFileId,
+            CoverLetter = string.IsNullOrWhiteSpace(request.CoverLetter) ? null : request.CoverLetter.Trim(),
             Status = "pending",
             AppliedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
@@ -79,6 +80,7 @@ public class ApplicationService : IApplicationService
             CvFileId = cv.Id,
             CvFileName = cv.FileName,
             CvFileUrl = cv.FileUrl,
+            CoverLetter = application.CoverLetter,
             Status = application.Status,
             AppliedAt = application.AppliedAt
         };
@@ -109,6 +111,7 @@ public class ApplicationService : IApplicationService
             CvFileName = a.CvFile?.FileName,
             CvFileUrl = a.CvFile?.FileUrl,
             CvLabel = a.CvFile?.Label,
+            CoverLetter = a.CoverLetter,
             Status = a.Status,
             AppliedAt = a.AppliedAt
         }).ToList();
@@ -128,6 +131,7 @@ public class ApplicationService : IApplicationService
             CvFileId = a.CvFileId,
             CvFileName = a.CvFile?.FileName,
             CvFileUrl = a.CvFile?.FileUrl,
+            CoverLetter = a.CoverLetter,
             Status = a.Status,
             AppliedAt = a.AppliedAt
         }).ToList();

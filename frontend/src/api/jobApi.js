@@ -72,3 +72,18 @@ export async function getSavedJobs(page = 1, pageSize = 20) {
 export async function getSavedJobIds() {
     return apiFetch('/jobs/saved-ids', { method: 'GET' });
 }
+
+export async function uploadJobAttachment(jobId, file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return apiFetch(`/jobs/${jobId}/attachments`, {
+        method: 'POST',
+        body: formData,
+    });
+}
+
+export async function deleteJobAttachment(jobId, attachmentId) {
+    return apiFetch(`/jobs/${jobId}/attachments/${attachmentId}`, {
+        method: 'DELETE',
+    });
+}

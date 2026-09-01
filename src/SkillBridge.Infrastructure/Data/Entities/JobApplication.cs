@@ -33,6 +33,9 @@ public partial class JobApplication
     [Column("updated_at", TypeName = "datetime")]
     public DateTime UpdatedAt { get; set; }
 
+    [Column("cover_letter", TypeName = "text")]
+    public string? CoverLetter { get; set; }
+
     [ForeignKey("CvFileId")]
     [InverseProperty("JobApplications")]
     public virtual CvFile? CvFile { get; set; }

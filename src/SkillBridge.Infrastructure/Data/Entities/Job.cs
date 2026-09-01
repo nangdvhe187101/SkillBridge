@@ -75,6 +75,9 @@ public partial class Job
     [InverseProperty("Job")]
     public virtual ICollection<JobApplication> Applications { get; set; } = new List<JobApplication>();
 
+    [InverseProperty("Job")]
+    public virtual ICollection<JobAttachment> Attachments { get; set; } = new List<JobAttachment>();
+
     [ForeignKey("CategoryId")]
     [InverseProperty("Jobs")]
     public virtual Category Category { get; set; } = null!;

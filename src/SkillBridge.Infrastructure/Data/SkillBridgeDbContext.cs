@@ -54,6 +54,8 @@ public partial class SkillBridgeDbContext : DbContext
 
     public virtual DbSet<Job> Jobs { get; set; }
 
+    public virtual DbSet<JobAttachment> JobAttachments { get; set; }
+
     public virtual DbSet<JobDeliverable> JobDeliverables { get; set; }
 
     public virtual DbSet<JobRequirement> JobRequirements { get; set; }
@@ -168,6 +170,10 @@ public partial class SkillBridgeDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
 
+            entity.HasIndex(e => new { e.JobId, e.StudentId })
+                .IsUnique()
+                .HasDatabaseName("uq_applications_job_student");
+
             entity.Property(e => e.AppliedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.Status).HasDefaultValueSql("'pending'");
             entity.Property(e => e.UpdatedAt)
@@ -185,6 +191,18 @@ public partial class SkillBridgeDbContext : DbContext
             entity.HasOne(d => d.CvFile).WithMany(p => p.JobApplications)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_applications_cvfile");
+        });
+
+        modelBuilder.Entity<JobAttachment>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.Job).WithMany(p => p.Attachments)
+                .HasForeignKey(d => d.JobId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_job_attachments_job");
         });
 
         modelBuilder.Entity<AuditLog>(entity =>

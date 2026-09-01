@@ -80,6 +80,18 @@ public class JobDetailDto
     public int EmployerReliabilityScore { get; set; }
     public bool IsSaved { get; set; }
     public List<JobRequirementDto> Requirements { get; set; } = new();
+    public List<JobAttachmentDto> Attachments { get; set; } = new();
+}
+
+public class JobAttachmentDto
+{
+    public int Id { get; set; }
+    public int JobId { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
+    public long FileSize { get; set; }
+    public string FileType { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
 }
 
 public class JobQueryParameters

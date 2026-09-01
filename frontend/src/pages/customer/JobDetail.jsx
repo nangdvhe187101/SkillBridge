@@ -246,9 +246,9 @@ export default function JobDetail() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                           <span style={{ fontSize: 22 }}>📁</span>
                           <div>
-                            <b style={{ fontSize: 13.5, display: 'block' }}>{f.name}</b>
+                            <b style={{ fontSize: 13.5, display: 'block' }}>{f.fileName || f.name}</b>
                             <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-                              {f.size ? (f.size > 1024 * 1024 ? (f.size / (1024 * 1024)).toFixed(1) + ' MB' : (f.size / 1024).toFixed(0) + ' KB') : 'Tài liệu đề bài'}
+                              {(f.fileSize || f.size) ? ((f.fileSize || f.size) > 1024 * 1024 ? ((f.fileSize || f.size) / (1024 * 1024)).toFixed(1) + ' MB' : ((f.fileSize || f.size) / 1024).toFixed(0) + ' KB') : 'Tài liệu đề bài'}
                             </span>
                           </div>
                         </div>
@@ -258,7 +258,7 @@ export default function JobDetail() {
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                           onClick={() => {
                             downloadJobAttachment(f, j.title);
-                            showToast(`Đang tải xuống: ${f.name}`, '⬇️');
+                            showToast(`Đang tải xuống: ${f.fileName || f.name}`, '⬇️');
                           }}
                         >
                           ⬇ Tải file về

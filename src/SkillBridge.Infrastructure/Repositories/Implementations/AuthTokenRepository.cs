@@ -45,26 +45,30 @@ namespace SkillBridge.Infrastructure.Repositories.Implementations
         }
         public async Task<int> MarkTokenAsUsedIfValidAsync(string tokenHash, string tokenType)
         {
-            var token = await context.AuthTokens
-                .Include(t => t.User)
-                .FirstOrDefaultAsync(t =>
-                    t.TokenHash == tokenHash &&
-                    t.TokenType == tokenType &&
-                    t.UsedAt == null &&
-                    t.ExpiresAt > DateTime.UtcNow);
+            var now = DateTime.UtcNow;
+            var tokenInfo = await context.AuthTokens
+                .Where(t => t.TokenHash == tokenHash
+                    && t.TokenType == tokenType
+                    && t.UsedAt == null
+                    && t.ExpiresAt > now)
+                .Select(t => new { t.Id, t.UserId })
+                .FirstOrDefaultAsync();
 
-            if (token == null)
+            if (tokenInfo == null)
                 return 0;
 
-            token.UsedAt = DateTime.UtcNow;
+            var rows = await context.AuthTokens
+                .Where(t => t.Id == tokenInfo.Id && t.UsedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.UsedAt, now));
 
-            if (tokenType == TokenTypes.EmailVerify && token.User.AccountStatus == "pending")
+            if (rows > 0 && tokenType == TokenTypes.EmailVerify)
             {
-                token.User.AccountStatus = "active";
+                await context.Users
+                    .Where(u => u.Id == tokenInfo.UserId && u.AccountStatus == "pending")
+                    .ExecuteUpdateAsync(s => s.SetProperty(u => u.AccountStatus, "active"));
             }
 
-            await context.SaveChangesAsync();
-            return 1;
+            return rows;
         }
 
         public async Task SaveChangesAsync() => await context.SaveChangesAsync();

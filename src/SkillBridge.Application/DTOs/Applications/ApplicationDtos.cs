@@ -20,6 +20,7 @@ public class JobApplicationResponseDto
     public int? CvFileId { get; set; }
     public string? CvFileName { get; set; }
     public string? CvFileUrl { get; set; }
+    public string? CoverLetter { get; set; }
     public string Status { get; set; } = null!;
     public DateTime AppliedAt { get; set; }
 }
@@ -35,6 +36,7 @@ public class ApplicantItemDto
     public string? CvFileName { get; set; }
     public string? CvFileUrl { get; set; }
     public string? CvLabel { get; set; }
+    public string? CoverLetter { get; set; }
     public string Status { get; set; } = null!;
     public DateTime AppliedAt { get; set; }
 }

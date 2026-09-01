@@ -13,10 +13,12 @@ namespace SkillBridge.API.Controllers.jobs;
 public class JobController : ControllerBase
 {
     private readonly IJobService _jobService;
+    private readonly IJobAttachmentService _jobAttachmentService;
 
-    public JobController(IJobService jobService)
+    public JobController(IJobService jobService, IJobAttachmentService jobAttachmentService)
     {
         _jobService = jobService;
+        _jobAttachmentService = jobAttachmentService;
     }
 
     [HttpGet]
@@ -115,5 +117,38 @@ public class JobController : ControllerBase
         var studentId = User.GetRequiredUserId();
         var ids = await _jobService.GetSavedJobIdsAsync(studentId);
         return Ok(ids);
+    }
+
+    [Authorize(Policy = "RequireEmployerRole")]
+    [HttpPost("{id:int}/attachments")]
+    [Consumes("multipart/form-data")]
+    [EnableRateLimiting("UploadPolicy")]
+    public async Task<IActionResult> UploadJobAttachment(int id, [FromForm] Microsoft.AspNetCore.Http.IFormFile file)
+    {
+        var employerId = User.GetRequiredUserId();
+        using var stream = file?.OpenReadStream();
+        if (stream == null)
+        {
+            return BadRequest(new { message = "Vui lòng chọn tệp tin đính kèm." });
+        }
+
+        var result = await _jobAttachmentService.UploadJobAttachmentAsync(
+            employerId,
+            id,
+            stream,
+            file!.FileName,
+            file.ContentType);
+
+        return Ok(result);
+    }
+
+    [Authorize(Policy = "RequireEmployerRole")]
+    [HttpDelete("{id:int}/attachments/{attachmentId:int}")]
+    [EnableRateLimiting("ResourceCreationPolicy")]
+    public async Task<IActionResult> DeleteJobAttachment(int id, int attachmentId)
+    {
+        var employerId = User.GetRequiredUserId();
+        await _jobAttachmentService.DeleteJobAttachmentAsync(employerId, id, attachmentId);
+        return Ok(new { message = "Xóa tệp đính kèm thành công." });
     }
 }
