@@ -548,7 +548,7 @@ export default function JobDetail() {
               )}
               <div className="jd-card">
                 <div className="jd-emp-row" style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${slugify(j.emp)}`)}>
-                  <Avatar name={j.emp} className="jd-emp-av" fontSize={16} />
+                  <Avatar src={j.employerAvatar || j.empAvatar || j.employer?.avatarUrl} name={j.emp} className="jd-emp-av" fontSize={16} />
                   <div>
                     <b>{j.emp}</b> <Icon name="check" style={{ width: 14, height: 14, display: 'inline', color: 'var(--primary)' }} />
                     <span>{j.loc} · Đã xác thực</span>

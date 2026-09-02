@@ -113,7 +113,7 @@ export default function Jobs() {
       <div className="job-card" key={j.id} onClick={() => navigate(`/jobs/${j.id}`)}>
         <div className="jc-top" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div className="jc-emp" onClick={(e) => { e.stopPropagation(); navigate(`/company/${slugify(j.emp)}`); }} style={{ cursor: 'pointer' }}>
-            <Avatar name={j.emp} className="jc-av" fontSize={13} />
+            <Avatar src={j.employerAvatar || j.empAvatar} name={j.emp} className="jc-av" fontSize={13} />
             <div><b>{j.emp} <Icon name="check" style={{ width: 12, height: 12, display: 'inline' }} /></b><span>{j.loc}</span></div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

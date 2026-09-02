@@ -28,6 +28,8 @@ export default function Avatar({ src, name = '?', className, style, fontSize = 1
     ? src
     : (src ? `http://localhost:5004/api/storage/file?key=${encodeURIComponent(src)}` : null);
 
+  const defaultSize = className ? {} : { width: 24, height: 24, borderRadius: '50%' };
+
   if (resolvedSrc && !error) {
     return (
       <img
@@ -35,12 +37,10 @@ export default function Avatar({ src, name = '?', className, style, fontSize = 1
         alt={name}
         className={className}
         style={{
-          width: 24,
-          height: 24,
-          borderRadius: '50%',
           objectFit: 'cover',
           userSelect: 'none',
           flexShrink: 0,
+          ...defaultSize,
           ...style,
         }}
         onError={(e) => {
@@ -60,9 +60,6 @@ export default function Avatar({ src, name = '?', className, style, fontSize = 1
     <div
       className={className}
       style={{
-        width: 24,
-        height: 24,
-        borderRadius: '50%',
         background: grad,
         display: 'flex',
         alignItems: 'center',
@@ -73,6 +70,7 @@ export default function Avatar({ src, name = '?', className, style, fontSize = 1
         fontSize,
         userSelect: 'none',
         flexShrink: 0,
+        ...defaultSize,
         ...style,
       }}
     >

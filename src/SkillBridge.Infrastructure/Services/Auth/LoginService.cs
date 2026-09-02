@@ -17,6 +17,7 @@ namespace SkillBridge.Infrastructure.Services
         private readonly IJwtService jwtService;
         private readonly IAuthTokenRepository authTokenRepository;
         private readonly ITokenVersionService tokenVersionService;
+        private readonly SkillBridge.Application.Interfaces.Storage.IStorageService storageService;
 
         private const int MaxFailedAttempts = 5;
         private const int LockoutMinutes = 15;
@@ -26,12 +27,14 @@ namespace SkillBridge.Infrastructure.Services
             IUserRepository _userRepository,
             IJwtService _jwtService,
             IAuthTokenRepository _authTokenRepository,
-            ITokenVersionService _tokenVersionService)
+            ITokenVersionService _tokenVersionService,
+            SkillBridge.Application.Interfaces.Storage.IStorageService _storageService)
         {
             userRepository = _userRepository;
             jwtService = _jwtService;
             authTokenRepository = _authTokenRepository;
             tokenVersionService = _tokenVersionService;
+            storageService = _storageService;
         }
 
         public async Task<(AuthResponseDto Result, string RefreshToken)> LoginAsync(LoginDto dto)
@@ -103,7 +106,8 @@ namespace SkillBridge.Infrastructure.Services
                 UserId = user.Id,
                 FullName = user.FullName,
                 Email = user.Email,
-                RoleCode = user.Role.Code
+                RoleCode = user.Role.Code,
+                AvatarUrl = storageService.GetPublicUrl(user.AvatarUrl)
             };
 
             return (result, refreshToken);

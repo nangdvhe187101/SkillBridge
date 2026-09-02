@@ -14,11 +14,16 @@ namespace SkillBridge.Infrastructure.Services
     {
         private readonly IAuthTokenRepository authTokenRepository;
         private readonly IJwtService jwtService;
+        private readonly SkillBridge.Application.Interfaces.Storage.IStorageService storageService;
 
-        public RefreshTokenService(IAuthTokenRepository _authTokenRepository, IJwtService _jwtService)
+        public RefreshTokenService(
+            IAuthTokenRepository _authTokenRepository,
+            IJwtService _jwtService,
+            SkillBridge.Application.Interfaces.Storage.IStorageService _storageService)
         {
             authTokenRepository = _authTokenRepository;
             jwtService = _jwtService;
+            storageService = _storageService;
         }
 
         public async Task<(AuthResponseDto Result, string RefreshToken)> RefreshAsync(string refreshToken)
@@ -95,7 +100,8 @@ namespace SkillBridge.Infrastructure.Services
                 UserId = user.Id,
                 FullName = user.FullName,
                 Email = user.Email,
-                RoleCode = user.Role.Code
+                RoleCode = user.Role.Code,
+                AvatarUrl = storageService.GetPublicUrl(user.AvatarUrl)
             };
 
             return (result, newRefreshToken);
