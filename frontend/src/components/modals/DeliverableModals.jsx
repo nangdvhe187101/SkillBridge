@@ -83,9 +83,11 @@ function DeliverablePreview({ d, revealFinal }) {
 }
 export { DeliverablePreview };
 
-export function DeliverableModal({ onClose, jobId }) {
+export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) {
   const { state, submitDeliverable } = useStore();
-  const job = state.myJobs.find((j) => j.id === jobId);
+  const localJob = state.myJobs.find((j) => j.id === jobId) ||
+                   state.myApplications.find((a) => a.jobId === jobId || a.id === jobId);
+  const job = propJob || localJob || { id: jobId, title: 'Công việc', status: 'in_progress' };
   const prev = job?.deliverable || {};
   const [mode, setMode] = useState(prev.mode || 'file');
   const [url, setUrl] = useState(prev.url || prev.externalUrl || '');
@@ -115,6 +117,7 @@ export function DeliverableModal({ onClose, jobId }) {
           await submitJobDeliverable(jobId, formData);
         }
         submitDeliverable({ jobId, mode: 'link', url: url.trim(), note });
+        onSubmitted?.();
         onClose();
       } catch (err) {
         setErrorMsg(err?.message || 'Không thể gửi bàn giao.');
@@ -183,6 +186,7 @@ export function DeliverableModal({ onClose, jobId }) {
           note
         });
       }
+      onSubmitted?.();
       onClose();
     } catch (err) {
       setErrorMsg(err?.message || 'Không thể tải lên file bàn giao.');
@@ -243,62 +247,119 @@ export function DeliverableModal({ onClose, jobId }) {
   );
 }
 
-export function RevisionModal({ onClose, jobId }) {
-  const { state, requestRevision } = useStore();
-  const job = state.myJobs.find((j) => j.id === jobId);
+export function RevisionModal({ onClose, jobId, deliverable: propDeliverable, job: propJob, onReviewed }) {
+  const { state, requestRevision, reviewDeliverableAsync } = useStore();
+  const localJob = state.myJobs.find((j) => j.id === jobId);
+  const job = propJob || localJob || { id: jobId, title: 'Công việc', revisionCount: 0, revisionLimit: 2 };
+  const deliverable = propDeliverable || job?.deliverable;
   const [text, setText] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
   if (!job) return null;
-  const submit = () => {
+
+  const submit = async () => {
     if (!text.trim()) return;
-    requestRevision({ jobId, text: text.trim() });
-    onClose();
+    setIsSubmitting(true);
+    setErrorMsg('');
+    try {
+      if (typeof jobId === 'number' && deliverable?.id) {
+        if (typeof reviewDeliverableAsync === 'function') {
+          await reviewDeliverableAsync(jobId, deliverable.id, {
+            status: 'revision_requested',
+            feedbackComment: text.trim()
+          });
+        }
+      } else {
+        requestRevision({ jobId, text: text.trim() });
+      }
+      onReviewed?.();
+      onClose();
+    } catch (err) {
+      setErrorMsg(err?.message || 'Không thể gửi yêu cầu chỉnh sửa.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
   return (
     <ModalShell onClose={onClose}>
       <h3>✏️ Yêu cầu sửa bàn giao</h3>
       <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-        Cho <b>{job.hiredApplicant}</b> biết cần chỉnh sửa gì. Lượt {(job.revisionCount || 0) + 1}/{job.revisionLimit}.
+        Cho <b>{job.hiredApplicant || 'sinh viên'}</b> biết cần chỉnh sửa gì. Lượt {(job.revisionCount || 0) + 1}/{job.revisionLimit || 2}.
       </p>
       <div className="field">
         <label>Nội dung cần sửa</label>
         <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="VD: Đổi màu chủ đạo sang xanh dương, thêm logo công ty ở góc trên..." />
       </div>
+      {errorMsg && <div style={{ color: 'var(--coral)', fontSize: 13, marginBottom: 12 }}>{errorMsg}</div>}
       <div className="modal-actions">
-        <button className="btn btn-primary" style={{ background: 'var(--coral)' }} onClick={submit}>Gửi yêu cầu sửa</button>
-        <button className="btn btn-outline" onClick={onClose}>Quay lại</button>
+        <button className="btn btn-primary" style={{ background: 'var(--coral)' }} onClick={submit} disabled={isSubmitting}>
+          {isSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu sửa'}
+        </button>
+        <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Quay lại</button>
       </div>
     </ModalShell>
   );
 }
 
-export function DeliverableReviewModal({ onClose, jobId }) {
-  const { state, markJobComplete } = useStore();
+export function DeliverableReviewModal({ onClose, jobId, deliverable: propDeliverable, job: propJob, onReviewed }) {
+  const { state, markJobComplete, reviewDeliverableAsync } = useStore();
   const { openModal } = useModal();
-  const job = state.myJobs.find((j) => j.id === jobId);
-  if (!job || !job.deliverable) return null;
-  const limitReached = job.revisionCount >= job.revisionLimit;
+  const localJob = state.myJobs.find((j) => j.id === jobId);
+  const job = propJob || localJob;
+  const deliverable = propDeliverable || job?.deliverable;
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  if (!job || !deliverable) return null;
+  const limitReached = (job.revisionCount || 0) >= (job.revisionLimit || 2);
+
+  const handleAccept = async () => {
+    setIsSubmitting(true);
+    setErrorMsg('');
+    try {
+      if (typeof jobId === 'number' && deliverable?.id) {
+        if (typeof reviewDeliverableAsync === 'function') {
+          await reviewDeliverableAsync(jobId, deliverable.id, {
+            status: 'accepted'
+          });
+        }
+      } else {
+        markJobComplete(job.id);
+      }
+      onReviewed?.();
+      onClose();
+      openModal('receipt', { justCompletedId: job.id });
+    } catch (err) {
+      setErrorMsg(err?.message || 'Không thể nghiệm thu công việc.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <ModalShell onClose={onClose}>
-      <h3>📥 Bàn giao từ {job.hiredApplicant} — phiên bản {job.deliverable.version || 1}</h3>
+      <h3>📥 Bàn giao từ {job.hiredApplicant || 'sinh viên'} — phiên bản {deliverable.version || 1}</h3>
       <p><b>{job.title}</b></p>
-      <DeliverablePreview d={job.deliverable} revealFinal={false} />
+      <DeliverablePreview d={deliverable} revealFinal={false} />
       <div className="checkout-summary" style={{ marginTop: 8 }}>
-        <div className="cs-row"><span>Ghi chú</span><span>{job.deliverable.note || '—'}</span></div>
-        <div className="cs-row"><span>Nộp lúc</span><span>{job.deliverable.submittedAt || 'Vừa xong'}</span></div>
+        <div className="cs-row"><span>Ghi chú</span><span>{deliverable.note || '—'}</span></div>
+        <div className="cs-row"><span>Nộp lúc</span><span>{deliverable.submittedAt || 'Vừa xong'}</span></div>
       </div>
       <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 10 }}>
         Xác nhận để giải ngân {fmtVND(job.escrowAmount || job.budget)} cho sinh viên, hoặc yêu cầu sửa lại nếu sản phẩm chưa đạt.
       </p>
+      {errorMsg && <div style={{ color: 'var(--coral)', fontSize: 13, marginBottom: 12 }}>{errorMsg}</div>}
       <div className="modal-actions">
-        <button className="btn btn-primary" onClick={() => { onClose(); markJobComplete(job.id); openModal('receipt', { justCompletedId: job.id }); }}>
-          ✓ Xác nhận & Giải ngân
+        <button className="btn btn-primary" onClick={handleAccept} disabled={isSubmitting}>
+          {isSubmitting ? 'Đang giải ngân...' : '✓ Xác nhận & Giải ngân'}
         </button>
-        <button className="btn btn-outline" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} disabled={limitReached}
-          onClick={() => { onClose(); openModal('revision', { jobId: job.id }); }}>
+        <button className="btn btn-outline" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} disabled={limitReached || isSubmitting}
+          onClick={() => { onClose(); openModal('revision', { jobId: job.id, deliverable, job, onReviewed }); }}>
           ✏️ Yêu cầu sửa
         </button>
-        <button className="btn btn-outline" onClick={onClose}>Để sau</button>
+        <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Để sau</button>
       </div>
     </ModalShell>
   );

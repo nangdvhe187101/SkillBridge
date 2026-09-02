@@ -109,7 +109,7 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
-    const save = () => {
+    const save = async () => {
         setError('');
         if (!form.fullName.trim()) {
             setError('Vui lòng nhập tên công ty / doanh nghiệp.');
@@ -120,20 +120,25 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
             return;
         }
         setSaving(true);
-        updateProfile({
-            fullName: form.fullName.trim(),
-            companyName: form.fullName.trim(),
-            representative: form.representative.trim(),
-            taxCode: form.taxCode.trim(),
-            industry: form.industry,
-            address: form.address.trim(),
-            website: form.website.trim(),
-            phone: form.phone || null,
-            phoneNumber: form.phone || null,
-            bio: form.bio.trim(),
-            companyDescription: form.bio.trim(),
-        });
-        setSaving(false);
+        try {
+            await updateProfile({
+                fullName: form.fullName.trim(),
+                companyName: form.fullName.trim(),
+                representative: form.representative.trim(),
+                taxCode: form.taxCode.trim(),
+                industry: form.industry,
+                address: form.address.trim(),
+                website: form.website.trim(),
+                phone: form.phone || null,
+                phoneNumber: form.phone || null,
+                bio: form.bio.trim(),
+                companyDescription: form.bio.trim(),
+            });
+        } catch (err) {
+            setError(err?.message || 'Không thể lưu thông tin hồ sơ.');
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -254,7 +259,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
-    const save = () => {
+    const save = async () => {
         setError('');
         if (!form.fullName.trim()) {
             setError('Vui lòng nhập họ và tên.');
@@ -265,16 +270,22 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
             return;
         }
         setSaving(true);
-        updateProfile({
-            fullName: form.fullName.trim(),
-            school: form.school.trim(),
-            industry: form.industry,
-            phone: form.phone || null,
-            phoneNumber: form.phone || null,
-            website: form.website.trim(),
-            bio: form.bio.trim(),
-        });
-        setSaving(false);
+        try {
+            await updateProfile({
+                fullName: form.fullName.trim(),
+                school: form.school.trim(),
+                industry: form.industry,
+                phone: form.phone || null,
+                phoneNumber: form.phone || null,
+                website: form.website.trim(),
+                bio: form.bio.trim(),
+                companyDescription: form.bio.trim(),
+            });
+        } catch (err) {
+            setError(err?.message || 'Không thể lưu thông tin hồ sơ.');
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (

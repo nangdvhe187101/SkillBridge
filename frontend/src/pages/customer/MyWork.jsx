@@ -43,9 +43,38 @@ export default function MyWork() {
   const [appsPage, setAppsPage] = useState(1);
   const appsPageSize = 5;
 
-  const activeWork = useMemo(() => state.myJobs.filter((j) =>
-    ['in_progress', 'submitted', 'revision_requested'].includes(j.status) && j.hiredApplicant
-  ), [state.myJobs]);
+  const activeWork = useMemo(() => {
+    // Lấy danh sách việc đang làm từ myApplications (cho tài khoản sinh viên từ API backend)
+    const appsWork = (state.myApplications || [])
+      .filter((a) => ['hired', 'submitted', 'revision_requested'].includes(a.status))
+      .map((a) => {
+        const matchingJob = (state.jobs || []).find((j) => j.id === a.jobId || (a.dashJobId && j.dashJobId === a.dashJobId));
+        const localJob = (state.myJobs || []).find((j) => j.id === a.jobId || (a.dashJobId && j.id === a.dashJobId));
+        return {
+          id: a.jobId || a.id,
+          jobId: a.jobId || a.id,
+          title: a.jobTitle || a.title || matchingJob?.title || 'Công việc',
+          budget: a.budget || matchingJob?.budget || 0,
+          status: a.status === 'hired' ? 'in_progress' : a.status,
+          deadlineAt: localJob?.deadlineAt || matchingJob?.deadlineAt,
+          revisionCount: localJob?.revisionCount || 0,
+          revisionLimit: localJob?.revisionLimit || 2,
+          deliverableFeedback: localJob?.deliverableFeedback || [],
+          emp: a.employerName || a.emp || matchingJob?.emp || 'Nhà tuyển dụng',
+        };
+      });
+
+    if (appsWork.length > 0) return appsWork;
+
+    // Fallback cho dữ liệu mock state.myJobs nếu có
+    return (state.myJobs || []).filter((j) =>
+      ['in_progress', 'submitted', 'revision_requested'].includes(j.status) && j.hiredApplicant
+    ).map((j) => ({
+      ...j,
+      jobId: j.id,
+      emp: state.jobs.find((pj) => pj.dashJobId === j.id)?.emp || 'Nhà tuyển dụng'
+    }));
+  }, [state.myApplications, state.myJobs, state.jobs]);
 
   const appsTotalPages = Math.ceil(state.myApplications.length / appsPageSize) || 1;
   const pagedApplications = useMemo(() => {
@@ -82,7 +111,8 @@ export default function MyWork() {
                   const isSubmitted = j.status === 'submitted';
                   const isRevision = j.status === 'revision_requested';
                   const isInProgress = j.status === 'in_progress';
-                  const empName = state.jobs.find((pj) => pj.dashJobId === j.id)?.emp || 'Nhà tuyển dụng';
+                  const empName = j.emp || 'Nhà tuyển dụng';
+                  const targetJobId = j.jobId || j.id;
                   return (
                     <div className="tx-row" style={{ flexWrap: 'wrap', alignItems: 'flex-start' }} key={j.id}>
                       <div className="tx-ic">{isRevision ? '✏️' : (isSubmitted ? '📤' : '🎯')}</div>
@@ -97,19 +127,19 @@ export default function MyWork() {
                         <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           {isRevision && (
                             <button className="btn btn-primary btn-sm" style={{ background: 'var(--coral)' }}
-                              onClick={() => openModal('deliverable', { jobId: j.id })}>
+                              onClick={() => openModal('deliverable', { jobId: targetJobId, job: j })}>
                               📤 Nộp lại ({j.revisionCount}/{j.revisionLimit} lần sửa)
                             </button>
                           )}
                           {isSubmitted && (
                             <button className="btn btn-outline btn-sm"
-                              onClick={() => openModal('deliverable', { jobId: j.id })}>
+                              onClick={() => openModal('deliverable', { jobId: targetJobId, job: j })}>
                               ✏️ Cập nhật bàn giao
                             </button>
                           )}
                           {isInProgress && (
                             <button className="btn btn-primary btn-sm"
-                              onClick={() => openModal('deliverable', { jobId: j.id })}>
+                              onClick={() => openModal('deliverable', { jobId: targetJobId, job: j })}>
                               📤 Nộp bàn giao / sản phẩm
                             </button>
                           )}
