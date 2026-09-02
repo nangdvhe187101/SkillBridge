@@ -4,6 +4,7 @@ import { useStore } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { uploadAvatar } from '../../api/userApi';
 import { getMyCvFiles, uploadCvFile, deleteCv } from '../../api/cvApi';
+import { downloadCandidateCv } from '../../utils/fileDownloader';
 import '../../styles/account-settings.css';
 
 const PHONE_REGEX = /^0\d{9}$/;
@@ -517,17 +518,14 @@ function CvManagerTab() {
                                 </div>
 
                                 <div className="cv-item-actions">
-                                    {cv.fileUrl && (
-                                        <a
-                                            href={cv.fileUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="btn btn-outline btn-sm"
-                                            style={{ fontSize: 12, textDecoration: 'none' }}
-                                        >
-                                            👁️ Xem / Tải
-                                        </a>
-                                    )}
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline btn-sm"
+                                        style={{ fontSize: 12 }}
+                                        onClick={() => downloadCandidateCv(cv.id, cv.fileName)}
+                                    >
+                                        👁️ Xem / Tải
+                                    </button>
                                     <button
                                         type="button"
                                         className="btn btn-outline btn-sm"

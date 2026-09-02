@@ -263,11 +263,6 @@ public class JobRepository : IJobRepository
                 }
             }
 
-            // Tăng category job_count đồng bộ
-            await _context.Categories
-                .Where(c => c.Id == job.CategoryId)
-                .ExecuteUpdateAsync(s => s.SetProperty(c => c.JobCount, c => c.JobCount + 1));
-
             await tx.CommitAsync();
             return job;
         }
@@ -341,11 +336,6 @@ public class JobRepository : IJobRepository
             _context.Jobs.Update(job);
             await _context.SaveChangesAsync();
 
-            // Giảm category job_count đồng bộ (không để âm)
-            await _context.Categories
-                .Where(c => c.Id == job.CategoryId && c.JobCount > 0)
-                .ExecuteUpdateAsync(s => s.SetProperty(c => c.JobCount, c => c.JobCount - 1));
-
             await tx.CommitAsync();
         }
         catch
@@ -364,10 +354,6 @@ public class JobRepository : IJobRepository
             job.UpdatedAt = DateTime.UtcNow;
             _context.Jobs.Update(job);
             await _context.SaveChangesAsync();
-
-            await _context.Categories
-                .Where(c => c.Id == job.CategoryId)
-                .ExecuteUpdateAsync(s => s.SetProperty(c => c.JobCount, c => c.JobCount + 1));
 
             await tx.CommitAsync();
         }
@@ -405,13 +391,6 @@ public class JobRepository : IJobRepository
             if (saved.Count > 0)
             {
                 _context.SavedJobs.RemoveRange(saved);
-            }
-
-            if (job.Status != "cancelled")
-            {
-                await _context.Categories
-                    .Where(c => c.Id == job.CategoryId && c.JobCount > 0)
-                    .ExecuteUpdateAsync(s => s.SetProperty(c => c.JobCount, c => c.JobCount - 1));
             }
 
             _context.Jobs.Remove(job);

@@ -67,4 +67,22 @@ public class DeliverableController : ControllerBase
         var result = await _deliverableService.ReviewDeliverableAsync(employerId, jobId, deliverableId, request);
         return Ok(result);
     }
+
+    [HttpGet("{deliverableId:int}/download")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> DownloadDeliverable(
+        int jobId,
+        int deliverableId,
+        [FromQuery] string type = "final",
+        System.Threading.CancellationToken cancellationToken = default)
+    {
+        var userId = User.GetRequiredUserId();
+        var result = await _deliverableService.GetDeliverableFileStreamAsync(userId, jobId, deliverableId, type, cancellationToken);
+        if (result == null)
+        {
+            return NotFound(new { message = "Không tìm thấy file sản phẩm bàn giao." });
+        }
+
+        return File(result.Value.Stream, result.Value.ContentType, result.Value.FileName);
+    }
 }

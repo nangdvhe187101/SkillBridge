@@ -18,13 +18,13 @@ public class CategoryService : ICategoryService
 
     public async Task<IReadOnlyList<CategoryResponseDto>> GetAllCategoriesAsync()
     {
-        var categories = await _categoryRepository.GetAllAsync();
-        return categories.Select(c => new CategoryResponseDto(
-            c.Id,
-            c.Name,
-            c.JobCount,
-            c.DefaultRevisionLimit,
-            c.PreviewStrategy
+        var items = await _categoryRepository.GetAllWithJobCountAsync();
+        return items.Select(item => new CategoryResponseDto(
+            item.Category.Id,
+            item.Category.Name,
+            item.JobCount,
+            item.Category.DefaultRevisionLimit,
+            item.Category.PreviewStrategy
         )).ToList();
     }
 }
