@@ -55,6 +55,9 @@ public class JobSummaryDto
     public bool IsSaved { get; set; }
     public int ApplicantCount { get; set; }
     public int AttachmentCount { get; set; }
+    public int? HiredApplicantId { get; set; }
+    public string? HiredStudentName { get; set; }
+    public decimal? EscrowAmount { get; set; }
 }
 
 public class JobDetailDto
@@ -81,6 +84,9 @@ public class JobDetailDto
     public string? EmployerWebsite { get; set; }
     public int EmployerReliabilityScore { get; set; }
     public bool IsSaved { get; set; }
+    public int? HiredApplicantId { get; set; }
+    public string? HiredStudentName { get; set; }
+    public decimal? EscrowAmount { get; set; }
     public List<JobRequirementDto> Requirements { get; set; } = new();
     public List<JobAttachmentDto> Attachments { get; set; } = new();
 }

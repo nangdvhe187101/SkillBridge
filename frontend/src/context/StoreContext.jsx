@@ -34,7 +34,11 @@ export function mapPublicJob(j) {
     deadlineAt: j.deadlineAt,
     attachmentCount: j.attachmentCount !== undefined ? j.attachmentCount : (j.attachments?.length || 0),
     req: [],
-    attachments: j.attachments || []
+    attachments: j.attachments || [],
+    hiredApplicantId: j.hiredApplicantId ?? null,
+    hiredApplicant: j.hiredStudentName || j.hiredApplicant || null,
+    hiredStudentName: j.hiredStudentName || j.hiredApplicant || null,
+    escrowAmount: j.escrowAmount !== undefined && j.escrowAmount !== null ? j.escrowAmount : null,
   };
 }
 
@@ -55,7 +59,11 @@ export function mapMyJob(j) {
     attachmentCount: j.attachmentCount !== undefined ? j.attachmentCount : (j.attachments?.length || 0),
     applicantsCount: j.applicantCount !== undefined ? j.applicantCount : (j.applicants?.length || 0),
     applicants: j.applicants || [],
-    attachments: j.attachments || []
+    attachments: j.attachments || [],
+    hiredApplicantId: j.hiredApplicantId ?? null,
+    hiredApplicant: j.hiredStudentName || j.hiredApplicant || null,
+    hiredStudentName: j.hiredStudentName || j.hiredApplicant || null,
+    escrowAmount: j.escrowAmount !== undefined && j.escrowAmount !== null ? j.escrowAmount : null,
   };
 }
 
@@ -213,11 +221,37 @@ function reducer(state, action) {
     }
 
     case 'SET_JOBS': {
-      return { ...state, jobs: action.jobs || [] };
+      const incoming = action.jobs || [];
+      const jobs = incoming.map((newJ) => {
+        const oldJ = (state.jobs || []).find((x) => String(x.id) === String(newJ.id));
+        if (!oldJ) return newJ;
+        return {
+          ...oldJ,
+          ...newJ,
+          hiredApplicant: newJ.hiredApplicant || oldJ.hiredApplicant || null,
+          hiredApplicantId: newJ.hiredApplicantId || oldJ.hiredApplicantId || null,
+          hiredStudentName: newJ.hiredStudentName || oldJ.hiredStudentName || null,
+          escrowAmount: newJ.escrowAmount ?? oldJ.escrowAmount ?? null,
+        };
+      });
+      return { ...state, jobs };
     }
 
     case 'SET_MY_JOBS': {
-      return { ...state, myJobs: action.myJobs || [] };
+      const incoming = action.myJobs || [];
+      const myJobs = incoming.map((newJ) => {
+        const oldJ = (state.myJobs || []).find((x) => String(x.id) === String(newJ.id));
+        if (!oldJ) return newJ;
+        return {
+          ...oldJ,
+          ...newJ,
+          hiredApplicant: newJ.hiredApplicant || oldJ.hiredApplicant || null,
+          hiredApplicantId: newJ.hiredApplicantId || oldJ.hiredApplicantId || null,
+          hiredStudentName: newJ.hiredStudentName || oldJ.hiredStudentName || null,
+          escrowAmount: newJ.escrowAmount ?? oldJ.escrowAmount ?? null,
+        };
+      });
+      return { ...state, myJobs };
     }
 
     case 'SET_SAVED_JOB_IDS': {
@@ -292,12 +326,12 @@ function reducer(state, action) {
     }
 
     case 'HIRE': {
-      const { jobId, applicantIdx, applicantName, days, method, applicant } = action.payload;
+      const { jobId, applicantIdx, applicantName, days, method, applicant, hiredStudentId, escrowAmount } = action.payload;
       const job = state.myJobs.find((j) => String(j.id) === String(jobId)) || { id: jobId, title: 'Công việc', budget: 150000, applicants: [] };
       const selectedName = applicantName || applicant?.name || (job.applicants && job.applicants[applicantIdx]?.name) || 'Sinh viên';
       const rate = commissionRate(state);
       const commission = Math.round((job.budget || 150000) * rate);
-      const hireAmount = (job.budget || 150000) + commission;
+      const hireAmount = escrowAmount || ((job.budget || 150000) + commission);
       if (method === 'wallet' && state.balance < hireAmount) return state;
 
       const updatedApplicants = (job.applicants || []).map((app) =>
@@ -307,6 +341,8 @@ function reducer(state, action) {
         ...job,
         status: 'in_progress',
         hiredApplicant: selectedName,
+        hiredStudentName: selectedName,
+        hiredApplicantId: hiredStudentId || applicant?.studentId || job.hiredApplicantId || null,
         hiredApplicantIsMe: false,
         commissionAmount: commission,
         escrowAmount: hireAmount,
@@ -922,10 +958,19 @@ export function StoreProvider({ children }) {
       hire: async (payload) => {
         const { jobId, applicationId, applicant, days } = payload;
         const appId = applicationId || applicant?.applicationId || applicant?.id;
+        let hireResult = null;
         if (jobId && appId && !isNaN(Number(jobId)) && !isNaN(Number(appId))) {
-          await applicationApi.hireApplicant(Number(jobId), Number(appId), days || 3);
+          hireResult = await applicationApi.hireApplicant(Number(jobId), Number(appId), days || 3);
         }
-        dispatch({ type: 'HIRE', payload });
+        dispatch({
+          type: 'HIRE',
+          payload: {
+            ...payload,
+            applicantName: hireResult?.hiredStudentName || payload.applicantName || payload.applicant?.name,
+            hiredStudentId: hireResult?.hiredStudentId,
+            escrowAmount: hireResult?.escrowAmount
+          }
+        });
         await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
         showToast('Đã thuê ứng viên và ký quỹ thành công!', '🤝');
       },

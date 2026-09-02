@@ -130,6 +130,10 @@ export default function JobApplicants() {
     status: apiJob.status || localJob?.status || 'open',
     deadlineAt: apiJob.deadlineAt || localJob?.deadlineAt,
     posted: apiJob.postedAt ? new Date(apiJob.postedAt).toLocaleDateString('vi-VN') : (localJob?.posted || 'Vừa đăng'),
+    hiredApplicantId: apiJob.hiredApplicantId ?? localJob?.hiredApplicantId,
+    hiredApplicant: apiJob.hiredStudentName || apiJob.hiredApplicant || localJob?.hiredApplicant,
+    hiredStudentName: apiJob.hiredStudentName || localJob?.hiredStudentName,
+    escrowAmount: apiJob.escrowAmount ?? localJob?.escrowAmount,
     deliverable: latestDeliverable || localJob?.deliverable,
     deliverableFeedback: deliverableFeedbackList.length > 0 ? deliverableFeedbackList : (localJob?.deliverableFeedback || []),
   } : localJob;
@@ -187,13 +191,13 @@ export default function JobApplicants() {
         cvFileName: a.cvFileName,
         cvFileUrl: a.cvFileUrl,
         cvLabel: a.cvLabel,
-        isHired: a.status === 'hired' || job?.hiredApplicant === a.studentName,
+        isHired: a.status === 'hired' || (job?.hiredApplicantId && a.studentId === job.hiredApplicantId) || job?.hiredApplicant === a.studentName || job?.hiredApplicant === a.name,
         rejected: a.status === 'rejected',
       }));
     }
     return (job?.applicants || []).map((a) => ({
       ...a,
-      isHired: job?.hiredApplicant === a.name,
+      isHired: (job?.hiredApplicantId && a.studentId === job.hiredApplicantId) || job?.hiredApplicant === a.name || job?.hiredApplicant === a.studentName,
     }));
   }, [apiApplicants, job]);
 

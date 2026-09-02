@@ -207,6 +207,7 @@ public class ApplicationService : IApplicationService
 
                 // Cập nhật trạng thái công việc
                 job.HiredApplicantId = application.StudentId;
+                job.EscrowAmount = job.Budget;
                 job.Status = "in_progress";
                 job.DeadlineAt = DateTime.UtcNow.AddDays(durationDays);
                 job.UpdatedAt = DateTime.UtcNow;

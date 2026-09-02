@@ -109,6 +109,10 @@ export default function JobDetail() {
     industry: apiJob.employerIndustry || '',
     reliability: apiJob.employerReliabilityScore || 95,
     dashJobId: apiJob.dashJobId,
+    hiredApplicantId: apiJob.hiredApplicantId,
+    hiredApplicant: apiJob.hiredStudentName || apiJob.hiredApplicant || null,
+    hiredStudentName: apiJob.hiredStudentName || apiJob.hiredApplicant || null,
+    escrowAmount: apiJob.escrowAmount !== undefined && apiJob.escrowAmount !== null ? apiJob.escrowAmount : null,
     attachments: Array.isArray(apiJob.attachments) ? apiJob.attachments : []
   } : (localJob ? {
     ...localJob,
@@ -118,7 +122,7 @@ export default function JobDetail() {
     attachments: Array.isArray(localJob.attachments) ? localJob.attachments : []
   } : null);
 
-  const dashJob = j?.dashJobId ? (state.myJobs || []).find((dj) => dj.id === j.dashJobId) : null;
+  const dashJob = (j?.dashJobId ? (state.myJobs || []).find((dj) => dj.id === j.dashJobId) : null) || (state.myJobs || []).find((dj) => String(dj.id) === String(jobId)) || null;
 
   const isLoggedIn = !!state.currentUser;
   const isStudent = isLoggedIn && state.currentUser.roleCode === 'student';
