@@ -148,12 +148,13 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
   const [method, setMethod] = useState(() => (state.balance >= total ? 'wallet' : 'bank'));
   const [days, setDays] = useState(3);
   const [errorMsg, setErrorMsg] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   if (!job || !a) return null;
 
   const isWalletInsufficient = method === 'wallet' && state.balance < total;
 
-  const confirm = () => {
+  const confirm = async () => {
     setErrorMsg('');
     if (!days || days <= 0) {
       setErrorMsg('Vui lòng nhập số ngày hoàn thành hợp lệ.');
@@ -163,16 +164,23 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
       setErrorMsg(`Số dư ví hiện tại (${fmtVND(state.balance)}) không đủ để ký quỹ ${fmtVND(total)}. Vui lòng nạp thêm hoặc chọn phương thức thanh toán khác.`);
       return;
     }
-    hire({
-      jobId: job.id,
-      applicantIdx,
-      applicantName: a.name,
-      applicant: a,
-      applicationId: a.applicationId || a.id,
-      days: Number(days),
-      method
-    });
-    onClose();
+    try {
+      setSubmitting(true);
+      await hire({
+        jobId: job.id,
+        applicantIdx,
+        applicantName: a.name,
+        applicant: a,
+        applicationId: a.applicationId || a.id,
+        days: Number(days),
+        method
+      });
+      onClose();
+    } catch (err) {
+      setErrorMsg(err?.message || 'Có lỗi xảy ra khi thuê ứng viên.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleTopup = () => {
@@ -210,8 +218,10 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
       )}
 
       <div className="modal-actions">
-        <button className="btn btn-primary" onClick={confirm}>Xác nhận thuê & ký quỹ</button>
-        <button className="btn btn-outline" onClick={onClose}>Hủy</button>
+        <button className="btn btn-primary" disabled={submitting} onClick={confirm}>
+          {submitting ? 'Đang xử lý...' : 'Xác nhận thuê & ký quỹ'}
+        </button>
+        <button className="btn btn-outline" disabled={submitting} onClick={onClose}>Hủy</button>
       </div>
     </ModalShell>
   );

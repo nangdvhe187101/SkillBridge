@@ -551,14 +551,22 @@ function JobsTab({ state, navigate, openModal, goToPostTab }) {
   const handleCloseJob = async (e, job) => {
     e.stopPropagation();
     if (await confirm(`Bạn có muốn đóng tin tuyển dụng "${job.title}" không? Sinh viên sẽ không thể nộp hồ sơ vào tin này nữa.`, { danger: true, confirmLabel: 'Đóng tin' })) {
-      await cancelJob(job.id);
+      try {
+        await cancelJob(job.id);
+      } catch {
+        // Error toast already handled by cancelJob
+      }
     }
   };
 
   const handleReopenJob = async (e, job) => {
     e.stopPropagation();
     if (await confirm(`Mở lại tin tuyển dụng "${job.title}" để tiếp tục nhận hồ sơ?`, { confirmLabel: 'Mở lại tin' })) {
-      await reopenJob(job.id);
+      try {
+        await reopenJob(job.id);
+      } catch {
+        // Error toast already handled by reopenJob
+      }
     }
   };
 

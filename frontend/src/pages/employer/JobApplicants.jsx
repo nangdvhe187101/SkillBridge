@@ -265,15 +265,23 @@ export default function JobApplicants() {
       ? `Xác nhận hủy công việc "${job.title}"? Số tiền ký quỹ ${fmtVND(job.escrowAmount || job.budget)} sẽ được hoàn lại vào ví của bạn.`
       : `Xác nhận đóng tin tuyển dụng "${job.title}"? Ứng viên sẽ không thể nộp hồ sơ vào tin này nữa.`;
     if (await confirm(msg, { danger: true, confirmLabel: wasEscrowed ? 'Hủy việc & Hoàn tiền' : 'Đóng tin tuyển dụng' })) {
-      await cancelJob(job.id);
-      navigate('/employer/jobs');
+      try {
+        await cancelJob(job.id);
+        navigate('/employer/jobs');
+      } catch {
+        // Error toast already handled by cancelJob
+      }
     }
   };
 
   const handleReopen = async () => {
     if (await confirm(`Bạn có muốn mở lại tin tuyển dụng "${job.title}" để tiếp tục nhận hồ sơ từ ứng viên không?`, { confirmLabel: 'Mở lại tin' })) {
-      await reopenJob(job.id);
-      loadData();
+      try {
+        await reopenJob(job.id);
+        loadData();
+      } catch {
+        // Error toast already handled by reopenJob
+      }
     }
   };
 
@@ -283,8 +291,12 @@ export default function JobApplicants() {
       return;
     }
     if (await confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn tin tuyển dụng "${job.title}" khỏi hệ thống? Hành động này không thể hoàn tác.`, { danger: true, confirmLabel: 'Xóa tin vĩnh viễn' })) {
-      await deleteJob(job.id);
-      navigate('/employer/jobs');
+      try {
+        await deleteJob(job.id);
+        navigate('/employer/jobs');
+      } catch {
+        // Error toast already handled by deleteJob
+      }
     }
   };
 
