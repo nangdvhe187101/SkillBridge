@@ -50,8 +50,7 @@ export default function JobDetail() {
   const { id } = useParams();
   const jobId = Number(id);
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const { state, applyJobAsync, toggleSaveJob, toggleSaveJobAsync, uploadCvAsync, studentAbandonJob, openChatWithPerson } = useStore();
+  const { state, applyJobAsync, toggleSaveJobAsync, uploadCvAsync, openChatWithPerson } = useStore();
   const { openModal } = useModal();
   const confirm = useConfirm();
   const { showToast } = useToast();
