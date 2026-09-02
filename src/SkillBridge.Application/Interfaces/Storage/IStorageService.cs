@@ -19,5 +19,7 @@ public interface IStorageService
 
     Task<string> GetPresignedUrlAsync(string fileKey, TimeSpan expiry);
 
+    string GetPublicUrl(string? fileKeyOrUrl);
+
     Task<(Stream Stream, string ContentType, string FileName)?> DownloadFileAsync(string fileKey, CancellationToken cancellationToken = default);
 }

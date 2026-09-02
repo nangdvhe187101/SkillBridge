@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import ModalShell from '../../components/modals/ModalShell';
@@ -6,6 +6,7 @@ import { useStore, fmtVND } from '../../context/StoreContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { downloadJobAttachment } from '../../utils/fileDownloader';
+import { uploadAvatar } from '../../api/userApi';
 
 function tierFromScore(score) {
   if (score >= 90) return 'gold';
@@ -29,7 +30,7 @@ const SAMPLE_PORTFOLIO = [
 ];
 
 export default function Profile() {
-  const { state, setCv, removeCv, addCvFile, removeCvFile, addEmployerDocs, removeEmployerDoc, addPortfolio, removePortfolio } = useStore();
+  const { state, dispatch, setCv, removeCv, addCvFile, removeCvFile, addEmployerDocs, removeEmployerDoc, addPortfolio, removePortfolio, updateProfile } = useStore();
   const { showToast } = useToast();
   const confirm = useConfirm();
   const navigate = useNavigate();
@@ -38,8 +39,25 @@ export default function Profile() {
   const portfolioInputRef = useRef();
   const avatarInputRef = useRef();
 
-  const [avatarUrl, setAvatarUrl] = useState(localStorage.getItem('avatarUrl') || null);
+  const isEmployer = state.role === 'employer';
+  const rawAvatarUrl = state.currentUser?.avatarUrl || null;
+  const resolveAvatarUrl = (url) => {
+    if (!url) return null;
+    if (url.startsWith('http://') || url.startsWith('https://')) return url;
+    return `http://localhost:5004/api/storage/file?key=${encodeURIComponent(url)}`;
+  };
+  const avatarUrl = resolveAvatarUrl(rawAvatarUrl);
+  const [avatarError, setAvatarError] = useState(false);
   const [selectedPf, setSelectedPf] = useState(null);
+
+  useEffect(() => {
+    // Dọn dẹp key avatarUrl cũ không phân biệt tài khoản trong localStorage
+    localStorage.removeItem('avatarUrl');
+  }, []);
+
+  useEffect(() => {
+    setAvatarError(false);
+  }, [avatarUrl]);
 
   const tier = tierFromScore(state.myReliability);
   const completedJobs = state.myApplications.filter((a) => a.status === 'completed').length;
@@ -48,16 +66,24 @@ export default function Profile() {
     ? (receivedReviews.reduce((s, r) => s + r.stars, 0) / receivedReviews.length).toFixed(1)
     : '5.0';
 
-  const onAvatarChange = (e) => {
-    const f = e.target.files[0];
+  const onAvatarChange = async (e) => {
+    const f = e.target.files?.[0];
     if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAvatarUrl(reader.result);
-      localStorage.setItem('avatarUrl', reader.result);
+    try {
+      showToast('Đang tải lên ảnh đại diện...', '⏳');
+      const res = await uploadAvatar(f);
+      setAvatarError(false);
+      if (dispatch) {
+        dispatch({ type: 'UPDATE_PROFILE', patch: { avatarUrl: res.avatarUrl } });
+      } else if (updateProfile) {
+        await updateProfile({ avatarUrl: res.avatarUrl });
+      }
       showToast('Đã cập nhật ảnh đại diện mới!', '📸');
-    };
-    reader.readAsDataURL(f);
+    } catch (err) {
+      showToast(err?.message || 'Không thể tải lên ảnh đại diện.', '⚠️');
+    } finally {
+      if (e.target) e.target.value = '';
+    }
   };
 
   const onCvChange = (e) => {
@@ -107,34 +133,57 @@ export default function Profile() {
               style={{
                 cursor: 'pointer',
                 position: 'relative',
-                backgroundImage: avatarUrl ? `url(${avatarUrl})` : undefined,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 fontSize: 32,
                 fontWeight: 700,
                 color: '#fff',
+                backgroundColor: isEmployer ? '#0284c7' : '#7c3aed',
+                borderRadius: '22px',
+                width: 88,
+                height: 88,
+                overflow: 'hidden',
+                flexShrink: 0
               }}
               title="Bấm để đổi ảnh đại diện"
               onClick={() => avatarInputRef.current?.click()}
             >
-              {!avatarUrl && currentName.charAt(0).toUpperCase()}
+              {avatarUrl && !avatarError ? (
+                <img
+                  src={avatarUrl}
+                  alt={currentName}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  onError={(e) => {
+                    if (!e.currentTarget.dataset.retried && rawAvatarUrl) {
+                      e.currentTarget.dataset.retried = 'true';
+                      const key = rawAvatarUrl.includes('avatars/')
+                        ? rawAvatarUrl.substring(rawAvatarUrl.indexOf('avatars/'))
+                        : rawAvatarUrl;
+                      e.currentTarget.src = `http://localhost:5004/api/storage/file?key=${encodeURIComponent(key)}`;
+                      return;
+                    }
+                    setAvatarError(true);
+                  }}
+                />
+              ) : (
+                <span>{currentName.charAt(0).toUpperCase()}</span>
+              )}
               <div
                 style={{
                   position: 'absolute',
-                  bottom: 0,
-                  right: 0,
-                  background: 'var(--primary)',
+                  bottom: 2,
+                  right: 2,
+                  background: 'var(--primary, #0ea5e9)',
                   borderRadius: '50%',
-                  width: 26,
-                  height: 26,
+                  width: 24,
+                  height: 24,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 13,
+                  fontSize: 12,
                   border: '2px solid #fff',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                 }}
               >
                 📷
