@@ -222,52 +222,6 @@ function reducer(state, action) {
       return { ...state, myApplications: apps, appliedJobIds };
     }
 
-    case 'SUBMIT_JOB_FORM': {
-      const { title, cat, budget, desc, req, urgent, attachments, editingId } = action.payload;
-      const fileList = attachments || [];
-      if (editingId) {
-        const myJobs = state.myJobs.map((j) => (j.id === editingId ? { ...j, title, cat, budget, desc, req: req || j.req, urgent, attachments: fileList } : j));
-        const jobs = state.jobs.map((j) => (j.dashJobId === editingId ? { ...j, title, cat, budget, desc, req: req || j.req, urgent, attachments: fileList } : j));
-        return { ...state, myJobs, jobs, editingJobId: null };
-      }
-      const newId = state.nextJobId;
-      const newDashJob = {
-        id: newId,
-        title,
-        cat,
-        budget,
-        desc,
-        req: req || ['Hoàn thành đúng deadline', 'Giao sản phẩm qua hệ thống SkillBridge'],
-        urgent,
-        status: 'open',
-        posted: 'Vừa đăng',
-        applicants: [],
-        attachments: fileList,
-      };
-      const newPublicJob = {
-        id: 1000 + newId,
-        title,
-        emp: 'Bạn (Nhà tuyển dụng)',
-        loc: 'TP.HCM',
-        cat,
-        budget,
-        urgent,
-        time: 'Vừa đăng',
-        desc,
-        req: req || ['Hoàn thành đúng deadline', 'Giao sản phẩm qua hệ thống SkillBridge'],
-        status: 'open',
-        dashJobId: newId,
-        attachments: fileList,
-      };
-      return {
-        ...state,
-        myJobs: [newDashJob, ...state.myJobs],
-        jobs: [newPublicJob, ...state.jobs],
-        nextJobId: state.nextJobId + 1,
-        editingJobId: null,
-      };
-    }
-
     case 'START_EDIT_JOB':
       return { ...state, editingJobId: action.id };
     case 'CLEAR_EDIT_JOB':
@@ -283,40 +237,10 @@ function reducer(state, action) {
     }
 
     case 'CANCEL_JOB': {
-      const job = state.myJobs.find((j) => j.id === action.id);
-      if (!job) return state;
-      const wasEscrowed = ['in_progress', 'submitted', 'revision_requested'].includes(job.status);
-      let { balance, transactions, myReliability, myApplications, notifications } = state;
-      if (wasEscrowed) {
-        const refund = job.escrowAmount || job.budget;
-        balance += refund;
-        transactions = addTxTo(transactions, 'escrow_refund', 'Hoàn tiền ký quỹ do hủy việc · ' + job.title, refund, 1);
-        if (job.hiredApplicantIsMe) {
-          myReliability = Math.max(0, myReliability - 8);
-          myApplications = myApplications.map((a) => (a.dashJobId === job.id ? { ...a, status: 'cancelled' } : a));
-          notifications = addNotifTo(notifications, '⚠️', `Công việc "${job.title}" đã bị nhà tuyển dụng hủy giữa chừng.`, '/mywork');
-        }
-        notifications = addNotifTo(notifications, '🚫', `Bạn đã hủy công việc "${job.title}". ${refund.toLocaleString('vi-VN')}đ đã hoàn lại vào ví.`, '/dashboard');
-      } else {
-        notifications = addNotifTo(notifications, '🚫', `Bạn đã hủy tin tuyển dụng "${job.title}".`, '/dashboard');
-      }
       const myJobs = state.myJobs.map((j) => (j.id === action.id ? { ...j, status: 'cancelled' } : j));
       const jobs = state.jobs.map((j) => (j.dashJobId === action.id ? { ...j, status: 'cancelled' } : j));
-      return { ...state, balance, transactions, myReliability, myApplications, notifications, myJobs, jobs };
-    }
-
-    case 'STUDENT_ABANDON_JOB': {
-      const job = state.myJobs.find((j) => j.id === action.id);
-      if (!job) return state;
-      const refund = job.escrowAmount || job.budget;
-      const balance = state.balance + refund;
-      const transactions = addTxTo(state.transactions, 'escrow_refund', 'Hoàn tiền ký quỹ (sinh viên bỏ ngang) · ' + job.title, refund, 1);
-      const myReliability = Math.max(0, state.myReliability - 15);
-      const myJobs = state.myJobs.map((j) => (j.id === action.id ? { ...j, status: 'cancelled' } : j));
-      const jobs = state.jobs.map((j) => (j.dashJobId === action.id ? { ...j, status: 'cancelled' } : j));
-      const myApplications = state.myApplications.map((a) => (a.dashJobId === action.id ? { ...a, status: 'cancelled' } : a));
-      const notifications = addNotifTo(state.notifications, '🚫', `Bạn đã bỏ ngang công việc "${job.title}". Điểm uy tín hiện tại: ${myReliability}/100.`, '/mywork');
-      return { ...state, balance, transactions, myReliability, myJobs, jobs, myApplications, notifications };
+      const myApplications = state.myApplications.map((a) => (a.jobId === action.id || a.dashJobId === action.id ? { ...a, status: 'cancelled' } : a));
+      return { ...state, myJobs, jobs, myApplications };
     }
 
     case 'APPLY_JOB': {
@@ -789,8 +713,8 @@ export function StoreProvider({ children }) {
     }
   }, []);
 
+  // Tải danh mục và danh sách công việc công khai (không cần đăng nhập)
   useEffect(() => {
-    // Tải danh sách Categories từ API
     jobApi.getCategories()
       .then((cats) => {
         dispatch({ type: 'SET_CATEGORIES', categories: cats });
@@ -799,16 +723,23 @@ export function StoreProvider({ children }) {
         console.error('Không thể tải danh mục từ backend:', err);
       });
 
-    // Tải danh sách Jobs công khai từ backend
     refreshJobs();
+  }, [refreshJobs]);
+
+  // Tải dữ liệu cá nhân theo role sau khi quá trình xác thực khởi tạo (refresh token) hoàn tất
+  useEffect(() => {
+    // Tránh race condition: nếu đang refresh-token khởi động hoặc chưa đăng nhập thì không tải API auth
+    if (state.isInitializing || !state.currentUser) {
+      return;
+    }
 
     // Nếu là employer, tải danh sách myJobs từ backend
-    if (state.currentUser?.roleCode === 'employer') {
+    if (state.currentUser.roleCode === 'employer') {
       refreshMyJobs();
     }
 
     // Nếu là student đã đăng nhập, tải savedJobIds, cvFiles, myApplications từ API
-    if (state.currentUser?.roleCode === 'student') {
+    if (state.currentUser.roleCode === 'student') {
       jobApi.getSavedJobIds()
         .then((ids) => {
           dispatch({ type: 'SET_SAVED_JOB_IDS', ids });
@@ -817,7 +748,6 @@ export function StoreProvider({ children }) {
 
       cvApi.getMyCvFiles()
         .then((files) => {
-          // Chuẩn hóa định dạng hiển thị nếu cần
           const formatted = (files || []).map(c => ({
             id: c.id,
             name: c.fileName,
@@ -840,7 +770,7 @@ export function StoreProvider({ children }) {
         })
         .catch((err) => console.error('Lỗi tải danh sách ứng tuyển:', err));
     }
-  }, [state.currentUser, refreshJobs, refreshMyJobs]);
+  }, [state.currentUser, state.isInitializing, refreshMyJobs]);
 
   useEffect(() => {
     const id = setInterval(() => dispatch({ type: 'CHECK_DEADLINES' }), 30000);
@@ -857,9 +787,8 @@ export function StoreProvider({ children }) {
     };
   }, []);
 
-  const actions = useMemo(
-    () => ({
-      submitJobForm: (payload) => dispatch({ type: 'SUBMIT_JOB_FORM', payload }),
+  const actions = useMemo(() => {
+    const act = {
       refreshJobs,
       refreshMyJobs,
       createJobPost: async (jobData) => {
@@ -874,7 +803,7 @@ export function StoreProvider({ children }) {
         showToast('Cập nhật tin tuyển dụng thành công!', '✓');
         return result;
       },
-      cancelJobPost: async (id) => {
+      cancelJob: async (id) => {
         try {
           const result = await jobApi.cancelJob(id);
           dispatch({ type: 'CANCEL_JOB', id });
@@ -883,10 +812,10 @@ export function StoreProvider({ children }) {
           return result;
         } catch (err) {
           dispatch({ type: 'CANCEL_JOB', id });
-          showToast('Đã đóng tin tuyển dụng.', '🚫');
+          showToast(err?.message || 'Đã đóng tin tuyển dụng.', '🚫');
         }
       },
-      deleteJobPost: async (id) => {
+      deleteJob: async (id) => {
         try {
           const result = await jobApi.deleteJob(id);
           dispatch({ type: 'DELETE_JOB', id });
@@ -895,9 +824,23 @@ export function StoreProvider({ children }) {
           return result;
         } catch (err) {
           dispatch({ type: 'DELETE_JOB', id });
-          showToast('Đã xóa tin tuyển dụng.', '🗑');
+          showToast(err?.message || 'Đã xóa tin tuyển dụng.', '🗑');
         }
       },
+      reopenJob: async (id) => {
+        try {
+          const result = await jobApi.reopenJob(id);
+          dispatch({ type: 'REOPEN_JOB', id });
+          await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
+          showToast('Đã mở lại tin tuyển dụng thành công!', '🎉');
+          return result;
+        } catch (err) {
+          dispatch({ type: 'REOPEN_JOB', id });
+          showToast(err?.message || 'Đã mở lại tin tuyển dụng.', '🎉');
+        }
+      },
+      startEditJob: (id) => dispatch({ type: 'START_EDIT_JOB', id }),
+      clearEditJob: () => dispatch({ type: 'CLEAR_EDIT_JOB' }),
       toggleSaveJobAsync: async (jobId) => {
         const isSaved = (state.savedJobIds || []).includes(jobId);
         if (isSaved) {
@@ -910,55 +853,15 @@ export function StoreProvider({ children }) {
           showToast('Đã lưu công việc vào mục yêu thích!', '❤️');
         }
       },
-      startEditJob: (id) => dispatch({ type: 'START_EDIT_JOB', id }),
-      clearEditJob: () => dispatch({ type: 'CLEAR_EDIT_JOB' }),
-      deleteJob: async (id) => {
-        try {
-          await jobApi.deleteJob(id);
-        } catch (err) {
-          console.warn("Delete job API fallback to local:", err);
-        }
-        dispatch({ type: 'DELETE_JOB', id });
-        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
-        showToast('Đã xóa tin tuyển dụng.', '🗑');
-      },
-      cancelJob: async (id) => {
-        try {
-          await jobApi.cancelJob(id);
-        } catch (err) {
-          console.warn("Cancel job API fallback to local:", err);
-        }
-        dispatch({ type: 'CANCEL_JOB', id });
-        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
-        showToast('Đã đóng tin tuyển dụng thành công.', '🚫');
-      },
-      reopenJob: async (id) => {
-        try {
-          await jobApi.reopenJob(id);
-        } catch (err) {
-          console.warn("Reopen job API fallback to local:", err);
-        }
-        dispatch({ type: 'REOPEN_JOB', id });
-        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
-        showToast('Đã mở lại tin tuyển dụng thành công!', '🎉');
-      },
-      reopenJobPost: async (id) => {
-        try {
-          const result = await jobApi.reopenJob(id);
-          dispatch({ type: 'REOPEN_JOB', id });
-          await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
-          showToast('Đã mở lại tin tuyển dụng thành công!', '🎉');
-          return result;
-        } catch (err) {
-          dispatch({ type: 'REOPEN_JOB', id });
-          showToast('Đã mở lại tin tuyển dụng.', '🎉');
-        }
-      },
-      studentAbandonJob: (id) => dispatch({ type: 'STUDENT_ABANDON_JOB', id }),
-      applyJob: (id) => dispatch({ type: 'APPLY_JOB', id }),
       applyJobAsync: async (jobId, cvFileId, coverLetter = '') => {
         const result = await applicationApi.applyJob(jobId, cvFileId, coverLetter);
-        dispatch({ type: 'APPLY_JOB', id: jobId });
+        const apps = await applicationApi.getMyApplications().catch(() => null);
+        if (apps) {
+          const list = Array.isArray(apps) ? apps : (apps?.items || []);
+          dispatch({ type: 'SET_MY_APPLICATIONS', applications: list });
+        } else {
+          dispatch({ type: 'APPLY_JOB', id: jobId });
+        }
         showToast('Nộp đơn ứng tuyển thành công!', '🚀');
         return result;
       },
@@ -996,7 +899,6 @@ export function StoreProvider({ children }) {
         dispatch({ type: 'SET_CV_FILES', files: (state.cvFiles || []).filter(c => c.id !== id) });
         showToast('Đã xóa CV.', '🗑️');
       },
-      toggleSaveJob: (jobId) => dispatch({ type: 'TOGGLE_SAVE_JOB', jobId }),
       hire: async (payload) => {
         const { jobId, applicationId, applicant, days } = payload;
         const appId = applicationId || applicant?.applicationId || applicant?.id;
@@ -1106,9 +1008,16 @@ export function StoreProvider({ children }) {
         dispatch({ type: 'UPDATE_ADS_SETTINGS', payload: patch });
         showToast('Đã lưu cài đặt chiến dịch quảng cáo.', '📢');
       }
-    }),
-    [showToast, state.savedJobIds, refreshJobs, refreshMyJobs]
-  );
+    };
+    act.cancelJobPost = act.cancelJob;
+    act.deleteJobPost = act.deleteJob;
+    act.reopenJobPost = act.reopenJob;
+    act.applyJob = act.applyJobAsync;
+    act.toggleSaveJob = act.toggleSaveJobAsync;
+    return act;
+  },
+  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, state.cvFiles, state.myApplications]
+);
 
   const value = useMemo(() => ({ state, dispatch, ...actions }), [state, actions]);
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;

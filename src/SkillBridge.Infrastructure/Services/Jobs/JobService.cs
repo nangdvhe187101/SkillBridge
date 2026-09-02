@@ -196,6 +196,18 @@ public class JobService : IJobService
             throw new BusinessException("Không tìm thấy công việc để lưu.");
         }
 
+        if (job.EmployerId == studentId)
+        {
+            throw new BusinessException("Bạn không thể lưu công việc do chính mình đăng.");
+        }
+
+        var savedJobIds = await _jobRepository.GetSavedJobIdsAsync(studentId);
+        if (savedJobIds.Contains(jobId))
+        {
+            // Đã lưu trước đó -> hoàn thành an toàn (idempotent)
+            return;
+        }
+
         await _jobRepository.SaveJobAsync(studentId, jobId);
     }
 
