@@ -41,6 +41,7 @@ public class JobRepository : IJobRepository
                 Job = j,
                 CategoryName = j.Category.Name,
                 Employer = j.Employer,
+                HiredStudentName = j.HiredApplicant != null ? j.HiredApplicant.FullName : null,
                 Requirements = j.JobRequirements.OrderBy(r => r.SortOrder).ToList(),
                 Attachments = j.Attachments.OrderBy(a => a.CreatedAt).ToList(),
                 IsSaved = currentUserId.HasValue && j.SavedJobs.Any(s => s.StudentId == currentUserId.Value)
@@ -73,6 +74,9 @@ public class JobRepository : IJobRepository
             EmployerWebsite = job.Employer.Website,
             EmployerReliabilityScore = job.Employer.ReliabilityScore,
             IsSaved = job.IsSaved,
+            HiredApplicantId = job.Job.HiredApplicantId,
+            HiredStudentName = job.HiredStudentName,
+            EscrowAmount = job.Job.EscrowAmount ?? (job.Job.HiredApplicantId.HasValue ? job.Job.Budget : null),
             Requirements = job.Requirements.Select(r => new JobRequirementDto
             {
                 Id = r.Id,
@@ -171,7 +175,10 @@ public class JobRepository : IJobRepository
                 EmployerAvatar = j.Employer.AvatarUrl,
                 IsSaved = currentUserId.HasValue && j.SavedJobs.Any(s => s.StudentId == currentUserId.Value),
                 ApplicantCount = j.Applications.Count(),
-                AttachmentCount = j.Attachments.Count()
+                AttachmentCount = j.Attachments.Count(),
+                HiredApplicantId = j.HiredApplicantId,
+                HiredStudentName = j.HiredApplicant != null ? j.HiredApplicant.FullName : null,
+                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null)
             })
             .ToListAsync();
 
@@ -229,7 +236,10 @@ public class JobRepository : IJobRepository
                 EmployerAvatar = j.Employer.AvatarUrl,
                 IsSaved = false,
                 ApplicantCount = j.Applications.Count(),
-                AttachmentCount = j.Attachments.Count()
+                AttachmentCount = j.Attachments.Count(),
+                HiredApplicantId = j.HiredApplicantId,
+                HiredStudentName = j.HiredApplicant != null ? j.HiredApplicant.FullName : null,
+                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null)
             })
             .ToListAsync();
 
@@ -485,7 +495,10 @@ public class JobRepository : IJobRepository
                 EmployerName = j.Employer.FullName,
                 EmployerAvatar = j.Employer.AvatarUrl,
                 IsSaved = true,
-                AttachmentCount = j.Attachments.Count()
+                AttachmentCount = j.Attachments.Count(),
+                HiredApplicantId = j.HiredApplicantId,
+                HiredStudentName = j.HiredApplicant != null ? j.HiredApplicant.FullName : null,
+                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null)
             })
             .ToListAsync();
 
