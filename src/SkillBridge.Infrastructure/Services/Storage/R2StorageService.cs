@@ -35,6 +35,11 @@ public class R2StorageService : IStorageService
             _logger.LogWarning("Cloudflare R2 credentials chưa được cấu hình đầy đủ trong appsettings.json.");
         }
 
+        if (string.IsNullOrWhiteSpace(_publicBaseUrl))
+        {
+            _logger.LogWarning("Cloudflare R2 PublicBaseUrl chưa được cấu hình. Các tệp tải lên sẽ sử dụng presigned URL tạm thời (7 ngày), có nguy cơ hỏng link vĩnh viễn trong DB nếu không qua download endpoint.");
+        }
+
         var credentials = new BasicAWSCredentials(accessKey, secretKey);
         var s3Config = new AmazonS3Config
         {
@@ -85,7 +90,8 @@ public class R2StorageService : IStorageService
             }
             else
             {
-                // Tự động sinh presigned URL 7 ngày nếu chưa có Public Domain
+                // Tự động sinh presigned URL 7 ngày nếu chưa có Public Domain và ghi log cảnh báo
+                _logger.LogWarning("PublicBaseUrl chưa được cấu hình. Sinh presigned URL 7 ngày cho file {FileKey}. Link lưu DB có thể hết hạn sau 7 ngày nếu không cấu hình PublicBaseUrl.", fileKey);
                 fileUrl = await GetPresignedUrlAsync(fileKey, TimeSpan.FromDays(7));
             }
 

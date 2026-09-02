@@ -811,8 +811,8 @@ export function StoreProvider({ children }) {
           showToast('Đã đóng tin tuyển dụng thành công.', '🚫');
           return result;
         } catch (err) {
-          dispatch({ type: 'CANCEL_JOB', id });
-          showToast(err?.message || 'Đã đóng tin tuyển dụng.', '🚫');
+          showToast(err?.message || 'Không thể đóng tin tuyển dụng.', '⚠️');
+          throw err;
         }
       },
       deleteJob: async (id) => {
@@ -823,8 +823,8 @@ export function StoreProvider({ children }) {
           showToast('Đã xóa vĩnh viễn tin tuyển dụng.', '🗑');
           return result;
         } catch (err) {
-          dispatch({ type: 'DELETE_JOB', id });
-          showToast(err?.message || 'Đã xóa tin tuyển dụng.', '🗑');
+          showToast(err?.message || 'Không thể xóa tin tuyển dụng.', '⚠️');
+          throw err;
         }
       },
       reopenJob: async (id) => {
@@ -835,8 +835,8 @@ export function StoreProvider({ children }) {
           showToast('Đã mở lại tin tuyển dụng thành công!', '🎉');
           return result;
         } catch (err) {
-          dispatch({ type: 'REOPEN_JOB', id });
-          showToast(err?.message || 'Đã mở lại tin tuyển dụng.', '🎉');
+          showToast(err?.message || 'Không thể mở lại tin tuyển dụng.', '⚠️');
+          throw err;
         }
       },
       startEditJob: (id) => dispatch({ type: 'START_EDIT_JOB', id }),
@@ -903,13 +903,11 @@ export function StoreProvider({ children }) {
         const { jobId, applicationId, applicant, days } = payload;
         const appId = applicationId || applicant?.applicationId || applicant?.id;
         if (jobId && appId && !isNaN(Number(jobId)) && !isNaN(Number(appId))) {
-          try {
-            await applicationApi.hireApplicant(Number(jobId), Number(appId), days || 3);
-          } catch (err) {
-            console.warn('Backend hire API warning:', err);
-          }
+          await applicationApi.hireApplicant(Number(jobId), Number(appId), days || 3);
         }
         dispatch({ type: 'HIRE', payload });
+        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
+        showToast('Đã thuê ứng viên và ký quỹ thành công!', '🤝');
       },
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),
       submitDeliverable: (payload) => dispatch({ type: 'SUBMIT_DELIVERABLE', payload }),

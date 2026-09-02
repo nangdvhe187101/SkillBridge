@@ -1,9 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.Interfaces.Jobs;
+using SkillBridge.Application.Interfaces.Storage;
+using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
 
@@ -13,11 +18,22 @@ public class JobService : IJobService
 {
     private readonly IJobRepository _jobRepository;
     private readonly ICategoryRepository _categoryRepository;
+    private readonly SkillBridgeDbContext _dbContext;
+    private readonly IStorageService _storageService;
+    private readonly ILogger<JobService> _logger;
 
-    public JobService(IJobRepository jobRepository, ICategoryRepository categoryRepository)
+    public JobService(
+        IJobRepository jobRepository,
+        ICategoryRepository categoryRepository,
+        SkillBridgeDbContext dbContext,
+        IStorageService storageService,
+        ILogger<JobService> logger)
     {
         _jobRepository = jobRepository;
         _categoryRepository = categoryRepository;
+        _dbContext = dbContext;
+        _storageService = storageService;
+        _logger = logger;
     }
 
     public async Task<JobDetailDto> CreateJobAsync(int employerId, CreateJobRequest request)
@@ -165,7 +181,49 @@ public class JobService : IJobService
             throw new BusinessException("Công việc đang trong quá trình thực hiện bởi sinh viên nên không thể xóa. Bạn chỉ có thể xóa sau khi hai bên đã hoàn thành giao dịch thành công (hoàn tất nghiệm thu) hoặc công việc chưa chọn người làm.");
         }
 
+        // Lấy danh sách attachments trước khi xóa Job (vì cascade sẽ xóa luôn record JobAttachment)
+        var attachmentUrls = await _dbContext.JobAttachments
+            .Where(a => a.JobId == jobId)
+            .Select(a => a.FileUrl)
+            .ToListAsync();
+
         await _jobRepository.DeleteJobAsync(job);
+
+        // Dọn dẹp các tệp đính kèm vật lý trên Cloudflare R2 sau khi xóa record
+        foreach (var fileUrl in attachmentUrls)
+        {
+            var fileKey = ExtractFileKeyFromUrl(fileUrl);
+            if (!string.IsNullOrWhiteSpace(fileKey))
+            {
+                try
+                {
+                    await _storageService.DeleteFileAsync(fileKey);
+                    _logger.LogInformation("Đã dọn dẹp file R2 {FileKey} của Job {JobId}.", fileKey, jobId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Không thể xóa file {FileKey} trên Cloudflare R2 khi xóa Job {JobId}.", fileKey, jobId);
+                }
+            }
+        }
+    }
+
+    private static string? ExtractFileKeyFromUrl(string? fileUrl)
+    {
+        if (string.IsNullOrWhiteSpace(fileUrl)) return null;
+
+        if (Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
+        {
+            var path = Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/');
+            var jobsIdx = path.IndexOf("jobs/", StringComparison.OrdinalIgnoreCase);
+            if (jobsIdx >= 0)
+            {
+                return path.Substring(jobsIdx);
+            }
+            return path;
+        }
+
+        return fileUrl;
     }
 
     public async Task<PagedResult<JobSummaryDto>> GetEmployerJobsAsync(int employerId, string? status, int page, int pageSize)
