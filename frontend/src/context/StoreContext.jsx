@@ -19,6 +19,9 @@ export function mapPublicJob(j) {
     id: j.id,
     title: j.title,
     emp: j.employerName || 'Nhà tuyển dụng',
+    employerAvatar: j.employerAvatar || null,
+    empAvatar: j.employerAvatar || null,
+    employerId: j.employerId,
     loc: j.location || 'Toàn quốc',
     cat: j.categoryName || 'Chung',
     categoryId: j.categoryId,
@@ -39,6 +42,8 @@ export function mapMyJob(j) {
   return {
     id: j.id,
     title: j.title,
+    employerAvatar: j.employerAvatar || null,
+    empAvatar: j.employerAvatar || null,
     cat: j.categoryName || 'Chung',
     categoryId: j.categoryId,
     budget: j.budget,
@@ -162,10 +167,17 @@ function addTxTo(list, type, label, amount, sign) {
 function reducer(state, action) {
   switch (action.type) {
     case 'AUTH_LOGIN_SUCCESS': {
-      const { token, userId, fullName, email, roleCode } = action.payload;
+      const { token, userId, fullName, email, roleCode, avatarUrl } = action.payload;
       setAccessToken(token);
-      localStorage.setItem('user', JSON.stringify({ userId, fullName, email, roleCode }));
-      return { ...state, token, currentUser: { userId, fullName, email, roleCode }, role: roleCode, isInitializing: false };
+      const currentUser = {
+        userId,
+        fullName,
+        email,
+        roleCode,
+        avatarUrl: avatarUrl !== undefined ? avatarUrl : state.currentUser?.avatarUrl || null
+      };
+      localStorage.setItem('user', JSON.stringify(currentUser));
+      return { ...state, token, currentUser, role: roleCode, isInitializing: false };
     }
 
     case 'AUTH_LOGOUT': {
@@ -658,6 +670,14 @@ export function StoreProvider({ children }) {
         setAccessToken(result.token);
         dispatch({ type: 'AUTH_LOGIN_SUCCESS', payload: result });
         authBroadcast?.postMessage({ type: 'AUTH_LOGIN_SUCCESS', payload: result });
+        try {
+          const profile = await userApi.getUserProfile();
+          if (profile && isMounted) {
+            dispatch({ type: 'UPDATE_PROFILE', patch: profile });
+          }
+        } catch (e) {
+          console.warn('Không thể tải hồ sơ chi tiết khi khởi động:', e);
+        }
       } catch (err) {
         if (!isMounted) return;
 
@@ -948,6 +968,14 @@ export function StoreProvider({ children }) {
         setAccessToken(result.token);
         dispatch({ type: "AUTH_LOGIN_SUCCESS", payload: result });
         authBroadcast?.postMessage({ type: 'AUTH_LOGIN_SUCCESS', payload: result });
+        try {
+          const profile = await userApi.getUserProfile();
+          if (profile) {
+            dispatch({ type: 'UPDATE_PROFILE', patch: profile });
+          }
+        } catch (e) {
+          console.warn('Không thể tải hồ sơ chi tiết khi đăng nhập:', e);
+        }
         showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, '👋');
         return result;
       },
