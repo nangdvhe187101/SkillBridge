@@ -8,6 +8,8 @@ import { login as loginApi, register as registerApi, logout as logoutApi, refres
 import * as jobApi from '../api/jobApi';
 import * as cvApi from '../api/cvApi';
 import * as applicationApi from '../api/applicationApi';
+import * as userApi from '../api/userApi';
+import * as deliverableApi from '../api/deliverableApi';
 import { setAccessToken, clearAccessToken } from '../api/tokenStore';
 
 const StoreContext = createContext(null);
@@ -436,15 +438,12 @@ function reducer(state, action) {
     case 'SUBMIT_DELIVERABLE': {
       const { jobId, mode, url, note, fileName, fileSize, previewDataUrl, finalDataUrl } = action.payload;
       const job = state.myJobs.find((j) => j.id === jobId);
-      if (!job) return state;
-      const wasRevision = job.status === 'revision_requested';
-      const wasUpdate = job.status === 'submitted' || wasRevision;
-      const version = wasUpdate && job.deliverable ? (job.deliverable.version || 1) + 1 : 1;
+      const wasRevision = job?.status === 'revision_requested';
+      const wasUpdate = job?.status === 'submitted' || wasRevision;
+      const version = wasUpdate && job?.deliverable ? (job.deliverable.version || 1) + 1 : 1;
       const deliverable = { mode, url: url || '', fileName: fileName || '', fileSize: fileSize || 0, previewDataUrl: previewDataUrl || null, finalDataUrl: finalDataUrl || null, note, submittedAt: fmtNow(), version, status: 'submitted' };
       const myJobs = state.myJobs.map((j) => (j.id === jobId ? { ...j, deliverable, status: 'submitted', hiredApplicantIsMe: true } : j));
-      let myApplications = state.myApplications;
-      const idx = myApplications.findIndex((a) => a.dashJobId === jobId);
-      if (idx >= 0) myApplications = myApplications.map((a, i) => (i === idx ? { ...a, status: 'submitted' } : a));
+      let myApplications = state.myApplications.map((a) => (a.jobId === jobId || a.dashJobId === jobId ? { ...a, status: 'submitted' } : a));
       const notifications = addNotifTo(
         state.notifications, '📤',
         wasRevision ? `Bạn đã nộp lại bàn giao (phiên bản ${version}).` : (wasUpdate ? `Bạn đã cập nhật bàn giao.` : `Bạn đã nộp bàn giao — đang chờ xác nhận.`),
@@ -1063,9 +1062,37 @@ export function StoreProvider({ children }) {
         authBroadcast?.postMessage({ type: 'AUTH_LOGOUT' });
         showToast(`Đã đăng xuất`, '👋');
       },
-      updateProfile: (patch) => {
-        dispatch({ type: 'UPDATE_PROFILE', patch });
-        showToast('Đã cập nhật thông tin tài khoản.', '✓');
+      reviewDeliverableAsync: async (jobId, deliverableId, reviewData) => {
+        const res = await deliverableApi.reviewJobDeliverable(jobId, deliverableId, reviewData);
+        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
+        if (reviewData?.status === 'accepted') {
+          dispatch({ type: 'MARK_JOB_COMPLETE', id: jobId });
+          showToast('Nghiệm thu sản phẩm & giải ngân thành công!', '🎉');
+        } else if (reviewData?.status === 'revision_requested') {
+          dispatch({ type: 'REQUEST_REVISION', payload: { jobId, text: reviewData.feedbackComment || '' } });
+          showToast('Đã gửi yêu cầu chỉnh sửa sản phẩm.', '✏️');
+        }
+        return res;
+      },
+      updateProfile: async (patch) => {
+        try {
+          const res = await userApi.updateUserProfile({
+            fullName: patch.fullName,
+            phoneNumber: patch.phoneNumber || patch.phone || null,
+            school: patch.school || null,
+            companyDescription: patch.companyDescription || patch.bio || null,
+            industry: patch.industry || null,
+            companySize: patch.companySize || null,
+            website: patch.website || null
+          });
+          dispatch({ type: 'UPDATE_PROFILE', patch: { ...patch, ...res } });
+          showToast('Đã cập nhật thông tin tài khoản.', '✓');
+          return res;
+        } catch (err) {
+          console.warn('Backend update profile fallback:', err);
+          dispatch({ type: 'UPDATE_PROFILE', patch });
+          showToast('Đã lưu thông tin tài khoản.', '✓');
+        }
       },
       changePassword: async (currentPassword, newPassword) => {
         const result = await changePasswordApi(currentPassword, newPassword);

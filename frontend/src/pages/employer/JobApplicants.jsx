@@ -11,6 +11,7 @@ import { DeliverablePreview } from '../../components/modals/DeliverableModals';
 import { slugify } from '../../data/companies';
 import { getJobApplicants } from '../../api/applicationApi';
 import { getJobById } from '../../api/jobApi';
+import { getJobDeliverables } from '../../api/deliverableApi';
 import { downloadCandidateCv, downloadJobAttachment } from '../../utils/fileDownloader';
 import '../../styles/account-settings.css';
 
@@ -81,6 +82,7 @@ export default function JobApplicants() {
   const [sortBy, setSortBy] = useState('score_desc'); // 'score_desc' | 'newest' | 'jobs_done'
   const [apiApplicants, setApiApplicants] = useState([]);
   const [apiJob, setApiJob] = useState(null);
+  const [apiDeliverables, setApiDeliverables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [viewStudentModal, setViewStudentModal] = useState(null);
   const [cannedModalApplicant, setCannedModalApplicant] = useState(null);
@@ -109,6 +111,14 @@ export default function JobApplicants() {
   };
 
   const localJob = state.myJobs.find((j) => String(j.id) === String(jobId));
+  const latestDeliverable = apiDeliverables && apiDeliverables.length > 0 ? apiDeliverables[0] : null;
+  const deliverableFeedbackList = (latestDeliverable?.feedbacks || []).map((f) => ({
+    version: latestDeliverable.version,
+    text: f.content,
+    at: f.createdAt ? new Date(f.createdAt).toLocaleDateString('vi-VN') : 'Gần đây',
+    author: f.authorName,
+  }));
+
   const job = apiJob ? {
     ...localJob,
     ...apiJob,
@@ -120,14 +130,17 @@ export default function JobApplicants() {
     status: apiJob.status || localJob?.status || 'open',
     deadlineAt: apiJob.deadlineAt || localJob?.deadlineAt,
     posted: apiJob.postedAt ? new Date(apiJob.postedAt).toLocaleDateString('vi-VN') : (localJob?.posted || 'Vừa đăng'),
+    deliverable: latestDeliverable || localJob?.deliverable,
+    deliverableFeedback: deliverableFeedbackList.length > 0 ? deliverableFeedbackList : (localJob?.deliverableFeedback || []),
   } : localJob;
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [applicantsRes, jobRes] = await Promise.allSettled([
+      const [applicantsRes, jobRes, deliverablesRes] = await Promise.allSettled([
         getJobApplicants(jobId),
         getJobById(jobId),
+        getJobDeliverables(jobId),
       ]);
       if (jobRes.status === 'fulfilled' && jobRes.value) {
         setApiJob(jobRes.value);
@@ -135,6 +148,10 @@ export default function JobApplicants() {
       if (applicantsRes.status === 'fulfilled' && applicantsRes.value) {
         const items = applicantsRes.value.items || applicantsRes.value || [];
         setApiApplicants(items);
+      }
+      if (deliverablesRes.status === 'fulfilled' && deliverablesRes.value) {
+        const delivs = Array.isArray(deliverablesRes.value) ? deliverablesRes.value : [];
+        setApiDeliverables(delivs);
       }
     } catch (e) {
       console.error('Lỗi khi tải ứng viên:', e);
@@ -515,7 +532,7 @@ export default function JobApplicants() {
                 <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button
                     className="btn btn-primary btn-sm"
-                    onClick={() => openModal('deliverableReview', { jobId: job.id })}
+                    onClick={() => openModal('deliverableReview', { jobId: job.id, deliverable: job.deliverable, job, onReviewed: loadData })}
                   >
                     ✓ Nghiệm thu & Giải ngân {fmtVND(job.escrowAmount || job.budget)}
                   </button>
@@ -523,7 +540,7 @@ export default function JobApplicants() {
                     className="btn btn-outline btn-sm"
                     style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
                     disabled={job.revisionCount >= job.revisionLimit}
-                    onClick={() => openModal('revision', { jobId: job.id })}
+                    onClick={() => openModal('revision', { jobId: job.id, deliverable: job.deliverable, job, onReviewed: loadData })}
                   >
                     ✏️ Yêu cầu sửa đổi ({job.revisionCount || 0}/{job.revisionLimit} lượt)
                   </button>

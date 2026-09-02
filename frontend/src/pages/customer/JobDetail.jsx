@@ -258,7 +258,9 @@ export default function JobDetail() {
     );
   }
 
-  const showWorkArea = dashJob && ['in_progress', 'submitted', 'revision_requested', 'completed', 'cancelled'].includes(dashJob.status) && !!dashJob.hiredApplicant;
+  const isStudentHired = isStudent && myApp && ['hired', 'submitted', 'revision_requested', 'completed'].includes(myApp.status);
+  const currentWorkStatus = myApp ? (myApp.status === 'hired' ? 'in_progress' : myApp.status) : (dashJob?.status);
+  const showWorkArea = (dashJob && ['in_progress', 'submitted', 'revision_requested', 'completed', 'cancelled'].includes(dashJob.status) && !!dashJob.hiredApplicant) || isStudentHired;
 
   return (
     <div className="page active">
@@ -342,50 +344,53 @@ export default function JobDetail() {
             <div className="jd-side">
               {showWorkArea && (
                 <div id="jdWorkArea">
-                  {dashJob.status === 'in_progress' && (
+                  {currentWorkStatus === 'in_progress' && (
                     <div className="jd-card jd-work-card" style={{ border: '1.5px solid var(--primary)', background: 'var(--surface)' }}>
                       <div className="jdw-head">
                         <div>
                           <span className="chip chip-cyan" style={{ marginBottom: 6 }}>Đang thực hiện</span>
                           <h4 style={{ margin: 0 }}>Khu vực bàn giao công việc</h4>
                         </div>
-                        <div className="jdw-dl"><Icon name="clock" /> Hạn chót: <b>{formatDeadline(dashJob.deadlineAt)}</b></div>
+                        <div className="jdw-dl"><Icon name="clock" /> Hạn chót: <b>{formatDeadline(j.deadlineAt || dashJob?.deadlineAt)}</b></div>
                       </div>
                       <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '10px 0' }}>Sau khi hoàn thành, hãy nộp sản phẩm kèm bản xem trước có đóng dấu bản quyền.</p>
-                      <button className="btn btn-primary btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('deliverable', { jobId: dashJob.id })}>
+                      <button className="btn btn-primary btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>
                         📤 Nộp sản phẩm bàn giao
                       </button>
                       <button className="btn btn-outline btn-block" onClick={() => openChatWithPerson(j.emp)}>💬 Trao đổi với NTD</button>
                     </div>
                   )}
-                  {dashJob.status === 'submitted' && (
+                  {currentWorkStatus === 'submitted' && (
                     <div className="jd-card">
                       <h4>⏳ Đã nộp bàn giao</h4>
                       <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '6px 0 12px' }}>Đang chờ nhà tuyển dụng xác nhận hoặc yêu cầu sửa.</p>
-                      {dashJob.deliverable && <DeliverablePreview d={dashJob.deliverable} />}
+                      {(dashJob?.deliverable) && <DeliverablePreview d={dashJob.deliverable} />}
+                      <button className="btn btn-outline btn-block" style={{ marginTop: 8 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>
+                        ✏️ Cập nhật bàn giao
+                      </button>
                     </div>
                   )}
-                  {dashJob.status === 'revision_requested' && (
+                  {currentWorkStatus === 'revision_requested' && (
                     <div className="jd-card" style={{ borderColor: 'var(--coral)' }}>
                       <h4>⚠️ Yêu cầu sửa đổi bàn giao</h4>
-                      {dashJob.deliverableFeedback && dashJob.deliverableFeedback.length > 0 && (
+                      {dashJob?.deliverableFeedback && dashJob.deliverableFeedback.length > 0 && (
                         <div className="feedback-box" style={{ background: 'var(--coral-dim)', padding: 10, borderRadius: 8, margin: '8px 0' }}>
                           <b>Góp ý từ NTD:</b>
                           <p style={{ marginTop: 4, fontSize: 13 }}>{dashJob.deliverableFeedback[dashJob.deliverableFeedback.length - 1].text}</p>
                         </div>
                       )}
-                      <button className="btn btn-primary btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('deliverable', { jobId: dashJob.id })}>📤 Nộp lại bàn giao</button>
+                      <button className="btn btn-primary btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>📤 Nộp lại bàn giao</button>
                       <button className="btn btn-outline btn-block" onClick={() => openChatWithPerson(j.emp)}>💬 Hỏi thêm NTD</button>
                     </div>
                   )}
-                  {dashJob.status === 'completed' && (
+                  {currentWorkStatus === 'completed' && (
                     <div className="jd-card">
                       <h4>✅ Đã hoàn thành & nhận thanh toán</h4>
                       <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>Cảm ơn bạn đã hoàn thành công việc trên SkillBridge.</p>
-                      {dashJob.deliverable && <DeliverablePreview d={dashJob.deliverable} revealFinal />}
+                      {dashJob?.deliverable && <DeliverablePreview d={dashJob.deliverable} revealFinal />}
                     </div>
                   )}
-                  {dashJob.status === 'cancelled' && <div className="jd-card"><h4>🚫 Công việc đã bị hủy</h4></div>}
+                  {currentWorkStatus === 'cancelled' && <div className="jd-card"><h4>🚫 Công việc đã bị hủy</h4></div>}
                 </div>
               )}
 

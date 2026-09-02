@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Applications;
 using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.Interfaces.Applications;
+using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
 
@@ -16,15 +18,18 @@ public class ApplicationService : IApplicationService
     private readonly IApplicationRepository _applicationRepository;
     private readonly IJobRepository _jobRepository;
     private readonly ICvFileRepository _cvFileRepository;
+    private readonly SkillBridgeDbContext _dbContext;
 
     public ApplicationService(
         IApplicationRepository applicationRepository,
         IJobRepository jobRepository,
-        ICvFileRepository cvFileRepository)
+        ICvFileRepository cvFileRepository,
+        SkillBridgeDbContext dbContext)
     {
         _applicationRepository = applicationRepository;
         _jobRepository = jobRepository;
         _cvFileRepository = cvFileRepository;
+        _dbContext = dbContext;
     }
 
     public async Task<JobApplicationResponseDto> ApplyJobAsync(int studentId, ApplyJobRequest request)
@@ -188,42 +193,56 @@ public class ApplicationService : IApplicationService
             throw new BusinessException("Hồ sơ ứng tuyển này đã bị từ chối trước đó.");
         }
 
-        // Cập nhật trạng thái công việc
-        job.HiredApplicantId = application.StudentId;
-        job.Status = "in_progress";
-        if (request != null && request.Days.HasValue && request.Days.Value > 0)
+        var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
+        return await executionStrategy.ExecuteAsync(async () =>
         {
-            job.DeadlineAt = DateTime.UtcNow.AddDays(request.Days.Value);
-        }
-        job.UpdatedAt = DateTime.UtcNow;
-        await _jobRepository.UpdateJobAsync(job);
-
-        // Cập nhật trạng thái ứng viên được chọn
-        application.Status = "hired";
-        application.UpdatedAt = DateTime.UtcNow;
-        await _applicationRepository.UpdateAsync(application);
-
-        // Đánh dấu từ chối các ứng viên khác cho công việc này
-        var otherApplications = await _applicationRepository.GetByJobIdAsync(jobId);
-        foreach (var other in otherApplications)
-        {
-            if (other.Id != applicationId && other.Status == "pending")
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            try
             {
-                other.Status = "rejected";
-                other.UpdatedAt = DateTime.UtcNow;
-                await _applicationRepository.UpdateAsync(other);
-            }
-        }
+                var durationDays = request?.Days.HasValue == true && request.Days.Value > 0 ? request.Days.Value : 3;
 
-        return new HireApplicantResultDto
-        {
-            JobId = job.Id,
-            ApplicationId = application.Id,
-            HiredStudentId = application.StudentId,
-            HiredStudentName = application.Student?.FullName ?? "Sinh viên",
-            JobStatus = job.Status,
-            DeadlineAt = job.DeadlineAt,
-            EscrowAmount = job.Budget
-        };
+                // Cập nhật trạng thái công việc
+                job.HiredApplicantId = application.StudentId;
+                job.Status = "in_progress";
+                job.DeadlineAt = DateTime.UtcNow.AddDays(durationDays);
+                job.UpdatedAt = DateTime.UtcNow;
+                await _jobRepository.UpdateJobAsync(job);
+
+                // Cập nhật trạng thái ứng viên được chọn
+                application.Status = "hired";
+                application.UpdatedAt = DateTime.UtcNow;
+                await _applicationRepository.UpdateAsync(application);
+
+                // Đánh dấu từ chối các ứng viên khác cho công việc này
+                var otherApplications = await _applicationRepository.GetByJobIdAsync(jobId);
+                foreach (var other in otherApplications)
+                {
+                    if (other.Id != applicationId && other.Status == "pending")
+                    {
+                        other.Status = "rejected";
+                        other.UpdatedAt = DateTime.UtcNow;
+                        await _applicationRepository.UpdateAsync(other);
+                    }
+                }
+
+                await transaction.CommitAsync();
+
+                return new HireApplicantResultDto
+                {
+                    JobId = job.Id,
+                    ApplicationId = application.Id,
+                    HiredStudentId = application.StudentId,
+                    HiredStudentName = application.Student?.FullName ?? "Sinh viên",
+                    JobStatus = job.Status,
+                    DeadlineAt = job.DeadlineAt,
+                    EscrowAmount = job.Budget
+                };
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        });
     }
 }
