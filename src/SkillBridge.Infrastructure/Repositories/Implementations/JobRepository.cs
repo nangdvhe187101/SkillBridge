@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Jobs;
+using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
@@ -14,10 +15,12 @@ namespace SkillBridge.Infrastructure.Repositories.Implementations;
 public class JobRepository : IJobRepository
 {
     private readonly SkillBridgeDbContext _context;
+    private readonly IStorageService _storageService;
 
-    public JobRepository(SkillBridgeDbContext context)
+    public JobRepository(SkillBridgeDbContext context, IStorageService storageService)
     {
         _context = context;
+        _storageService = storageService;
     }
 
     public async Task<Job?> GetByIdAsync(int id)
@@ -63,7 +66,7 @@ public class JobRepository : IJobRepository
             CategoryName = job.CategoryName,
             EmployerId = job.Employer.Id,
             EmployerName = job.Employer.FullName,
-            EmployerAvatar = job.Employer.AvatarUrl,
+            EmployerAvatar = _storageService.GetPublicUrl(job.Employer.AvatarUrl),
             EmployerCompanyDescription = job.Employer.CompanyDescription,
             EmployerIndustry = job.Employer.Industry,
             EmployerCompanySize = job.Employer.CompanySize,
@@ -81,7 +84,7 @@ public class JobRepository : IJobRepository
                 Id = a.Id,
                 JobId = a.JobId,
                 FileName = a.FileName,
-                FileUrl = a.FileUrl,
+                FileUrl = _storageService.GetPublicUrl(a.FileUrl),
                 FileSize = a.FileSize,
                 FileType = a.FileType,
                 CreatedAt = a.CreatedAt
@@ -172,6 +175,11 @@ public class JobRepository : IJobRepository
             })
             .ToListAsync();
 
+        foreach (var item in items)
+        {
+            item.EmployerAvatar = _storageService.GetPublicUrl(item.EmployerAvatar);
+        }
+
         return new PagedResult<JobSummaryDto>
         {
             Items = items,
@@ -224,6 +232,11 @@ public class JobRepository : IJobRepository
                 AttachmentCount = j.Attachments.Count()
             })
             .ToListAsync();
+
+        foreach (var item in items)
+        {
+            item.EmployerAvatar = _storageService.GetPublicUrl(item.EmployerAvatar);
+        }
 
         return new PagedResult<JobSummaryDto>
         {
@@ -475,6 +488,11 @@ public class JobRepository : IJobRepository
                 AttachmentCount = j.Attachments.Count()
             })
             .ToListAsync();
+
+        foreach (var item in items)
+        {
+            item.EmployerAvatar = _storageService.GetPublicUrl(item.EmployerAvatar);
+        }
 
         return new PagedResult<JobSummaryDto>
         {

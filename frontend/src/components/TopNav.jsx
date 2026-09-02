@@ -203,16 +203,29 @@ export default function TopNav() {
                   aria-haspopup="true"
                   aria-expanded={userMenuOpen}
                 >
-                  <Avatar name={state.currentUser.fullName} fontSize={12} style={{ width: 22, height: 22 }} />
+                  <Avatar
+                    src={state.currentUser.avatarUrl}
+                    name={state.currentUser.fullName}
+                    fontSize={12}
+                    style={{ width: 24, height: 24, borderRadius: '50%' }}
+                  />
                   Xin chào, {state.currentUser.fullName} <span className="nav-more-caret">▾</span>
                 </button>
                 <div
                   className={'nav-more-panel' + (userMenuOpen ? ' open' : '')}
-                  style={{ left: 'auto', right: 0, minWidth: 200 }}
+                  style={{ left: 'auto', right: 0, minWidth: 220 }}
                 >
-                  <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--border)', marginBottom: 4 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13.5 }}>{state.currentUser.fullName}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted, #888)' }}>{state.currentUser.email}</div>
+                  <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--border)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Avatar
+                      src={state.currentUser.avatarUrl}
+                      name={state.currentUser.fullName}
+                      fontSize={14}
+                      style={{ width: 34, height: 34, borderRadius: '50%' }}
+                    />
+                    <div style={{ overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 700, fontSize: 13.5, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{state.currentUser.fullName}</div>
+                      <div style={{ fontSize: 12, color: 'var(--muted, #888)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{state.currentUser.email}</div>
+                    </div>
                   </div>
                   <NavLink to="/profile" className="nav-more-link" onClick={() => goFromUserMenu('/profile')}>👤 Hồ sơ của tôi</NavLink>
                   <NavLink to="/wallet" className="nav-more-link" onClick={() => goFromUserMenu('/wallet')}>👛 Ví của tôi</NavLink>

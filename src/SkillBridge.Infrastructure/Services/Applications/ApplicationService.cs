@@ -7,6 +7,7 @@ using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Applications;
 using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.Interfaces.Applications;
+using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
@@ -19,17 +20,20 @@ public class ApplicationService : IApplicationService
     private readonly IJobRepository _jobRepository;
     private readonly ICvFileRepository _cvFileRepository;
     private readonly SkillBridgeDbContext _dbContext;
+    private readonly IStorageService _storageService;
 
     public ApplicationService(
         IApplicationRepository applicationRepository,
         IJobRepository jobRepository,
         ICvFileRepository cvFileRepository,
-        SkillBridgeDbContext dbContext)
+        SkillBridgeDbContext dbContext,
+        IStorageService storageService)
     {
         _applicationRepository = applicationRepository;
         _jobRepository = jobRepository;
         _cvFileRepository = cvFileRepository;
         _dbContext = dbContext;
+        _storageService = storageService;
     }
 
     public async Task<JobApplicationResponseDto> ApplyJobAsync(int studentId, ApplyJobRequest request)
@@ -85,7 +89,7 @@ public class ApplicationService : IApplicationService
             StudentId = studentId,
             CvFileId = cv.Id,
             CvFileName = cv.FileName,
-            CvFileUrl = cv.FileUrl,
+            CvFileUrl = _storageService.GetPublicUrl(cv.FileUrl),
             CoverLetter = application.CoverLetter,
             Status = application.Status,
             AppliedAt = application.AppliedAt
@@ -113,14 +117,14 @@ public class ApplicationService : IApplicationService
             StudentName = a.Student?.FullName ?? "Sinh viên",
             StudentEmail = a.Student?.Email,
             StudentPhone = a.Student?.PhoneNumber,
-            StudentAvatarUrl = a.Student?.AvatarUrl,
+            StudentAvatarUrl = _storageService.GetPublicUrl(a.Student?.AvatarUrl),
             School = a.Student?.School,
             ReliabilityScore = a.Student?.ReliabilityScore ?? 95,
             JobsDoneCount = a.Student?.JobsDoneCount ?? 0,
             KycStatus = a.Student?.KycStatus ?? "verified",
             CvFileId = a.CvFileId,
             CvFileName = a.CvFile?.FileName,
-            CvFileUrl = a.CvFile?.FileUrl,
+            CvFileUrl = _storageService.GetPublicUrl(a.CvFile?.FileUrl),
             CvLabel = a.CvFile?.Label,
             CoverLetter = a.CoverLetter,
             Status = a.Status,
@@ -149,7 +153,7 @@ public class ApplicationService : IApplicationService
             StudentId = a.StudentId,
             CvFileId = a.CvFileId,
             CvFileName = a.CvFile?.FileName,
-            CvFileUrl = a.CvFile?.FileUrl,
+            CvFileUrl = _storageService.GetPublicUrl(a.CvFile?.FileUrl),
             CoverLetter = a.CoverLetter,
             Status = a.Status,
             AppliedAt = a.AppliedAt

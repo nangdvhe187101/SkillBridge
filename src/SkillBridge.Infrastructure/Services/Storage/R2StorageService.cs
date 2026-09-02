@@ -83,12 +83,8 @@ public class R2StorageService : IStorageService
 
             await _s3Client.PutObjectAsync(putRequest, cancellationToken);
 
-            string fileUrl;
-            if (!string.IsNullOrWhiteSpace(_publicBaseUrl))
-            {
-                fileUrl = $"{_publicBaseUrl.TrimEnd('/')}/{fileKey}";
-            }
-            else
+            string fileUrl = GetPublicUrl(fileKey);
+            if (string.IsNullOrWhiteSpace(_publicBaseUrl))
             {
                 // Tự động sinh presigned URL 7 ngày nếu chưa có Public Domain và ghi log cảnh báo
                 _logger.LogWarning("PublicBaseUrl chưa được cấu hình. Sinh presigned URL 7 ngày cho file {FileKey}. Link lưu DB có thể hết hạn sau 7 ngày nếu không cấu hình PublicBaseUrl.", fileKey);
@@ -135,6 +131,27 @@ public class R2StorageService : IStorageService
             _logger.LogError(ex, "Lỗi khi xóa file {FileKey} trên Cloudflare R2.", fileKey);
             return false;
         }
+    }
+
+    public string GetPublicUrl(string? fileKeyOrUrl)
+    {
+        if (string.IsNullOrWhiteSpace(fileKeyOrUrl)) return string.Empty;
+
+        var trimmed = fileKeyOrUrl.Trim();
+
+        // Hỗ trợ backward-compatibility: nếu bản ghi cũ đã lưu Full URL (http:// hoặc https://), trả về nguyên bản
+        if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed;
+        }
+
+        if (string.IsNullOrWhiteSpace(_publicBaseUrl))
+        {
+            return trimmed;
+        }
+
+        return $"{_publicBaseUrl.TrimEnd('/')}/{trimmed.TrimStart('/')}";
     }
 
     public Task<string> GetPresignedUrlAsync(string fileKey, TimeSpan expiry)

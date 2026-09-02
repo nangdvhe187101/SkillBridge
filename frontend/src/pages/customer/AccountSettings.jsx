@@ -67,7 +67,20 @@ function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
                 title="Bấm để đổi ảnh đại diện"
             >
                 {currentUser?.avatarUrl ? (
-                    <img src={currentUser.avatarUrl} alt="Avatar" className="acct-avatar-img" />
+                    <img
+                        src={currentUser.avatarUrl.startsWith('http') ? currentUser.avatarUrl : `http://localhost:5004/api/storage/file?key=${encodeURIComponent(currentUser.avatarUrl)}`}
+                        alt="Avatar"
+                        className="acct-avatar-img"
+                        onError={(e) => {
+                            if (!e.currentTarget.dataset.retried && currentUser.avatarUrl) {
+                                e.currentTarget.dataset.retried = 'true';
+                                const key = currentUser.avatarUrl.includes('avatars/')
+                                    ? currentUser.avatarUrl.substring(currentUser.avatarUrl.indexOf('avatars/'))
+                                    : currentUser.avatarUrl;
+                                e.currentTarget.src = `http://localhost:5004/api/storage/file?key=${encodeURIComponent(key)}`;
+                            }
+                        }}
+                    />
                 ) : (
                     <div className="acct-avatar-placeholder">{initial}</div>
                 )}
@@ -700,16 +713,6 @@ export default function AccountSettings({ forcedTab }) {
                                 <span>{t.label}</span>
                             </button>
                         ))}
-                    </div>
-
-                    <div style={{ marginTop: 'auto', paddingTop: 24, borderTop: '1px solid var(--border)' }}>
-                        <button
-                            className="btn btn-outline btn-block"
-                            style={{ color: 'var(--coral, #f43f5e)', borderColor: 'var(--coral, #f43f5e)', fontSize: 13 }}
-                            onClick={logout}
-                        >
-                            Đăng xuất
-                        </button>
                     </div>
                 </div>
 

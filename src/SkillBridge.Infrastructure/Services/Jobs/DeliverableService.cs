@@ -152,7 +152,7 @@ public class DeliverableService : IDeliverableService
                 folder: "job-deliverables",
                 cancellationToken: cancellationToken);
 
-            previewUrl = uploadResult.FileUrl;
+            previewUrl = uploadResult.FileKey;
         }
         else if (string.IsNullOrWhiteSpace(externalUrl))
         {
@@ -432,7 +432,7 @@ public class DeliverableService : IDeliverableService
         return fileUrl;
     }
 
-    private static DeliverableDto MapToDeliverableDto(JobDeliverable d)
+    private DeliverableDto MapToDeliverableDto(JobDeliverable d)
     {
         return new DeliverableDto
         {
@@ -441,8 +441,8 @@ public class DeliverableService : IDeliverableService
             StudentId = d.StudentId,
             StudentName = d.Student?.FullName ?? "Sinh viên",
             Version = d.Version,
-            PreviewFileUrl = d.PreviewFileUrl,
-            FinalFileUrl = d.FinalFileUrl,
+            PreviewFileUrl = _storageService.GetPublicUrl(d.PreviewFileUrl),
+            FinalFileUrl = d.FinalFileUrl != null ? _storageService.GetPublicUrl(d.FinalFileUrl) : null,
             ExternalUrl = d.ExternalUrl,
             FileName = d.FileName,
             FileType = d.FileType,

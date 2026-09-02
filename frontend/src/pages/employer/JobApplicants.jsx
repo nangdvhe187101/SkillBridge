@@ -47,19 +47,19 @@ const CANNED_TEMPLATES = [
   {
     id: 'interview',
     icon: '📞',
-    title: 'Mời phỏng vấn nhanh online 15 phút',
+    title: 'Mời phỏng vấn nhanh online',
     text: (jobTitle, studentName) => `Chào ${studentName}, mình đã xem qua hồ sơ ứng tuyển của bạn cho công việc "${jobTitle}" và thấy rất ấn tượng. Bạn có thể sắp xếp 15 phút trao đổi trực tuyến (Google Meet/Zalo) trong hôm nay hoặc ngày mai không?`
   },
   {
     id: 'sample',
     icon: '📁',
-    title: 'Yêu cầu gửi thêm sản phẩm / Portfolio mẫu',
+    title: 'Yêu cầu gửi Portfolio mẫu',
     text: (jobTitle, studentName) => `Chào ${studentName}, cảm ơn bạn đã ứng tuyển vào "${jobTitle}". Để bên mình tiện đánh giá chuyên môn, bạn có thể gửi thêm link 1-2 sản phẩm hoặc dự án tương tự mà bạn đã từng thực hiện được không?`
   },
   {
     id: 'terms',
     icon: '🤝',
-    title: 'Thỏa thuận về tiến độ & điều kiện bàn giao',
+    title: 'Thỏa thuận tiến độ & bàn giao',
     text: (jobTitle, studentName) => `Chào ${studentName}, vị trí "${jobTitle}" bên mình cần hoàn thành đúng tiến độ. Bạn có thể cam kết bàn giao đúng hạn và bắt đầu làm việc ngay khi bên mình ký quỹ trên SkillBridge không?`
   },
   {
@@ -1099,19 +1099,29 @@ function CannedReplyModal({ applicant, jobTitle, onClose, onSend }) {
               type="button"
               className="btn btn-sm"
               style={{
+                display: 'flex',
+                alignItems: 'center',
                 textAlign: 'left',
                 justifyContent: 'flex-start',
-                padding: '8px 10px',
-                fontSize: 12,
-                borderRadius: 8,
+                gap: 8,
+                padding: '10px 12px',
+                fontSize: 12.5,
+                lineHeight: 1.35,
+                whiteSpace: 'normal',
+                wordBreak: 'break-word',
+                height: 'auto',
+                minHeight: '44px',
+                borderRadius: 10,
                 background: selectedTpl === tpl.id ? 'rgba(108, 76, 255, 0.1)' : 'var(--surface)',
                 borderColor: selectedTpl === tpl.id ? 'var(--primary)' : 'var(--border)',
                 color: selectedTpl === tpl.id ? 'var(--primary)' : 'var(--ink)',
-                fontWeight: selectedTpl === tpl.id ? 600 : 400
+                fontWeight: selectedTpl === tpl.id ? 600 : 500,
+                transition: 'all 0.15s ease'
               }}
               onClick={() => handleSelectTemplate(tpl)}
             >
-              <span>{tpl.icon}</span> {tpl.title}
+              <span style={{ fontSize: 16, flexShrink: 0 }}>{tpl.icon}</span>
+              <span style={{ flex: 1 }}>{tpl.title}</span>
             </button>
           ))}
         </div>

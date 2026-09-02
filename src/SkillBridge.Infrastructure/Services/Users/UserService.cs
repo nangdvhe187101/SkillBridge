@@ -164,14 +164,14 @@ public class UserService : IUserService
             }
         }
 
-        user.AvatarUrl = uploadResult.FileUrl;
+        user.AvatarUrl = uploadResult.FileKey;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return uploadResult;
     }
 
-    private static UserProfileDto MapToProfileDto(Data.Entities.User user)
+    private UserProfileDto MapToProfileDto(Data.Entities.User user)
     {
         return new UserProfileDto
         {
@@ -179,7 +179,7 @@ public class UserService : IUserService
             FullName = user.FullName,
             Email = user.Email,
             PhoneNumber = user.PhoneNumber,
-            AvatarUrl = user.AvatarUrl,
+            AvatarUrl = _storageService.GetPublicUrl(user.AvatarUrl),
             RoleName = user.Role?.Name ?? "student",
             School = user.School,
             Industry = user.Industry,

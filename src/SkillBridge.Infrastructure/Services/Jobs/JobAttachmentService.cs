@@ -92,7 +92,7 @@ public class JobAttachmentService : IJobAttachmentService
         {
             JobId = jobId,
             FileName = cleanFileName,
-            FileUrl = uploadResult.FileUrl,
+            FileUrl = uploadResult.FileKey,
             FileSize = uploadResult.FileSize,
             FileType = uploadResult.ContentType,
             CreatedAt = DateTime.UtcNow
@@ -108,7 +108,7 @@ public class JobAttachmentService : IJobAttachmentService
             Id = attachment.Id,
             JobId = attachment.JobId,
             FileName = attachment.FileName,
-            FileUrl = attachment.FileUrl,
+            FileUrl = _storageService.GetPublicUrl(attachment.FileUrl),
             FileSize = attachment.FileSize,
             FileType = attachment.FileType,
             CreatedAt = attachment.CreatedAt

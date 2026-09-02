@@ -39,7 +39,7 @@ public class CvService : ICvService
             Id = c.Id,
             StudentId = c.StudentId,
             FileName = c.FileName,
-            FileUrl = c.FileUrl,
+            FileUrl = _storageService.GetPublicUrl(c.FileUrl),
             FileSize = c.FileSize,
             Label = c.Label,
             CategoryId = c.CategoryId,
@@ -171,7 +171,7 @@ public class CvService : ICvService
         {
             StudentId = studentId,
             FileName = cleanName,
-            FileUrl = uploadResult.FileUrl,
+            FileUrl = uploadResult.FileKey,
             PublicId = uploadResult.FileKey,
             FileSize = (int)uploadResult.FileSize,
             Label = string.IsNullOrWhiteSpace(label) ? cleanName : label.Trim(),
@@ -268,14 +268,14 @@ public class CvService : ICvService
         return fileUrl;
     }
 
-    private static CvFileDto MapToDto(CvFile entity, string? categoryName)
+    private CvFileDto MapToDto(CvFile entity, string? categoryName)
     {
         return new CvFileDto
         {
             Id = entity.Id,
             StudentId = entity.StudentId,
             FileName = entity.FileName,
-            FileUrl = entity.FileUrl,
+            FileUrl = _storageService.GetPublicUrl(entity.FileUrl),
             FileSize = entity.FileSize,
             Label = entity.Label,
             CategoryId = entity.CategoryId,
