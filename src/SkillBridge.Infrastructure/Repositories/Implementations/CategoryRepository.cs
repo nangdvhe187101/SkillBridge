@@ -23,6 +23,20 @@ public class CategoryRepository : ICategoryRepository
             .ToListAsync();
     }
 
+    public async Task<IReadOnlyList<(Category Category, int JobCount)>> GetAllWithJobCountAsync()
+    {
+        var list = await _context.Categories
+            .AsNoTracking()
+            .Select(c => new
+            {
+                Category = c,
+                JobCount = c.Jobs.Count(j => j.Status == "open" && j.Employer.AccountStatus != "blacklisted")
+            })
+            .ToListAsync();
+
+        return list.Select(x => (x.Category, x.JobCount)).ToList();
+    }
+
     public async Task<Category?> GetByIdAsync(int id)
     {
         return await _context.Categories

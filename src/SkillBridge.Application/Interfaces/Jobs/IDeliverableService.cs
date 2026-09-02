@@ -26,4 +26,11 @@ public interface IDeliverableService
         int deliverableId,
         ReviewDeliverableRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<(Stream Stream, string ContentType, string FileName)?> GetDeliverableFileStreamAsync(
+        int userId,
+        int jobId,
+        int deliverableId,
+        string type = "final",
+        CancellationToken cancellationToken = default);
 }

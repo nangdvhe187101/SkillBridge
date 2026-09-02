@@ -109,6 +109,40 @@ export async function downloadCandidateCv(cvFileId, originalFileName = 'CV_UngVi
     }
 }
 
+export async function downloadDeliverableFile(jobId, deliverableId, originalFileName = 'deliverable.zip', type = 'final') {
+    const fileName = originalFileName || 'deliverable';
+    if (!jobId || !deliverableId) return;
+
+    try {
+        const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
+        const downloadUrl = `${API_URL}/jobs/${jobId}/deliverables/${deliverableId}/download?type=${type}`;
+        const token = getAccessToken();
+        const headers = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch(downloadUrl, { headers, credentials: 'include' });
+        if (res.ok) {
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+            return;
+        } else {
+            const errData = await res.json().catch(() => ({}));
+            console.error(`Tải sản phẩm bàn giao thất bại (${res.status}):`, errData.message || res.statusText);
+            alert(errData.message || 'Không thể tải file sản phẩm bàn giao.');
+        }
+    } catch (err) {
+        console.error("Lỗi khi tải file sản phẩm bàn giao:", err);
+    }
+}
+
 export function exportTransactionsToCSV(transactions, fileName = 'Sao_ke_giao_dich_SkillBridge.csv') {
     const headers = ['Mã Giao Dịch', 'Thời Gian', 'Loại Giao Dịch', 'Diễn Giải', 'Biến Động (VNĐ)', 'Chiều Tiền'];
     const rows = transactions.map((t, idx) => {

@@ -7,5 +7,6 @@ namespace SkillBridge.Infrastructure.Repositories.Interfaces;
 public interface ICategoryRepository
 {
     Task<IReadOnlyList<Category>> GetAllAsync();
+    Task<IReadOnlyList<(Category Category, int JobCount)>> GetAllWithJobCountAsync();
     Task<Category?> GetByIdAsync(int id);
 }

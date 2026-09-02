@@ -3,6 +3,7 @@ import ModalShell from './ModalShell';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import { submitJobDeliverable } from '../../api/deliverableApi';
+import { downloadDeliverableFile } from '../../utils/fileDownloader';
 
 function watermarkImageFile(file) {
   return new Promise((resolve, reject) => {
@@ -42,8 +43,8 @@ function watermarkImageFile(file) {
 
 function DeliverablePreview({ d, revealFinal }) {
   if (!d) return null;
-  if (d.mode === 'link' || (!d.previewFileUrl && d.externalUrl)) {
-    const url = d.url || d.externalUrl;
+  if (d.mode === 'link' || (!d.previewFileUrl && d.externalUrl) || d.fileType === 'url') {
+    const url = d.url || d.externalUrl || d.previewFileUrl;
     return (
       <>
         <p style={{ margin: '6px 0', fontSize: 13 }}><b>Link:</b> <a href={url} target="_blank" rel="noopener noreferrer">{url}</a></p>
@@ -59,7 +60,13 @@ function DeliverablePreview({ d, revealFinal }) {
     return revealFinal ? (
       <>
         <div style={{ margin: '8px 0' }}><img src={finalUrl || previewUrl} style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid var(--border)' }} alt="Bàn giao" /></div>
-        <a className="btn btn-outline btn-sm" href={finalUrl || previewUrl} target="_blank" rel="noreferrer" download={d.fileName || 'deliverable'}>⬇️ Tải bản gốc</a>
+        <button
+          type="button"
+          className="btn btn-outline btn-sm"
+          onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
+        >
+          ⬇️ Tải bản gốc
+        </button>
       </>
     ) : (
       <>
@@ -72,12 +79,30 @@ function DeliverablePreview({ d, revealFinal }) {
   }
 
   return revealFinal && finalUrl ? (
-    <div style={{ margin: '8px 0' }}><a className="btn btn-outline btn-sm" href={finalUrl} target="_blank" rel="noreferrer" download={d.fileName || 'deliverable'}>⬇️ Tải {d.fileName || 'file bàn giao'}</a></div>
+    <div style={{ margin: '8px 0' }}>
+      <button
+        type="button"
+        className="btn btn-outline btn-sm"
+        onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
+      >
+        ⬇️ Tải {d.fileName || 'file bàn giao'}
+      </button>
+    </div>
   ) : (
     <div className="empty-state" style={{ textAlign: 'left', background: 'var(--surface)', borderRadius: 10, padding: 12, margin: '8px 0' }}>
       🔒 <b>{d.fileName || 'Tệp đính kèm'}</b>{d.fileSize ? ` (${Math.round(d.fileSize / 1024)} KB)` : ''}
       <br /><span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Nội dung đầy đủ được lưu trên Cloudflare R2 và bảo vệ an toàn.</span>
-      {finalUrl && <div style={{ marginTop: 8 }}><a href={finalUrl} target="_blank" rel="noreferrer" className="btn btn-primary btn-sm">Xem file</a></div>}
+      {finalUrl && (
+        <div style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
+          >
+            Tải file an toàn
+          </button>
+        </div>
+      )}
     </div>
   );
 }

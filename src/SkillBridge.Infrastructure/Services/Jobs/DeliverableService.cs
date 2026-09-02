@@ -336,6 +336,102 @@ public class DeliverableService : IDeliverableService
         return MapToDeliverableDto(deliverable);
     }
 
+    public async Task<(Stream Stream, string ContentType, string FileName)?> GetDeliverableFileStreamAsync(
+        int userId,
+        int jobId,
+        int deliverableId,
+        string type = "final",
+        CancellationToken cancellationToken = default)
+    {
+        var job = await _dbContext.Jobs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(j => j.Id == jobId, cancellationToken);
+
+        if (job == null)
+        {
+            throw new BusinessException("Công việc không tồn tại.");
+        }
+
+        var deliverable = await _dbContext.JobDeliverables
+            .AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Id == deliverableId && d.JobId == jobId, cancellationToken);
+
+        if (deliverable == null)
+        {
+            throw new BusinessException("Sản phẩm bàn giao không tồn tại.");
+        }
+
+        // Quyền truy cập IDOR: Chỉ Nhà tuyển dụng đăng việc HOẶC Sinh viên nộp deliverable này mới được tải
+        var isEmployer = job.EmployerId == userId;
+        var isStudent = deliverable.StudentId == userId;
+
+        if (!isEmployer && !isStudent)
+        {
+            throw new BusinessException("Bạn không có quyền truy cập sản phẩm bàn giao này.");
+        }
+
+        // Nếu deliverable là liên kết ngoài (GitHub/Figma/Drive), không thể stream từ R2
+        if (string.Equals(deliverable.FileType, "url", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Sản phẩm bàn giao là liên kết ngoài (GitHub/Figma/Drive), không thể tải về qua hệ thống lưu trữ.");
+        }
+
+        var targetUrl = string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase)
+            ? deliverable.PreviewFileUrl
+            : (deliverable.FinalFileUrl ?? deliverable.PreviewFileUrl);
+
+        if (string.IsNullOrWhiteSpace(targetUrl))
+        {
+            throw new BusinessException("Không tìm thấy đường dẫn file sản phẩm bàn giao.");
+        }
+
+        var fileKey = ExtractFileKeyFromUrl(targetUrl);
+        if (string.IsNullOrWhiteSpace(fileKey))
+        {
+            throw new BusinessException("Không xác định được vị trí file trên hệ thống lưu trữ.");
+        }
+
+        var downloadResult = await _storageService.DownloadFileAsync(fileKey, cancellationToken);
+        if (downloadResult == null)
+        {
+            throw new BusinessException("Không thể tải file sản phẩm bàn giao từ hệ thống lưu trữ.");
+        }
+
+        var ext = Path.GetExtension(deliverable.FileName).ToLowerInvariant();
+        var contentType = !string.IsNullOrWhiteSpace(downloadResult.Value.ContentType)
+            ? downloadResult.Value.ContentType
+            : (ext switch
+            {
+                ".pdf" => "application/pdf",
+                ".zip" => "application/zip",
+                ".rar" => "application/x-rar-compressed",
+                ".png" => "image/png",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".webp" => "image/webp",
+                _ => "application/octet-stream"
+            });
+
+        return (downloadResult.Value.Stream, contentType, deliverable.FileName);
+    }
+
+    private static string? ExtractFileKeyFromUrl(string? fileUrl)
+    {
+        if (string.IsNullOrWhiteSpace(fileUrl)) return null;
+
+        if (Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
+        {
+            var path = Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/');
+            var idx = path.IndexOf("job-deliverables/", StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0)
+            {
+                return path.Substring(idx);
+            }
+            return path;
+        }
+
+        return fileUrl;
+    }
+
     private static DeliverableDto MapToDeliverableDto(JobDeliverable d)
     {
         return new DeliverableDto

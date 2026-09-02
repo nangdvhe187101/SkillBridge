@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -16,9 +16,6 @@ public partial class Category
     [Column("name")]
     [StringLength(100)]
     public string Name { get; set; } = null!;
-
-    [Column("job_count")]
-    public int JobCount { get; set; }
 
     [Column("default_revision_limit")]
     public int DefaultRevisionLimit { get; set; }
