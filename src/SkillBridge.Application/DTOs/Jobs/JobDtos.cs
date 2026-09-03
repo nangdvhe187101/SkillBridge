@@ -58,6 +58,8 @@ public class JobSummaryDto
     public int? HiredApplicantId { get; set; }
     public string? HiredStudentName { get; set; }
     public decimal? EscrowAmount { get; set; }
+    public int RevisionLimit { get; set; }
+    public int RevisionCount { get; set; }
 }
 
 public class JobDetailDto
@@ -71,6 +73,7 @@ public class JobDetailDto
     public bool IsFeatured { get; set; }
     public string Status { get; set; } = string.Empty;
     public int RevisionLimit { get; set; }
+    public int RevisionCount { get; set; }
     public DateTime PostedAt { get; set; }
     public DateTime? DeadlineAt { get; set; }
     public int CategoryId { get; set; }

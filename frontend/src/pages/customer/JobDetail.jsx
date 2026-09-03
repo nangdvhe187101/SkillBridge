@@ -11,6 +11,7 @@ import { DeliverablePreview } from '../../components/modals/DeliverableModals';
 import { slugify } from '../../data/companies';
 import { downloadJobAttachment } from '../../utils/fileDownloader';
 import * as jobApi from '../../api/jobApi';
+import { getJobDeliverables } from '../../api/deliverableApi';
 
 function formatDurationDetail(deadlineAt, postedAt) {
   if (!deadlineAt) return null;
@@ -28,14 +29,16 @@ function formatDurationDetail(deadlineAt, postedAt) {
 
 function formatDeadline(ts) {
   if (!ts) return '—';
-  const diff = ts - Date.now();
+  const time = typeof ts === 'string' || ts instanceof Date ? new Date(ts).getTime() : ts;
+  if (isNaN(time)) return '—';
+  const diff = time - Date.now();
   if (diff <= 0) return 'Đã quá hạn';
   const days = Math.floor(diff / 86400000);
   const hours = Math.floor((diff % 86400000) / 3600000);
   const mins = Math.floor((diff % 3600000) / 60000);
-  if (days > 0) return `còn ${days} ngày ${hours} giờ`;
-  if (hours > 0) return `còn ${hours} giờ ${mins} phút`;
-  return `còn ${mins} phút`;
+  if (days > 0) return `${days} ngày ${hours} giờ`;
+  if (hours > 0) return `${hours} giờ ${mins} phút`;
+  return `${mins} phút`;
 }
 
 function useTick(ms) {
@@ -261,9 +264,34 @@ export default function JobDetail() {
     );
   }
 
+  const [studentDeliverable, setStudentDeliverable] = useState(null);
+  const [studentFeedbackList, setStudentFeedbackList] = useState([]);
+
   const isStudentHired = isStudent && myApp && ['hired', 'submitted', 'revision_requested', 'completed'].includes(myApp.status);
-  const currentWorkStatus = myApp ? (myApp.status === 'hired' ? 'in_progress' : myApp.status) : (dashJob?.status);
+  const currentWorkStatus = myApp ? (myApp.jobStatus || (myApp.status === 'hired' ? 'in_progress' : myApp.status)) : (dashJob?.status);
   const showWorkArea = (dashJob && ['in_progress', 'submitted', 'revision_requested', 'completed', 'cancelled'].includes(dashJob.status) && !!dashJob.hiredApplicant) || isStudentHired;
+
+  useEffect(() => {
+    if (isStudentHired && jobId) {
+      getJobDeliverables(jobId)
+        .then((res) => {
+          const delivs = Array.isArray(res) ? res : (res?.items || []);
+          if (delivs.length > 0) {
+            setStudentDeliverable(delivs[0]);
+            if (delivs[0].feedbacks?.length) {
+              setStudentFeedbackList(delivs[0].feedbacks.map((f) => ({
+                text: f.content || f.feedbackText || '',
+                at: f.createdAt ? new Date(f.createdAt).toLocaleDateString('vi-VN') : 'Gần đây',
+              })));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [isStudentHired, jobId]);
+
+  const activeDeliverable = dashJob?.deliverable || studentDeliverable;
+  const activeFeedbacks = (dashJob?.deliverableFeedback?.length ? dashJob.deliverableFeedback : null) || studentFeedbackList;
 
   return (
     <div className="page active">
@@ -367,7 +395,7 @@ export default function JobDetail() {
                     <div className="jd-card">
                       <h4>⏳ Đã nộp bàn giao</h4>
                       <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '6px 0 12px' }}>Đang chờ nhà tuyển dụng xác nhận hoặc yêu cầu sửa.</p>
-                      {(dashJob?.deliverable) && <DeliverablePreview d={dashJob.deliverable} />}
+                      {activeDeliverable && <DeliverablePreview d={activeDeliverable} />}
                       <button className="btn btn-outline btn-block" style={{ marginTop: 8 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>
                         ✏️ Cập nhật bàn giao
                       </button>
@@ -376,10 +404,10 @@ export default function JobDetail() {
                   {currentWorkStatus === 'revision_requested' && (
                     <div className="jd-card" style={{ borderColor: 'var(--coral)' }}>
                       <h4>⚠️ Yêu cầu sửa đổi bàn giao</h4>
-                      {dashJob?.deliverableFeedback && dashJob.deliverableFeedback.length > 0 && (
+                      {activeFeedbacks && activeFeedbacks.length > 0 && (
                         <div className="feedback-box" style={{ background: 'var(--coral-dim)', padding: 10, borderRadius: 8, margin: '8px 0' }}>
                           <b>Góp ý từ NTD:</b>
-                          <p style={{ marginTop: 4, fontSize: 13 }}>{dashJob.deliverableFeedback[dashJob.deliverableFeedback.length - 1].text}</p>
+                          <p style={{ marginTop: 4, fontSize: 13 }}>{activeFeedbacks[activeFeedbacks.length - 1].text}</p>
                         </div>
                       )}
                       <button className="btn btn-primary btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>📤 Nộp lại bàn giao</button>
@@ -390,7 +418,7 @@ export default function JobDetail() {
                     <div className="jd-card">
                       <h4>✅ Đã hoàn thành & nhận thanh toán</h4>
                       <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>Cảm ơn bạn đã hoàn thành công việc trên SkillBridge.</p>
-                      {dashJob?.deliverable && <DeliverablePreview d={dashJob.deliverable} revealFinal />}
+                      {activeDeliverable && <DeliverablePreview d={activeDeliverable} revealFinal />}
                     </div>
                   )}
                   {currentWorkStatus === 'cancelled' && <div className="jd-card"><h4>🚫 Công việc đã bị hủy</h4></div>}

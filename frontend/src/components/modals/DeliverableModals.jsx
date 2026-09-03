@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ModalShell from './ModalShell';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
-import { submitJobDeliverable } from '../../api/deliverableApi';
+import { submitJobDeliverable, getJobDeliverables } from '../../api/deliverableApi';
 import { downloadDeliverableFile } from '../../utils/fileDownloader';
 
 function watermarkImageFile(file) {
@@ -109,12 +109,39 @@ function DeliverablePreview({ d, revealFinal }) {
 export { DeliverablePreview };
 
 export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) {
-  const { state, submitDeliverable } = useStore();
+  const { state, submitDeliverable, refreshMyApplications } = useStore();
   const localJob = state.myJobs.find((j) => j.id === jobId) ||
                    state.myApplications.find((a) => a.jobId === jobId || a.id === jobId);
   const job = propJob || localJob || { id: jobId, title: 'Công việc', status: 'in_progress' };
-  const prev = job?.deliverable || {};
-  const [mode, setMode] = useState(prev.mode || 'file');
+  const [apiDeliverable, setApiDeliverable] = useState(null);
+  const [apiFeedbacks, setApiFeedbacks] = useState([]);
+
+  useEffect(() => {
+    if (jobId && !isNaN(Number(jobId)) && (!job?.deliverableFeedback?.length || !job?.deliverable)) {
+      getJobDeliverables(Number(jobId))
+        .then((res) => {
+          const delivs = Array.isArray(res) ? res : (res?.items || []);
+          if (delivs.length > 0) {
+            const latest = delivs[0];
+            setApiDeliverable(latest);
+            if (latest.externalUrl) setUrl((prevUrl) => prevUrl || latest.externalUrl);
+            if (latest.note) setNote((prevNote) => prevNote || latest.note);
+            if (latest.feedbacks?.length) {
+              setApiFeedbacks(latest.feedbacks.map((f) => ({
+                version: latest.version,
+                text: f.content || f.feedbackText || '',
+                at: f.createdAt ? new Date(f.createdAt).toLocaleDateString('vi-VN') : 'Gần đây',
+                author: f.authorName || 'Nhà tuyển dụng',
+              })));
+            }
+          }
+        })
+        .catch(() => {});
+    }
+  }, [jobId]);
+
+  const prev = job?.deliverable || apiDeliverable || {};
+  const [mode, setMode] = useState(prev.mode || (prev.externalUrl ? 'link' : 'file'));
   const [url, setUrl] = useState(prev.url || prev.externalUrl || '');
   const [note, setNote] = useState(prev.note || '');
   const [file, setFile] = useState(null);
@@ -123,8 +150,9 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
 
   if (!job) return null;
   const isUpdate = ['submitted', 'revision_requested'].includes(job.status) && !!(prev.url || prev.fileName || prev.externalUrl);
-  const lastFeedback = job.status === 'revision_requested' && job.deliverableFeedback?.length
-    ? job.deliverableFeedback[job.deliverableFeedback.length - 1] : null;
+  const allFeedbacks = job.deliverableFeedback?.length ? job.deliverableFeedback : apiFeedbacks;
+  const lastFeedback = job.status === 'revision_requested' && allFeedbacks.length
+    ? allFeedbacks[allFeedbacks.length - 1] : null;
 
   const submit = async () => {
     setErrorMsg('');
@@ -142,6 +170,9 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
           await submitJobDeliverable(jobId, formData);
         }
         submitDeliverable({ jobId, mode: 'link', url: url.trim(), note });
+        if (typeof refreshMyApplications === 'function') {
+          refreshMyApplications();
+        }
         onSubmitted?.();
         onClose();
       } catch (err) {
@@ -210,6 +241,9 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
           finalDataUrl: r2Result?.previewFileUrl,
           note
         });
+      }
+      if (typeof refreshMyApplications === 'function') {
+        refreshMyApplications();
       }
       onSubmitted?.();
       onClose();

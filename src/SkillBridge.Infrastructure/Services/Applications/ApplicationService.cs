@@ -92,7 +92,11 @@ public class ApplicationService : IApplicationService
             CvFileUrl = _storageService.GetPublicUrl(cv.FileUrl),
             CoverLetter = application.CoverLetter,
             Status = application.Status,
-            AppliedAt = application.AppliedAt
+            AppliedAt = application.AppliedAt,
+            JobStatus = job.Status,
+            DeadlineAt = job.DeadlineAt,
+            RevisionLimit = job.RevisionLimit,
+            RevisionCount = job.RevisionCount
         };
     }
 
@@ -156,7 +160,11 @@ public class ApplicationService : IApplicationService
             CvFileUrl = _storageService.GetPublicUrl(a.CvFile?.FileUrl),
             CoverLetter = a.CoverLetter,
             Status = a.Status,
-            AppliedAt = a.AppliedAt
+            AppliedAt = a.AppliedAt,
+            JobStatus = a.Job?.Status,
+            DeadlineAt = a.Job?.DeadlineAt,
+            RevisionLimit = a.Job?.RevisionLimit ?? 2,
+            RevisionCount = a.Job?.RevisionCount ?? 0
         }).ToList();
 
         return new SkillBridge.Application.DTOs.Jobs.PagedResult<JobApplicationResponseDto>

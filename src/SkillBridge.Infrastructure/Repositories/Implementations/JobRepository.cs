@@ -61,6 +61,7 @@ public class JobRepository : IJobRepository
             IsFeatured = job.Job.IsFeatured,
             Status = job.Job.Status,
             RevisionLimit = job.Job.RevisionLimit,
+            RevisionCount = job.Job.RevisionCount,
             PostedAt = job.Job.PostedAt,
             DeadlineAt = job.Job.DeadlineAt,
             CategoryId = job.Job.CategoryId,
@@ -178,7 +179,9 @@ public class JobRepository : IJobRepository
                 AttachmentCount = j.Attachments.Count(),
                 HiredApplicantId = j.HiredApplicantId,
                 HiredStudentName = j.HiredApplicant != null ? j.HiredApplicant.FullName : null,
-                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null)
+                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null),
+                RevisionLimit = j.RevisionLimit,
+                RevisionCount = j.RevisionCount
             })
             .ToListAsync();
 
@@ -239,7 +242,9 @@ public class JobRepository : IJobRepository
                 AttachmentCount = j.Attachments.Count(),
                 HiredApplicantId = j.HiredApplicantId,
                 HiredStudentName = j.HiredApplicant != null ? j.HiredApplicant.FullName : null,
-                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null)
+                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null),
+                RevisionLimit = j.RevisionLimit,
+                RevisionCount = j.RevisionCount
             })
             .ToListAsync();
 
@@ -498,7 +503,9 @@ public class JobRepository : IJobRepository
                 AttachmentCount = j.Attachments.Count(),
                 HiredApplicantId = j.HiredApplicantId,
                 HiredStudentName = j.HiredApplicant != null ? j.HiredApplicant.FullName : null,
-                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null)
+                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null),
+                RevisionLimit = j.RevisionLimit,
+                RevisionCount = j.RevisionCount
             })
             .ToListAsync();
 

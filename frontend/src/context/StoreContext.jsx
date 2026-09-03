@@ -39,6 +39,8 @@ export function mapPublicJob(j) {
     hiredApplicant: j.hiredStudentName || j.hiredApplicant || null,
     hiredStudentName: j.hiredStudentName || j.hiredApplicant || null,
     escrowAmount: j.escrowAmount !== undefined && j.escrowAmount !== null ? j.escrowAmount : null,
+    revisionLimit: j.revisionLimit ?? 2,
+    revisionCount: j.revisionCount ?? 0,
   };
 }
 
@@ -64,6 +66,8 @@ export function mapMyJob(j) {
     hiredApplicant: j.hiredStudentName || j.hiredApplicant || null,
     hiredStudentName: j.hiredStudentName || j.hiredApplicant || null,
     escrowAmount: j.escrowAmount !== undefined && j.escrowAmount !== null ? j.escrowAmount : null,
+    revisionLimit: j.revisionLimit ?? 2,
+    revisionCount: j.revisionCount ?? 0,
   };
 }
 
@@ -415,7 +419,7 @@ function reducer(state, action) {
       const version = wasUpdate && job?.deliverable ? (job.deliverable.version || 1) + 1 : 1;
       const deliverable = { mode, url: url || '', fileName: fileName || '', fileSize: fileSize || 0, previewDataUrl: previewDataUrl || null, finalDataUrl: finalDataUrl || null, note, submittedAt: fmtNow(), version, status: 'submitted' };
       const myJobs = state.myJobs.map((j) => (j.id === jobId ? { ...j, deliverable, status: 'submitted', hiredApplicantIsMe: true } : j));
-      let myApplications = state.myApplications.map((a) => (a.jobId === jobId || a.dashJobId === jobId ? { ...a, status: 'submitted' } : a));
+      let myApplications = state.myApplications.map((a) => (a.jobId === jobId || a.dashJobId === jobId ? { ...a, status: 'submitted', jobStatus: 'submitted' } : a));
       const notifications = addNotifTo(
         state.notifications, '📤',
         wasRevision ? `Bạn đã nộp lại bàn giao (phiên bản ${version}).` : (wasUpdate ? `Bạn đã cập nhật bàn giao.` : `Bạn đã nộp bàn giao — đang chờ xác nhận.`),
@@ -769,6 +773,18 @@ export function StoreProvider({ children }) {
     }
   }, []);
 
+  const refreshMyApplications = useCallback(async () => {
+    try {
+      const res = await applicationApi.getMyApplications(1, 50);
+      const list = Array.isArray(res) ? res : (res?.items || []);
+      dispatch({ type: 'SET_MY_APPLICATIONS', applications: list });
+      return list;
+    } catch (err) {
+      console.error('Không thể tải danh sách ứng tuyển từ backend:', err);
+      return [];
+    }
+  }, []);
+
   // Tải danh mục và danh sách công việc công khai (không cần đăng nhập)
   useEffect(() => {
     jobApi.getCategories()
@@ -819,14 +835,9 @@ export function StoreProvider({ children }) {
         })
         .catch((err) => console.error('Lỗi tải danh sách CV:', err));
 
-      applicationApi.getMyApplications()
-        .then((apps) => {
-          const list = Array.isArray(apps) ? apps : (apps?.items || []);
-          dispatch({ type: 'SET_MY_APPLICATIONS', applications: list });
-        })
-        .catch((err) => console.error('Lỗi tải danh sách ứng tuyển:', err));
+      refreshMyApplications();
     }
-  }, [state.currentUser, state.isInitializing, refreshMyJobs]);
+  }, [state.currentUser, state.isInitializing, refreshMyJobs, refreshMyApplications]);
 
   useEffect(() => {
     const id = setInterval(() => dispatch({ type: 'CHECK_DEADLINES' }), 30000);
@@ -847,6 +858,7 @@ export function StoreProvider({ children }) {
     const act = {
       refreshJobs,
       refreshMyJobs,
+      refreshMyApplications,
       createJobPost: async (jobData) => {
         const result = await jobApi.createJob(jobData);
         await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
@@ -1087,7 +1099,7 @@ export function StoreProvider({ children }) {
     act.toggleSaveJob = act.toggleSaveJobAsync;
     return act;
   },
-  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, state.cvFiles, state.myApplications]
+  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, state.cvFiles, state.myApplications]
 );
 
   const value = useMemo(() => ({ state, dispatch, ...actions }), [state, actions]);

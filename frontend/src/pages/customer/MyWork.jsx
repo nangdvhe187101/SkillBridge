@@ -1,12 +1,15 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
+import { getJobDeliverables } from '../../api/deliverableApi';
 
 function formatDeadline(ts) {
   if (!ts) return '—';
-  const diff = ts - Date.now();
+  const time = typeof ts === 'string' || ts instanceof Date ? new Date(ts).getTime() : ts;
+  if (isNaN(time)) return '—';
+  const diff = time - Date.now();
   if (diff <= 0) return 'Đã quá hạn';
   const days = Math.floor(diff / 86400000);
   const hours = Math.floor((diff % 86400000) / 3600000);
@@ -36,37 +39,94 @@ const APP_STATUS_COLOR = {
 };
 
 export default function MyWork() {
-  const { state, openChatWithPerson } = useStore();
+  const { state, openChatWithPerson, refreshMyApplications } = useStore();
   const { openModal } = useModal();
   const navigate = useNavigate();
 
   const [appsPage, setAppsPage] = useState(1);
+  const [deliverablesMap, setDeliverablesMap] = useState({});
   const appsPageSize = 5;
+
+  // Làm mới danh sách ứng tuyển khi vào trang
+  useEffect(() => {
+    if (typeof refreshMyApplications === 'function') {
+      refreshMyApplications();
+    }
+  }, [refreshMyApplications]);
+
+  // Lọc các ứng tuyển đang trong giai đoạn làm việc thực tế
+  const activeApps = useMemo(() => {
+    return (state.myApplications || []).filter((a) =>
+      ['hired', 'submitted', 'revision_requested'].includes(a.status) ||
+      ['in_progress', 'submitted', 'revision_requested'].includes(a.jobStatus)
+    );
+  }, [state.myApplications]);
+
+  // Nạp danh sách deliverables thật cho các việc đang làm
+  const loadDeliverables = useCallback(async () => {
+    if (!activeApps.length) return;
+    const results = {};
+    await Promise.allSettled(
+      activeApps.map(async (a) => {
+        const jId = a.jobId || a.id;
+        if (!jId || isNaN(Number(jId))) return;
+        try {
+          const res = await getJobDeliverables(Number(jId));
+          const delivs = Array.isArray(res) ? res : (res?.items || []);
+          const latest = delivs[0] || null;
+          const feedbacks = (latest?.feedbacks || []).map((f) => ({
+            version: latest.version,
+            text: f.content || f.feedbackText || '',
+            at: f.createdAt ? new Date(f.createdAt).toLocaleDateString('vi-VN') : 'Gần đây',
+            author: f.authorName || 'Nhà tuyển dụng',
+          }));
+          results[jId] = {
+            deliverable: latest,
+            deliverableFeedback: feedbacks,
+          };
+        } catch {
+          // ignore error if deliverables cannot be fetched
+        }
+      })
+    );
+    setDeliverablesMap(results);
+  }, [activeApps]);
+
+  useEffect(() => {
+    loadDeliverables();
+  }, [loadDeliverables]);
 
   const activeWork = useMemo(() => {
     // Lấy danh sách việc đang làm từ myApplications (cho tài khoản sinh viên từ API backend)
-    const appsWork = (state.myApplications || [])
-      .filter((a) => ['hired', 'submitted', 'revision_requested'].includes(a.status))
-      .map((a) => {
-        const matchingJob = (state.jobs || []).find((j) => j.id === a.jobId || (a.dashJobId && j.dashJobId === a.dashJobId));
-        const localJob = (state.myJobs || []).find((j) => j.id === a.jobId || (a.dashJobId && j.id === a.dashJobId));
-        return {
-          id: a.jobId || a.id,
-          jobId: a.jobId || a.id,
-          title: a.jobTitle || a.title || matchingJob?.title || 'Công việc',
-          budget: a.budget || matchingJob?.budget || 0,
-          status: a.status === 'hired' ? 'in_progress' : a.status,
-          deadlineAt: localJob?.deadlineAt || matchingJob?.deadlineAt,
-          revisionCount: localJob?.revisionCount || 0,
-          revisionLimit: localJob?.revisionLimit || 2,
-          deliverableFeedback: localJob?.deliverableFeedback || [],
-          emp: a.employerName || a.emp || matchingJob?.emp || 'Nhà tuyển dụng',
-        };
-      });
+    const appsWork = activeApps.map((a) => {
+      const targetJobId = a.jobId || a.id;
+      const matchingJob = (state.jobs || []).find((j) => j.id === targetJobId || (a.dashJobId && j.dashJobId === a.dashJobId));
+      const delivData = deliverablesMap[targetJobId] || {};
+
+      // Xác định trạng thái chính xác: ưu tiên a.jobStatus từ backend, fallback a.status
+      let effectiveStatus = a.jobStatus;
+      if (!effectiveStatus || effectiveStatus === 'open' || effectiveStatus === 'filled') {
+        effectiveStatus = a.status === 'hired' ? 'in_progress' : a.status;
+      }
+
+      return {
+        id: targetJobId,
+        jobId: targetJobId,
+        title: a.jobTitle || a.title || matchingJob?.title || 'Công việc',
+        budget: a.budget || matchingJob?.budget || 0,
+        status: effectiveStatus,
+        deadlineAt: a.deadlineAt || matchingJob?.deadlineAt || null,
+        revisionCount: a.revisionCount !== undefined && a.revisionCount !== null ? a.revisionCount : (matchingJob?.revisionCount || 0),
+        revisionLimit: a.revisionLimit !== undefined && a.revisionLimit !== null ? a.revisionLimit : (matchingJob?.revisionLimit || 2),
+        deliverable: delivData.deliverable || null,
+        deliverableFeedback: delivData.deliverableFeedback || [],
+        emp: a.employerName || a.emp || matchingJob?.emp || 'Nhà tuyển dụng',
+      };
+    });
 
     if (appsWork.length > 0) return appsWork;
 
-    // Fallback cho dữ liệu mock state.myJobs nếu có
+    // Fallback cho dữ liệu mock state.myJobs nếu không có dữ liệu ứng tuyển backend
     return (state.myJobs || []).filter((j) =>
       ['in_progress', 'submitted', 'revision_requested'].includes(j.status) && j.hiredApplicant
     ).map((j) => ({
@@ -74,13 +134,26 @@ export default function MyWork() {
       jobId: j.id,
       emp: state.jobs.find((pj) => pj.dashJobId === j.id)?.emp || 'Nhà tuyển dụng'
     }));
-  }, [state.myApplications, state.myJobs, state.jobs]);
+  }, [activeApps, deliverablesMap, state.jobs, state.myJobs]);
 
   const appsTotalPages = Math.ceil(state.myApplications.length / appsPageSize) || 1;
   const pagedApplications = useMemo(() => {
     const start = (appsPage - 1) * appsPageSize;
     return state.myApplications.slice(start, start + appsPageSize);
   }, [state.myApplications, appsPage]);
+
+  const handleOpenDeliverableModal = (targetJobId, j) => {
+    openModal('deliverable', {
+      jobId: targetJobId,
+      job: j,
+      onSubmitted: () => {
+        loadDeliverables();
+        if (typeof refreshMyApplications === 'function') {
+          refreshMyApplications();
+        }
+      }
+    });
+  };
 
   return (
     <div className="page active">
@@ -127,19 +200,19 @@ export default function MyWork() {
                         <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                           {isRevision && (
                             <button className="btn btn-primary btn-sm" style={{ background: 'var(--coral)' }}
-                              onClick={() => openModal('deliverable', { jobId: targetJobId, job: j })}>
+                              onClick={() => handleOpenDeliverableModal(targetJobId, j)}>
                               📤 Nộp lại ({j.revisionCount}/{j.revisionLimit} lần sửa)
                             </button>
                           )}
                           {isSubmitted && (
                             <button className="btn btn-outline btn-sm"
-                              onClick={() => openModal('deliverable', { jobId: targetJobId, job: j })}>
+                              onClick={() => handleOpenDeliverableModal(targetJobId, j)}>
                               ✏️ Cập nhật bàn giao
                             </button>
                           )}
                           {isInProgress && (
                             <button className="btn btn-primary btn-sm"
-                              onClick={() => openModal('deliverable', { jobId: targetJobId, job: j })}>
+                              onClick={() => handleOpenDeliverableModal(targetJobId, j)}>
                               📤 Nộp bàn giao / sản phẩm
                             </button>
                           )}

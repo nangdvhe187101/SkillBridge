@@ -23,6 +23,10 @@ public class JobApplicationResponseDto
     public string? CoverLetter { get; set; }
     public string Status { get; set; } = null!;
     public DateTime AppliedAt { get; set; }
+    public string? JobStatus { get; set; }
+    public DateTime? DeadlineAt { get; set; }
+    public int RevisionLimit { get; set; }
+    public int RevisionCount { get; set; }
 }
 
 public class ApplicantItemDto
