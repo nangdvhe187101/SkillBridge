@@ -91,7 +91,7 @@ function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
 
             <div className="acct-avatar-info">
                 <h4>Ảnh đại diện (Avatar)</h4>
-                <p>Hỗ trợ định dạng JPG, PNG, WEBP tối đa 5MB. Ảnh sẽ được tối ưu và lưu trên Cloudflare R2.</p>
+                <p>Hỗ trợ định dạng JPG, PNG, WEBP tối đa 5MB. Ảnh sẽ được tối ưu và bảo mật an toàn.</p>
                 <button
                     type="button"
                     className="btn btn-outline btn-sm"
@@ -435,7 +435,7 @@ function CvManagerTab() {
         setUploading(true);
         try {
             await uploadCvFile(formData);
-            addToast('Tải lên CV thành công lên Cloudflare R2!', 'success');
+            addToast('Tải lên CV thành công!', 'success');
             setLabel('');
             await loadCvs();
         } catch (err) {
@@ -447,7 +447,7 @@ function CvManagerTab() {
     };
 
     const handleDelete = async (id, fileName) => {
-        if (!window.confirm(`Bạn có chắc chắn muốn xóa "${fileName}"? File sẽ bị xóa vĩnh viễn khỏi Cloudflare R2.`)) {
+        if (!window.confirm(`Bạn có chắc chắn muốn xóa "${fileName}"?`)) {
             return;
         }
 
@@ -474,7 +474,7 @@ function CvManagerTab() {
 
             <div className="acct-section" style={{ paddingTop: 0 }}>
                 <p className="acct-section-desc">
-                    Tải lên các bản CV chuyên ngành của bạn để ứng tuyển nhanh chóng vào các công việc. Mọi file được bảo mật và lưu trữ an toàn trên Cloudflare R2.
+                    Tải lên các bản CV chuyên ngành của bạn để ứng tuyển nhanh chóng vào các công việc. Mọi file được bảo mật và lưu trữ an toàn.
                 </p>
 
                 <input
@@ -491,7 +491,7 @@ function CvManagerTab() {
                 >
                     <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
                     <h3 style={{ fontSize: 16, margin: '0 0 6px' }}>
-                        {uploading ? '⏳ Đang tải file lên Cloudflare R2...' : 'Nhấn để chọn file CV tải lên'}
+                        {uploading ? '⏳ Đang tải file lên...' : 'Nhấn để chọn file CV tải lên'}
                     </h3>
                     <p style={{ fontSize: 12.5, color: 'var(--muted, #666)', margin: 0 }}>
                         Định dạng hỗ trợ: PDF, DOC, DOCX (Tối đa 10MB)

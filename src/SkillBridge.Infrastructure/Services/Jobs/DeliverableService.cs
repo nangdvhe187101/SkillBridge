@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using SkiaSharp;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.Interfaces.Jobs;
@@ -109,7 +110,8 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Chỉ ứng viên được nhà tuyển dụng chọn thuê chính thức mới có quyền nộp sản phẩm bàn giao cho công việc này.");
         }
 
-        string previewUrl = externalUrl ?? string.Empty;
+        string? previewUrl = externalUrl;
+        string? finalUrl = externalUrl;
         string cleanFileName = fileName != null ? Path.GetFileName(fileName) : "external_link";
         string fileType = "url";
 
@@ -127,32 +129,71 @@ public class DeliverableService : IDeliverableService
             var allowedExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
                 // Tài liệu & dữ liệu
-                ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".json",
+                ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".csv", ".json", ".xml", ".rtf",
                 // Nén & Thiết kế
-                ".zip", ".rar", ".7z", ".tar", ".gz", ".png", ".jpg", ".jpeg", ".webp", ".psd", ".ai", ".fig",
-                // Đa phương tiện
-                ".mp4", ".mp3", ".wav"
+                ".zip", ".rar", ".7z", ".tar", ".gz", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".psd", ".ai", ".fig", ".xd", ".sketch", ".eps",
+                // Video đa phương tiện
+                ".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv", ".wmv", ".flv",
+                // Âm thanh
+                ".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg"
             };
 
             if (!allowedExtensions.Contains(fileExt))
             {
-                throw new BusinessException("Định dạng file không được hỗ trợ. Chỉ chấp nhận tài liệu (PDF, Word, Excel, PowerPoint), file nén (ZIP, RAR), hình ảnh (PNG, JPG), media hoặc file thiết kế.");
+                throw new BusinessException("Định dạng file không được hỗ trợ. Chỉ chấp nhận tài liệu (PDF, Word, Excel, PowerPoint), file nén (ZIP, RAR), video (MP4, MOV, AVI), âm thanh (MP3, WAV), hình ảnh hoặc file thiết kế.");
             }
 
+            // Đọc toàn bộ nội dung file vào byte array để có thể tái sử dụng cho nhiều luồng (validate, upload final, sinh watermark)
+            using var fileMemoryStream = new MemoryStream();
+            await stream.CopyToAsync(fileMemoryStream, cancellationToken);
+            var fileBytes = fileMemoryStream.ToArray();
+
             // Validate denylist safe file signature
-            FileSignatureValidator.ValidateSafeFile(stream, cleanFileName);
+            using (var validateStream = new MemoryStream(fileBytes))
+            {
+                FileSignatureValidator.ValidateSafeFile(validateStream, cleanFileName);
+            }
 
             fileType = fileExt.TrimStart('.');
 
-            // Tải file kết quả công việc lên Cloudflare R2
-            var uploadResult = await _storageService.UploadStreamAsync(
-                stream,
-                cleanFileName,
-                contentType ?? "application/octet-stream",
-                folder: "job-deliverables",
-                cancellationToken: cancellationToken);
+            // 1. Tải bản gốc (Final Clean File) lên hệ thống lưu trữ
+            var finalFileName = $"final_{Guid.NewGuid():N}_{cleanFileName}";
+            using (var finalStream = new MemoryStream(fileBytes))
+            {
+                var uploadFinalResult = await _storageService.UploadStreamAsync(
+                    finalStream,
+                    finalFileName,
+                    contentType ?? "application/octet-stream",
+                    folder: $"job-deliverables/{jobId}",
+                    cancellationToken: cancellationToken);
 
-            previewUrl = uploadResult.FileKey;
+                finalUrl = uploadFinalResult.FileKey;
+            }
+
+            // 2. Tạo bản Preview có Watermark (Nếu là file ảnh)
+            var isImage = new[] { ".png", ".jpg", ".jpeg", ".webp" }.Contains(fileExt);
+            if (isImage)
+            {
+                using var imageStream = new MemoryStream(fileBytes);
+                using var watermarkedStream = ApplyImageWatermark(imageStream, fileExt, jobId);
+                if (watermarkedStream != null)
+                {
+                    var previewFileName = $"preview_{Guid.NewGuid():N}_{cleanFileName}";
+                    var uploadPreviewResult = await _storageService.UploadStreamAsync(
+                        watermarkedStream,
+                        previewFileName,
+                        contentType ?? "image/jpeg",
+                        folder: $"job-deliverables/{jobId}",
+                        cancellationToken: cancellationToken);
+
+                    previewUrl = uploadPreviewResult.FileKey;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(previewUrl))
+            {
+                previewUrl = finalUrl;
+            }
         }
         else if (string.IsNullOrWhiteSpace(externalUrl))
         {
@@ -174,7 +215,7 @@ public class DeliverableService : IDeliverableService
                 StudentId = studentId,
                 Version = currentMaxVersion + 1,
                 PreviewFileUrl = previewUrl,
-                FinalFileUrl = previewUrl,
+                FinalFileUrl = finalUrl,
                 ExternalUrl = externalUrl,
                 FileName = cleanFileName,
                 FileType = string.IsNullOrWhiteSpace(fileType) ? "binary" : fileType,
@@ -370,6 +411,15 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Bạn không có quyền truy cập sản phẩm bàn giao này.");
         }
 
+        // ⚠️ BẢO VỆ SẢN PHẨM: Nếu Nhà tuyển dụng yêu cầu tải bản Final, bắt buộc sản phẩm phải đã được duyệt (accepted)
+        if (isEmployer && string.Equals(type, "final", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!string.Equals(deliverable.Status, "accepted", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BusinessException("Chỉ có thể tải bản gốc (Final) sau khi bạn đã xác nhận nghiệm thu sản phẩm và giải ngân cho sinh viên.");
+            }
+        }
+
         // Nếu deliverable là liên kết ngoài (GitHub/Figma/Drive), không thể stream từ R2
         if (string.Equals(deliverable.FileType, "url", StringComparison.OrdinalIgnoreCase))
         {
@@ -412,6 +462,79 @@ public class DeliverableService : IDeliverableService
             });
 
         return (downloadResult.Value.Stream, contentType, deliverable.FileName);
+    }
+
+    private static Stream? ApplyImageWatermark(Stream inputStream, string ext, int jobId)
+    {
+        try
+        {
+            inputStream.Position = 0;
+            using var originalBitmap = SKBitmap.Decode(inputStream);
+            if (originalBitmap == null) return null;
+
+            using var surface = SKSurface.Create(new SKImageInfo(originalBitmap.Width, originalBitmap.Height));
+            var canvas = surface.Canvas;
+
+            // Vẽ ảnh gốc
+            using var originalImage = SKImage.FromBitmap(originalBitmap);
+            canvas.DrawImage(originalImage, 0, 0);
+
+            // Cấu hình chữ Watermark thanh mảnh, trong suốt tinh tế (không che lấp chi tiết ảnh)
+            var fontSize = Math.Max(16f, originalBitmap.Width / 26f);
+            using var typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.SemiBold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
+            using var font = new SKFont(typeface, fontSize);
+
+            using var fillPaint = new SKPaint
+            {
+                Color = new SKColor(255, 255, 255, 48), // Màu trắng mờ tinh tế ~18%
+                IsAntialias = true
+            };
+
+            using var strokePaint = new SKPaint
+            {
+                Color = new SKColor(0, 0, 0, 26), // Viền tối siêu mờ
+                IsAntialias = true,
+                Style = SKPaintStyle.Stroke,
+                StrokeWidth = 1
+            };
+
+            var mainLabel = $"SKILLBRIDGE · BẢN XEM TRƯỚC · Job #{jobId}";
+
+            // 1. Vẽ 1 đường chéo thanh mảnh chạy qua trung tâm ảnh
+            canvas.Save();
+            canvas.Translate(originalBitmap.Width / 2f, originalBitmap.Height / 2f);
+            canvas.RotateDegrees(-22);
+
+            canvas.DrawText(mainLabel, 0, 0, SKTextAlign.Center, font, strokePaint);
+            canvas.DrawText(mainLabel, 0, 0, SKTextAlign.Center, font, fillPaint);
+
+            canvas.Restore();
+
+            // 2. Vẽ huy hiệu bản quyền nhỏ kín đáo ở góc dưới bên phải
+            var badgeFontSize = Math.Max(11f, fontSize * 0.45f);
+            using var badgeFont = new SKFont(typeface, badgeFontSize);
+            var badgeLabel = $"© SkillBridge Protected · Job #{jobId}";
+            var badgeMargin = 16f;
+            canvas.DrawText(badgeLabel, originalBitmap.Width - badgeMargin, originalBitmap.Height - badgeMargin, SKTextAlign.Right, badgeFont, fillPaint);
+
+            using var image = surface.Snapshot();
+            var encodedFormat = ext.ToLowerInvariant() switch
+            {
+                ".png" => SKEncodedImageFormat.Png,
+                ".webp" => SKEncodedImageFormat.Webp,
+                _ => SKEncodedImageFormat.Jpeg
+            };
+
+            using var data = image.Encode(encodedFormat, 85);
+            var memoryStream = new MemoryStream();
+            data.SaveTo(memoryStream);
+            memoryStream.Position = 0;
+            return memoryStream;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string? ExtractFileKeyFromUrl(string? fileUrl)
