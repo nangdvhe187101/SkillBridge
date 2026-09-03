@@ -133,12 +133,44 @@ public class JobService : IJobService
             throw new BusinessException("Bạn không có quyền hủy công việc này.");
         }
 
-        if (job.Status != "open")
+        if (job.Status == "cancelled")
         {
-            throw new BusinessException("Chỉ có thể đóng/hủy công việc khi đang ở trạng thái 'open'.");
+            throw new BusinessException("Công việc này đã bị hủy trước đó.");
+        }
+
+        if (job.Status == "completed")
+        {
+            throw new BusinessException("Không thể hủy công việc đã hoàn thành.");
+        }
+
+        var isHired = job.Status == "in_progress" || job.HiredApplicantId.HasValue || new[] { "submitted", "revision_requested" }.Contains(job.Status);
+
+        // Nếu NTD tự ý hủy khi đang có sinh viên làm việc, trừ 10 điểm uy tín NTD
+        if (isHired)
+        {
+            var employer = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == employerId);
+            if (employer != null)
+            {
+                var oldScore = employer.ReliabilityScore;
+                employer.ReliabilityScore = Math.Max(0, employer.ReliabilityScore - 10);
+                _logger.LogWarning("Nhà tuyển dụng {EmployerId} hủy Job {JobId} đang có sinh viên thực hiện. Điểm uy tín giảm từ {OldScore} xuống {NewScore}.",
+                    employerId, jobId, oldScore, employer.ReliabilityScore);
+            }
+
+            // Hủy các application đang hired liên quan
+            var hiredApps = await _dbContext.Applications
+                .Where(a => a.JobId == jobId && (a.Status == "hired" || a.Status == "submitted" || a.Status == "revision_requested"))
+                .ToListAsync();
+
+            foreach (var app in hiredApps)
+            {
+                app.Status = "cancelled";
+                app.UpdatedAt = DateTime.UtcNow;
+            }
         }
 
         await _jobRepository.CancelJobAsync(job);
+        await _dbContext.SaveChangesAsync();
     }
 
     public async Task ReopenJobAsync(int employerId, int jobId)

@@ -24,9 +24,22 @@ export default function Avatar({ src, name = '?', className, style, fontSize = 1
   const initial = name.trim().charAt(0).toUpperCase() || '?';
   const grad = GRADIENTS[hashStr(name) % GRADIENTS.length];
 
-  const resolvedSrc = src?.startsWith('http')
-    ? src
-    : (src ? `http://localhost:5004/api/storage/file?key=${encodeURIComponent(src)}` : null);
+  let resolvedSrc = null;
+  if (src && typeof src === 'string') {
+    const s = src.trim();
+    if (s.startsWith('data:') || s.startsWith('blob:')) {
+      resolvedSrc = s;
+    } else if (s.includes('.r2.dev/')) {
+      const key = s.substring(s.indexOf('.r2.dev/') + 8);
+      resolvedSrc = `http://localhost:5004/api/storage/file?key=${encodeURIComponent(key)}`;
+    } else if (s.includes('/api/storage/file')) {
+      resolvedSrc = s.startsWith('http') ? s : `http://localhost:5004${s.startsWith('/') ? '' : '/'}${s}`;
+    } else if (s.startsWith('http://') || s.startsWith('https://')) {
+      resolvedSrc = s;
+    } else if (s) {
+      resolvedSrc = `http://localhost:5004/api/storage/file?key=${encodeURIComponent(s)}`;
+    }
+  }
 
   const defaultSize = className ? {} : { width: 24, height: 24, borderRadius: '50%' };
 

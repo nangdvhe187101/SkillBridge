@@ -51,6 +51,7 @@ function useTick(ms) {
 
 export default function JobDetail() {
   const { id } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const jobId = Number(id);
   const navigate = useNavigate();
   const { state, applyJobAsync, toggleSaveJobAsync, uploadCvAsync, openChatWithPerson } = useStore();
@@ -248,22 +249,6 @@ export default function JobDetail() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="page active">
-        <div className="wrap" style={{ padding: '100px 0', textAlign: 'center' }}>Đang tải thông tin công việc...</div>
-      </div>
-    );
-  }
-
-  if (!j) {
-    return (
-      <div className="page active">
-        <div className="wrap" style={{ padding: '100px 0', textAlign: 'center' }}>Không tìm thấy công việc.</div>
-      </div>
-    );
-  }
-
   const [studentDeliverable, setStudentDeliverable] = useState(null);
   const [studentFeedbackList, setStudentFeedbackList] = useState([]);
 
@@ -292,6 +277,22 @@ export default function JobDetail() {
 
   const activeDeliverable = dashJob?.deliverable || studentDeliverable;
   const activeFeedbacks = (dashJob?.deliverableFeedback?.length ? dashJob.deliverableFeedback : null) || studentFeedbackList;
+
+  if (isLoading) {
+    return (
+      <div className="page active">
+        <div className="wrap" style={{ padding: '100px 0', textAlign: 'center' }}>Đang tải thông tin công việc...</div>
+      </div>
+    );
+  }
+
+  if (!j) {
+    return (
+      <div className="page active">
+        <div className="wrap" style={{ padding: '100px 0', textAlign: 'center' }}>Không tìm thấy công việc.</div>
+      </div>
+    );
+  }
 
   return (
     <div className="page active">

@@ -11,4 +11,5 @@ public interface IApplicationService
     Task<PagedResult<ApplicantItemDto>> GetJobApplicantsAsync(int employerId, int jobId, int page = 1, int pageSize = 20);
     Task<PagedResult<JobApplicationResponseDto>> GetMyApplicationsAsync(int studentId, int page = 1, int pageSize = 20);
     Task<HireApplicantResultDto> HireApplicantAsync(int employerId, int jobId, int applicationId, HireApplicantRequest? request = null);
+    Task CancelOrWithdrawApplicationAsync(int studentId, int jobId, string? reason = null);
 }
