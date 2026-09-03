@@ -5,7 +5,7 @@ import { useModal } from '../../context/ModalContext';
 import { submitJobDeliverable, getJobDeliverables } from '../../api/deliverableApi';
 import { getAccessToken } from '../../api/tokenStore';
 import { downloadDeliverableFile } from '../../utils/fileDownloader';
-import { SecurePdfViewer, SecureTextViewer } from '../SecureDocViewer';
+import { SecureDocumentViewer } from '../SecureDocViewer';
 
 function watermarkImageFile(file) {
   return new Promise((resolve, reject) => {
@@ -482,40 +482,20 @@ function DeliverablePreview({ d, revealFinal }) {
     );
   }
 
-  const ext = (d.fileName || '').split('.').pop()?.toLowerCase();
-  const isPdf = ext === 'pdf';
-  const isText = ['txt', 'json', 'csv', 'xml', 'md', 'rtf'].includes(ext);
-  const isOffice = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext);
-
-  // PDF: render inline via PDF.js (bảo mật cao — watermark trên canvas, không lộ URL)
-  if (isPdf) {
+  const docViewer = SecureDocumentViewer({ d, revealFinal });
+  if (docViewer) {
     return (
       <div style={{ margin: '10px 0' }}>
-        <SecurePdfViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} version={d.version} />
+        {docViewer}
         {revealFinal && (
-          <div style={{ textAlign: 'center', marginTop: 10 }}>
-            <button type="button" className="btn btn-primary btn-sm"
+          <div style={{ textAlign: 'center', marginTop: 12 }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
               onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-              ⬇️ Tải PDF gốc hoàn thiện
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // TXT / JSON / CSV / XML: render nội dung trực tiếp
-  if (isText) {
-    return (
-      <div style={{ margin: '10px 0' }}>
-        <SecureTextViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} fileName={d.fileName} />
-        {revealFinal && (
-          <div style={{ textAlign: 'center', marginTop: 10 }}>
-            <button type="button" className="btn btn-primary btn-sm"
-              onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-              ⬇️ Tải file gốc hoàn thiện
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+            >
+              ⬇️ Tải tệp gốc hoàn thiện
             </button>
           </div>
         )}
