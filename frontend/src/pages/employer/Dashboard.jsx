@@ -34,7 +34,9 @@ const TIER_COLOR = { gold: '#CBFF4D', silver: '#57C7FF', bronze: '#FF5C7A' };
 
 function formatDeadline(ts) {
   if (!ts) return '—';
-  const diff = ts - Date.now();
+  const time = typeof ts === 'string' || ts instanceof Date ? new Date(ts).getTime() : ts;
+  if (isNaN(time)) return '—';
+  const diff = time - Date.now();
   if (diff <= 0) return 'Đã quá hạn';
   const days = Math.floor(diff / 86400000);
   const hours = Math.floor((diff % 86400000) / 3600000);

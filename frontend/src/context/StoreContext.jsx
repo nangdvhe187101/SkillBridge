@@ -571,14 +571,16 @@ function reducer(state, action) {
       let changed = false;
       const myJobs = state.myJobs.map((job) => {
         if (['in_progress', 'submitted', 'revision_requested'].includes(job.status) && job.deadlineAt && !job.deadlineReminderSent) {
-          const remain = job.deadlineAt - Date.now();
+          const deadlineTs = typeof job.deadlineAt === 'number' ? job.deadlineAt : new Date(job.deadlineAt).getTime();
+          if (isNaN(deadlineTs)) return job;
+          const remain = deadlineTs - Date.now();
           if (remain <= 0) {
-            notifications = addNotifTo(notifications, '⏰', `Công việc "${job.title}" đã quá hạn hoàn thành. Vui lòng liên hệ ${job.hiredApplicant} hoặc gửi khiếu nại nếu cần.`, '/dashboard');
+            notifications = addNotifTo(notifications, '⏰', `Công việc "${job.title}" đã quá hạn hoàn thành. Vui lòng liên hệ ${job.hiredApplicant || 'sinh viên'} hoặc gửi khiếu nại nếu cần.`, '/dashboard');
             changed = true;
             return { ...job, deadlineReminderSent: true };
           }
           if (remain > 0 && remain < 12 * 3600000) {
-            notifications = addNotifTo(notifications, '⏰', `Công việc "${job.title}" sắp tới hạn (còn dưới 12 giờ). Nhắc ${job.hiredApplicant} nộp bàn giao sớm.`, '/dashboard');
+            notifications = addNotifTo(notifications, '⏰', `Công việc "${job.title}" sắp tới hạn (còn dưới 12 giờ). Nhắc ${job.hiredApplicant || 'sinh viên'} nộp bàn giao sớm.`, '/dashboard');
             changed = true;
             return { ...job, deadlineReminderSent: true };
           }
@@ -987,8 +989,6 @@ export function StoreProvider({ children }) {
         showToast('Đã thuê ứng viên và ký quỹ thành công!', '🤝');
       },
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),
-      submitDeliverable: (payload) => dispatch({ type: 'SUBMIT_DELIVERABLE', payload }),
-      requestRevision: (payload) => dispatch({ type: 'REQUEST_REVISION', payload }),
       topup: (amount, methodLabel) => { dispatch({ type: 'TOPUP', amount, methodLabel }); showToast(`Nạp ${amount.toLocaleString('vi-VN')}đ thành công!`, '✓'); },
       withdraw: (amount) => { dispatch({ type: 'WITHDRAW', amount }); showToast(`Đã gửi yêu cầu rút ${amount.toLocaleString('vi-VN')}đ.`, '✓'); },
       updateBankAccount: (payload) => { dispatch({ type: 'UPDATE_BANK_ACCOUNT', payload }); showToast('Cập nhật tài khoản ngân hàng thành công!', '✓'); },
