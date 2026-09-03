@@ -270,6 +270,10 @@ img {
   gap: 2px;
 }
 
+.nav-mobile-only {
+  display: none !important;
+}
+
 .navlink {
   position: relative;
   padding: 9px 16px;
@@ -3684,6 +3688,13 @@ footer {
 
   .navlinks.open {
     display: flex;
+  }
+
+  .nav-mobile-only {
+    display: flex !important;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
   }
 
   .navtoggle {

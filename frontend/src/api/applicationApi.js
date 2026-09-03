@@ -21,3 +21,10 @@ export async function hireApplicant(jobId, applicationId, days = 3) {
         body: JSON.stringify({ days }),
     });
 }
+
+export async function cancelOrWithdrawApplication(jobId, reason = '') {
+    return apiFetch(`/applications/${jobId}/cancel`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+    });
+}

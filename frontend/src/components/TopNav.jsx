@@ -93,6 +93,40 @@ export default function TopNav() {
         </NavLink>
 
         <div className={'navlinks' + (navOpen ? ' open' : '')} id="navlinks">
+          {/* User Profile Card on Mobile if logged in */}
+          {isLoggedIn && (
+            <div className="nav-mobile-only">
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '12px 14px',
+                  marginBottom: 10,
+                  borderRadius: 12,
+                  background: 'var(--surface-2, #f1f5f9)',
+                  border: '1px solid var(--border, #e2e8f0)',
+                  cursor: 'pointer'
+                }}
+                onClick={() => { navigate('/profile'); setNavOpen(false); }}
+              >
+                <Avatar
+                  src={state.currentUser.avatarUrl}
+                  name={state.currentUser.fullName}
+                  fontSize={15}
+                  style={{ width: 40, height: 40, borderRadius: '50%' }}
+                />
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--ink)' }}>{state.currentUser.fullName}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                    {isStudent ? '🎓 Sinh viên Freelancer' : (isEmployer ? '🏢 Nhà tuyển dụng' : '🛡️ Quản trị viên')}
+                  </div>
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 700 }}>Hồ sơ ➔</span>
+              </div>
+            </div>
+          )}
+
           <NavLink to="/" className={linkClass} end onClick={() => setNavOpen(false)}>Trang chủ</NavLink>
           <NavLink to="/jobs" className={linkClass} onClick={() => setNavOpen(false)}>Tìm việc</NavLink>
           {isStudent && (
@@ -103,13 +137,24 @@ export default function TopNav() {
           )}
           <NavLink to="/pricing" className={linkClass} onClick={() => setNavOpen(false)}>Bảng giá</NavLink>
 
+          {isLoggedIn && (
+            <div className="nav-mobile-only">
+              <div style={{ height: 1, background: 'var(--border)', margin: '6px 0' }} />
+              <NavLink to="/profile" className={linkClass} onClick={() => setNavOpen(false)}>👤 Hồ sơ của tôi</NavLink>
+              <NavLink to="/wallet" className={linkClass} onClick={() => setNavOpen(false)}>👛 Ví của tôi ({fmtVND(state.balance)})</NavLink>
+              <NavLink to="/messages" className={linkClass} onClick={() => setNavOpen(false)}>💬 Tin nhắn {unreadMsgCount > 0 ? `(${unreadMsgCount})` : ''}</NavLink>
+              {state.currentUser?.roleCode === 'admin' && (
+                <NavLink to="/admin" className={linkClass} onClick={() => setNavOpen(false)}>⚙️ Bảng điều khiển Admin</NavLink>
+              )}
+              <NavLink to="/account-settings" className={linkClass} onClick={() => setNavOpen(false)}>⚙️ Cài đặt tài khoản</NavLink>
+            </div>
+          )}
+
           <div className="nav-drop-actions">
             {isLoggedIn ? (
-              <>
-                <button className="btn btn-outline btn-sm" onClick={handleLogout}>
-                  Đăng xuất
-                </button>
-              </>
+              <button className="btn btn-outline btn-sm" style={{ width: '100%', color: 'var(--danger, #e5484d)', borderColor: 'var(--danger, #e5484d)', marginTop: 8 }} onClick={handleLogout}>
+                🚪 Đăng xuất
+              </button>
             ) : (
               <>
                 <button className="btn btn-outline btn-sm" onClick={() => { navigate('/employer/post-job'); setNavOpen(false); }}>
@@ -118,17 +163,10 @@ export default function TopNav() {
                 <button className="btn btn-outline btn-sm" onClick={() => { navigate('/auth?tab=login'); setNavOpen(false); }}>
                   Đăng nhập
                 </button>
+                <button className="btn btn-primary btn-sm" onClick={() => { navigate('/auth?tab=register'); setNavOpen(false); }}>
+                  Đăng ký miễn phí
+                </button>
               </>
-            )}
-          </div>
-
-          <div className="nav-mobile-extra">
-            {isLoggedIn ? (
-              <button className="wallet-pill" onClick={() => { navigate('/wallet'); setNavOpen(false); }}>
-                <Icon name="wallet" /> <span>Ví: {fmtVND(state.balance)}</span>
-              </button>
-            ) : (
-              <button className="btn btn-primary btn-sm" onClick={() => { navigate('/auth?tab=register'); setNavOpen(false); }}>Đăng ký miễn phí</button>
             )}
           </div>
         </div>

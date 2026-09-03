@@ -9,12 +9,18 @@ public class ApplyJobRequest
     public string? CoverLetter { get; set; }
 }
 
+public class CancelApplicationRequest
+{
+    public string? Reason { get; set; }
+}
+
 public class JobApplicationResponseDto
 {
     public int Id { get; set; }
     public int JobId { get; set; }
     public string JobTitle { get; set; } = null!;
     public string EmployerName { get; set; } = null!;
+    public string? EmployerAvatarUrl { get; set; }
     public decimal Budget { get; set; }
     public int StudentId { get; set; }
     public int? CvFileId { get; set; }

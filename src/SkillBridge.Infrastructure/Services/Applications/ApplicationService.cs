@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Applications;
 using SkillBridge.Application.DTOs.Jobs;
@@ -21,19 +22,22 @@ public class ApplicationService : IApplicationService
     private readonly ICvFileRepository _cvFileRepository;
     private readonly SkillBridgeDbContext _dbContext;
     private readonly IStorageService _storageService;
+    private readonly ILogger<ApplicationService> _logger;
 
     public ApplicationService(
         IApplicationRepository applicationRepository,
         IJobRepository jobRepository,
         ICvFileRepository cvFileRepository,
         SkillBridgeDbContext dbContext,
-        IStorageService storageService)
+        IStorageService storageService,
+        ILogger<ApplicationService> logger)
     {
         _applicationRepository = applicationRepository;
         _jobRepository = jobRepository;
         _cvFileRepository = cvFileRepository;
         _dbContext = dbContext;
         _storageService = storageService;
+        _logger = logger;
     }
 
     public async Task<JobApplicationResponseDto> ApplyJobAsync(int studentId, ApplyJobRequest request)
@@ -153,6 +157,7 @@ public class ApplicationService : IApplicationService
             JobId = a.JobId,
             JobTitle = a.Job?.Title ?? "Công việc",
             EmployerName = a.Job?.Employer?.FullName ?? "Nhà tuyển dụng",
+            EmployerAvatarUrl = _storageService.GetPublicUrl(a.Job?.Employer?.AvatarUrl),
             Budget = a.Job?.Budget ?? 0,
             StudentId = a.StudentId,
             CvFileId = a.CvFileId,
@@ -250,6 +255,81 @@ public class ApplicationService : IApplicationService
                     DeadlineAt = job.DeadlineAt,
                     EscrowAmount = job.Budget
                 };
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        });
+    }
+
+    public async Task CancelOrWithdrawApplicationAsync(int studentId, int jobId, string? reason = null)
+    {
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            try
+            {
+                var application = await _dbContext.Applications
+                    .Include(a => a.Job)
+                    .Include(a => a.Student)
+                    .FirstOrDefaultAsync(a => a.StudentId == studentId && a.JobId == jobId);
+
+                if (application == null)
+                {
+                    throw new BusinessException("Không tìm thấy đơn ứng tuyển cho công việc này.");
+                }
+
+                if (application.Status == "cancelled")
+                {
+                    throw new BusinessException("Đơn ứng tuyển này đã được hủy trước đó.");
+                }
+
+                if (application.Status == "completed")
+                {
+                    throw new BusinessException("Công việc đã hoàn thành, không thể hủy.");
+                }
+
+                var isHiredOrInProgress = application.Status == "hired" ||
+                    (application.Job != null && new[] { "in_progress", "submitted", "revision_requested" }.Contains(application.Job.Status));
+
+                // Nếu đang trong quá trình thực hiện việc (đã được thuê), trừ 10 điểm uy tín sinh viên
+                if (isHiredOrInProgress)
+                {
+                    var student = application.Student ?? await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == studentId);
+                    if (student != null)
+                    {
+                        var oldScore = student.ReliabilityScore;
+                        student.ReliabilityScore = Math.Max(0, student.ReliabilityScore - 10);
+                        _logger.LogWarning("Sinh viên {StudentId} hủy việc đang làm tại Job {JobId}. Điểm uy tín giảm từ {OldScore} xuống {NewScore}. Lý do: {Reason}",
+                            studentId, jobId, oldScore, student.ReliabilityScore, reason ?? "Không có lý do");
+                    }
+
+                    // Reset Job về trạng thái open để NTD có thể chọn người khác
+                    var job = application.Job ?? await _jobRepository.GetByIdAsync(jobId);
+                    if (job != null)
+                    {
+                        job.Status = "open";
+                        job.HiredApplicantId = null;
+                        job.DeadlineAt = null;
+                        job.EscrowAmount = null;
+                        job.UpdatedAt = DateTime.UtcNow;
+                        _dbContext.Jobs.Update(job);
+                    }
+                }
+
+                // Cập nhật Application của sinh viên sang cancelled
+                application.Status = "cancelled";
+                application.UpdatedAt = DateTime.UtcNow;
+                _dbContext.Applications.Update(application);
+
+                await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _logger.LogInformation("Đã xử lý hủy đơn/việc cho sinh viên {StudentId} tại Job {JobId}. Đang làm: {IsHiredOrInProgress}",
+                    studentId, jobId, isHiredOrInProgress);
             }
             catch
             {

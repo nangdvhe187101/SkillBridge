@@ -67,4 +67,14 @@ public class ApplicationController : ControllerBase
         var applications = await _applicationService.GetMyApplicationsAsync(studentId, page, pageSize);
         return Ok(applications);
     }
+
+    [Authorize(Policy = "RequireStudentRole")]
+    [HttpPost("applications/{jobId:int}/cancel")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> CancelOrWithdrawApplication(int jobId, [FromBody] CancelApplicationRequest? request = null)
+    {
+        var studentId = User.GetRequiredUserId();
+        await _applicationService.CancelOrWithdrawApplicationAsync(studentId, jobId, request?.Reason);
+        return Ok(new { message = "Đã hủy đơn/việc thành công." });
+    }
 }

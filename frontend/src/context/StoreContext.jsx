@@ -71,6 +71,33 @@ export function mapMyJob(j) {
   };
 }
 
+export function mapMyApplication(a) {
+  return {
+    id: a.id,
+    jobId: a.jobId,
+    title: a.jobTitle || a.title || 'Công việc',
+    jobTitle: a.jobTitle || a.title || 'Công việc',
+    emp: a.employerName || a.emp || 'Nhà tuyển dụng',
+    employerName: a.employerName || a.emp || 'Nhà tuyển dụng',
+    employerAvatarUrl: a.employerAvatarUrl || a.employerAvatar || null,
+    empAvatar: a.employerAvatarUrl || a.employerAvatar || null,
+    budget: a.budget || 0,
+    studentId: a.studentId,
+    cvFileId: a.cvFileId,
+    cvFileName: a.cvFileName,
+    cvFileUrl: a.cvFileUrl,
+    cvLabel: a.cvLabel || a.cvFileName,
+    coverLetter: a.coverLetter,
+    status: a.status || 'pending',
+    appliedAt: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString('vi-VN') : 'Mới nộp',
+    rawAppliedAt: a.appliedAt,
+    jobStatus: a.jobStatus || a.status || 'open',
+    deadlineAt: a.deadlineAt,
+    revisionLimit: a.revisionLimit ?? 2,
+    revisionCount: a.revisionCount ?? 0,
+  };
+}
+
 export function commissionRate(state) {
   return state.vipBusiness ? 0.05 : 0.1;
 }
@@ -779,8 +806,9 @@ export function StoreProvider({ children }) {
     try {
       const res = await applicationApi.getMyApplications(1, 50);
       const list = Array.isArray(res) ? res : (res?.items || []);
-      dispatch({ type: 'SET_MY_APPLICATIONS', applications: list });
-      return list;
+      const mapped = list.map(mapMyApplication);
+      dispatch({ type: 'SET_MY_APPLICATIONS', applications: mapped });
+      return mapped;
     } catch (err) {
       console.error('Không thể tải danh sách ứng tuyển từ backend:', err);
       return [];
@@ -928,7 +956,7 @@ export function StoreProvider({ children }) {
         const apps = await applicationApi.getMyApplications().catch(() => null);
         if (apps) {
           const list = Array.isArray(apps) ? apps : (apps?.items || []);
-          dispatch({ type: 'SET_MY_APPLICATIONS', applications: list });
+          dispatch({ type: 'SET_MY_APPLICATIONS', applications: list.map(mapMyApplication) });
         } else {
           dispatch({ type: 'APPLY_JOB', id: jobId });
         }
@@ -1000,6 +1028,26 @@ export function StoreProvider({ children }) {
       removeCv: () => { dispatch({ type: 'REMOVE_CV' }); showToast('Đã xoá CV khỏi hồ sơ.', '🗑️'); },
       addCvFile: (payload) => { dispatch({ type: 'ADD_CV_FILE', payload }); showToast('Đã thêm CV chuyên môn mới!', '📄'); },
       removeCvFile: (id) => { dispatch({ type: 'REMOVE_CV_FILE', id }); showToast('Đã xóa CV.', '🗑️'); },
+      cancelStudentWorkAsync: async (jobId, reason = '') => {
+        try {
+          await applicationApi.cancelOrWithdrawApplication(jobId, reason);
+          await refreshMyApplications();
+          showToast('Đã hủy việc thành công.', 'ℹ️');
+        } catch (err) {
+          showToast(err?.message || 'Không thể hủy việc.', '⚠️');
+          throw err;
+        }
+      },
+      withdrawApplicationAsync: async (jobId) => {
+        try {
+          await applicationApi.cancelOrWithdrawApplication(jobId, 'Rút đơn');
+          await refreshMyApplications();
+          showToast('Đã rút đơn ứng tuyển.', 'ℹ️');
+        } catch (err) {
+          showToast(err?.message || 'Không thể rút đơn ứng tuyển.', '⚠️');
+          throw err;
+        }
+      },
       addEmployerDocs: (files) => { dispatch({ type: 'ADD_EMPLOYER_DOCS', files }); showToast('Đã cập nhật hồ sơ công ty.', '✓'); },
       removeEmployerDoc: (idx) => dispatch({ type: 'REMOVE_EMPLOYER_DOC', idx }),
       addPortfolio: (item) => { dispatch({ type: 'ADD_PORTFOLIO', item }); showToast('Đã thêm vào portfolio.', '✓'); },

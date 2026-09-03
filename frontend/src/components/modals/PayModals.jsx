@@ -133,7 +133,7 @@ export function UpgradeVipModal({ onClose }) {
   );
 }
 
-export function HireModal({ onClose, jobId, applicantIdx, applicantName, applicant, job: propJob }) {
+export function HireModal({ onClose, jobId, applicantIdx, applicantName, applicant, job: propJob, onHired }) {
   const { state, hire } = useStore();
   const { openModal } = useModal();
   const localJob = state.myJobs.find((j) => String(j.id) === String(jobId));
@@ -175,6 +175,9 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
         days: Number(days),
         method
       });
+      if (typeof onHired === 'function') {
+        await onHired();
+      }
       onClose();
     } catch (err) {
       setErrorMsg(err?.message || 'Có lỗi xảy ra khi thuê ứng viên.');

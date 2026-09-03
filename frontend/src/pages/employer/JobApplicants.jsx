@@ -856,7 +856,7 @@ export default function JobApplicants() {
                               title="Chọn thuê & tiến hành ký quỹ an toàn"
                               onClick={() => {
                                 const realIdx = allApplicants.findIndex((x) => x.name === a.name);
-                                openModal('hire', { jobId: job.id, applicantIdx: realIdx >= 0 ? realIdx : idx, applicantName: a.name, applicant: a, job });
+                                openModal('hire', { jobId: job.id, applicantIdx: realIdx >= 0 ? realIdx : idx, applicantName: a.name, applicant: a, job, onHired: loadData });
                               }}
                             >
                               <Icon name="check" /> Thuê & Ký quỹ
@@ -1063,7 +1063,7 @@ export default function JobApplicants() {
                   const s = viewStudentModal;
                   setViewStudentModal(null);
                   const realIdx = allApplicants.findIndex((x) => x.name === s.name);
-                  openModal('hire', { jobId: job.id, applicantIdx: realIdx >= 0 ? realIdx : 0, applicantName: s.name, applicant: s, job });
+                  openModal('hire', { jobId: job.id, applicantIdx: realIdx >= 0 ? realIdx : 0, applicantName: s.name, applicant: s, job, onHired: loadData });
                 }}
               >
                 ✓ Thuê sinh viên này & Ký quỹ
