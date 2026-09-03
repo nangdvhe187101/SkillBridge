@@ -22,10 +22,12 @@ public class JobAttachmentService : IJobAttachmentService
 
     private static readonly string[] AllowedExtensions =
     {
-        ".pdf", ".doc", ".docx", ".txt", ".rtf",
-        ".png", ".jpg", ".jpeg", ".webp",
-        ".zip", ".rar", ".7z",
-        ".fig", ".psd", ".ai"
+        ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".txt", ".rtf", ".csv",
+        ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg",
+        ".zip", ".rar", ".7z", ".tar", ".gz",
+        ".fig", ".psd", ".ai", ".xd", ".sketch",
+        ".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv",
+        ".mp3", ".wav", ".m4a"
     };
 
     public JobAttachmentService(

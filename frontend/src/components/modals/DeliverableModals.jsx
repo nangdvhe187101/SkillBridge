@@ -3,7 +3,9 @@ import ModalShell from './ModalShell';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import { submitJobDeliverable, getJobDeliverables } from '../../api/deliverableApi';
+import { getAccessToken } from '../../api/tokenStore';
 import { downloadDeliverableFile } from '../../utils/fileDownloader';
+import { SecurePdfViewer, SecureTextViewer } from '../SecureDocViewer';
 
 function watermarkImageFile(file) {
   return new Promise((resolve, reject) => {
@@ -41,6 +43,321 @@ function watermarkImageFile(file) {
   });
 }
 
+function DeliverableImage({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
+  const [imageSrc, setImageSrc] = useState(fallbackSrc?.startsWith('data:') ? fallbackSrc : null);
+  const [loading, setLoading] = useState(!fallbackSrc?.startsWith('data:'));
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    if (fallbackSrc?.startsWith('data:')) {
+      setImageSrc(fallbackSrc);
+      setLoading(false);
+      return;
+    }
+
+    let isMounted = true;
+    let blobUrl = null;
+
+    async function loadImage() {
+      if (!jobId || !deliverableId) {
+        if (fallbackSrc && !fallbackSrc.startsWith('job-deliverables')) {
+          setImageSrc(fallbackSrc);
+        }
+        setLoading(false);
+        return;
+      }
+      try {
+        setLoading(true);
+        const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
+        const type = isFinal ? 'final' : 'preview';
+        const url = `${API_URL}/jobs/${jobId}/deliverables/${deliverableId}/download?type=${type}`;
+        const token = getAccessToken();
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(url, { headers, credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load image');
+        const blob = await res.blob();
+        blobUrl = URL.createObjectURL(blob);
+        if (isMounted) {
+          setImageSrc(blobUrl);
+          setError(false);
+        }
+      } catch (err) {
+        if (isMounted) {
+          if (fallbackSrc && !fallbackSrc.startsWith('job-deliverables')) {
+            setImageSrc(fallbackSrc);
+          } else {
+            setError(true);
+          }
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadImage();
+
+    return () => {
+      isMounted = false;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [jobId, deliverableId, isFinal, fallbackSrc]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '24px 16px', textAlign: 'center', background: 'var(--surface)', borderRadius: 10, border: '1px dashed var(--border)' }}>
+        <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>⏳ Đang tải bản xem trước có watermark...</span>
+      </div>
+    );
+  }
+
+  if (error || !imageSrc) {
+    return (
+      <div className="empty-state" style={{ padding: '20px 16px', textAlign: 'center', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 24, marginBottom: 4 }}>🖼️</div>
+        <b style={{ fontSize: 13, color: 'var(--ink)' }}>{alt || 'Hình ảnh bàn giao'}</b>
+        <p style={{ fontSize: 11.5, color: 'var(--muted, #666)', margin: '4px 0 0' }}>Bản xem trước có watermark được bảo vệ an toàn trên hệ thống.</p>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={imageSrc}
+      alt={alt}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{
+        maxWidth: '100%',
+        maxHeight: 380,
+        objectFit: 'contain',
+        borderRadius: 10,
+        border: '1px solid var(--border)',
+        display: 'block',
+        margin: '0 auto',
+        userSelect: 'none'
+      }}
+    />
+  );
+}
+
+function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
+  const [videoSrc, setVideoSrc] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    let blobUrl = null;
+
+    async function loadVideo() {
+      if (!jobId || !deliverableId) {
+        if (fallbackSrc && !fallbackSrc.startsWith('job-deliverables')) {
+          setVideoSrc(fallbackSrc);
+        }
+        setLoading(false);
+        return;
+      }
+      try {
+        setLoading(true);
+        const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
+        const type = isFinal ? 'final' : 'preview';
+        const url = `${API_URL}/jobs/${jobId}/deliverables/${deliverableId}/download?type=${type}`;
+        const token = getAccessToken();
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch(url, { headers, credentials: 'include' });
+        if (!res.ok) throw new Error('Failed to load video');
+        const blob = await res.blob();
+        blobUrl = URL.createObjectURL(blob);
+        if (isMounted) {
+          setVideoSrc(blobUrl);
+          setError(false);
+        }
+      } catch (err) {
+        if (isMounted) {
+          if (fallbackSrc && !fallbackSrc.startsWith('job-deliverables')) {
+            setVideoSrc(fallbackSrc);
+          } else {
+            setError(true);
+          }
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    loadVideo();
+
+    return () => {
+      isMounted = false;
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+  }, [jobId, deliverableId, isFinal, fallbackSrc]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: '28px 16px', textAlign: 'center', background: 'var(--surface)', borderRadius: 10, border: '1px dashed var(--border)' }}>
+        <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>⏳ Đang nạp video xem trước...</span>
+      </div>
+    );
+  }
+
+  if (error || !videoSrc) {
+    return (
+      <div className="empty-state" style={{ padding: '20px 16px', textAlign: 'center', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 28, marginBottom: 4 }}>🎥</div>
+        <b style={{ fontSize: 13, color: 'var(--ink)' }}>{alt || 'Video sản phẩm bàn giao'}</b>
+        <p style={{ fontSize: 11.5, color: 'var(--muted, #666)', margin: '4px 0 0' }}>Video được bảo vệ an toàn trên hệ thống.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        maxWidth: '100%',
+        width: 'fit-content',
+        maxHeight: 440,
+        borderRadius: 12,
+        overflow: 'hidden',
+        background: '#0a0a0a',
+        margin: '0 auto',
+        boxShadow: '0 4px 18px rgba(0,0,0,0.15)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
+      }}
+    >
+      <video
+        src={videoSrc}
+        controls
+        controlsList="nodownload"
+        disablePictureInPicture
+        playsInline
+        onContextMenu={(e) => e.preventDefault()}
+        style={{
+          maxWidth: '100%',
+          maxHeight: 420,
+          display: 'block',
+          objectFit: 'contain'
+        }}
+      >
+        Trình duyệt của bạn không hỗ trợ phát định dạng video này.
+      </video>
+
+      {/* Watermark Overlay chống quay chụp & bảo vệ bản quyền */}
+      {!isFinal && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            pointerEvents: 'none',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            zIndex: 2
+          }}
+        >
+          {/* Dòng chữ chéo thanh mảnh, trong suốt xuyên thấu */}
+          <div
+            style={{
+              transform: 'rotate(-22deg)',
+              color: 'rgba(255, 255, 255, 0.22)',
+              fontSize: 'clamp(11px, 2.6vw, 15px)',
+              fontWeight: 600,
+              letterSpacing: '1.5px',
+              textShadow: '0 0 2px rgba(0,0,0,0.6)',
+              textAlign: 'center',
+              userSelect: 'none',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            SKILLBRIDGE · BẢN XEM TRƯỚC · CHƯA NGHIỆM THU
+          </div>
+          {/* Huy hiệu bản quyền nhỏ ở góc dưới */}
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 8,
+              right: 12,
+              color: 'rgba(255, 255, 255, 0.35)',
+              fontSize: 10.5,
+              fontWeight: 500,
+              letterSpacing: '0.5px',
+              textShadow: '0 0 2px rgba(0,0,0,0.8)'
+            }}
+          >
+            © SkillBridge Protected
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function getFileIcon(fileName) {
+  const ext = (fileName || '').split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'zip':
+    case 'rar':
+    case '7z':
+    case 'tar':
+    case 'gz':
+      return '📦';
+    case 'doc':
+    case 'docx':
+      return '📝';
+    case 'xls':
+    case 'xlsx':
+    case 'csv':
+      return '📊';
+    case 'pdf':
+      return '📑';
+    case 'ppt':
+    case 'pptx':
+      return '📊';
+    case 'js':
+    case 'ts':
+    case 'py':
+    case 'java':
+    case 'cpp':
+    case 'html':
+    case 'css':
+    case 'json':
+      return '💻';
+    case 'mp4':
+    case 'mov':
+    case 'm4v':
+    case 'webm':
+    case 'avi':
+    case 'mkv':
+    case 'wmv':
+    case 'flv':
+      return '🎥';
+    case 'mp3':
+    case 'wav':
+    case 'm4a':
+    case 'aac':
+    case 'flac':
+    case 'ogg':
+      return '🎵';
+    default:
+      return '📁';
+  }
+}
+
+function formatDeliverableDisplayName(fileName, isImage = false, version = 1) {
+  if (!fileName) return isImage ? 'Hình ảnh sản phẩm' : 'Tệp sản phẩm bàn giao';
+  if (isImage || fileName.length > 25 || /^[a-z0-9_]{20,}\.[a-z0-9]+$/i.test(fileName)) {
+    return isImage ? `Hình ảnh sản phẩm (v${version || 1})` : `Tệp sản phẩm bàn giao (v${version || 1})`;
+  }
+  return fileName;
+}
+
 function DeliverablePreview({ d, revealFinal }) {
   if (!d) return null;
   if (d.mode === 'link' || (!d.previewFileUrl && d.externalUrl) || d.fileType === 'url') {
@@ -53,56 +370,217 @@ function DeliverablePreview({ d, revealFinal }) {
     );
   }
 
-  const previewUrl = d.previewFileUrl || d.previewDataUrl;
-  const finalUrl = d.finalFileUrl || d.finalDataUrl;
+  const isVideo =
+    (d.fileType && ['mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv', 'wmv', 'flv', 'video'].includes(d.fileType.toLowerCase())) ||
+    (d.fileName && /\.(mp4|mov|m4v|webm|avi|mkv|wmv|flv)$/i.test(d.fileName));
 
-  if (previewUrl && (previewUrl.startsWith('data:image') || previewUrl.match(/\.(jpg|jpeg|png|webp|gif)$/i))) {
+  if (isVideo) {
     return revealFinal ? (
       <>
-        <div style={{ margin: '8px 0' }}><img src={finalUrl || previewUrl} style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid var(--border)' }} alt="Bàn giao" /></div>
-        <button
-          type="button"
-          className="btn btn-outline btn-sm"
-          onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
-        >
-          ⬇️ Tải bản gốc
-        </button>
-      </>
-    ) : (
-      <>
-        <div style={{ margin: '8px 0' }}>
-          <img src={previewUrl} onContextMenu={(e) => e.preventDefault()} style={{ maxWidth: '100%', borderRadius: 10, border: '1px solid var(--border)', userSelect: 'none', pointerEvents: 'none' }} alt="Xem trước có watermark" />
+        <div style={{ margin: '8px 0', textAlign: 'center' }}>
+          <DeliverableVideo
+            jobId={d.jobId}
+            deliverableId={d.id}
+            fallbackSrc={d.finalDataUrl || d.finalFileUrl || d.previewFileUrl}
+            alt="Bản gốc video bàn giao"
+            isFinal={true}
+          />
         </div>
-        <p style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>🔒 Bản xem trước có watermark — bản gốc chỉ mở khi xác nhận & giải ngân.</p>
-      </>
-    );
-  }
-
-  return revealFinal && finalUrl ? (
-    <div style={{ margin: '8px 0' }}>
-      <button
-        type="button"
-        className="btn btn-outline btn-sm"
-        onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
-      >
-        ⬇️ Tải {d.fileName || 'file bàn giao'}
-      </button>
-    </div>
-  ) : (
-    <div className="empty-state" style={{ textAlign: 'left', background: 'var(--surface)', borderRadius: 10, padding: 12, margin: '8px 0' }}>
-      🔒 <b>{d.fileName || 'Tệp đính kèm'}</b>{d.fileSize ? ` (${Math.round(d.fileSize / 1024)} KB)` : ''}
-      <br /><span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Nội dung đầy đủ được lưu trên Cloudflare R2 và bảo vệ an toàn.</span>
-      {finalUrl && (
-        <div style={{ marginTop: 8 }}>
+        <div style={{ textAlign: 'center', marginTop: 10 }}>
           <button
             type="button"
             className="btn btn-primary btn-sm"
             onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
           >
-            Tải file an toàn
+            ⬇️ Tải video gốc hoàn thiện
           </button>
         </div>
-      )}
+      </>
+    ) : (
+      <>
+        <div style={{ margin: '8px 0', textAlign: 'center' }}>
+          <DeliverableVideo
+            jobId={d.jobId}
+            deliverableId={d.id}
+            fallbackSrc={d.previewDataUrl || d.previewFileUrl}
+            alt="Video xem trước có watermark"
+            isFinal={false}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+            🔒 Video sản phẩm bàn giao (Bản xem trước có watermark)
+          </span>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
+          >
+            ⬇️ Tải video xem trước
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  const isImage =
+    (d.fileType && ['png', 'jpg', 'jpeg', 'webp', 'gif', 'image'].includes(d.fileType.toLowerCase())) ||
+    (d.fileName && /\.(png|jpg|jpeg|webp|gif)$/i.test(d.fileName)) ||
+    (d.previewDataUrl && d.previewDataUrl.startsWith('data:image')) ||
+    (d.previewFileUrl && /\.(png|jpg|jpeg|webp|gif)$/i.test(d.previewFileUrl));
+
+  if (isImage) {
+    return revealFinal ? (
+      <>
+        <div style={{ margin: '8px 0' }}>
+          <DeliverableImage
+            jobId={d.jobId}
+            deliverableId={d.id}
+            fallbackSrc={d.finalDataUrl || d.finalFileUrl || d.previewFileUrl}
+            alt="Bản gốc bàn giao"
+            isFinal={true}
+          />
+        </div>
+        <div style={{ textAlign: 'center', marginTop: 10 }}>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+          >
+            ⬇️ Tải ảnh gốc hoàn thiện
+          </button>
+        </div>
+      </>
+    ) : (
+      <>
+        <div style={{ margin: '8px 0' }}>
+          <DeliverableImage
+            jobId={d.jobId}
+            deliverableId={d.id}
+            fallbackSrc={d.previewDataUrl || d.previewFileUrl}
+            alt="Xem trước có watermark"
+            isFinal={false}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
+          <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+            🔒 Hình ảnh sản phẩm (Bản xem trước có watermark)
+          </span>
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
+          >
+            ⬇️ Tải ảnh xem trước
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  const ext = (d.fileName || '').split('.').pop()?.toLowerCase();
+  const isPdf = ext === 'pdf';
+  const isText = ['txt', 'json', 'csv', 'xml', 'md', 'rtf'].includes(ext);
+  const isOffice = ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext);
+
+  // PDF: render inline via PDF.js (bảo mật cao — watermark trên canvas, không lộ URL)
+  if (isPdf) {
+    return (
+      <div style={{ margin: '10px 0' }}>
+        <SecurePdfViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} version={d.version} />
+        {revealFinal && (
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <button type="button" className="btn btn-primary btn-sm"
+              onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+              ⬇️ Tải PDF gốc hoàn thiện
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // TXT / JSON / CSV / XML: render nội dung trực tiếp
+  if (isText) {
+    return (
+      <div style={{ margin: '10px 0' }}>
+        <SecureTextViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} fileName={d.fileName} />
+        {revealFinal && (
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <button type="button" className="btn btn-primary btn-sm"
+              onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+              ⬇️ Tải file gốc hoàn thiện
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const fileIcon = getFileIcon(d.fileName);
+  const downloadType = revealFinal ? 'final' : 'preview';
+  const cleanDisplayName = formatDeliverableDisplayName(d.fileName, false, d.version);
+
+  return (
+    <div
+      className="empty-state"
+      style={{
+        textAlign: 'left',
+        background: 'var(--surface)',
+        borderRadius: 12,
+        padding: '16px',
+        margin: '10px 0',
+        border: '1px solid var(--border)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ fontSize: 32 }}>{fileIcon}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <b style={{ fontSize: 14, color: 'var(--ink)', display: 'block', wordBreak: 'break-all' }}>
+            {cleanDisplayName}
+          </b>
+          <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+            {d.fileSize ? `${Math.round(d.fileSize / 1024)} KB · ` : ''}
+            {revealFinal ? 'Bản gốc hoàn thiện đã giải ngân' : 'Bản nộp xem trước (Đã khóa định danh & lưu vết)'}
+          </span>
+        </div>
+      </div>
+
+      {/* Escrow & Copyright Guarantee Badge */}
+      <div style={{ background: 'rgba(59, 130, 246, 0.05)', border: '1px solid rgba(59, 130, 246, 0.18)', borderRadius: 8, padding: '10px 12px', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+        <span style={{ fontSize: 16, lineHeight: 1.2 }}>🛡️</span>
+        <div style={{ fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.45 }}>
+          <strong style={{ color: 'var(--ink)', display: 'block', marginBottom: 2 }}>Bảo hộ bản quyền & Ký quỹ Escrow SkillBridge:</strong>
+          {revealFinal ? (
+            <span>Tệp sản phẩm đã hoàn tất nghiệm thu và chính thức bàn giao quyền sở hữu cho Nhà tuyển dụng.</span>
+          ) : (
+            <span>Tệp đã được ghi nhận dấu thời gian (Timestamp) lưu vết trên hệ thống. Bản gốc hoàn thiện sẽ được chính thức bàn giao sau khi bạn nhấn nghiệm thu.</span>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingTop: 6, borderTop: '1px dashed var(--border)' }}>
+        <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
+          {revealFinal ? '✅ Bản gốc hoàn thiện đã sẵn sàng' : '💡 Tải về để xem trước nội dung & kiểm tra chất lượng'}
+        </span>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, downloadType)}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+        >
+          ⬇️ {revealFinal ? 'Tải bản gốc hoàn thiện' : 'Tải file về kiểm tra'}
+        </button>
+      </div>
     </div>
   );
 }
@@ -236,7 +714,7 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
         <label>Cách nộp bàn giao</label>
         <div style={{ display: 'flex', gap: 16, margin: '4px 0 10px', flexWrap: 'wrap' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
-            <input type="radio" checked={mode === 'file'} onChange={() => setMode('file')} /> 📁 Tải file lên Cloudflare R2
+            <input type="radio" checked={mode === 'file'} onChange={() => setMode('file')} /> 📁 Tải file trực tiếp
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 500, cursor: 'pointer' }}>
             <input type="radio" checked={mode === 'link'} onChange={() => setMode('link')} /> 🔗 Dán link ngoài
@@ -248,7 +726,7 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
           <input type="file" onChange={(e) => setFile(e.target.files?.[0])} />
           <div className="uz-ic" style={{ fontSize: 32, marginBottom: 6 }}>📁</div>
           <b>Kéo thả hoặc bấm để chọn file sản phẩm</b>
-          <p style={{ fontSize: 12, color: 'var(--muted, #666)', margin: '4px 0 0' }}>Hỗ trợ mọi định dạng (Tối đa 25MB). File được lưu trực tiếp lên Cloudflare R2.</p>
+          <p style={{ fontSize: 12, color: 'var(--muted, #666)', margin: '4px 0 0' }}>Hỗ trợ mọi định dạng (Tối đa 25MB). File được mã hóa và bảo mật an toàn.</p>
           {file && <div style={{ fontSize: 13, marginTop: 8, color: 'var(--primary, #5b4cf5)', fontWeight: 600 }}>Đã chọn: {file.name} ({Math.round(file.size / 1024)} KB)</div>}
         </div>
       ) : (
@@ -266,7 +744,7 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
 
       <div className="modal-actions">
         <button className="btn btn-primary" onClick={submit} disabled={isSubmitting}>
-          {isSubmitting ? 'Đang tải lên Cloudflare R2...' : (isUpdate ? 'Cập nhật bàn giao' : 'Gửi bàn giao')}
+          {isSubmitting ? 'Đang tải file lên...' : (isUpdate ? 'Cập nhật bàn giao' : 'Gửi bàn giao')}
         </button>
         <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Hủy</button>
       </div>

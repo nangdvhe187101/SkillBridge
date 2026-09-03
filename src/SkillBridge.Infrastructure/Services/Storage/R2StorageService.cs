@@ -72,6 +72,7 @@ public class R2StorageService : IStorageService
 
         try
         {
+            var streamLength = stream.CanSeek ? stream.Length : 0;
             var putRequest = new PutObjectRequest
             {
                 BucketName = _bucketName,
@@ -91,22 +92,22 @@ public class R2StorageService : IStorageService
                 fileUrl = await GetPresignedUrlAsync(fileKey, TimeSpan.FromDays(7));
             }
 
-            _logger.LogInformation("Upload file {FileKey} lên Cloudflare R2 thành công.", fileKey);
+            _logger.LogInformation("Upload file {FileKey} thành công.", fileKey);
 
             return new FileUploadResult
             {
                 FileKey = fileKey,
                 FileUrl = fileUrl,
                 FileName = cleanFileName,
-                FileSize = stream.Length,
+                FileSize = streamLength,
                 ContentType = putRequest.ContentType,
                 UploadedAt = DateTime.UtcNow
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Lỗi khi upload file {FileName} lên Cloudflare R2.", fileName);
-            throw new BusinessException("Không thể tải file lên Cloudflare R2. Vui lòng thử lại sau.", ex);
+            _logger.LogError(ex, "Lỗi khi upload file {FileName}.", fileName);
+            throw new BusinessException("Không thể tải file lên hệ thống lưu trữ. Vui lòng thử lại sau.", ex);
         }
     }
 

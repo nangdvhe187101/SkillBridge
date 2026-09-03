@@ -1,3 +1,5 @@
+import { getAccessToken } from '../api/tokenStore';
+
 export async function downloadJobAttachment(file, jobTitle = '', jobId = null) {
     const fileName = file?.fileName || file?.name || 'Tai_lieu_SkillBridge.pdf';
     const effectiveJobId = jobId || file?.jobId;
@@ -75,8 +77,6 @@ Thời gian tải về: ${new Date().toLocaleString('vi-VN')}
     URL.revokeObjectURL(url);
 }
 
-import { getAccessToken } from '../api/tokenStore';
-
 export async function downloadCandidateCv(cvFileId, originalFileName = 'CV_UngVien_SkillBridge.pdf') {
     const fileName = originalFileName || 'CV_UngVien_SkillBridge.pdf';
     if (!cvFileId) return;
@@ -110,7 +110,11 @@ export async function downloadCandidateCv(cvFileId, originalFileName = 'CV_UngVi
 }
 
 export async function downloadDeliverableFile(jobId, deliverableId, originalFileName = 'deliverable.zip', type = 'final') {
-    const fileName = originalFileName || 'deliverable';
+    let fileName = originalFileName || 'deliverable';
+    if (fileName.length > 25 || /^[a-z0-9_]{20,}\.[a-z0-9]+$/i.test(fileName)) {
+        const ext = fileName.includes('.') ? fileName.split('.').pop() : 'zip';
+        fileName = `SkillBridge_BanGiao_Job${jobId}_${type === 'preview' ? 'Preview' : 'Final'}.${ext}`;
+    }
     if (!jobId || !deliverableId) return;
 
     try {
