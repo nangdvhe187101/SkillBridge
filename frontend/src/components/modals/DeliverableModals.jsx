@@ -109,16 +109,17 @@ function DeliverablePreview({ d, revealFinal }) {
 export { DeliverablePreview };
 
 export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) {
-  const { state, submitDeliverable, refreshMyApplications } = useStore();
-  const localJob = state.myJobs.find((j) => j.id === jobId) ||
-                   state.myApplications.find((a) => a.jobId === jobId || a.id === jobId);
+  const { state, refreshMyApplications } = useStore();
+  const numericJobId = Number(jobId);
+  const localJob = state.myJobs.find((j) => Number(j.id) === numericJobId) ||
+                   state.myApplications.find((a) => Number(a.jobId) === numericJobId || Number(a.id) === numericJobId);
   const job = propJob || localJob || { id: jobId, title: 'Công việc', status: 'in_progress' };
   const [apiDeliverable, setApiDeliverable] = useState(null);
   const [apiFeedbacks, setApiFeedbacks] = useState([]);
 
   useEffect(() => {
-    if (jobId && !isNaN(Number(jobId)) && (!job?.deliverableFeedback?.length || !job?.deliverable)) {
-      getJobDeliverables(Number(jobId))
+    if (numericJobId && !isNaN(numericJobId) && (!job?.deliverableFeedback?.length || !job?.deliverable)) {
+      getJobDeliverables(numericJobId)
         .then((res) => {
           const delivs = Array.isArray(res) ? res : (res?.items || []);
           if (delivs.length > 0) {
@@ -138,7 +139,7 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
         })
         .catch(() => {});
     }
-  }, [jobId]);
+  }, [numericJobId]);
 
   const prev = job?.deliverable || apiDeliverable || {};
   const [mode, setMode] = useState(prev.mode || (prev.externalUrl ? 'link' : 'file'));
@@ -156,6 +157,11 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
 
   const submit = async () => {
     setErrorMsg('');
+    if (!numericJobId || isNaN(numericJobId)) {
+      setErrorMsg('Mã công việc không hợp lệ.');
+      return;
+    }
+
     if (mode === 'link') {
       if (!url.trim()) {
         setErrorMsg('Vui lòng nhập đường dẫn sản phẩm.');
@@ -163,17 +169,14 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
       }
       setIsSubmitting(true);
       try {
-        if (typeof jobId === 'number' && jobId > 0) {
-          const formData = new FormData();
-          formData.append('externalUrl', url.trim());
-          if (note) formData.append('note', note.trim());
-          await submitJobDeliverable(jobId, formData);
-        }
-        submitDeliverable({ jobId, mode: 'link', url: url.trim(), note });
+        const formData = new FormData();
+        formData.append('externalUrl', url.trim());
+        if (note) formData.append('note', note.trim());
+        const result = await submitJobDeliverable(numericJobId, formData);
         if (typeof refreshMyApplications === 'function') {
-          refreshMyApplications();
+          await refreshMyApplications();
         }
-        onSubmitted?.();
+        onSubmitted?.(result);
         onClose();
       } catch (err) {
         setErrorMsg(err?.message || 'Không thể gửi bàn giao.');
@@ -202,50 +205,15 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
 
     setIsSubmitting(true);
     try {
-      let r2Result = null;
-      if (typeof jobId === 'number' && jobId > 0) {
-        const formData = new FormData();
-        formData.append('file', file);
-        if (note) formData.append('note', note.trim());
-        r2Result = await submitJobDeliverable(jobId, formData);
-      }
+      const formData = new FormData();
+      formData.append('file', file);
+      if (note) formData.append('note', note.trim());
+      const r2Result = await submitJobDeliverable(numericJobId, formData);
 
-      if (file.type.startsWith('image/')) {
-        try {
-          const { previewDataUrl, finalDataUrl } = await watermarkImageFile(file);
-          submitDeliverable({
-            jobId,
-            mode: 'file',
-            fileName: file.name,
-            fileSize: file.size,
-            previewDataUrl,
-            finalDataUrl: r2Result?.previewFileUrl || finalDataUrl,
-            note
-          });
-        } catch {
-          submitDeliverable({
-            jobId,
-            mode: 'file',
-            fileName: file.name,
-            fileSize: file.size,
-            finalDataUrl: r2Result?.previewFileUrl,
-            note
-          });
-        }
-      } else {
-        submitDeliverable({
-          jobId,
-          mode: 'file',
-          fileName: file.name,
-          fileSize: file.size,
-          finalDataUrl: r2Result?.previewFileUrl,
-          note
-        });
-      }
       if (typeof refreshMyApplications === 'function') {
-        refreshMyApplications();
+        await refreshMyApplications();
       }
-      onSubmitted?.();
+      onSubmitted?.(r2Result);
       onClose();
     } catch (err) {
       setErrorMsg(err?.message || 'Không thể tải lên file bàn giao.');
@@ -307,30 +275,53 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
 }
 
 export function RevisionModal({ onClose, jobId, deliverable: propDeliverable, job: propJob, onReviewed }) {
-  const { state, requestRevision, reviewDeliverableAsync } = useStore();
-  const localJob = state.myJobs.find((j) => j.id === jobId);
+  const { state, reviewDeliverableAsync } = useStore();
+  const numericJobId = Number(jobId);
+  const localJob = state.myJobs.find((j) => Number(j.id) === numericJobId);
   const job = propJob || localJob || { id: jobId, title: 'Công việc', revisionCount: 0, revisionLimit: 2 };
-  const deliverable = propDeliverable || job?.deliverable;
+  const [deliverable, setDeliverable] = useState(propDeliverable || job?.deliverable || null);
+  const [loading, setLoading] = useState(!propDeliverable?.id && !job?.deliverable?.id && !!numericJobId);
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
+  useEffect(() => {
+    if (numericJobId && !deliverable?.id) {
+      setLoading(true);
+      getJobDeliverables(numericJobId)
+        .then((res) => {
+          const delivs = Array.isArray(res) ? res : (res?.items || []);
+          if (delivs.length > 0) {
+            setDeliverable(delivs[0]);
+          }
+        })
+        .catch((err) => {
+          console.error('Lỗi khi tải thông tin sản phẩm bàn giao:', err);
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [numericJobId]);
+
   if (!job) return null;
 
   const submit = async () => {
-    if (!text.trim()) return;
+    if (!text.trim()) {
+      setErrorMsg('Vui lòng nhập nội dung cần chỉnh sửa.');
+      return;
+    }
+    const targetDeliverableId = deliverable?.id;
+    if (!numericJobId || !targetDeliverableId) {
+      setErrorMsg('Không tìm thấy thông tin bản bàn giao hợp lệ trên máy chủ để gửi yêu cầu sửa đổi.');
+      return;
+    }
     setIsSubmitting(true);
     setErrorMsg('');
     try {
-      if (typeof jobId === 'number' && deliverable?.id) {
-        if (typeof reviewDeliverableAsync === 'function') {
-          await reviewDeliverableAsync(jobId, deliverable.id, {
-            status: 'revision_requested',
-            feedbackComment: text.trim()
-          });
-        }
-      } else {
-        requestRevision({ jobId, text: text.trim() });
+      if (typeof reviewDeliverableAsync === 'function') {
+        await reviewDeliverableAsync(numericJobId, targetDeliverableId, {
+          status: 'revision_requested',
+          feedbackComment: text.trim()
+        });
       }
       onReviewed?.();
       onClose();
@@ -347,13 +338,23 @@ export function RevisionModal({ onClose, jobId, deliverable: propDeliverable, jo
       <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
         Cho <b>{job.hiredApplicant || 'sinh viên'}</b> biết cần chỉnh sửa gì. Lượt {(job.revisionCount || 0) + 1}/{job.revisionLimit || 2}.
       </p>
-      <div className="field">
-        <label>Nội dung cần sửa</label>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="VD: Đổi màu chủ đạo sang xanh dương, thêm logo công ty ở góc trên..." />
-      </div>
+      {loading ? (
+        <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--ink-soft)' }}>
+          Đang tải dữ liệu bàn giao...
+        </div>
+      ) : !deliverable ? (
+        <div style={{ padding: '16px 0', color: 'var(--coral)', fontSize: 13 }}>
+          ⚠️ Không tìm thấy bản bàn giao tương ứng để yêu cầu chỉnh sửa.
+        </div>
+      ) : (
+        <div className="field">
+          <label>Nội dung cần sửa</label>
+          <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="VD: Đổi màu chủ đạo sang xanh dương, thêm logo công ty ở góc trên..." />
+        </div>
+      )}
       {errorMsg && <div style={{ color: 'var(--coral)', fontSize: 13, marginBottom: 12 }}>{errorMsg}</div>}
       <div className="modal-actions">
-        <button className="btn btn-primary" style={{ background: 'var(--coral)' }} onClick={submit} disabled={isSubmitting}>
+        <button className="btn btn-primary" style={{ background: 'var(--coral)' }} onClick={submit} disabled={isSubmitting || loading || !deliverable}>
           {isSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu sửa'}
         </button>
         <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Quay lại</button>
@@ -363,33 +364,53 @@ export function RevisionModal({ onClose, jobId, deliverable: propDeliverable, jo
 }
 
 export function DeliverableReviewModal({ onClose, jobId, deliverable: propDeliverable, job: propJob, onReviewed }) {
-  const { state, markJobComplete, reviewDeliverableAsync } = useStore();
+  const { state, reviewDeliverableAsync } = useStore();
   const { openModal } = useModal();
-  const localJob = state.myJobs.find((j) => j.id === jobId);
+  const numericJobId = Number(jobId);
+  const localJob = state.myJobs.find((j) => Number(j.id) === numericJobId);
   const job = propJob || localJob;
-  const deliverable = propDeliverable || job?.deliverable;
+  const [deliverable, setDeliverable] = useState(propDeliverable || job?.deliverable || null);
+  const [loading, setLoading] = useState(!propDeliverable?.id && !job?.deliverable?.id && !!numericJobId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  if (!job || !deliverable) return null;
+  useEffect(() => {
+    if (numericJobId && !deliverable?.id) {
+      setLoading(true);
+      getJobDeliverables(numericJobId)
+        .then((res) => {
+          const delivs = Array.isArray(res) ? res : (res?.items || []);
+          if (delivs.length > 0) {
+            setDeliverable(delivs[0]);
+          }
+        })
+        .catch((err) => {
+          console.error('Lỗi khi tải thông tin sản phẩm bàn giao:', err);
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [numericJobId]);
+
+  if (!job) return null;
   const limitReached = (job.revisionCount || 0) >= (job.revisionLimit || 2);
 
   const handleAccept = async () => {
+    const targetDeliverableId = deliverable?.id;
+    if (!numericJobId || !targetDeliverableId) {
+      setErrorMsg('Không tìm thấy thông tin bản bàn giao hợp lệ trên máy chủ để nghiệm thu.');
+      return;
+    }
     setIsSubmitting(true);
     setErrorMsg('');
     try {
-      if (typeof jobId === 'number' && deliverable?.id) {
-        if (typeof reviewDeliverableAsync === 'function') {
-          await reviewDeliverableAsync(jobId, deliverable.id, {
-            status: 'accepted'
-          });
-        }
-      } else {
-        markJobComplete(job.id);
+      if (typeof reviewDeliverableAsync === 'function') {
+        await reviewDeliverableAsync(numericJobId, targetDeliverableId, {
+          status: 'accepted'
+        });
       }
       onReviewed?.();
       onClose();
-      openModal('receipt', { justCompletedId: job.id });
+      openModal('receipt', { justCompletedId: job.id || numericJobId });
     } catch (err) {
       setErrorMsg(err?.message || 'Không thể nghiệm thu công việc.');
     } finally {
@@ -399,27 +420,55 @@ export function DeliverableReviewModal({ onClose, jobId, deliverable: propDelive
 
   return (
     <ModalShell onClose={onClose}>
-      <h3>📥 Bàn giao từ {job.hiredApplicant || 'sinh viên'} — phiên bản {deliverable.version || 1}</h3>
-      <p><b>{job.title}</b></p>
-      <DeliverablePreview d={deliverable} revealFinal={false} />
-      <div className="checkout-summary" style={{ marginTop: 8 }}>
-        <div className="cs-row"><span>Ghi chú</span><span>{deliverable.note || '—'}</span></div>
-        <div className="cs-row"><span>Nộp lúc</span><span>{deliverable.submittedAt || 'Vừa xong'}</span></div>
-      </div>
-      <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 10 }}>
-        Xác nhận để giải ngân {fmtVND(job.escrowAmount || job.budget)} cho sinh viên, hoặc yêu cầu sửa lại nếu sản phẩm chưa đạt.
-      </p>
-      {errorMsg && <div style={{ color: 'var(--coral)', fontSize: 13, marginBottom: 12 }}>{errorMsg}</div>}
-      <div className="modal-actions">
-        <button className="btn btn-primary" onClick={handleAccept} disabled={isSubmitting}>
-          {isSubmitting ? 'Đang giải ngân...' : '✓ Xác nhận & Giải ngân'}
-        </button>
-        <button className="btn btn-outline" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} disabled={limitReached || isSubmitting}
-          onClick={() => { onClose(); openModal('revision', { jobId: job.id, deliverable, job, onReviewed }); }}>
-          ✏️ Yêu cầu sửa
-        </button>
-        <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Để sau</button>
-      </div>
+      {loading ? (
+        <div style={{ padding: '30px 0', textAlign: 'center', color: 'var(--ink-soft)' }}>
+          Đang tải dữ liệu bàn giao từ máy chủ...
+        </div>
+      ) : !deliverable ? (
+        <div style={{ padding: '20px 0', textAlign: 'center' }}>
+          <div style={{ fontSize: 32, marginBottom: 8 }}>⚠️</div>
+          <b>Chưa tìm thấy sản phẩm bàn giao</b>
+          <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>
+            Không tìm thấy bản bàn giao nào của sinh viên trong hệ thống cho công việc này.
+          </p>
+          <div className="modal-actions" style={{ marginTop: 20 }}>
+            <button className="btn btn-outline" onClick={onClose}>Đóng</button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <h3>📥 Bàn giao từ {job.hiredApplicant || 'sinh viên'} — phiên bản {deliverable.version || 1}</h3>
+          <p><b>{job.title}</b></p>
+          <DeliverablePreview d={deliverable} revealFinal={false} />
+          <div className="checkout-summary" style={{ marginTop: 8 }}>
+            <div className="cs-row"><span>Ghi chú</span><span>{deliverable.note || '—'}</span></div>
+            <div className="cs-row">
+              <span>Nộp lúc</span>
+              <span>
+                {deliverable.submittedAt
+                  ? (new Date(deliverable.submittedAt).toString() !== 'Invalid Date'
+                      ? new Date(deliverable.submittedAt).toLocaleString('vi-VN')
+                      : deliverable.submittedAt)
+                  : 'Vừa xong'}
+              </span>
+            </div>
+          </div>
+          <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 10 }}>
+            Xác nhận để giải ngân {fmtVND(job.escrowAmount || job.budget)} cho sinh viên, hoặc yêu cầu sửa lại nếu sản phẩm chưa đạt.
+          </p>
+          {errorMsg && <div style={{ color: 'var(--coral)', fontSize: 13, marginBottom: 12 }}>{errorMsg}</div>}
+          <div className="modal-actions">
+            <button className="btn btn-primary" onClick={handleAccept} disabled={isSubmitting}>
+              {isSubmitting ? 'Đang giải ngân...' : '✓ Xác nhận & Giải ngân'}
+            </button>
+            <button className="btn btn-outline" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} disabled={limitReached || isSubmitting}
+              onClick={() => { onClose(); openModal('revision', { jobId: job.id || numericJobId, deliverable, job, onReviewed }); }}>
+              ✏️ Yêu cầu sửa
+            </button>
+            <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Để sau</button>
+          </div>
+        </>
+      )}
     </ModalShell>
   );
 }
