@@ -160,6 +160,17 @@ public class R2StorageService : IStorageService
         if (string.IsNullOrWhiteSpace(fileKeyOrUrl)) return string.Empty;
 
         var trimmed = fileKeyOrUrl.Trim();
+        var normalized = trimmed.Replace('\\', '/').TrimStart('/');
+
+        // ⚠️ BẢO MẬT: Chặn tuyệt đối việc sinh Public URL cho các tệp tin nhạy cảm/riêng tư (CVs, Deliverables)
+        if (normalized.StartsWith("cvs/", StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith("job-deliverables/", StringComparison.OrdinalIgnoreCase) ||
+            normalized.StartsWith("private/", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains("/cvs/", StringComparison.OrdinalIgnoreCase) ||
+            normalized.Contains("/job-deliverables/", StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
 
         // Hỗ trợ backward-compatibility: nếu bản ghi cũ đã lưu Full URL (http:// hoặc https://), trả về nguyên bản
         if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
@@ -173,7 +184,7 @@ public class R2StorageService : IStorageService
             return trimmed;
         }
 
-        return $"{_publicBaseUrl.TrimEnd('/')}/{trimmed.TrimStart('/')}";
+        return $"{_publicBaseUrl.TrimEnd('/')}/{normalized}";
     }
 
     public Task<string> GetPresignedUrlAsync(string fileKey, TimeSpan expiry)

@@ -70,6 +70,7 @@ public class DeliverableController : ControllerBase
 
     [HttpGet("{deliverableId:int}/download")]
     [EnableRateLimiting("GeneralApiPolicy")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> DownloadDeliverable(
         int jobId,
         int deliverableId,
