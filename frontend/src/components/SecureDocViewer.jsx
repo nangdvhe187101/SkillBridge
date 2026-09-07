@@ -24,7 +24,16 @@ async function fetchDeliverableBlob(jobId, deliverableId, type, asBuffer) {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
     credentials: 'include',
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    let msg = `HTTP ${res.status}`;
+    try {
+      const errJson = await res.json();
+      if (errJson?.message) msg = errJson.message;
+    } catch {
+      // ignore
+    }
+    throw new Error(msg);
+  }
   return asBuffer ? res.arrayBuffer() : res.blob();
 }
 

@@ -78,9 +78,10 @@ public class DeliverableController : ControllerBase
     {
         var userId = User.GetRequiredUserId();
         var result = await _deliverableService.GetDeliverableFileStreamAsync(userId, jobId, deliverableId, type, cancellationToken);
-        if (result == null)
+        if (string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase))
         {
-            return NotFound(new { message = "Không tìm thấy file sản phẩm bàn giao." });
+            Response.Headers["Content-Disposition"] = "inline";
+            return File(result.Value.Stream, result.Value.ContentType);
         }
 
         return File(result.Value.Stream, result.Value.ContentType, result.Value.FileName);

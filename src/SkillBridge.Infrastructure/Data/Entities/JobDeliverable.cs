@@ -27,7 +27,7 @@ public partial class JobDeliverable
 
     [Column("preview_file_url")]
     [StringLength(255)]
-    public string PreviewFileUrl { get; set; } = null!;
+    public string? PreviewFileUrl { get; set; }
 
     [Column("final_file_url")]
     [StringLength(255)]
