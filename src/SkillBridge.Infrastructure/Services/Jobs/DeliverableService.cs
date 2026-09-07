@@ -55,12 +55,17 @@ public class DeliverableService : IDeliverableService
             .Include(d => d.Student)
             .Include(d => d.DeliverableFeedbacks)
                 .ThenInclude(f => f.Employer)
-            .Where(d => d.JobId == jobId);
+            .Where(d => d.JobId == jobId && d.Status != "cancelled");
 
         if (!isEmployer)
         {
             // Sinh viên chỉ được xem deliverables do chính mình nộp cho job này (chặn IDOR)
             query = query.Where(d => d.StudentId == userId);
+        }
+        else if (job.HiredApplicantId.HasValue)
+        {
+            // Nhà tuyển dụng chỉ xem các bản bàn giao của ứng viên đang được thuê hiện tại (tránh lẫn với sinh viên cũ đã hủy việc)
+            query = query.Where(d => d.StudentId == job.HiredApplicantId.Value);
         }
 
         var deliverables = await query
@@ -317,6 +322,17 @@ public class DeliverableService : IDeliverableService
         if (deliverable == null)
         {
             throw new BusinessException("Bản nộp sản phẩm không tồn tại.");
+        }
+
+        // BẢO MẬT & TOÀN VẸN NGHIỆP VỤ: Đảm bảo bản nộp thuộc về ứng viên đang được thuê chính thức hiện tại
+        if (!job.HiredApplicantId.HasValue || deliverable.StudentId != job.HiredApplicantId.Value)
+        {
+            throw new BusinessException("Bản nộp sản phẩm này không thuộc về sinh viên đang được thuê hiện tại của công việc.");
+        }
+
+        if (string.Equals(deliverable.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Bản nộp sản phẩm này đã bị hủy do sinh viên trước đó đã rút khỏi công việc.");
         }
 
         if (job.Status == "completed")
