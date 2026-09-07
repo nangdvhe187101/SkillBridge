@@ -315,8 +315,18 @@ public class ApplicationService : IApplicationService
                         job.HiredApplicantId = null;
                         job.DeadlineAt = null;
                         job.EscrowAmount = null;
+                        job.RevisionCount = 0; // Reset số lần chỉnh sửa cho lượt thuê mới
                         job.UpdatedAt = DateTime.UtcNow;
                         _dbContext.Jobs.Update(job);
+                    }
+
+                    // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên này để không lẫn vào lượt thuê mới
+                    var pendingDeliverables = await _dbContext.JobDeliverables
+                        .Where(d => d.JobId == jobId && d.StudentId == studentId && d.Status != "accepted")
+                        .ToListAsync();
+                    foreach (var del in pendingDeliverables)
+                    {
+                        del.Status = "cancelled";
                     }
                 }
 
