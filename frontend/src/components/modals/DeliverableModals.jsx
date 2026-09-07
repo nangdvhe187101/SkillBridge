@@ -700,10 +700,15 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
       return;
     }
 
-    const blockedExts = ['exe', 'bat', 'cmd', 'sh', 'dll', 'vbs', 'msi', 'com', 'scr', 'ps1'];
+    const allowedExtensions = [
+      'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'json', 'xml', 'rtf',
+      'zip', 'rar', '7z', 'tar', 'gz', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'psd', 'ai', 'fig', 'xd', 'sketch', 'eps',
+      'mp4', 'mov', 'm4v', 'webm', 'avi', 'mkv', 'wmv', 'flv',
+      'mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg'
+    ];
     const ext = file.name.split('.').pop()?.toLowerCase();
-    if (blockedExts.includes(ext)) {
-      setErrorMsg('Định dạng file thực thi có rủi ro bảo mật và không được phép tải lên.');
+    if (!ext || !allowedExtensions.includes(ext)) {
+      setErrorMsg('Định dạng file không được hỗ trợ. Vui lòng tải lên tài liệu (PDF, Word, Excel, PowerPoint), file nén (ZIP, RAR), video, âm thanh, hình ảnh hoặc file thiết kế.');
       return;
     }
 
@@ -754,10 +759,14 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
       </div>
       {mode === 'file' ? (
         <div className="upload-zone" style={{ border: '2px dashed var(--primary, #5b4cf5)', borderRadius: 12, padding: 20, textAlign: 'center' }}>
-          <input type="file" onChange={(e) => setFile(e.target.files?.[0])} />
+          <input
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.json,.xml,.rtf,.zip,.rar,.7z,.tar,.gz,.png,.jpg,.jpeg,.webp,.gif,.svg,.psd,.ai,.fig,.xd,.sketch,.eps,.mp4,.mov,.m4v,.webm,.avi,.mkv,.wmv,.flv,.mp3,.wav,.m4a,.aac,.flac,.ogg"
+            onChange={(e) => setFile(e.target.files?.[0])}
+          />
           <div className="uz-ic" style={{ fontSize: 32, marginBottom: 6 }}>📁</div>
           <b>Kéo thả hoặc bấm để chọn file sản phẩm</b>
-          <p style={{ fontSize: 12, color: 'var(--muted, #666)', margin: '4px 0 0' }}>Hỗ trợ mọi định dạng (Tối đa 25MB). File được mã hóa và bảo mật an toàn.</p>
+          <p style={{ fontSize: 12, color: 'var(--muted, #666)', margin: '4px 0 0' }}>Hỗ trợ tài liệu (PDF, Word, Excel), file nén (ZIP, RAR), video, âm thanh, thiết kế (Tối đa 25MB).</p>
           {file && <div style={{ fontSize: 13, marginTop: 8, color: 'var(--primary, #5b4cf5)', fontWeight: 600 }}>Đã chọn: {file.name} ({Math.round(file.size / 1024)} KB)</div>}
         </div>
       ) : (

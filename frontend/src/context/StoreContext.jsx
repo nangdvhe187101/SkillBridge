@@ -199,8 +199,8 @@ const initialState = {
 function addNotifTo(list, icon, text, link = null) {
   return [{ id: Date.now() + Math.random(), icon, text, read: false, time: 'Vừa xong', link }, ...list];
 }
-function addTxTo(list, type, label, amount, sign) {
-  return [{ id: Date.now() + Math.random(), type, label, amount, sign, date: fmtNow() }, ...list];
+function addTxTo(list, type, label, amount, sign, referenceId = null) {
+  return [{ id: Date.now() + Math.random(), type, label, amount, sign, referenceId, date: fmtNow() }, ...list];
 }
 
 function reducer(state, action) {
@@ -394,9 +394,9 @@ function reducer(state, action) {
       let transactions = state.transactions;
       if (method === 'wallet') {
         balance -= hireAmount;
-        transactions = addTxTo(transactions, 'escrow_hold', 'Ký quỹ thuê ' + selectedName + ' · ' + job.title, hireAmount, -1);
+        transactions = addTxTo(transactions, 'escrow_hold', 'Ký quỹ thuê ' + selectedName + ' · ' + job.title, hireAmount, -1, job.id);
       } else {
-        transactions = addTxTo(transactions, 'escrow_hold', 'Ký quỹ thuê ' + selectedName + ' · ' + job.title + ' (Thanh toán trực tiếp)', hireAmount, -1);
+        transactions = addTxTo(transactions, 'escrow_hold', 'Ký quỹ thuê ' + selectedName + ' · ' + job.title + ' (Thanh toán trực tiếp)', hireAmount, -1, job.id);
       }
 
       let myApplications = state.myApplications;
@@ -436,6 +436,62 @@ function reducer(state, action) {
       };
       const notifications = addNotifTo(state.notifications, '✅', `Công việc "${job.title}" đã hoàn thành và tiền đã giải ngân cho ${job.hiredApplicant}.`, '/wallet');
       return { ...state, myJobs, transactions, myReliability, myApplications, receipts: [receipt, ...state.receipts], notifications, lastReceiptId: receipt.id };
+    }
+
+    case 'RECORD_REAL_RECEIPT': {
+      const { jobId, deliverableResult } = action.payload;
+      const numericJobId = Number(jobId);
+      const job = state.myJobs.find((j) => j.id === numericJobId || j.id === jobId) || state.jobs.find((j) => j.id === numericJobId || j.id === jobId);
+      if (!job) return state;
+
+      const studentName = job.hiredApplicant || job.hiredStudentName || deliverableResult?.studentName || 'Sinh viên';
+      const budget = job.budget || deliverableResult?.budget || 0;
+      const receiptCode = `SB-REC-${job.id}-${Date.now().toString().slice(-4)}`;
+      const receipt = {
+        id: 'rc-' + job.id + '-' + Date.now(),
+        code: receiptCode,
+        dashJobId: job.id,
+        jobId: job.id,
+        jobTitle: job.title,
+        budget: budget,
+        commission: 0,
+        total: budget,
+        net: budget,
+        student: studentName,
+        employer: job.employerName || 'Nhà tuyển dụng',
+        date: fmtNow()
+      };
+
+      const myJobs = state.myJobs.map((j) => (j.id === job.id ? { ...j, status: 'completed' } : j));
+      const jobs = state.jobs.map((j) => (j.id === job.id ? { ...j, status: 'completed' } : j));
+      const myApplications = state.myApplications.map((a) => (a.jobId === job.id || a.dashJobId === job.id ? { ...a, status: 'completed', jobStatus: 'completed' } : a));
+
+      let transactions = state.transactions;
+      const txLabel = `Giải ngân cho ${studentName} · ${job.title}`;
+      const alreadyReleased = transactions.some(
+        (t) => t.type === 'escrow_release' && (t.referenceId === job.id || t.dashJobId === job.id || t.label === txLabel)
+      );
+      if (!alreadyReleased) {
+        transactions = addTxTo(transactions, 'escrow_release', txLabel, budget, 1, job.id);
+      }
+
+      const notifications = addNotifTo(
+        state.notifications,
+        '✅',
+        `Công việc "${job.title}" đã hoàn thành và giải ngân ${budget.toLocaleString('vi-VN')}đ cho ${studentName}.`,
+        '/wallet'
+      );
+
+      return {
+        ...state,
+        myJobs,
+        jobs,
+        myApplications,
+        transactions,
+        receipts: [receipt, ...state.receipts.filter((r) => r.dashJobId !== job.id && r.jobId !== job.id)],
+        notifications,
+        lastReceiptId: receipt.id
+      };
     }
 
     case 'SUBMIT_DELIVERABLE': {
@@ -1099,10 +1155,9 @@ export function StoreProvider({ children }) {
         const res = await deliverableApi.reviewJobDeliverable(jobId, deliverableId, reviewData);
         await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
         if (reviewData?.status === 'accepted') {
-          dispatch({ type: 'MARK_JOB_COMPLETE', id: jobId });
+          dispatch({ type: 'RECORD_REAL_RECEIPT', payload: { jobId, deliverableResult: res } });
           showToast('Nghiệm thu sản phẩm & giải ngân thành công!', '🎉');
         } else if (reviewData?.status === 'revision_requested') {
-          dispatch({ type: 'REQUEST_REVISION', payload: { jobId, text: reviewData.feedbackComment || '' } });
           showToast('Đã gửi yêu cầu chỉnh sửa sản phẩm.', '✏️');
         }
         return res;

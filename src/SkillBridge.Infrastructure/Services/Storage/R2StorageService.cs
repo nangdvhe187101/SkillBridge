@@ -106,12 +106,16 @@ public class R2StorageService : IStorageService
             }
 
             string fileUrl = GetPublicUrl(fileKey);
-            if (string.IsNullOrWhiteSpace(_publicBaseUrl))
+            if (!IsPrivateFolder(fileKey) && string.IsNullOrWhiteSpace(_publicBaseUrl))
             {
-                // Tự động sinh presigned URL 7 ngày nếu chưa có Public Domain và ghi log cảnh báo
-                _logger.LogWarning("PublicBaseUrl chưa được cấu hình. Sinh presigned URL 7 ngày cho file {FileKey}. Link lưu DB có thể hết hạn sau 7 ngày nếu không cấu hình PublicBaseUrl.", fileKey);
+                // Chỉ fallback sinh presigned URL cho tệp tin công khai khi PublicBaseUrl chưa được cấu hình (ví dụ dev local)
+                _logger.LogWarning("PublicBaseUrl chưa được cấu hình. Sinh presigned URL 7 ngày cho tệp công khai {FileKey}.", fileKey);
                 fileUrl = await GetPresignedUrlAsync(fileKey, TimeSpan.FromDays(7));
             }
+            // ⚠️ LƯU Ý BẢO MẬT: Đối với tệp tin thuộc danh mục riêng tư (cvs/, job-deliverables/),
+            // fileUrl CÓ CHỦ ĐÍCH giữ nguyên chuỗi rỗng (string.Empty) để ngăn chặn rò rỉ link trực tiếp (kể cả presigned URL)
+            // có thể bypass qua tầng xác thực JWT, rate-limit và phân quyền IDOR.
+            // Caller BẮT BUỘC sử dụng FileKey kết hợp với endpoint download nghiệp vụ có thẩm quyền.
 
             _logger.LogInformation("Upload file {FileKey} thành công.", fileKey);
 
@@ -160,17 +164,14 @@ public class R2StorageService : IStorageService
         if (string.IsNullOrWhiteSpace(fileKeyOrUrl)) return string.Empty;
 
         var trimmed = fileKeyOrUrl.Trim();
-        var normalized = trimmed.Replace('\\', '/').TrimStart('/');
 
         // ⚠️ BẢO MẬT: Chặn tuyệt đối việc sinh Public URL cho các tệp tin nhạy cảm/riêng tư (CVs, Deliverables)
-        if (normalized.StartsWith("cvs/", StringComparison.OrdinalIgnoreCase) ||
-            normalized.StartsWith("job-deliverables/", StringComparison.OrdinalIgnoreCase) ||
-            normalized.StartsWith("private/", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("/cvs/", StringComparison.OrdinalIgnoreCase) ||
-            normalized.Contains("/job-deliverables/", StringComparison.OrdinalIgnoreCase))
+        if (IsPrivateFolder(trimmed))
         {
             return string.Empty;
         }
+
+        var normalized = trimmed.Replace('\\', '/').TrimStart('/');
 
         // Hỗ trợ backward-compatibility: nếu bản ghi cũ đã lưu Full URL (http:// hoặc https://), trả về nguyên bản
         if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
@@ -185,6 +186,17 @@ public class R2StorageService : IStorageService
         }
 
         return $"{_publicBaseUrl.TrimEnd('/')}/{normalized}";
+    }
+
+    private static bool IsPrivateFolder(string? fileKeyOrUrl)
+    {
+        if (string.IsNullOrWhiteSpace(fileKeyOrUrl)) return false;
+        var normalized = fileKeyOrUrl.Replace('\\', '/').TrimStart('/');
+        return normalized.StartsWith("cvs/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("job-deliverables/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.StartsWith("private/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Contains("/cvs/", StringComparison.OrdinalIgnoreCase) ||
+               normalized.Contains("/job-deliverables/", StringComparison.OrdinalIgnoreCase);
     }
 
     public Task<string> GetPresignedUrlAsync(string fileKey, TimeSpan expiry)
