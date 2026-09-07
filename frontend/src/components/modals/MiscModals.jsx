@@ -8,15 +8,16 @@ import { downloadJobAttachment } from '../../utils/fileDownloader';
 export function ReceiptModal({ onClose, justCompletedId }) {
   const { state } = useStore();
   const { openModal } = useModal();
-  const receipt = justCompletedId
-    ? state.receipts.find((r) => r.dashJobId === justCompletedId) || state.receipts[0]
+  const numericCompletedId = justCompletedId ? Number(justCompletedId) : null;
+  const receipt = numericCompletedId
+    ? state.receipts.find((r) => r.dashJobId === numericCompletedId || r.jobId === numericCompletedId || r.dashJobId === justCompletedId)
     : state.receipts[0];
   if (!receipt) { onClose(); return null; }
-  const job = state.myJobs.find((j) => j.id === receipt.dashJobId) || state.myJobs.find((j) => j.title === receipt.jobTitle);
+  const job = state.myJobs.find((j) => j.id === receipt.dashJobId || j.id === receipt.jobId) || state.myJobs.find((j) => j.title === receipt.jobTitle);
 
   const proceed = () => {
     onClose();
-    if (job) openModal('review', { jobTitle: job.title, withName: job.hiredApplicant, direction: 'toStudent', dashJobId: job.id });
+    if (job) openModal('review', { jobTitle: job.title, withName: job.hiredApplicant || receipt.student, direction: 'toStudent', dashJobId: job.id });
   };
 
   return (
@@ -26,8 +27,11 @@ export function ReceiptModal({ onClose, justCompletedId }) {
         <div className="cs-row"><span>Công việc</span><span>{receipt.jobTitle}</span></div>
         <div className="cs-row"><span>Sinh viên nhận</span><span>{receipt.student}</span></div>
         <div className="cs-row"><span>Ngân sách</span><span>{fmtVND(receipt.budget)}</span></div>
-        <div className="cs-row"><span>Hoa hồng nền tảng</span><span>{fmtVND(receipt.commission)}</span></div>
-        <div className="cs-row total"><span>Tổng đã thanh toán</span><span>{fmtVND(receipt.total)}</span></div>
+        <div className="cs-row">
+          <span>Hoa hồng nền tảng</span>
+          <span>{receipt.commission > 0 ? fmtVND(receipt.commission) : '0đ (Miễn phí nền tảng)'}</span>
+        </div>
+        <div className="cs-row total"><span>Tổng đã thanh toán</span><span>{fmtVND(receipt.total || receipt.budget)}</span></div>
         <div className="cs-row"><span>Thời gian</span><span>{receipt.date}</span></div>
       </div>
       <p style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Biên nhận được lưu trong Ví của bạn — có thể dùng làm căn cứ minh bạch thu nhập/nghĩa vụ thuế.</p>
