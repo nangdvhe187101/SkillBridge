@@ -80,6 +80,7 @@ public class CvController : ControllerBase
 
     [HttpGet("{id:int}/download")]
     [EnableRateLimiting("GeneralApiPolicy")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> DownloadCv(int id)
     {
         var userId = User.GetRequiredUserId();

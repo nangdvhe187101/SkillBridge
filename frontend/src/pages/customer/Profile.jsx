@@ -5,7 +5,7 @@ import ModalShell from '../../components/modals/ModalShell';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
-import { downloadJobAttachment } from '../../utils/fileDownloader';
+import { downloadCandidateCv, downloadJobAttachment } from '../../utils/fileDownloader';
 import { uploadAvatar } from '../../api/userApi';
 
 function tierFromScore(score) {
@@ -399,7 +399,7 @@ export default function Profile() {
                         <button
                           className="btn btn-outline btn-sm"
                           style={{ fontSize: 11, padding: '2px 8px' }}
-                          onClick={() => downloadJobAttachment(cv, cv.label)}
+                          onClick={() => downloadCandidateCv(cv.id, cv.name || cv.label)}
                           title="Xem / Tải file CV"
                         >
                           Tải về

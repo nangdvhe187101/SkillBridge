@@ -10,7 +10,10 @@ export async function downloadJobAttachment(file, jobTitle = '', jobId = null) {
         try {
             const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
             const downloadUrl = `${API_URL}/jobs/${effectiveJobId}/attachments/${attachmentId}/download`;
-            const res = await fetch(downloadUrl);
+            const token = getAccessToken();
+            const headers = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(downloadUrl, { headers, credentials: 'include' });
             if (res.ok) {
                 const blob = await res.blob();
                 const blobUrl = URL.createObjectURL(blob);
@@ -32,7 +35,10 @@ export async function downloadJobAttachment(file, jobTitle = '', jobId = null) {
     const fileUrl = file?.fileUrl || file?.url;
     if (fileUrl && typeof fileUrl === 'string' && (fileUrl.startsWith('http://') || fileUrl.startsWith('https://') || fileUrl.startsWith('/'))) {
         try {
-            const res = await fetch(fileUrl);
+            const token = getAccessToken();
+            const headers = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+            const res = await fetch(fileUrl, { headers, credentials: 'include' });
             if (res.ok) {
                 const blob = await res.blob();
                 const blobUrl = URL.createObjectURL(blob);
