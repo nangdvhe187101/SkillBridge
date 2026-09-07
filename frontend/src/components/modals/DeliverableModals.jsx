@@ -389,56 +389,64 @@ function DeliverablePreview({ d, revealFinal }) {
     (d.fileName && /\.(mp4|mov|m4v|webm|avi|mkv|wmv|flv)$/i.test(d.fileName));
 
   if (isVideo) {
-    return revealFinal ? (
-      <>
-        <div style={{ margin: '8px 0', textAlign: 'center' }}>
-          <DeliverableVideo
-            jobId={d.jobId}
-            deliverableId={d.id}
-            fallbackSrc={d.finalDataUrl || d.finalFileUrl || d.previewFileUrl}
-            alt="Bản gốc video bàn giao"
-            isFinal={true}
-          />
-        </div>
-        <div style={{ textAlign: 'center', marginTop: 10 }}>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
-          >
-            ⬇️ Tải video gốc hoàn thiện
-          </button>
-        </div>
-      </>
-    ) : (
-      <>
-        <div style={{ margin: '8px 0', textAlign: 'center' }}>
-          <DeliverableVideo
-            jobId={d.jobId}
-            deliverableId={d.id}
-            fallbackSrc={d.previewDataUrl || d.previewFileUrl}
-            alt="Video xem trước có watermark"
-            isFinal={false}
-          />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
-          <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-            🔒 Video sản phẩm bàn giao (Được bảo hộ bản quyền SkillBridge)
-          </span>
-          {d.canDownloadPreview && (
+    if (revealFinal) {
+      return (
+        <>
+          <div style={{ margin: '8px 0', textAlign: 'center' }}>
+            <DeliverableVideo
+              jobId={d.jobId}
+              deliverableId={d.id}
+              fallbackSrc={d.finalDataUrl || d.finalFileUrl || d.previewFileUrl}
+              alt="Bản gốc video bàn giao"
+              isFinal={true}
+            />
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
             <button
               type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
+              className="btn btn-primary btn-sm"
+              onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
             >
-              ⬇️ Tải video xem trước
+              ⬇️ Tải video gốc hoàn thiện
             </button>
-          )}
-        </div>
-      </>
-    );
+          </div>
+        </>
+      );
+    }
+
+    // Khi chưa nghiệm thu (!revealFinal), chỉ hiển thị video player nếu THỰC SỰ có bản đóng watermark server-side
+    if (d.hasWatermarkedPreview) {
+      return (
+        <>
+          <div style={{ margin: '8px 0', textAlign: 'center' }}>
+            <DeliverableVideo
+              jobId={d.jobId}
+              deliverableId={d.id}
+              fallbackSrc={d.previewDataUrl || d.previewFileUrl}
+              alt="Video xem trước có watermark"
+              isFinal={false}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+              🔒 Video sản phẩm bàn giao (Bản xem trước có watermark)
+            </span>
+            {d.canDownloadPreview && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
+              >
+                ⬇️ Tải video xem trước
+              </button>
+            )}
+          </div>
+        </>
+      );
+    }
+    // Nếu chưa nghiệm thu và chưa có server-watermark preview, không mount player kéo file vào RAM -> rơi vào Escrow Protected Card bên dưới!
   }
 
   const isImage =
@@ -448,54 +456,62 @@ function DeliverablePreview({ d, revealFinal }) {
     (d.previewFileUrl && /\.(png|jpg|jpeg|webp|gif)$/i.test(d.previewFileUrl));
 
   if (isImage) {
-    return revealFinal ? (
-      <>
-        <div style={{ margin: '8px 0' }}>
-          <DeliverableImage
-            jobId={d.jobId}
-            deliverableId={d.id}
-            fallbackSrc={d.finalDataUrl || d.finalFileUrl || d.previewFileUrl}
-            alt="Bản gốc bàn giao"
-            isFinal={true}
-          />
-        </div>
-        <div style={{ textAlign: 'center', marginTop: 10 }}>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
-          >
-            ⬇️ Tải ảnh gốc hoàn thiện
-          </button>
-        </div>
-      </>
-    ) : (
-      <>
-        <div style={{ margin: '8px 0' }}>
-          <DeliverableImage
-            jobId={d.jobId}
-            deliverableId={d.id}
-            fallbackSrc={d.previewDataUrl || d.previewFileUrl}
-            alt="Xem trước có watermark"
-            isFinal={false}
-          />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
-          <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-            🔒 Hình ảnh sản phẩm (Bản xem trước có watermark)
-          </span>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
-          >
-            ⬇️ Tải ảnh xem trước
-          </button>
-        </div>
-      </>
-    );
+    if (revealFinal) {
+      return (
+        <>
+          <div style={{ margin: '8px 0' }}>
+            <DeliverableImage
+              jobId={d.jobId}
+              deliverableId={d.id}
+              fallbackSrc={d.finalDataUrl || d.finalFileUrl || d.previewFileUrl}
+              alt="Bản gốc bàn giao"
+              isFinal={true}
+            />
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+            >
+              ⬇️ Tải ảnh gốc hoàn thiện
+            </button>
+          </div>
+        </>
+      );
+    }
+
+    if (d.hasWatermarkedPreview || d.previewDataUrl) {
+      return (
+        <>
+          <div style={{ margin: '8px 0' }}>
+            <DeliverableImage
+              jobId={d.jobId}
+              deliverableId={d.id}
+              fallbackSrc={d.previewDataUrl || d.previewFileUrl}
+              alt="Xem trước có watermark"
+              isFinal={false}
+            />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+              🔒 Hình ảnh sản phẩm (Bản xem trước có watermark)
+            </span>
+            {d.canDownloadPreview && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
+              >
+                ⬇️ Tải ảnh xem trước
+              </button>
+            )}
+          </div>
+        </>
+      );
+    }
   }
 
   const docViewer = SecureDocumentViewer({ d, revealFinal });
