@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
+using Amazon.S3.Transfer;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
@@ -73,16 +74,36 @@ public class R2StorageService : IStorageService
         try
         {
             var streamLength = stream.CanSeek ? stream.Length : 0;
-            var putRequest = new PutObjectRequest
-            {
-                BucketName = _bucketName,
-                Key = fileKey,
-                InputStream = stream,
-                ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
-                DisablePayloadSigning = true
-            };
+            var safeContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType;
 
-            await _s3Client.PutObjectAsync(putRequest, cancellationToken);
+            if (streamLength > 5 * 1024 * 1024)
+            {
+                // Sử dụng TransferUtility để upload file lớn (>5MB) theo cơ chế multipart đa luồng song song
+                using var transferUtility = new TransferUtility(_s3Client);
+                var uploadRequest = new TransferUtilityUploadRequest
+                {
+                    BucketName = _bucketName,
+                    Key = fileKey,
+                    InputStream = stream,
+                    ContentType = safeContentType,
+                    PartSize = 5 * 1024 * 1024, // 5MB mỗi part
+                    DisablePayloadSigning = true
+                };
+                await transferUtility.UploadAsync(uploadRequest, cancellationToken);
+            }
+            else
+            {
+                var putRequest = new PutObjectRequest
+                {
+                    BucketName = _bucketName,
+                    Key = fileKey,
+                    InputStream = stream,
+                    ContentType = safeContentType,
+                    DisablePayloadSigning = true
+                };
+
+                await _s3Client.PutObjectAsync(putRequest, cancellationToken);
+            }
 
             string fileUrl = GetPublicUrl(fileKey);
             if (string.IsNullOrWhiteSpace(_publicBaseUrl))
@@ -100,7 +121,7 @@ public class R2StorageService : IStorageService
                 FileUrl = fileUrl,
                 FileName = cleanFileName,
                 FileSize = streamLength,
-                ContentType = putRequest.ContentType,
+                ContentType = safeContentType,
                 UploadedAt = DateTime.UtcNow
             };
         }

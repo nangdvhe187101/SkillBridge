@@ -7,6 +7,9 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
+using PdfSharpCore.Pdf;
+using PdfSharpCore.Pdf.IO;
+using PdfSharpCore.Drawing;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.Interfaces.Jobs;
@@ -64,7 +67,7 @@ public class DeliverableService : IDeliverableService
             .OrderByDescending(d => d.Version)
             .ToListAsync(cancellationToken);
 
-        return deliverables.Select(MapToDeliverableDto).ToList();
+        return deliverables.Select(d => MapToDeliverableDto(d, isEmployer)).ToList();
     }
 
     public async Task<DeliverableDto> SubmitDeliverableAsync(
@@ -110,10 +113,16 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Chỉ ứng viên được nhà tuyển dụng chọn thuê chính thức mới có quyền nộp sản phẩm bàn giao cho công việc này.");
         }
 
-        string? previewUrl = externalUrl;
-        string? finalUrl = externalUrl;
+        string? previewUrl = null;
+        string? finalUrl = null;
         string cleanFileName = fileName != null ? Path.GetFileName(fileName) : "external_link";
         string fileType = "url";
+
+        if (!string.IsNullOrWhiteSpace(externalUrl))
+        {
+            previewUrl = externalUrl;
+            finalUrl = externalUrl;
+        }
 
         if (stream != null && stream.Length > 0 && !string.IsNullOrWhiteSpace(fileName))
         {
@@ -170,8 +179,10 @@ public class DeliverableService : IDeliverableService
                 finalUrl = uploadFinalResult.FileKey;
             }
 
-            // 2. Tạo bản Preview có Watermark (Nếu là file ảnh)
+            // 2. Tạo bản Preview có Watermark (Hỗ trợ Ảnh và PDF server-side)
             var isImage = new[] { ".png", ".jpg", ".jpeg", ".webp" }.Contains(fileExt);
+            var isPdf = string.Equals(fileExt, ".pdf", StringComparison.OrdinalIgnoreCase);
+
             if (isImage)
             {
                 using var imageStream = new MemoryStream(fileBytes);
@@ -189,11 +200,27 @@ public class DeliverableService : IDeliverableService
                     previewUrl = uploadPreviewResult.FileKey;
                 }
             }
-
-            if (string.IsNullOrWhiteSpace(previewUrl))
+            else if (isPdf)
             {
-                previewUrl = finalUrl;
+                using var pdfStream = new MemoryStream(fileBytes);
+                using var watermarkedPdfStream = ApplyPdfWatermark(pdfStream, jobId);
+                if (watermarkedPdfStream != null)
+                {
+                    var previewFileName = $"preview_{Guid.NewGuid():N}_{cleanFileName}";
+                    var uploadPreviewResult = await _storageService.UploadStreamAsync(
+                        watermarkedPdfStream,
+                        previewFileName,
+                        "application/pdf",
+                        folder: $"job-deliverables/{jobId}",
+                        cancellationToken: cancellationToken);
+
+                    previewUrl = uploadPreviewResult.FileKey;
+                }
             }
+
+            // ⚠️ TUYỆT ĐỐI KHÔNG gán previewUrl = finalUrl cho các file chưa có watermark (DOCX, XLSX, MP4, ZIP, Code...).
+            // Nếu hệ thống chưa hỗ trợ tạo watermark server-side cho định dạng đó, previewUrl giữ nguyên null
+            // để bảo vệ quyền tác giả, tránh rò rỉ file gốc sạch khi gọi endpoint download với type=preview.
         }
         else if (string.IsNullOrWhiteSpace(externalUrl))
         {
@@ -257,7 +284,7 @@ public class DeliverableService : IDeliverableService
             .FirstAsync(d => d.Id == createdEntity.Id, cancellationToken);
 
         _logger.LogInformation("Sinh viên {StudentId} nộp bài deliverable v{Version} cho Job {JobId}. Trạng thái Job cập nhật: submitted.", studentId, createdEntity.Version, jobId);
-        return MapToDeliverableDto(created);
+        return MapToDeliverableDto(created, isEmployer: false);
     }
 
     private static bool IsDuplicateVersionError(DbUpdateException ex)
@@ -353,6 +380,24 @@ public class DeliverableService : IDeliverableService
                 _logger.LogInformation("Sinh viên {StudentId} hoàn thành công việc {JobId}. JobsDoneCount: {JobsDone}, ReliabilityScore: {Score}.", 
                     student.Id, jobId, student.JobsDoneCount, student.ReliabilityScore);
             }
+
+            // Ghi nhận giải ngân Escrow thực tế vào Transaction ledger
+            if (job.Budget > 0)
+            {
+                var escrowReleaseTx = new Transaction
+                {
+                    UserId = deliverable.StudentId,
+                    Type = "escrow_release",
+                    Label = $"Nhận thù lao giải ngân công việc #{job.Id} · {job.Title}",
+                    Amount = job.Budget,
+                    Sign = 1,
+                    ReferenceId = job.Id,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _dbContext.Transactions.AddAsync(escrowReleaseTx, cancellationToken);
+                _logger.LogInformation("Đã tạo giao dịch escrow_release cho sinh viên {StudentId} với số tiền {Amount}đ từ Job {JobId}.", 
+                    deliverable.StudentId, job.Budget, job.Id);
+            }
         }
 
         deliverable.Status = normalizedStatus;
@@ -374,7 +419,7 @@ public class DeliverableService : IDeliverableService
 
         _logger.LogInformation("Nhà tuyển dụng {EmployerId} đã duyệt deliverable {DeliverableId} với trạng thái {Status}. Trạng thái Job: {JobStatus}.", 
             employerId, deliverableId, normalizedStatus, job.Status);
-        return MapToDeliverableDto(deliverable);
+        return MapToDeliverableDto(deliverable, isEmployer: true);
     }
 
     public async Task<(Stream Stream, string ContentType, string FileName)?> GetDeliverableFileStreamAsync(
@@ -411,12 +456,29 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Bạn không có quyền truy cập sản phẩm bàn giao này.");
         }
 
+        var isAccepted = string.Equals(deliverable.Status, "accepted", StringComparison.OrdinalIgnoreCase);
+
         // ⚠️ BẢO VỆ SẢN PHẨM: Nếu Nhà tuyển dụng yêu cầu tải bản Final, bắt buộc sản phẩm phải đã được duyệt (accepted)
         if (isEmployer && string.Equals(type, "final", StringComparison.OrdinalIgnoreCase))
         {
-            if (!string.Equals(deliverable.Status, "accepted", StringComparison.OrdinalIgnoreCase))
+            if (!isAccepted)
             {
                 throw new BusinessException("Chỉ có thể tải bản gốc (Final) sau khi bạn đã xác nhận nghiệm thu sản phẩm và giải ngân cho sinh viên.");
+            }
+        }
+
+        var ext = Path.GetExtension(deliverable.FileName).ToLowerInvariant();
+        var isRawArchiveOrBinary = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".exe", ".bin"
+        }.Contains(ext);
+
+        // ⚠️ BẢO VỆ BẢN PREVIEW: Chặn Nhà tuyển dụng tải khi chưa nghiệm thu nếu là tệp nén / binary thô không có viewer
+        if (isEmployer && string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase) && !isAccepted)
+        {
+            if (isRawArchiveOrBinary)
+            {
+                throw new BusinessException("Tệp nén / dữ liệu nhị phân không hỗ trợ tải xem trước. Vui lòng duyệt nghiệm thu công việc để tải toàn bộ tệp gốc hoàn chỉnh.");
             }
         }
 
@@ -426,9 +488,19 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Sản phẩm bàn giao là liên kết ngoài (GitHub/Figma/Drive), không thể tải về qua hệ thống lưu trữ.");
         }
 
-        var targetUrl = string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase)
-            ? deliverable.PreviewFileUrl
-            : (deliverable.FinalFileUrl ?? deliverable.PreviewFileUrl);
+        string? targetUrl;
+        if (string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase))
+        {
+            // Ưu tiên bản watermark preview nếu có (Ảnh, PDF).
+            // Với Video/Tài liệu chưa có watermark server-side, dùng file để trình duyệt stream phát trong player/viewer kèm Watermark Overlay
+            targetUrl = !string.IsNullOrWhiteSpace(deliverable.PreviewFileUrl)
+                ? deliverable.PreviewFileUrl
+                : deliverable.FinalFileUrl;
+        }
+        else
+        {
+            targetUrl = deliverable.FinalFileUrl ?? deliverable.PreviewFileUrl;
+        }
 
         if (string.IsNullOrWhiteSpace(targetUrl))
         {
@@ -447,19 +519,34 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Không thể tải file sản phẩm bàn giao từ hệ thống lưu trữ.");
         }
 
-        var ext = Path.GetExtension(deliverable.FileName).ToLowerInvariant();
+        var knownMime = ext switch
+        {
+            ".pdf" => "application/pdf",
+            ".mp4" or ".m4v" or ".mov" => "video/mp4",
+            ".webm" => "video/webm",
+            ".avi" => "video/x-msvideo",
+            ".mp3" => "audio/mpeg",
+            ".wav" => "audio/wav",
+            ".png" => "image/png",
+            ".jpg" or ".jpeg" => "image/jpeg",
+            ".webp" => "image/webp",
+            ".gif" => "image/gif",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".doc" => "application/msword",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xls" => "application/vnd.ms-excel",
+            ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".txt" => "text/plain; charset=utf-8",
+            ".zip" => "application/zip",
+            ".rar" => "application/x-rar-compressed",
+            ".7z" => "application/x-7z-compressed",
+            _ => "application/octet-stream"
+        };
+
         var contentType = !string.IsNullOrWhiteSpace(downloadResult.Value.ContentType)
+            && downloadResult.Value.ContentType != "application/octet-stream"
             ? downloadResult.Value.ContentType
-            : (ext switch
-            {
-                ".pdf" => "application/pdf",
-                ".zip" => "application/zip",
-                ".rar" => "application/x-rar-compressed",
-                ".png" => "image/png",
-                ".jpg" or ".jpeg" => "image/jpeg",
-                ".webp" => "image/webp",
-                _ => "application/octet-stream"
-            });
+            : knownMime;
 
         return (downloadResult.Value.Stream, contentType, deliverable.FileName);
     }
@@ -477,7 +564,7 @@ public class DeliverableService : IDeliverableService
 
             // Vẽ ảnh gốc
             using var originalImage = SKImage.FromBitmap(originalBitmap);
-            canvas.DrawImage(originalImage, 0, 0);
+            canvas.DrawImage(originalImage, 0, 0, new SKSamplingOptions());
 
             // Cấu hình chữ Watermark thanh mảnh, trong suốt tinh tế (không che lấp chi tiết ảnh)
             var fontSize = Math.Max(16f, originalBitmap.Width / 26f);
@@ -537,6 +624,49 @@ public class DeliverableService : IDeliverableService
         }
     }
 
+    private static Stream? ApplyPdfWatermark(Stream inputStream, int jobId)
+    {
+        try
+        {
+            inputStream.Position = 0;
+            using var document = PdfReader.Open(inputStream, PdfDocumentOpenMode.Modify);
+
+            var font = new XFont("Helvetica", 22, XFontStyle.Bold);
+            var watermarkColor = XColor.FromArgb(45, 99, 102, 241);
+            var brush = new XSolidBrush(watermarkColor);
+            var text = $"SKILLBRIDGE · BẢN XEM TRƯỚC · Job #{jobId}";
+
+            for (int i = 0; i < document.Pages.Count; i++)
+            {
+                var page = document.Pages[i];
+                using var gfx = XGraphics.FromPdfPage(page);
+
+                var size = gfx.MeasureString(text, font);
+                var centerX = page.Width.Point / 2;
+                var centerY = page.Height.Point / 2;
+
+                gfx.Save();
+                gfx.TranslateTransform(centerX, centerY);
+                gfx.RotateTransform(-30);
+                gfx.DrawString(text, font, brush, -size.Width / 2, size.Height / 2);
+                gfx.Restore();
+
+                var badgeFont = new XFont("Helvetica", 10, XFontStyle.Regular);
+                var badgeText = $"© SkillBridge Protected · Job #{jobId}";
+                gfx.DrawString(badgeText, badgeFont, brush, page.Width.Point - 180, page.Height.Point - 18);
+            }
+
+            var outputStream = new MemoryStream();
+            document.Save(outputStream, false);
+            outputStream.Position = 0;
+            return outputStream;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static string? ExtractFileKeyFromUrl(string? fileUrl)
     {
         if (string.IsNullOrWhiteSpace(fileUrl)) return null;
@@ -555,8 +685,47 @@ public class DeliverableService : IDeliverableService
         return fileUrl;
     }
 
-    private DeliverableDto MapToDeliverableDto(JobDeliverable d)
+    private DeliverableDto MapToDeliverableDto(JobDeliverable d, bool isEmployer)
     {
+        var isAccepted = string.Equals(d.Status, "accepted", StringComparison.OrdinalIgnoreCase);
+        var hasWatermarkedPreview = !string.IsNullOrWhiteSpace(d.PreviewFileUrl)
+            && !string.Equals(d.PreviewFileUrl, d.FinalFileUrl, StringComparison.OrdinalIgnoreCase);
+
+        var isExternalUrl = string.Equals(d.FileType, "url", StringComparison.OrdinalIgnoreCase);
+
+        // ⚠️ Bảo vệ tuyệt mật URL file: KHÔNG BAO GIỜ trả về direct public link của Cloudflare R2!
+        // Mọi lượt truy cập file đều được trỏ về endpoint API backend:
+        // /api/jobs/{jobId}/deliverables/{id}/download?type=...
+        // để bắt buộc qua tầng xác thực JWT, rate limiting, phân quyền IDOR và kiểm tra status accepted.
+        string? exposedFinalUrl = null;
+        if (!isEmployer || isAccepted)
+        {
+            if (isExternalUrl)
+            {
+                exposedFinalUrl = d.FinalFileUrl;
+            }
+            else if (!string.IsNullOrWhiteSpace(d.FinalFileUrl))
+            {
+                exposedFinalUrl = $"/api/jobs/{d.JobId}/deliverables/{d.Id}/download?type=final";
+            }
+        }
+
+        string? exposedPreviewUrl = null;
+        if (isExternalUrl)
+        {
+            exposedPreviewUrl = d.PreviewFileUrl;
+        }
+        else if (hasWatermarkedPreview)
+        {
+            exposedPreviewUrl = $"/api/jobs/{d.JobId}/deliverables/{d.Id}/download?type=preview";
+        }
+        else if (!isEmployer || isAccepted)
+        {
+            exposedPreviewUrl = exposedFinalUrl;
+        }
+
+        var canDownloadPreview = (!isEmployer || isAccepted) || hasWatermarkedPreview;
+
         return new DeliverableDto
         {
             Id = d.Id,
@@ -564,13 +733,15 @@ public class DeliverableService : IDeliverableService
             StudentId = d.StudentId,
             StudentName = d.Student?.FullName ?? "Sinh viên",
             Version = d.Version,
-            PreviewFileUrl = _storageService.GetPublicUrl(d.PreviewFileUrl),
-            FinalFileUrl = d.FinalFileUrl != null ? _storageService.GetPublicUrl(d.FinalFileUrl) : null,
+            PreviewFileUrl = exposedPreviewUrl,
+            FinalFileUrl = exposedFinalUrl,
             ExternalUrl = d.ExternalUrl,
             FileName = d.FileName,
             FileType = d.FileType,
             Note = d.Note,
             Status = d.Status,
+            HasWatermarkedPreview = hasWatermarkedPreview,
+            CanDownloadPreview = canDownloadPreview,
             SubmittedAt = d.SubmittedAt,
             ReviewedAt = d.ReviewedAt,
             Feedbacks = d.DeliverableFeedbacks.Select(f => new DeliverableFeedbackDto

@@ -10,13 +10,15 @@ public class DeliverableDto
     public int StudentId { get; set; }
     public string StudentName { get; set; } = null!;
     public int Version { get; set; }
-    public string PreviewFileUrl { get; set; } = null!;
+    public string? PreviewFileUrl { get; set; }
     public string? FinalFileUrl { get; set; }
     public string? ExternalUrl { get; set; }
     public string FileName { get; set; } = null!;
     public string FileType { get; set; } = null!;
     public string? Note { get; set; }
     public string Status { get; set; } = null!;
+    public bool HasWatermarkedPreview { get; set; }
+    public bool CanDownloadPreview { get; set; }
     public DateTime SubmittedAt { get; set; }
     public DateTime? ReviewedAt { get; set; }
     public List<DeliverableFeedbackDto> Feedbacks { get; set; } = new();

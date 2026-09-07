@@ -60,7 +60,7 @@ function DeliverableImage({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
 
     async function loadImage() {
       if (!jobId || !deliverableId) {
-        if (fallbackSrc && !fallbackSrc.startsWith('job-deliverables')) {
+        if (fallbackSrc?.startsWith('data:')) {
           setImageSrc(fallbackSrc);
         }
         setLoading(false);
@@ -85,7 +85,7 @@ function DeliverableImage({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
         }
       } catch (err) {
         if (isMounted) {
-          if (fallbackSrc && !fallbackSrc.startsWith('job-deliverables')) {
+          if (fallbackSrc?.startsWith('data:')) {
             setImageSrc(fallbackSrc);
           } else {
             setError(true);
@@ -145,6 +145,7 @@ function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
   const [videoSrc, setVideoSrc] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     let isMounted = true;
@@ -152,7 +153,7 @@ function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
 
     async function loadVideo() {
       if (!jobId || !deliverableId) {
-        if (fallbackSrc && !fallbackSrc.startsWith('job-deliverables')) {
+        if (fallbackSrc?.startsWith('data:')) {
           setVideoSrc(fallbackSrc);
         }
         setLoading(false);
@@ -160,6 +161,8 @@ function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
       }
       try {
         setLoading(true);
+        setError(false);
+        setErrorMessage('');
         const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
         const type = isFinal ? 'final' : 'preview';
         const url = `${API_URL}/jobs/${jobId}/deliverables/${deliverableId}/download?type=${type}`;
@@ -168,19 +171,30 @@ function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
         const res = await fetch(url, { headers, credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to load video');
+        if (!res.ok) {
+          const errData = await res.json().catch(() => null);
+          throw new Error(errData?.message || `Lỗi máy chủ (${res.status}): Không thể tải video.`);
+        }
         const blob = await res.blob();
-        blobUrl = URL.createObjectURL(blob);
+        
+        // Đảm bảo MIME type cho browser HTML5 video player decode được (đặc biệt là .mov container)
+        let finalBlob = blob;
+        if (!blob.type || blob.type === 'video/quicktime' || blob.type === 'application/octet-stream') {
+          finalBlob = new Blob([blob], { type: 'video/mp4' });
+        }
+
+        blobUrl = URL.createObjectURL(finalBlob);
         if (isMounted) {
           setVideoSrc(blobUrl);
           setError(false);
         }
       } catch (err) {
         if (isMounted) {
-          if (fallbackSrc && !fallbackSrc.startsWith('job-deliverables')) {
+          if (fallbackSrc?.startsWith('data:')) {
             setVideoSrc(fallbackSrc);
           } else {
             setError(true);
+            setErrorMessage(err.message || 'Không thể tải video xem trước.');
           }
         }
       } finally {
@@ -199,7 +213,7 @@ function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
   if (loading) {
     return (
       <div style={{ padding: '28px 16px', textAlign: 'center', background: 'var(--surface)', borderRadius: 10, border: '1px dashed var(--border)' }}>
-        <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>⏳ Đang nạp video xem trước...</span>
+        <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>⏳ Đang tải video xem trước (vui lòng chờ trong giây lát)...</span>
       </div>
     );
   }
@@ -207,9 +221,9 @@ function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
   if (error || !videoSrc) {
     return (
       <div className="empty-state" style={{ padding: '20px 16px', textAlign: 'center', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
-        <div style={{ fontSize: 28, marginBottom: 4 }}>🎥</div>
+        <div style={{ fontSize: 28, marginBottom: 4 }}>🎬</div>
         <b style={{ fontSize: 13, color: 'var(--ink)' }}>{alt || 'Video sản phẩm bàn giao'}</b>
-        <p style={{ fontSize: 11.5, color: 'var(--muted, #666)', margin: '4px 0 0' }}>Video được bảo vệ an toàn trên hệ thống.</p>
+        <p style={{ fontSize: 12, color: 'var(--coral, #e11d48)', margin: '6px 0 0' }}>{errorMessage || 'Không thể hiển thị video xem trước.'}</p>
       </div>
     );
   }
@@ -410,16 +424,18 @@ function DeliverablePreview({ d, revealFinal }) {
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
           <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-            🔒 Video sản phẩm bàn giao (Bản xem trước có watermark)
+            🔒 Video sản phẩm bàn giao (Được bảo hộ bản quyền SkillBridge)
           </span>
-          <button
-            type="button"
-            className="btn btn-outline btn-sm"
-            onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
-          >
-            ⬇️ Tải video xem trước
-          </button>
+          {d.canDownloadPreview && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
+            >
+              ⬇️ Tải video xem trước
+            </button>
+          )}
         </div>
       </>
     );
@@ -550,16 +566,35 @@ function DeliverablePreview({ d, revealFinal }) {
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingTop: 6, borderTop: '1px dashed var(--border)' }}>
         <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
-          {revealFinal ? '✅ Bản gốc hoàn thiện đã sẵn sàng' : '💡 Tải về để xem trước nội dung & kiểm tra chất lượng'}
+          {revealFinal
+            ? '✅ Bản gốc hoàn thiện đã sẵn sàng tải về'
+            : (d.canDownloadPreview
+                ? '💡 Tải về để xem trước nội dung & kiểm tra chất lượng'
+                : '🔒 Bản gốc tải về ngay sau khi bạn nhấn nghiệm thu & giải ngân Escrow')}
         </span>
-        <button
-          type="button"
-          className="btn btn-primary btn-sm"
-          onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, downloadType)}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-        >
-          ⬇️ {revealFinal ? 'Tải bản gốc hoàn thiện' : 'Tải file về kiểm tra'}
-        </button>
+        {revealFinal ? (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'final')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            ⬇️ Tải bản gốc hoàn thiện
+          </button>
+        ) : d.canDownloadPreview ? (
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            ⬇️ Tải bản xem trước
+          </button>
+        ) : (
+          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)', padding: '6px 12px', background: 'rgba(0,0,0,0.04)', borderRadius: 6, border: '1px solid var(--border)' }}>
+            🛡️ Khóa tải file trước nghiệm thu
+          </span>
+        )}
       </div>
     </div>
   );
@@ -722,9 +757,20 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
 
       {errorMsg && <div style={{ color: 'var(--coral, #f43f5e)', fontSize: 13, marginBottom: 12 }}>{errorMsg}</div>}
 
+      {isSubmitting && file && (
+        <div style={{ margin: '10px 0 14px', padding: '10px 14px', background: 'rgba(99, 102, 241, 0.08)', borderRadius: 8, border: '1px solid rgba(99, 102, 241, 0.2)', fontSize: 12.5, color: 'var(--ink)' }}>
+          ⏳ Đang mã hóa và đẩy tệp <b>{file.name}</b> ({(file.size / (1024 * 1024)).toFixed(1)} MB) lên đám mây Cloudflare R2. Quá trình có thể mất từ 10 - 25 giây tùy theo tốc độ mạng của bạn, vui lòng không tắt cửa sổ.
+        </div>
+      )}
+
       <div className="modal-actions">
-        <button className="btn btn-primary" onClick={submit} disabled={isSubmitting}>
-          {isSubmitting ? 'Đang tải file lên...' : (isUpdate ? 'Cập nhật bàn giao' : 'Gửi bàn giao')}
+        <button className="btn btn-primary" onClick={submit} disabled={isSubmitting} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          {isSubmitting ? (
+            <>
+              <span style={{ width: 14, height: 14, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
+              <span>Đang tải {file ? `(${(file.size / (1024 * 1024)).toFixed(1)} MB)...` : '...'}</span>
+            </>
+          ) : (isUpdate ? 'Cập nhật bàn giao' : 'Gửi bàn giao')}
         </button>
         <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Hủy</button>
       </div>

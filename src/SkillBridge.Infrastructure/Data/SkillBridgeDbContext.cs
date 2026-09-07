@@ -441,6 +441,7 @@ public partial class SkillBridgeDbContext : DbContext
 
             entity.HasIndex(e => new { e.JobId, e.Version }, "uq_deliverables_job_version").IsUnique();
 
+            entity.Property(e => e.PreviewFileUrl).IsRequired(false);
             entity.Property(e => e.Status).HasDefaultValueSql("'submitted'");
             entity.Property(e => e.SubmittedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.Version).HasDefaultValueSql("'1'");
