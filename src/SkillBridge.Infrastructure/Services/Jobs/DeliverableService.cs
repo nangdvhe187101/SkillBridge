@@ -468,17 +468,15 @@ public class DeliverableService : IDeliverableService
         }
 
         var ext = Path.GetExtension(deliverable.FileName).ToLowerInvariant();
-        var isRawArchiveOrBinary = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ".zip", ".rar", ".7z", ".tar", ".gz", ".iso", ".exe", ".bin"
-        }.Contains(ext);
+        var hasWatermarkedPreview = !string.IsNullOrWhiteSpace(deliverable.PreviewFileUrl)
+            && !string.Equals(deliverable.PreviewFileUrl, deliverable.FinalFileUrl, StringComparison.OrdinalIgnoreCase);
 
-        // ⚠️ BẢO VỆ BẢN PREVIEW: Chặn Nhà tuyển dụng tải khi chưa nghiệm thu nếu là tệp nén / binary thô không có viewer
+        // ⚠️ BẢO VỆ BẢN PREVIEW (Zero-Trust): Nhà tuyển dụng chỉ được xem trước nếu file THỰC SỰ có bản đóng watermark server-side
         if (isEmployer && string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase) && !isAccepted)
         {
-            if (isRawArchiveOrBinary)
+            if (!hasWatermarkedPreview)
             {
-                throw new BusinessException("Tệp nén / dữ liệu nhị phân không hỗ trợ tải xem trước. Vui lòng duyệt nghiệm thu công việc để tải toàn bộ tệp gốc hoàn chỉnh.");
+                throw new BusinessException("Định dạng tệp này không hỗ trợ xem trước có watermark. Để bảo vệ quyền tác giả của sinh viên, tệp gốc hoàn chỉnh chỉ được mở sau khi bạn xác nhận nghiệm thu sản phẩm.");
             }
         }
 
@@ -491,11 +489,15 @@ public class DeliverableService : IDeliverableService
         string? targetUrl;
         if (string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase))
         {
-            // Ưu tiên bản watermark preview nếu có (Ảnh, PDF).
-            // Với Video/Tài liệu chưa có watermark server-side, dùng file để trình duyệt stream phát trong player/viewer kèm Watermark Overlay
-            targetUrl = !string.IsNullOrWhiteSpace(deliverable.PreviewFileUrl)
-                ? deliverable.PreviewFileUrl
-                : deliverable.FinalFileUrl;
+            if (isEmployer && !isAccepted)
+            {
+                // Tuyệt đối không fallback sang FinalFileUrl cho Nhà tuyển dụng khi chưa nghiệm thu!
+                targetUrl = deliverable.PreviewFileUrl;
+            }
+            else
+            {
+                targetUrl = deliverable.PreviewFileUrl ?? deliverable.FinalFileUrl;
+            }
         }
         else
         {

@@ -500,8 +500,17 @@ export function SecureDocumentViewer({ d, revealFinal }) {
   const isExcel = ['xlsx', 'xls', 'csv'].includes(ext) || ft.includes('excel') || ft.includes('spreadsheet') || ft.includes('officedocument.spreadsheetml');
   const isText = ['txt', 'json', 'xml', 'md', 'rtf', 'js', 'ts', 'py', 'java', 'cpp', 'html', 'css'].includes(ext) || ft.startsWith('text/');
 
+  // 1. PDF: Cho phép xem nếu đã nghiệm thu (revealFinal) HOẶC có bản watermark server-side (hasWatermarkedPreview)
   if (isPdf) {
+    if (!revealFinal && !d.hasWatermarkedPreview) return null;
     return <SecurePdfViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} version={d.version} />;
+  }
+
+  // 2. Tài liệu văn phòng & Text (DOCX, XLSX, TXT, Code...):
+  // Tuyệt đối KHÔNG tải file thô về RAM trình duyệt khi chưa nghiệm thu (!revealFinal)
+  // Trả về null để giao diện rơi vào Shield Lock Card (Bảo vệ tác quyền SkillBridge Escrow)
+  if (!revealFinal) {
+    return null;
   }
 
   if (isDocx) {
