@@ -6,7 +6,7 @@ import { useModal } from '../../context/ModalContext';
 
 export default function Pricing() {
   const [tab, setTab] = useState('student');
-  const { state, upgradeVip } = useStore();
+  const { state } = useStore();
   const { openModal } = useModal();
   const navigate = useNavigate();
 

@@ -12,7 +12,6 @@ import Profile from './pages/customer/Profile';
 import CompanyProfile from './pages/customer/CompanyProfile';
 import StudentProfile from './pages/customer/StudentProfile';
 import Pricing from './pages/customer/Pricing';
-import PostJob from './pages/employer/PostJob';
 import Dashboard from './pages/employer/Dashboard';
 import JobApplicants from './pages/employer/JobApplicants';
 import Wallet from './pages/customer/Wallet';

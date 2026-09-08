@@ -5,7 +5,6 @@ import Avatar from '../../components/Avatar';
 import ModalShell from '../../components/modals/ModalShell';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
-import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { DeliverablePreview } from '../../components/modals/DeliverableModals';
 import { slugify } from '../../data/companies';
@@ -56,7 +55,6 @@ export default function JobDetail() {
   const navigate = useNavigate();
   const { state, applyJobAsync, toggleSaveJobAsync, uploadCvAsync, openChatWithPerson } = useStore();
   const { openModal } = useModal();
-  const confirm = useConfirm();
   const { showToast } = useToast();
 
   const [applyModalOpen, setApplyModalOpen] = useState(false);

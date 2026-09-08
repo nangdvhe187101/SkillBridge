@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams, useSearchParams } from 'react-rout
 import Icon from '../../components/Icon';
 import PostJobForm from '../../components/PostJobForm';
 import { DonutChart, BarChart } from '../../components/DashboardCharts';
-import DashboardSidebar, { DASHBOARD_TABS as TABS } from '../../components/DashboardSidebar';
+import DashboardSidebar from '../../components/DashboardSidebar';
 import Pagination from '../../components/Pagination';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
@@ -493,7 +493,7 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
 
 const PAGE_SIZE = 6;
 
-function JobsTab({ state, navigate, openModal, goToPostTab }) {
+function JobsTab({ state, navigate, goToPostTab }) {
   const { cancelJob, reopenJob, showToast } = useStore();
   const confirm = useConfirm();
   const [q, setQ] = useState('');
@@ -1296,7 +1296,6 @@ export default function Dashboard({ forcedTab }) {
             <JobsTab
               state={state}
               navigate={navigate}
-              openModal={openModal}
               goToPostTab={() => navigate('/employer/post-job')}
             />
           )}

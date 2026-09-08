@@ -38,61 +38,25 @@ async function fetchDeliverableBlob(jobId, deliverableId, type, asBuffer) {
 }
 
 /** Watermark Overlay Component for HTML-rendered documents (Word, Excel, Text) */
-function DocumentWatermarkOverlay({ jobId, version }) {
+const REPEATING_WATERMARK_SVG = `data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='360' height='240'><text x='50%' y='50%' fill='rgba(99,102,241,0.08)' font-size='12' font-family='sans-serif' font-weight='600' text-anchor='middle' transform='rotate(-20 180 120)'>SKILLBRIDGE · BẢN XEM TRƯỚC · CHƯA THANH TOÁN</text></svg>`;
+
+function DocumentWatermarkOverlay() {
   return (
     <div
       style={{
         position: 'absolute',
-        inset: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         pointerEvents: 'none',
-        zIndex: 10,
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-around',
-        alignItems: 'center',
+        zIndex: 5,
+        backgroundImage: `url("${REPEATING_WATERMARK_SVG}")`,
+        backgroundRepeat: 'repeat',
+        backgroundSize: '360px 240px',
         userSelect: 'none',
       }}
-    >
-      {[...Array(6)].map((_, idx) => (
-        <div
-          key={idx}
-          style={{
-            transform: 'rotate(-22deg)',
-            color: 'rgba(99, 102, 241, 0.08)',
-            fontSize: 'clamp(14px, 2.2vw, 22px)',
-            fontWeight: 800,
-            letterSpacing: '3px',
-            textTransform: 'uppercase',
-            whiteSpace: 'nowrap',
-            textShadow: '0 0 1px rgba(0,0,0,0.05)',
-          }}
-        >
-          SKILLBRIDGE · BẢN XEM TRƯỚC · CHƯA NGHIỆM THU
-        </div>
-      ))}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 12,
-          right: 16,
-          background: 'rgba(15, 23, 42, 0.75)',
-          color: '#e2e8f0',
-          padding: '4px 10px',
-          borderRadius: 6,
-          fontSize: 11,
-          fontWeight: 600,
-          backdropFilter: 'blur(4px)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-        }}
-      >
-        <span>🛡️ SkillBridge Protected</span>
-        <span>•</span>
-        <span>Job #{jobId} v{version || 1}</span>
-      </div>
-    </div>
+    />
   );
 }
 
@@ -127,7 +91,7 @@ export function SecurePdfViewer({ jobId, deliverableId, isFinal, version }) {
       ctx.fillStyle = 'rgba(99, 102, 241, 0.12)';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      const label = 'SKILLBRIDGE · BẢN XEM TRƯỚC · CHƯA NGHIỆM THU';
+      const label = 'SKILLBRIDGE · BẢN XEM TRƯỚC · CHƯA THANH TOÁN';
       const lineH = fontSize * 3;
       for (let y = -height; y <= height; y += lineH) ctx.fillText(label, 0, y);
       ctx.restore();
@@ -163,8 +127,10 @@ export function SecurePdfViewer({ jobId, deliverableId, isFinal, version }) {
   }, [jobId, deliverableId, isFinal]);
 
   useEffect(() => {
-    if (!loading && pdfDocRef.current) renderPage(currentPage);
-  }, [currentPage, loading, renderPage]);
+    if (!loading && pdfDocRef.current && (isFinal || totalPages <= 2 || currentPage <= 2)) {
+      renderPage(currentPage);
+    }
+  }, [currentPage, loading, renderPage, isFinal, totalPages]);
 
   if (loading) return (
     <div style={{ padding: '36px 16px', textAlign: 'center', background: 'var(--surface)', borderRadius: 12, border: '1px dashed var(--border)' }}>
@@ -193,8 +159,25 @@ export function SecurePdfViewer({ jobId, deliverableId, isFinal, version }) {
         </div>
         {!isFinal && <span className="badge badge-warning" style={{ fontSize: 11, background: '#f59e0b', color: '#fff', padding: '2px 8px', borderRadius: 4 }}>🔒 Bản bảo vệ</span>}
       </div>
-      <div style={{ background: '#334155', display: 'flex', justifyContent: 'center', padding: '16px 12px', borderRadius: '0 0 10px 10px' }} onContextMenu={(e) => e.preventDefault()}>
-        <canvas ref={canvasRef} style={{ maxWidth: '100%', borderRadius: 4, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', display: 'block' }} />
+      <div style={{ background: '#334155', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 12px', borderRadius: '0 0 10px 10px', minHeight: 380 }} onContextMenu={(e) => e.preventDefault()}>
+        {(!isFinal && totalPages > 2 && currentPage > 2) ? (
+          <div style={{ background: 'rgba(15, 23, 42, 0.95)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 12, padding: '32px 24px', maxWidth: 440, textAlign: 'center', color: '#f8fafc', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', margin: '40px 0' }}>
+            <div style={{ fontSize: 36, marginBottom: 12 }}>🔒</div>
+            <h4 style={{ fontSize: 16, margin: '0 0 8px', color: '#ffffff' }}>Nội dung từ trang 3 đã được khóa bảo vệ</h4>
+            <p style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.5, margin: '0 0 16px' }}>
+              Bạn đang xem bản mẫu (Trang 1 và 2) để thẩm định chất lượng và bố cục tài liệu. Toàn bộ {totalPages} trang và file PDF gốc sẽ tự động mở khóa ngay sau khi bạn xác nhận nghiệm thu và giải ngân.
+            </p>
+            <button
+              type="button"
+              onClick={() => setCurrentPage(1)}
+              style={{ background: 'var(--primary, #3b82f6)', color: '#ffffff', border: 'none', borderRadius: 6, padding: '8px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+            >
+              Quay lại Trang 1
+            </button>
+          </div>
+        ) : (
+          <canvas ref={canvasRef} style={{ maxWidth: '100%', borderRadius: 4, boxShadow: '0 4px 16px rgba(0,0,0,0.3)', display: 'block' }} />
+        )}
       </div>
       {!isFinal && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: 'rgba(59,130,246,0.05)', border: '1px solid rgba(59,130,246,0.18)', borderRadius: 8 }}>
@@ -204,10 +187,15 @@ export function SecurePdfViewer({ jobId, deliverableId, isFinal, version }) {
       )}
       {totalPages > 1 && (
         <div style={{ display: 'flex', gap: 5, overflowX: 'auto', paddingBottom: 4 }}>
-          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-            <button key={p} onClick={() => setCurrentPage(p)}
-              style={{ minWidth: 34, height: 34, border: `2px solid ${currentPage === p ? 'var(--accent, #6366f1)' : 'var(--border)'}`, borderRadius: 6, background: currentPage === p ? 'rgba(99,102,241,0.1)' : 'var(--surface)', color: currentPage === p ? 'var(--accent, #6366f1)' : 'var(--ink-soft)', fontSize: 12, cursor: 'pointer', fontWeight: currentPage === p ? 700 : 400 }}>{p}</button>
-          ))}
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => {
+            const isLocked = !isFinal && totalPages > 2 && p > 2;
+            return (
+              <button key={p} onClick={() => setCurrentPage(p)}
+                style={{ minWidth: 34, height: 34, border: `2px solid ${currentPage === p ? 'var(--accent, #6366f1)' : 'var(--border)'}`, borderRadius: 6, background: currentPage === p ? 'rgba(99,102,241,0.1)' : 'var(--surface)', color: isLocked ? '#94a3b8' : (currentPage === p ? 'var(--accent, #6366f1)' : 'var(--ink-soft)'), fontSize: 12, cursor: 'pointer', fontWeight: currentPage === p ? 700 : 400 }}>
+                {isLocked ? `🔒${p}` : p}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
@@ -215,10 +203,12 @@ export function SecurePdfViewer({ jobId, deliverableId, isFinal, version }) {
 }
 
 /** 2. WORD VIEWER (docx-preview) */
-export function SecureDocxViewer({ jobId, deliverableId, isFinal, version, fileName }) {
+export function SecureDocxViewer({ jobId, deliverableId, isFinal }) {
   const containerRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [totalDocPages, setTotalDocPages] = useState(1);
+  const [hasLockedPages, setHasLockedPages] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +227,24 @@ export function SecureDocxViewer({ jobId, deliverableId, isFinal, version, fileN
             ignoreHeight: false,
             breakPages: true,
           });
+
+          if (!isFinal && containerRef.current) {
+            const pages = containerRef.current.querySelectorAll('.docx-preview-content > section, .docx, section');
+            if (pages.length > 2) {
+              setTotalDocPages(pages.length);
+              setHasLockedPages(true);
+              for (let i = 2; i < pages.length; i++) {
+                pages[i].style.filter = 'blur(6px)';
+                pages[i].style.opacity = '0.25';
+                pages[i].style.pointerEvents = 'none';
+                pages[i].style.userSelect = 'none';
+                pages[i].style.maxHeight = '240px';
+                pages[i].style.overflow = 'hidden';
+              }
+            } else {
+              setHasLockedPages(false);
+            }
+          }
         }
         if (!cancelled) setLoading(false);
       } catch (err) {
@@ -283,20 +291,48 @@ export function SecureDocxViewer({ jobId, deliverableId, isFinal, version, fileN
           </div>
         )}
 
-        <div
-          ref={containerRef}
-          style={{
-            background: '#ffffff',
-            borderRadius: 6,
-            boxShadow: '0 4px 14px rgba(0,0,0,0.1)',
-            minHeight: loading ? 0 : 300,
-            padding: '12px',
-          }}
-        />
+        <div style={{ position: 'relative', width: '100%' }}>
+          <div
+            ref={containerRef}
+            style={{
+              background: '#ffffff',
+              borderRadius: 6,
+              boxShadow: '0 4px 14px rgba(0,0,0,0.1)',
+              minHeight: loading ? 0 : 300,
+              padding: '12px',
+            }}
+          />
 
-        {!isFinal && !loading && !error && (
-          <DocumentWatermarkOverlay jobId={jobId} version={version} />
-        )}
+          {!isFinal && !loading && !error && (
+            <DocumentWatermarkOverlay jobId={jobId} version={version} />
+          )}
+
+          {!isFinal && hasLockedPages && !loading && !error && (
+            <div
+              style={{
+                margin: '20px auto 10px',
+                maxWidth: 480,
+                background: 'rgba(15, 23, 42, 0.95)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                borderRadius: 12,
+                padding: '24px 20px',
+                textAlign: 'center',
+                color: '#f8fafc',
+                boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+                position: 'relative',
+                zIndex: 6,
+              }}
+            >
+              <div style={{ fontSize: 32, marginBottom: 8 }}>🔒</div>
+              <b style={{ fontSize: 14, color: '#ffffff', display: 'block', marginBottom: 6 }}>
+                Nội dung từ trang 3 đã được khóa bảo vệ
+              </b>
+              <p style={{ fontSize: 12.5, color: '#94a3b8', margin: 0, lineHeight: 1.5 }}>
+                Bạn đang xem bản mẫu (2 trang đầu) để thẩm định chất lượng văn phong và định dạng. Toàn bộ tài liệu ({totalDocPages} trang) và file Word gốc sẽ được tự động mở khóa ngay sau khi bạn bấm <strong>Xác nhận & Giải ngân</strong>.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {!isFinal && (
@@ -310,7 +346,7 @@ export function SecureDocxViewer({ jobId, deliverableId, isFinal, version, fileN
 }
 
 /** 3. EXCEL / SPREADSHEET VIEWER (SheetJS / xlsx) */
-export function SecureExcelViewer({ jobId, deliverableId, isFinal, version, fileName }) {
+export function SecureExcelViewer({ jobId, deliverableId, isFinal }) {
   const [sheets, setSheets] = useState([]);
   const [activeSheet, setActiveSheet] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -327,8 +363,27 @@ export function SecureExcelViewer({ jobId, deliverableId, isFinal, version, file
         const workbook = XLSX.read(buffer, { type: 'array' });
         const parsedSheets = workbook.SheetNames.map(name => {
           const ws = workbook.Sheets[name];
-          const html = XLSX.utils.sheet_to_html(ws, { id: 'excel-table', editable: false });
-          return { name, html };
+          let html = '';
+          let totalRows = 0;
+          let isTrimmed = false;
+
+          if (!isFinal && ws && ws['!ref']) {
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            totalRows = range.e.r - range.s.r + 1;
+            if (totalRows > 20) {
+              isTrimmed = true;
+              const trimmedRange = {
+                s: { c: range.s.c, r: range.s.r },
+                e: { c: range.e.c, r: Math.min(range.s.r + 19, range.e.r) }
+              };
+              html = XLSX.utils.sheet_to_html(ws, { id: 'excel-table', editable: false, range: XLSX.utils.encode_range(trimmedRange) });
+            } else {
+              html = XLSX.utils.sheet_to_html(ws, { id: 'excel-table', editable: false });
+            }
+          } else {
+            html = XLSX.utils.sheet_to_html(ws, { id: 'excel-table', editable: false });
+          }
+          return { name, html, totalRows, isTrimmed };
         });
         if (cancelled) return;
         setSheets(parsedSheets);
@@ -401,19 +456,45 @@ export function SecureExcelViewer({ jobId, deliverableId, isFinal, version, file
           </div>
         )}
 
-        {!loading && !error && sheets[activeSheet] && (
-          <div
-            dangerouslySetInnerHTML={{ __html: sheets[activeSheet].html }}
-            style={{
-              fontSize: 13,
-              fontFamily: 'system-ui, sans-serif',
-              overflowX: 'auto',
-            }}
-          />
-        )}
+        <div style={{ position: 'relative', minWidth: 'fit-content' }}>
+          {!loading && !error && sheets[activeSheet] && (
+            <div
+              dangerouslySetInnerHTML={{ __html: sheets[activeSheet].html }}
+              style={{
+                fontSize: 13,
+                fontFamily: 'system-ui, sans-serif',
+                overflowX: 'auto',
+              }}
+            />
+          )}
 
-        {!isFinal && !loading && !error && (
-          <DocumentWatermarkOverlay jobId={jobId} version={version} />
+          {!isFinal && !loading && !error && (
+            <DocumentWatermarkOverlay jobId={jobId} version={version} />
+          )}
+        </div>
+
+        {/* Khóa các dòng sau 20 dòng */}
+        {!isFinal && sheets[activeSheet]?.isTrimmed && (
+          <div
+            style={{
+              margin: '16px auto 8px',
+              padding: '16px 20px',
+              background: 'rgba(15, 23, 42, 0.95)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              borderRadius: 8,
+              textAlign: 'center',
+              color: '#f8fafc',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.2)',
+            }}
+          >
+            <div style={{ fontSize: 24, marginBottom: 6 }}>🔒</div>
+            <b style={{ fontSize: 13.5, color: '#ffffff', display: 'block', marginBottom: 4 }}>
+              Đã hiển thị mẫu 20 dòng đầu tiên (Tổng cộng {sheets[activeSheet].totalRows} dòng)
+            </b>
+            <span style={{ fontSize: 12, color: '#94a3b8' }}>
+              Các dòng tiếp theo và công thức bảng tính đã được khóa bảo vệ. Bấm <strong>Xác nhận & Giải ngân</strong> để mở khóa toàn bộ bảng tính và tải file Excel gốc.
+            </span>
+          </div>
         )}
       </div>
 
@@ -462,18 +543,46 @@ export function SecureTextViewer({ jobId, deliverableId, isFinal, version, fileN
   );
 
   const ext = (fileName || '').split('.').pop().toLowerCase();
+  const allLines = content.split('\n');
+  const isTrimmed = !isFinal && allLines.length > 50;
+  const displayedContent = isTrimmed ? allLines.slice(0, 50).join('\n') : content;
 
   return (
     <div style={{ position: 'relative', userSelect: 'none' }} onContextMenu={(e) => e.preventDefault()}>
       <div style={{ background: '#0f172a', borderRadius: 10, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.12)' }}>
         <div style={{ padding: '10px 14px', background: '#1e293b', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12.5, color: '#94a3b8', fontWeight: 600 }}>📝 {fileName || 'Tệp văn bản'} · {content.split('\n').length} dòng</span>
+          <span style={{ fontSize: 12.5, color: '#94a3b8', fontWeight: 600 }}>📝 {fileName || 'Tệp văn bản'} · {allLines.length} dòng</span>
           {!isFinal && <span className="badge badge-warning" style={{ fontSize: 11, background: '#f59e0b', color: '#fff', padding: '2px 8px', borderRadius: 4 }}>🔒 Bản bảo vệ</span>}
         </div>
         <div style={{ position: 'relative', maxHeight: 450, overflow: 'auto' }}>
-          <pre style={{ margin: 0, padding: '16px', fontSize: 13, lineHeight: 1.6, color: ext === 'json' ? '#93c5fd' : '#e2e8f0', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{content}</pre>
-          {!isFinal && (
-            <DocumentWatermarkOverlay jobId={jobId} version={version} />
+          <div style={{ position: 'relative', minHeight: '100%' }}>
+            <pre style={{ margin: 0, padding: '16px', fontSize: 13, lineHeight: 1.6, color: ext === 'json' ? '#93c5fd' : '#e2e8f0', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{displayedContent}</pre>
+            {!isFinal && (
+              <DocumentWatermarkOverlay jobId={jobId} version={version} />
+            )}
+          </div>
+
+          {isTrimmed && (
+            <div
+              style={{
+                margin: '16px',
+                padding: '18px 20px',
+                background: 'rgba(15, 23, 42, 0.95)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                borderRadius: 8,
+                textAlign: 'center',
+                color: '#f8fafc',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
+              }}
+            >
+              <div style={{ fontSize: 24, marginBottom: 6 }}>🔒</div>
+              <b style={{ fontSize: 13.5, color: '#ffffff', display: 'block', marginBottom: 4 }}>
+                Đã hiển thị 50 dòng đầu tiên để thẩm định cấu trúc (Tổng cộng {allLines.length} dòng)
+              </b>
+              <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                Phần nội dung/mã nguồn còn lại đã được khóa bảo vệ. Bấm <strong>Xác nhận & Giải ngân</strong> để mở khóa toàn bộ tài liệu và tải file gốc.
+              </span>
+            </div>
           )}
         </div>
       </div>
@@ -489,6 +598,19 @@ export function SecureTextViewer({ jobId, deliverableId, isFinal, version, fileN
 
 /** 5. UNIFIED DOCUMENT VIEWER */
 export function SecureDocumentViewer({ d, revealFinal }) {
+  useEffect(() => {
+    if (revealFinal) return;
+    const handleKeyDown = (e) => {
+      // Chặn Ctrl+P / Cmd+P (In ra file PDF) và Ctrl+S / Cmd+S (Lưu trang)
+      if ((e.ctrlKey || e.metaKey) && ['p', 'P', 's', 'S'].includes(e.key)) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [revealFinal]);
+
   if (!d) return null;
 
   const fileName = d.fileName || '';
@@ -500,30 +622,36 @@ export function SecureDocumentViewer({ d, revealFinal }) {
   const isExcel = ['xlsx', 'xls', 'csv'].includes(ext) || ft.includes('excel') || ft.includes('spreadsheet') || ft.includes('officedocument.spreadsheetml');
   const isText = ['txt', 'json', 'xml', 'md', 'rtf', 'js', 'ts', 'py', 'java', 'cpp', 'html', 'css'].includes(ext) || ft.startsWith('text/');
 
-  // 1. PDF: Cho phép xem nếu đã nghiệm thu (revealFinal) HOẶC có bản watermark server-side (hasWatermarkedPreview)
+  let inner = null;
   if (isPdf) {
     if (!revealFinal && !d.hasWatermarkedPreview) return null;
-    return <SecurePdfViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} version={d.version} />;
+    inner = <SecurePdfViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} version={d.version} />;
+  } else if (isDocx) {
+    inner = <SecureDocxViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} version={d.version} fileName={d.fileName} />;
+  } else if (isExcel) {
+    inner = <SecureExcelViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} version={d.version} fileName={d.fileName} />;
+  } else if (isText) {
+    inner = <SecureTextViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} version={d.version} fileName={d.fileName} />;
   }
 
-  // 2. Tài liệu văn phòng & Text (DOCX, XLSX, TXT, Code...):
-  // Tuyệt đối KHÔNG tải file thô về RAM trình duyệt khi chưa nghiệm thu (!revealFinal)
-  // Trả về null để giao diện rơi vào Shield Lock Card (Bảo vệ tác quyền SkillBridge Escrow)
-  if (!revealFinal) {
-    return null;
-  }
+  if (!inner) return null;
 
-  if (isDocx) {
-    return <SecureDocxViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} version={d.version} fileName={d.fileName} />;
-  }
-
-  if (isExcel) {
-    return <SecureExcelViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} version={d.version} fileName={d.fileName} />;
-  }
-
-  if (isText) {
-    return <SecureTextViewer jobId={d.jobId} deliverableId={d.id} isFinal={revealFinal} version={d.version} fileName={d.fileName} />;
-  }
-
-  return null;
+  return (
+    <div
+      className="secure-doc-shield"
+      onDragStart={(e) => e.preventDefault()}
+      style={{ position: 'relative' }}
+    >
+      {!revealFinal && (
+        <style>{`
+          @media print {
+            .secure-doc-shield {
+              display: none !important;
+            }
+          }
+        `}</style>
+      )}
+      {inner}
+    </div>
+  );
 }

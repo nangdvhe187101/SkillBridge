@@ -42,15 +42,6 @@ const APP_STATUS_LABEL = {
   cancelled: 'Đã hủy',
 };
 
-const APP_STATUS_CLASS = {
-  pending: 'chip-neutral',
-  hired: 'chip-success',
-  rejected: 'chip-muted',
-  submitted: 'chip-info',
-  revision_requested: 'chip-warning',
-  completed: 'chip-primary',
-  cancelled: 'chip-danger',
-};
 
 export default function MyWork() {
   const {
@@ -70,7 +61,6 @@ export default function MyWork() {
   const [appsPage, setAppsPage] = useState(1);
   const [deliverablesMap, setDeliverablesMap] = useState({});
   const [jobDetailsMap, setJobDetailsMap] = useState({});
-  const [loadingDeliverables, setLoadingDeliverables] = useState(false);
   const [cancelModalJob, setCancelModalJob] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);

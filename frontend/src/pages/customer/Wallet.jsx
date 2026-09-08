@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore, fmtVND, TX_ICON } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import Pagination from '../../components/Pagination';
-import { downloadJobAttachment, exportTransactionsToCSV } from '../../utils/fileDownloader';
+import { exportTransactionsToCSV } from '../../utils/fileDownloader';
 
 const TX_FILTER_MAP = {
   all: 'Tất cả',

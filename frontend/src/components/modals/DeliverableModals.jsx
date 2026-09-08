@@ -7,42 +7,6 @@ import { getAccessToken } from '../../api/tokenStore';
 import { downloadDeliverableFile } from '../../utils/fileDownloader';
 import { SecureDocumentViewer } from '../SecureDocViewer';
 
-function watermarkImageFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('read-failed'));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('decode-failed'));
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        ctx.save();
-        ctx.translate(canvas.width / 2, canvas.height / 2);
-        ctx.rotate(-Math.PI / 8);
-        ctx.font = `bold ${Math.max(18, Math.round(canvas.width / 16))}px sans-serif`;
-        ctx.fillStyle = 'rgba(255,255,255,0.38)';
-        ctx.strokeStyle = 'rgba(0,0,0,0.28)';
-        ctx.lineWidth = 2;
-        ctx.textAlign = 'center';
-        const label = 'SKILLBRIDGE · XEM TRƯỚC · CHƯA THANH TOÁN';
-        const stepY = Math.max(60, canvas.height / 6);
-        for (let y = -canvas.height; y < canvas.height; y += stepY) {
-          ctx.strokeText(label, 0, y);
-          ctx.fillText(label, 0, y);
-        }
-        ctx.restore();
-        resolve({ previewDataUrl: canvas.toDataURL('image/png', 0.92), finalDataUrl: reader.result });
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
 function DeliverableImage({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
   const [imageSrc, setImageSrc] = useState(fallbackSrc?.startsWith('data:') ? fallbackSrc : null);
   const [loading, setLoading] = useState(!fallbackSrc?.startsWith('data:'));
@@ -83,7 +47,7 @@ function DeliverableImage({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
           setImageSrc(blobUrl);
           setError(false);
         }
-      } catch (err) {
+      } catch {
         if (isMounted) {
           if (fallbackSrc?.startsWith('data:')) {
             setImageSrc(fallbackSrc);
@@ -262,7 +226,7 @@ function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
         Trình duyệt của bạn không hỗ trợ phát định dạng video này.
       </video>
 
-      {/* Watermark Overlay chống quay chụp & bảo vệ bản quyền */}
+      {/* Lớp phủ chữ ký bản quyền đè trong video (Copyright Watermark Overlay - tinh giản, chữ bé mờ nhẹ để kiểm tra chất lượng rõ nét) */}
       {!isFinal && (
         <div
           style={{
@@ -273,36 +237,42 @@ function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
             alignItems: 'center',
             justifyContent: 'center',
             overflow: 'hidden',
-            zIndex: 2
+            zIndex: 3,
+            userSelect: 'none'
           }}
         >
-          {/* Dòng chữ chéo thanh mảnh, trong suốt xuyên thấu */}
+          {/* Dòng chữ ký bản quyền chéo thanh mảnh, chữ bé và mờ nhẹ để không che tầm nhìn khi kiểm tra chất lượng */}
           <div
             style={{
-              transform: 'rotate(-22deg)',
+              transform: 'rotate(-20deg)',
               color: 'rgba(255, 255, 255, 0.22)',
-              fontSize: 'clamp(11px, 2.6vw, 15px)',
-              fontWeight: 600,
-              letterSpacing: '1.5px',
-              textShadow: '0 0 2px rgba(0,0,0,0.6)',
+              fontSize: 'clamp(10px, 1.5vw, 12.5px)',
+              fontWeight: 500,
+              letterSpacing: '1.2px',
+              textShadow: '0 0 2px rgba(0,0,0,0.7)',
               textAlign: 'center',
               userSelect: 'none',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
+              pointerEvents: 'none'
             }}
           >
-            SKILLBRIDGE · BẢN XEM TRƯỚC · CHƯA NGHIỆM THU
+            SKILLBRIDGE · BẢN XEM TRƯỚC · CHƯA THANH TOÁN
           </div>
-          {/* Huy hiệu bản quyền nhỏ ở góc dưới */}
+
+          {/* Huy hiệu bản quyền nhỏ gọn ở góc dưới bên phải */}
           <div
             style={{
               position: 'absolute',
               bottom: 8,
-              right: 12,
-              color: 'rgba(255, 255, 255, 0.35)',
-              fontSize: 10.5,
+              right: 10,
+              background: 'rgba(0, 0, 0, 0.45)',
+              borderRadius: 4,
+              padding: '2px 7px',
+              color: 'rgba(255, 255, 255, 0.55)',
+              fontSize: 9.5,
               fontWeight: 500,
-              letterSpacing: '0.5px',
-              textShadow: '0 0 2px rgba(0,0,0,0.8)'
+              letterSpacing: '0.4px',
+              textShadow: '0 1px 2px rgba(0,0,0,0.8)'
             }}
           >
             © SkillBridge Protected
@@ -401,7 +371,10 @@ function DeliverablePreview({ d, revealFinal }) {
               isFinal={true}
             />
           </div>
-          <div style={{ textAlign: 'center', marginTop: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10, padding: '10px 14px', background: 'rgba(16, 185, 129, 0.06)', borderRadius: 8, border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+            <span style={{ fontSize: 12.5, color: 'var(--ink)' }}>
+              ✅ <b>Đã nghiệm thu & thanh toán!</b> Bản video gốc sạch chất lượng cao đã sẵn sàng.
+            </span>
             <button
               type="button"
               className="btn btn-primary btn-sm"
@@ -415,38 +388,38 @@ function DeliverablePreview({ d, revealFinal }) {
       );
     }
 
-    // Khi chưa nghiệm thu (!revealFinal), chỉ hiển thị video player nếu THỰC SỰ có bản đóng watermark server-side
-    if (d.hasWatermarkedPreview) {
-      return (
-        <>
-          <div style={{ margin: '8px 0', textAlign: 'center' }}>
-            <DeliverableVideo
-              jobId={d.jobId}
-              deliverableId={d.id}
-              fallbackSrc={d.previewDataUrl || d.previewFileUrl}
-              alt="Video xem trước có watermark"
-              isFinal={false}
-            />
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10, padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-              🔒 Video sản phẩm bàn giao (Bản xem trước có watermark)
+    // Khi chưa nghiệm thu (!revealFinal): Luôn hiển thị Secure Video Player với chữ ký bản quyền đè trong video
+    return (
+      <>
+        <div style={{ margin: '8px 0', textAlign: 'center' }}>
+          <DeliverableVideo
+            jobId={d.jobId}
+            deliverableId={d.id}
+            fallbackSrc={d.previewDataUrl || d.previewFileUrl}
+            alt="Video xem trước có chữ ký bản quyền"
+            isFinal={false}
+          />
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10, padding: '10px 14px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: 8, border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>🛡️</span>
+            <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+              <strong style={{ color: 'var(--ink)' }}>Bản xem trước có chữ ký bản quyền:</strong> Bạn có thể kiểm tra chất lượng video trực tiếp. Bản gốc hoàn thiện sẽ được mở khóa tải về sau khi bạn xác nhận nghiệm thu.
             </span>
-            {d.canDownloadPreview && (
-              <button
-                type="button"
-                className="btn btn-outline btn-sm"
-                onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
-              >
-                ⬇️ Tải video xem trước
-              </button>
-            )}
           </div>
-        </>
-      );
-    }
-    // Nếu chưa nghiệm thu và chưa có server-watermark preview, không mount player kéo file vào RAM -> rơi vào Escrow Protected Card bên dưới!
+          {d.canDownloadPreview && (
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}
+            >
+              ⬇️ Tải video xem trước
+            </button>
+          )}
+        </div>
+      </>
+    );
   }
 
   const isImage =
@@ -519,7 +492,7 @@ function DeliverablePreview({ d, revealFinal }) {
     return (
       <div style={{ margin: '10px 0' }}>
         {docViewer}
-        {revealFinal && (
+        {revealFinal ? (
           <div style={{ textAlign: 'center', marginTop: 12 }}>
             <button
               type="button"
@@ -530,13 +503,31 @@ function DeliverablePreview({ d, revealFinal }) {
               ⬇️ Tải tệp gốc hoàn thiện
             </button>
           </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginTop: 10, padding: '9px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 15, lineHeight: 1 }}>🔒</span>
+              <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                <strong style={{ color: 'var(--ink)' }}>Bản xem trước có chữ ký bản quyền:</strong> Bạn có thể kiểm tra nội dung và số liệu trực tiếp. Bản gốc hoàn thiện sẽ được mở khóa tải về sau khi bạn xác nhận nghiệm thu.
+              </span>
+            </div>
+            {d.canDownloadPreview && (
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={() => downloadDeliverableFile(d.jobId, d.id, d.fileName, 'preview')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+              >
+                ⬇️ Tải bản xem trước
+              </button>
+            )}
+          </div>
         )}
       </div>
     );
   }
 
   const fileIcon = getFileIcon(d.fileName);
-  const downloadType = revealFinal ? 'final' : 'preview';
   const cleanDisplayName = formatDeliverableDisplayName(d.fileName, false, d.version);
 
   return (

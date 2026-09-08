@@ -74,7 +74,7 @@ export default function AdminOps() {
               <div style={{ flex: 1, minWidth: 240 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <b style={{ fontSize: 13.5 }}>{t.subject}</b>
-                  <span className="chip" style={{ ...(PRIORITY_STYLE[t.priority] || {}), fontSize: 11, padding: '1px 6px' }}>
+                  <span className="chip" style={{ ...PRIORITY_STYLE[t.priority], fontSize: 11, padding: '1px 6px' }}>
                     {PRIORITY_LABEL[t.priority]}
                   </span>
                 </div>
@@ -158,7 +158,7 @@ export default function AdminOps() {
             <button className="modal-close" onClick={() => setViewTicket(null)}>✕</button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span className="chip" style={{ ...(PRIORITY_STYLE[viewTicket.priority] || {}), fontSize: 11 }}>
+              <span className="chip" style={{ ...PRIORITY_STYLE[viewTicket.priority], fontSize: 11 }}>
                 {PRIORITY_LABEL[viewTicket.priority]}
               </span>
               <span className="chip" style={{ fontSize: 11 }}>Mã: #{viewTicket.id.toUpperCase()}</span>
