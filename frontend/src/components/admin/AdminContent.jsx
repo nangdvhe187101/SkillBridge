@@ -96,7 +96,7 @@ export default function AdminContent() {
                         Người đăng: <b>{m.emp}</b> · Ngân sách: <b style={{ color: 'var(--primary)' }}>{fmtVND(m.budget || 300000)}</b> · {m.postedAt || 'Vừa xong'}
                       </div>
                     </div>
-                    <span className="chip" style={{ ...(RISK_STYLE[m.risk] || {}), fontSize: 11 }}>
+                    <span className="chip" style={{ ...RISK_STYLE[m.risk], fontSize: 11 }}>
                       {RISK_LABEL[m.risk]}
                     </span>
                   </div>
@@ -189,7 +189,7 @@ export default function AdminContent() {
             <button className="modal-close" onClick={() => setViewJob(null)}>✕</button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span className="chip" style={{ ...(RISK_STYLE[viewJob.risk] || {}), fontSize: 11 }}>
+              <span className="chip" style={{ ...RISK_STYLE[viewJob.risk], fontSize: 11 }}>
                 {RISK_LABEL[viewJob.risk]}
               </span>
               <span className="chip chip-lime" style={{ fontSize: 11 }}>{viewJob.cat}</span>

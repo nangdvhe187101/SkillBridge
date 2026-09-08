@@ -12,7 +12,6 @@ export default function DashboardSidebar({ activeTab, onTabClick }) {
     const navigate = useNavigate();
     const { state } = useStore();
 
-    const openCount = state.myJobs?.filter((j) => j.status === 'open').length || 0;
     const submittedCount = state.myJobs?.filter((j) => j.status === 'submitted').length || 0;
 
     const handleClick = (tab) => {

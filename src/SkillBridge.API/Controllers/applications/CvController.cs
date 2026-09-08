@@ -46,7 +46,7 @@ public class CvController : ControllerBase
     [Consumes("multipart/form-data")]
     [EnableRateLimiting("UploadPolicy")]
     public async Task<IActionResult> UploadCvFile(
-        [FromForm] IFormFile file,
+        [FromForm] IFormFile? file,
         [FromForm] string? label,
         [FromForm] int? categoryId)
     {
@@ -61,7 +61,7 @@ public class CvController : ControllerBase
             studentId,
             stream,
             file.FileName,
-            file.ContentType,
+            file.ContentType ?? "application/octet-stream",
             label,
             categoryId);
 

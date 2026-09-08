@@ -25,6 +25,41 @@ public class DeliverableService : IDeliverableService
     private readonly IStorageService _storageService;
     private readonly ILogger<DeliverableService> _logger;
 
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".png", ".jpg", ".jpeg", ".webp"
+    };
+
+    private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".mp4", ".mov", ".m4v", ".webm", ".avi", ".mkv", ".wmv", ".flv"
+    };
+
+    private static readonly HashSet<string> DocumentExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".docx", ".doc", ".xlsx", ".xls", ".csv", ".txt", ".json", ".xml", ".md", ".rtf", ".js", ".ts", ".py", ".java", ".cpp", ".html", ".css", ".pptx", ".ppt"
+    };
+
+    private static bool IsVideoFile(string? fileName, string? fileType)
+    {
+        if (!string.IsNullOrEmpty(fileName) && VideoExtensions.Contains(Path.GetExtension(fileName)))
+            return true;
+        return !string.IsNullOrEmpty(fileType) && fileType.Contains("video", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDocumentFile(string? fileName, string? fileType)
+    {
+        if (!string.IsNullOrEmpty(fileName) && DocumentExtensions.Contains(Path.GetExtension(fileName)))
+            return true;
+        if (string.IsNullOrEmpty(fileType))
+            return false;
+        return fileType.Contains("word", StringComparison.OrdinalIgnoreCase)
+            || fileType.Contains("sheet", StringComparison.OrdinalIgnoreCase)
+            || fileType.Contains("excel", StringComparison.OrdinalIgnoreCase)
+            || fileType.Contains("document", StringComparison.OrdinalIgnoreCase)
+            || fileType.StartsWith("text/", StringComparison.OrdinalIgnoreCase);
+    }
+
     public DeliverableService(
         SkillBridgeDbContext dbContext,
         IStorageService storageService,
@@ -185,7 +220,7 @@ public class DeliverableService : IDeliverableService
             }
 
             // 2. Tạo bản Preview có Watermark (Hỗ trợ Ảnh và PDF server-side)
-            var isImage = new[] { ".png", ".jpg", ".jpeg", ".webp" }.Contains(fileExt);
+            var isImage = ImageExtensions.Contains(fileExt);
             var isPdf = string.Equals(fileExt, ".pdf", StringComparison.OrdinalIgnoreCase);
 
             if (isImage)
@@ -483,14 +518,15 @@ public class DeliverableService : IDeliverableService
             }
         }
 
-        var ext = Path.GetExtension(deliverable.FileName).ToLowerInvariant();
+        var isVideo = IsVideoFile(deliverable.FileName, deliverable.FileType);
+        var isDocument = IsDocumentFile(deliverable.FileName, deliverable.FileType);
         var hasWatermarkedPreview = !string.IsNullOrWhiteSpace(deliverable.PreviewFileUrl)
             && !string.Equals(deliverable.PreviewFileUrl, deliverable.FinalFileUrl, StringComparison.OrdinalIgnoreCase);
 
-        // ⚠️ BẢO VỆ BẢN PREVIEW (Zero-Trust): Nhà tuyển dụng chỉ được xem trước nếu file THỰC SỰ có bản đóng watermark server-side
+        // ⚠️ BẢO VỆ BẢN PREVIEW (Zero-Trust): Nhà tuyển dụng chỉ được xem trước nếu file THỰC SỰ có bản đóng watermark server-side HOẶC là video/tài liệu xem qua Secure Viewer có watermark overlay
         if (isEmployer && string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase) && !isAccepted)
         {
-            if (!hasWatermarkedPreview)
+            if (!hasWatermarkedPreview && !isVideo && !isDocument)
             {
                 throw new BusinessException("Định dạng tệp này không hỗ trợ xem trước có watermark. Để bảo vệ quyền tác giả của sinh viên, tệp gốc hoàn chỉnh chỉ được mở sau khi bạn xác nhận nghiệm thu sản phẩm.");
             }
@@ -507,8 +543,8 @@ public class DeliverableService : IDeliverableService
         {
             if (isEmployer && !isAccepted)
             {
-                // Tuyệt đối không fallback sang FinalFileUrl cho Nhà tuyển dụng khi chưa nghiệm thu!
-                targetUrl = deliverable.PreviewFileUrl;
+                // Với video/tài liệu xem trước qua Secure Viewer có watermark: nếu chưa có PreviewFileUrl riêng thì stream file để viewer render kèm watermark overlay
+                targetUrl = deliverable.PreviewFileUrl ?? ((isVideo || isDocument) ? deliverable.FinalFileUrl : null);
             }
             else
             {
@@ -695,7 +731,7 @@ public class DeliverableService : IDeliverableService
             var idx = path.IndexOf("job-deliverables/", StringComparison.OrdinalIgnoreCase);
             if (idx >= 0)
             {
-                return path.Substring(idx);
+                return path[idx..];
             }
             return path;
         }
@@ -703,11 +739,15 @@ public class DeliverableService : IDeliverableService
         return fileUrl;
     }
 
-    private DeliverableDto MapToDeliverableDto(JobDeliverable d, bool isEmployer)
+    private static DeliverableDto MapToDeliverableDto(JobDeliverable d, bool isEmployer)
     {
         var isAccepted = string.Equals(d.Status, "accepted", StringComparison.OrdinalIgnoreCase);
-        var hasWatermarkedPreview = !string.IsNullOrWhiteSpace(d.PreviewFileUrl)
-            && !string.Equals(d.PreviewFileUrl, d.FinalFileUrl, StringComparison.OrdinalIgnoreCase);
+        var isVideo = IsVideoFile(d.FileName, d.FileType);
+        var isDocument = IsDocumentFile(d.FileName, d.FileType);
+
+        var hasWatermarkedPreview = (!string.IsNullOrWhiteSpace(d.PreviewFileUrl)
+            && !string.Equals(d.PreviewFileUrl, d.FinalFileUrl, StringComparison.OrdinalIgnoreCase))
+            || isVideo || isDocument;
 
         var isExternalUrl = string.Equals(d.FileType, "url", StringComparison.OrdinalIgnoreCase);
 
@@ -742,7 +782,8 @@ public class DeliverableService : IDeliverableService
             exposedPreviewUrl = exposedFinalUrl;
         }
 
-        var canDownloadPreview = (!isEmployer || isAccepted) || hasWatermarkedPreview;
+        // Với video và tài liệu văn phòng khi chưa nghiệm thu, NTD chỉ được xem trên Secure Viewer có watermark, KHÔNG được tải file thô về máy
+        var canDownloadPreview = (!isEmployer || isAccepted) || (hasWatermarkedPreview && !isVideo && !isDocument);
 
         return new DeliverableDto
         {
@@ -755,7 +796,7 @@ public class DeliverableService : IDeliverableService
             FinalFileUrl = exposedFinalUrl,
             ExternalUrl = d.ExternalUrl,
             FileName = d.FileName,
-            FileType = d.FileType,
+            FileType = d.FileType ?? string.Empty,
             Note = d.Note,
             Status = d.Status,
             HasWatermarkedPreview = hasWatermarkedPreview,

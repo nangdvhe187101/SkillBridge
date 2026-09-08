@@ -23,10 +23,10 @@ public class DeliverableController : ControllerBase
 
     [HttpGet]
     [EnableRateLimiting("GeneralApiPolicy")]
-    public async Task<IActionResult> GetDeliverables(int jobId)
+    public async Task<IActionResult> GetDeliverables(int jobId, CancellationToken cancellationToken = default)
     {
         var userId = User.GetRequiredUserId();
-        var deliverables = await _deliverableService.GetDeliverablesByJobIdAsync(userId, jobId);
+        var deliverables = await _deliverableService.GetDeliverablesByJobIdAsync(userId, jobId, cancellationToken);
         return Ok(deliverables);
     }
 
@@ -38,7 +38,8 @@ public class DeliverableController : ControllerBase
         int jobId,
         [FromForm] IFormFile? file,
         [FromForm] string? externalUrl,
-        [FromForm] string? note)
+        [FromForm] string? note,
+        CancellationToken cancellationToken = default)
     {
         var studentId = User.GetRequiredUserId();
 
@@ -50,7 +51,8 @@ public class DeliverableController : ControllerBase
             file?.FileName,
             file?.ContentType,
             externalUrl,
-            note);
+            note,
+            cancellationToken);
 
         return Ok(result);
     }
@@ -61,10 +63,11 @@ public class DeliverableController : ControllerBase
     public async Task<IActionResult> ReviewDeliverable(
         int jobId,
         int deliverableId,
-        [FromBody] ReviewDeliverableRequest request)
+        [FromBody] ReviewDeliverableRequest request,
+        CancellationToken cancellationToken = default)
     {
         var employerId = User.GetRequiredUserId();
-        var result = await _deliverableService.ReviewDeliverableAsync(employerId, jobId, deliverableId, request);
+        var result = await _deliverableService.ReviewDeliverableAsync(employerId, jobId, deliverableId, request, cancellationToken);
         return Ok(result);
     }
 
@@ -75,16 +78,22 @@ public class DeliverableController : ControllerBase
         int jobId,
         int deliverableId,
         [FromQuery] string type = "final",
-        System.Threading.CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
     {
         var userId = User.GetRequiredUserId();
         var result = await _deliverableService.GetDeliverableFileStreamAsync(userId, jobId, deliverableId, type, cancellationToken);
-        if (string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase))
+        if (!result.HasValue)
         {
-            Response.Headers["Content-Disposition"] = "inline";
-            return File(result.Value.Stream, result.Value.ContentType);
+            return NotFound(new { message = "Không tìm thấy file sản phẩm bàn giao." });
         }
 
-        return File(result.Value.Stream, result.Value.ContentType, result.Value.FileName);
+        var (stream, contentType, fileName) = result.Value;
+        if (string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase))
+        {
+            Response.Headers.ContentDisposition = "inline";
+            return File(stream, contentType, enableRangeProcessing: true);
+        }
+
+        return File(stream, contentType, fileName, enableRangeProcessing: true);
     }
 }

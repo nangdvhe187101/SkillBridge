@@ -2,10 +2,10 @@ import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import ModalShell from '../../components/modals/ModalShell';
-import { useStore, fmtVND } from '../../context/StoreContext';
+import { useStore } from '../../context/StoreContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
-import { downloadCandidateCv, downloadJobAttachment } from '../../utils/fileDownloader';
+import { downloadCandidateCv } from '../../utils/fileDownloader';
 import { uploadAvatar } from '../../api/userApi';
 
 function tierFromScore(score) {
@@ -30,7 +30,7 @@ const SAMPLE_PORTFOLIO = [
 ];
 
 export default function Profile() {
-  const { state, dispatch, setCv, removeCv, addCvFile, removeCvFile, addEmployerDocs, removeEmployerDoc, addPortfolio, removePortfolio, updateProfile } = useStore();
+  const { state, dispatch, addCvFile, removeCvFile, addEmployerDocs, removeEmployerDoc, addPortfolio, removePortfolio, updateProfile } = useStore();
   const { showToast } = useToast();
   const confirm = useConfirm();
   const navigate = useNavigate();

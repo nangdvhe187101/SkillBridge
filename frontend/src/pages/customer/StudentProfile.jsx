@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import ModalShell from '../../components/modals/ModalShell';
-import { useModal } from '../../context/ModalContext';
 import { useStore } from '../../context/StoreContext';
 import { studentsSeed } from '../../data/studentDirectory';
 import { slugify } from '../../data/companies';
@@ -17,7 +16,6 @@ const TIER_LABEL = { gold: 'Gold Tier', silver: 'Silver Tier', bronze: 'Bronze T
 export default function StudentProfile() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { openModal } = useModal();
   const { openChatWithPerson } = useStore();
   const [selectedPf, setSelectedPf] = useState(null);
 

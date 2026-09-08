@@ -2,9 +2,8 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import { useStore, fmtVND } from '../../context/StoreContext';
-import { useModal } from '../../context/ModalContext';
 import { useToast } from '../../context/ToastContext';
-import { companiesSeed, getCompanyByName, slugify } from '../../data/companies';
+import { companiesSeed, slugify } from '../../data/companies';
 
 const SAMPLE_COMPANY_REVIEWS = [
   { student: 'Minh Anh · ĐH FPT', rating: 5, time: '2 tuần trước', job: 'Dựng video TikTok 30s', comment: 'Doanh nghiệp duyệt bài nhanh, thanh toán đúng hạn và giao tiếp cực kỳ tôn trọng sinh viên.' },
@@ -16,7 +15,6 @@ export default function CompanyProfile() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { state, openChatWithPerson } = useStore();
-  const { openModal } = useModal();
   const { showToast } = useToast();
   const [tab, setTab] = useState('overview'); // 'overview' | 'jobs' | 'reviews'
   const [following, setFollowing] = useState(false);

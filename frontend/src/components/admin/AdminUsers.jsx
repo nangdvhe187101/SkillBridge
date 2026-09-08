@@ -220,7 +220,7 @@ export default function AdminUsers() {
                     <span
                       className="chip"
                       style={{
-                        ...(STATUS_STYLE[u.status] || {}),
+                        ...STATUS_STYLE[u.status],
                         fontSize: 11.5
                       }}
                     >

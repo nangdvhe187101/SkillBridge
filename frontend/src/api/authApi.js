@@ -123,7 +123,7 @@ export async function apiFetch(path, options = {}) {
             credentials: "include",
             headers: {
                 ...defaultHeaders,
-                ...(options.headers || {}),
+                ...options.headers,
                 ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
             },
         });
