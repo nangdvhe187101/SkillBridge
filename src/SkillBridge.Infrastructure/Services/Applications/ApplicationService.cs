@@ -216,44 +216,56 @@ public class ApplicationService : IApplicationService
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
             try
             {
+                // Re-check trạng thái công việc bên trong transaction để chống race condition khi có nhiều request đồng thời
+                var currentJob = await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId);
+                if (currentJob == null || currentJob.Status != "open")
+                {
+                    throw new BusinessException("Công việc này không còn ở trạng thái mở nhận ứng viên.");
+                }
+
+                var currentApp = await _dbContext.Applications
+                    .Include(a => a.Student)
+                    .FirstOrDefaultAsync(a => a.Id == applicationId && a.JobId == jobId);
+                if (currentApp == null || currentApp.Status == "rejected" || currentApp.Status == "hired")
+                {
+                    throw new BusinessException("Hồ sơ ứng tuyển này không còn hợp lệ hoặc đã được xử lý trước đó.");
+                }
+
                 var durationDays = request?.Days.HasValue == true && request.Days.Value > 0 ? request.Days.Value : 3;
 
                 // Cập nhật trạng thái công việc
-                job.HiredApplicantId = application.StudentId;
-                job.EscrowAmount = job.Budget;
-                job.Status = "in_progress";
-                job.DeadlineAt = DateTime.UtcNow.AddDays(durationDays);
-                job.UpdatedAt = DateTime.UtcNow;
-                await _jobRepository.UpdateJobAsync(job);
+                currentJob.HiredApplicantId = currentApp.StudentId;
+                currentJob.EscrowAmount = currentJob.Budget;
+                currentJob.Status = "in_progress";
+                currentJob.DeadlineAt = DateTime.UtcNow.AddDays(durationDays);
+                currentJob.UpdatedAt = DateTime.UtcNow;
 
                 // Cập nhật trạng thái ứng viên được chọn
-                application.Status = "hired";
-                application.UpdatedAt = DateTime.UtcNow;
-                await _applicationRepository.UpdateAsync(application);
+                currentApp.Status = "hired";
+                currentApp.UpdatedAt = DateTime.UtcNow;
 
                 // Đánh dấu từ chối các ứng viên khác cho công việc này
-                var otherApplications = await _applicationRepository.GetByJobIdAsync(jobId);
+                var otherApplications = await _dbContext.Applications
+                    .Where(a => a.JobId == jobId && a.Id != applicationId && a.Status == "pending")
+                    .ToListAsync();
                 foreach (var other in otherApplications)
                 {
-                    if (other.Id != applicationId && other.Status == "pending")
-                    {
-                        other.Status = "rejected";
-                        other.UpdatedAt = DateTime.UtcNow;
-                        await _applicationRepository.UpdateAsync(other);
-                    }
+                    other.Status = "rejected";
+                    other.UpdatedAt = DateTime.UtcNow;
                 }
 
+                await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
 
                 return new HireApplicantResultDto
                 {
-                    JobId = job.Id,
-                    ApplicationId = application.Id,
-                    HiredStudentId = application.StudentId,
-                    HiredStudentName = application.Student?.FullName ?? "Sinh viên",
-                    JobStatus = job.Status,
-                    DeadlineAt = job.DeadlineAt,
-                    EscrowAmount = job.Budget
+                    JobId = currentJob.Id,
+                    ApplicationId = currentApp.Id,
+                    HiredStudentId = currentApp.StudentId,
+                    HiredStudentName = currentApp.Student?.FullName ?? "Sinh viên",
+                    JobStatus = currentJob.Status,
+                    DeadlineAt = currentJob.DeadlineAt,
+                    EscrowAmount = currentJob.Budget
                 };
             }
             catch

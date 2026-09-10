@@ -394,42 +394,156 @@ public class JobRepository : IJobRepository
 
     public async Task DeleteJobAsync(Job job)
     {
-        await using var tx = await _context.Database.BeginTransactionAsync();
-        try
+        var strategy = _context.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            var attachments = await _context.JobAttachments.Where(a => a.JobId == job.Id).ToListAsync();
-            if (attachments.Count > 0)
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            try
             {
-                _context.JobAttachments.RemoveRange(attachments);
-            }
+                // 1. Dọn dẹp JobAttachments
+                var attachments = await _context.JobAttachments.Where(a => a.JobId == job.Id).ToListAsync();
+                if (attachments.Count > 0)
+                {
+                    _context.JobAttachments.RemoveRange(attachments);
+                }
 
-            var reqs = await _context.JobRequirements.Where(r => r.JobId == job.Id).ToListAsync();
-            if (reqs.Count > 0)
+                // 2. Dọn dẹp JobRequirements
+                var reqs = await _context.JobRequirements.Where(r => r.JobId == job.Id).ToListAsync();
+                if (reqs.Count > 0)
+                {
+                    _context.JobRequirements.RemoveRange(reqs);
+                }
+
+                // 3. Dọn dẹp Disputes & DisputeEvidences liên quan
+                var disputes = await _context.Disputes.Where(d => d.JobId == job.Id).ToListAsync();
+                if (disputes.Count > 0)
+                {
+                    var disputeIds = disputes.Select(d => d.Id).ToList();
+                    var evidences = await _context.DisputeEvidences
+                        .Where(e => disputeIds.Contains(e.DisputeId))
+                        .ToListAsync();
+                    if (evidences.Count > 0)
+                    {
+                        _context.DisputeEvidences.RemoveRange(evidences);
+                    }
+
+                    var disputeLedgers = await _context.InsuranceFundLedgers
+                        .Where(l => l.DisputeId.HasValue && disputeIds.Contains(l.DisputeId.Value))
+                        .ToListAsync();
+                    if (disputeLedgers.Count > 0)
+                    {
+                        _context.InsuranceFundLedgers.RemoveRange(disputeLedgers);
+                    }
+
+                    _context.Disputes.RemoveRange(disputes);
+                }
+
+                // 4. Dọn dẹp JobDeliverables & DeliverableFeedbacks
+                var deliverables = await _context.JobDeliverables.Where(d => d.JobId == job.Id).ToListAsync();
+                if (deliverables.Count > 0)
+                {
+                    var deliverableIds = deliverables.Select(d => d.Id).ToList();
+                    var feedbacks = await _context.DeliverableFeedbacks
+                        .Where(f => deliverableIds.Contains(f.DeliverableId))
+                        .ToListAsync();
+                    if (feedbacks.Count > 0)
+                    {
+                        _context.DeliverableFeedbacks.RemoveRange(feedbacks);
+                    }
+
+                    _context.JobDeliverables.RemoveRange(deliverables);
+                }
+
+                // 5. Dọn dẹp InsuranceFundClaims & Ledgers
+                var claims = await _context.InsuranceFundClaims.Where(c => c.JobId == job.Id).ToListAsync();
+                if (claims.Count > 0)
+                {
+                    var claimIds = claims.Select(c => c.Id).ToList();
+                    var ledgers = await _context.InsuranceFundLedgers
+                        .Where(l => l.ClaimId.HasValue && claimIds.Contains(l.ClaimId.Value))
+                        .ToListAsync();
+                    if (ledgers.Count > 0)
+                    {
+                        _context.InsuranceFundLedgers.RemoveRange(ledgers);
+                    }
+
+                    _context.InsuranceFundClaims.RemoveRange(claims);
+                }
+
+                // 6. Dọn dẹp Receipts (Biên nhận điện tử)
+                var receipts = await _context.Receipts.Where(r => r.JobId == job.Id).ToListAsync();
+                if (receipts.Count > 0)
+                {
+                    _context.Receipts.RemoveRange(receipts);
+                }
+
+                // 7. Dọn dẹp Reviews (Đánh giá hoàn thành công việc)
+                var reviews = await _context.Reviews.Where(r => r.JobId == job.Id).ToListAsync();
+                if (reviews.Count > 0)
+                {
+                    _context.Reviews.RemoveRange(reviews);
+                }
+
+                // 8. Dọn dẹp FeaturedRequests
+                var featured = await _context.FeaturedRequests.Where(f => f.JobId == job.Id).ToListAsync();
+                if (featured.Count > 0)
+                {
+                    _context.FeaturedRequests.RemoveRange(featured);
+                }
+
+                // 9. Dọn dẹp ModerationQueues
+                var modQueues = await _context.ModerationQueues.Where(m => m.JobId == job.Id).ToListAsync();
+                if (modQueues.Count > 0)
+                {
+                    _context.ModerationQueues.RemoveRange(modQueues);
+                }
+
+                // 10. Gỡ liên kết JobId trong Conversations (bảo tồn hội thoại của người dùng)
+                var convs = await _context.Conversations.Where(c => c.JobId == job.Id).ToListAsync();
+                foreach (var c in convs)
+                {
+                    c.JobId = null;
+                }
+
+                // 11. Gỡ liên kết JobId trong ReliabilityEvents
+                var relEvents = await _context.ReliabilityEvents.Where(r => r.JobId == job.Id).ToListAsync();
+                foreach (var r in relEvents)
+                {
+                    r.JobId = null;
+                }
+
+                // 12. Gỡ liên kết TargetJobId trong Reports
+                var reports = await _context.Reports.Where(r => r.TargetJobId == job.Id).ToListAsync();
+                foreach (var r in reports)
+                {
+                    r.TargetJobId = null;
+                }
+
+                // 13. Dọn dẹp Applications
+                var apps = await _context.Applications.Where(a => a.JobId == job.Id).ToListAsync();
+                if (apps.Count > 0)
+                {
+                    _context.Applications.RemoveRange(apps);
+                }
+
+                // 14. Dọn dẹp SavedJobs
+                var saved = await _context.SavedJobs.Where(s => s.JobId == job.Id).ToListAsync();
+                if (saved.Count > 0)
+                {
+                    _context.SavedJobs.RemoveRange(saved);
+                }
+
+                // 15. Xóa Job chính
+                _context.Jobs.Remove(job);
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+            }
+            catch
             {
-                _context.JobRequirements.RemoveRange(reqs);
+                await tx.RollbackAsync();
+                throw;
             }
-
-            var apps = await _context.Applications.Where(a => a.JobId == job.Id).ToListAsync();
-            if (apps.Count > 0)
-            {
-                _context.Applications.RemoveRange(apps);
-            }
-
-            var saved = await _context.SavedJobs.Where(s => s.JobId == job.Id).ToListAsync();
-            if (saved.Count > 0)
-            {
-                _context.SavedJobs.RemoveRange(saved);
-            }
-
-            _context.Jobs.Remove(job);
-            await _context.SaveChangesAsync();
-            await tx.CommitAsync();
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
-        }
+        });
     }
 
     public async Task<bool> SaveJobAsync(int studentId, int jobId)
