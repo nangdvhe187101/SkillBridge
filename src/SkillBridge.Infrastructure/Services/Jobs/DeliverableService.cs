@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SkiaSharp;
@@ -153,9 +154,15 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Chỉ ứng viên được nhà tuyển dụng chọn thuê chính thức mới có quyền nộp sản phẩm bàn giao cho công việc này.");
         }
 
+        // Kiểm tra thời hạn bàn giao (Deadline)
+        if (job.DeadlineAt.HasValue && job.DeadlineAt.Value < DateTime.UtcNow)
+        {
+            throw new BusinessException("Công việc này đã quá hạn bàn giao (Deadline). Vui lòng liên hệ Nhà tuyển dụng để được gia hạn thời gian trước khi nộp hoặc cập nhật sản phẩm.");
+        }
+
         string? previewUrl = null;
         string? finalUrl = null;
-        string cleanFileName = fileName != null ? Path.GetFileName(fileName) : "external_link";
+        string cleanFileName = fileName != null ? SanitizeAndCleanFileName(fileName) : "external_link";
         string fileType = "url";
 
         if (!string.IsNullOrWhiteSpace(externalUrl))
@@ -171,7 +178,7 @@ public class DeliverableService : IDeliverableService
                 throw new BusinessException("Dung lượng file sản phẩm vượt quá giới hạn cho phép (tối đa 25MB).");
             }
 
-            cleanFileName = Path.GetFileName(fileName);
+            cleanFileName = SanitizeAndCleanFileName(fileName);
             var fileExt = Path.GetExtension(cleanFileName).ToLowerInvariant();
 
             // Danh sách trắng (Whitelist) các định dạng file được phép tải lên
@@ -276,15 +283,19 @@ public class DeliverableService : IDeliverableService
                 .Where(d => d.JobId == jobId)
                 .MaxAsync(d => (int?)d.Version, cancellationToken) ?? 0;
 
+            var newVersion = currentMaxVersion + 1;
+            var ext = Path.GetExtension(cleanFileName).ToLowerInvariant();
+            var standardizedName = $"SkillBridge_Job{jobId}_v{newVersion}{ext}";
+
             var deliverable = new JobDeliverable
             {
                 JobId = jobId,
                 StudentId = studentId,
-                Version = currentMaxVersion + 1,
+                Version = newVersion,
                 PreviewFileUrl = previewUrl,
                 FinalFileUrl = finalUrl,
                 ExternalUrl = externalUrl,
-                FileName = cleanFileName,
+                FileName = string.IsNullOrWhiteSpace(externalUrl) ? standardizedName : "external_link",
                 FileType = string.IsNullOrWhiteSpace(fileType) ? "binary" : fileType,
                 Note = note?.Trim(),
                 Status = "submitted",
@@ -294,7 +305,6 @@ public class DeliverableService : IDeliverableService
             try
             {
                 await _dbContext.JobDeliverables.AddAsync(deliverable, cancellationToken);
-                
                 // Đồng bộ cập nhật trạng thái Job sang "submitted"
                 job.Status = "submitted";
                 job.UpdatedAt = DateTime.UtcNow;
@@ -306,7 +316,7 @@ public class DeliverableService : IDeliverableService
             catch (DbUpdateException ex) when (IsDuplicateVersionError(ex) && attempt < maxRetries)
             {
                 _dbContext.Entry(deliverable).State = EntityState.Detached;
-                _logger.LogWarning("Phát hiện xung đột version khi nộp deliverable cho Job {JobId}. Đang thử lại lần {Attempt}...", jobId, attempt);
+                _logger.LogWarning(ex, "Phát hiện xung đột version khi nộp deliverable cho Job {JobId}. Đang thử lại lần {Attempt}...", jobId, attempt);
                 await Task.Delay(50 * attempt, cancellationToken);
             }
         }
@@ -498,6 +508,8 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Sản phẩm bàn giao không tồn tại.");
         }
 
+        var ext = Path.GetExtension(deliverable.FileName)?.ToLowerInvariant() ?? string.Empty;
+
         // Quyền truy cập IDOR: Chỉ Nhà tuyển dụng đăng việc HOẶC Sinh viên nộp deliverable này mới được tải
         var isEmployer = job.EmployerId == userId;
         var isStudent = deliverable.StudentId == userId;
@@ -573,6 +585,11 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Không thể tải file sản phẩm bàn giao từ hệ thống lưu trữ.");
         }
 
+        if (string.IsNullOrEmpty(ext) && !string.IsNullOrWhiteSpace(targetUrl))
+        {
+            ext = Path.GetExtension(targetUrl)?.ToLowerInvariant() ?? string.Empty;
+        }
+
         var knownMime = ext switch
         {
             ".pdf" => "application/pdf",
@@ -602,7 +619,8 @@ public class DeliverableService : IDeliverableService
             ? downloadResult.Value.ContentType
             : knownMime;
 
-        return (downloadResult.Value.Stream, contentType, deliverable.FileName);
+        var downloadFileName = GenerateDownloadFileName(deliverable.FileName, deliverable.JobId, deliverable.Version, type);
+        return (downloadResult.Value.Stream, contentType, downloadFileName);
     }
 
     private static Stream? ApplyImageWatermark(Stream inputStream, string ext, int jobId)
@@ -812,5 +830,42 @@ public class DeliverableService : IDeliverableService
                 CreatedAt = f.CreatedAt
             }).ToList()
         };
+    }
+
+    private static string SanitizeAndCleanFileName(string originalName)
+    {
+        var fileNameOnly = Path.GetFileName(originalName).Trim();
+        var ext = Path.GetExtension(fileNameOnly).ToLowerInvariant();
+        var baseName = Path.GetFileNameWithoutExtension(fileNameOnly);
+
+        // Thay thế khoảng trắng và ký tự không an toàn bằng gạch dưới
+        var safeBase = Regex.Replace(baseName, @"[^\w\-.]", "_").Trim('_');
+        if (string.IsNullOrWhiteSpace(safeBase))
+        {
+            safeBase = "SanPham_BanGiao";
+        }
+
+        // Cắt gọn nếu tên file quá dài
+        if (safeBase.Length > 60)
+        {
+            safeBase = safeBase.Substring(0, 60);
+        }
+
+        return $"{safeBase}{ext}";
+    }
+
+    private static string GenerateDownloadFileName(string fileName, int jobId, int version, string type)
+    {
+        var ext = Path.GetExtension(fileName)?.ToLowerInvariant() ?? string.Empty;
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        var isPreview = string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase);
+        var previewTag = isPreview ? "Preview_" : "";
+
+        if (baseName.StartsWith($"SkillBridge_Job{jobId}", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"{baseName}{ext}";
+        }
+
+        return $"SkillBridge_Job{jobId}_v{version}_{previewTag}{baseName}{ext}";
     }
 }
