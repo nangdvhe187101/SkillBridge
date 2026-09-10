@@ -7,7 +7,63 @@ import { useModal } from '../../context/ModalContext';
 import { useToast } from '../../context/ToastContext';
 import { getJobDeliverables } from '../../api/deliverableApi';
 import { getJobById } from '../../api/jobApi';
-import { downloadJobAttachment } from '../../utils/fileDownloader';
+import { downloadJobAttachment, downloadDeliverableFile } from '../../utils/fileDownloader';
+import { DeliverablePreview } from '../../components/modals/DeliverableModals';
+
+function formatDateTime(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return String(ts);
+  return d.toLocaleString('vi-VN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || isNaN(bytes) || bytes <= 0) return '';
+  if (bytes > 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / 1024).toFixed(0) + ' KB';
+}
+
+function getDeliverableFileMeta(fileName, fileType) {
+  const ext = (fileType || fileName || '').split('.').pop()?.toLowerCase();
+  switch (ext) {
+    case 'zip': case 'rar': case '7z': case 'tar': case 'gz':
+      return { icon: '📦', label: 'Tệp nén lưu trữ (Archive)', color: '#d97706', bg: '#fef3c7' };
+    case 'doc': case 'docx':
+      return { icon: '📝', label: 'Tài liệu Word', color: '#2563eb', bg: '#eff6ff' };
+    case 'xls': case 'xlsx': case 'csv':
+      return { icon: '📊', label: 'Bảng tính Excel', color: '#16a34a', bg: '#f0fdf4' };
+    case 'pdf':
+      return { icon: '📑', label: 'Tài liệu PDF', color: '#dc2626', bg: '#fef2f2' };
+    case 'ppt': case 'pptx':
+      return { icon: '📊', label: 'Bài trình chiếu PowerPoint', color: '#ea580c', bg: '#fff7ed' };
+    case 'png': case 'jpg': case 'jpeg': case 'webp': case 'gif': case 'svg': case 'image':
+      return { icon: '🖼️', label: 'Hình ảnh thiết kế', color: '#7c3aed', bg: '#f5f3ff' };
+    case 'mp4': case 'mov': case 'm4v': case 'webm': case 'avi': case 'mkv': case 'video':
+      return { icon: '🎬', label: 'Video sản phẩm', color: '#0284c7', bg: '#e0f2fe' };
+    case 'mp3': case 'wav': case 'm4a': case 'aac': case 'flac':
+      return { icon: '🎵', label: 'Tệp âm thanh', color: '#db2777', bg: '#fdf2f8' };
+    case 'url':
+      return { icon: '🔗', label: 'Liên kết ngoài', color: '#4f46e5', bg: '#eef2ff' };
+    default:
+      return { icon: '📁', label: 'Tệp sản phẩm', color: '#475569', bg: '#f1f5f9' };
+  }
+}
+
+function formatDeliverableDisplayName(fileName, jobId, version = 1, isExternal = false) {
+  if (isExternal || !fileName) return fileName || 'Liên kết sản phẩm';
+  const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+  const cleanExt = ext ? `.${ext}` : '';
+  if (fileName.toLowerCase().startsWith('skillbridge_job')) {
+    return fileName;
+  }
+  return `SkillBridge_Job${jobId}_v${version || 1}${cleanExt}`;
+}
 
 function formatDeadline(ts) {
   if (!ts) return '—';
@@ -61,6 +117,8 @@ export default function MyWork() {
   const [appsPage, setAppsPage] = useState(1);
   const [deliverablesMap, setDeliverablesMap] = useState({});
   const [jobDetailsMap, setJobDetailsMap] = useState({});
+  const [loadingDeliverables, setLoadingDeliverables] = useState(false);
+  const [expandedVersions, setExpandedVersions] = useState({});
   const [cancelModalJob, setCancelModalJob] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
@@ -102,15 +160,21 @@ export default function MyWork() {
             const res = delivRes.value;
             const delivs = Array.isArray(res) ? res : (res?.items || []);
             const latest = delivs[0] || null;
-            const feedbacks = (latest?.feedbacks || []).map((f) => ({
-              version: latest.version,
-              text: f.content || f.feedbackText || '',
-              at: f.createdAt ? new Date(f.createdAt).toLocaleDateString('vi-VN') : 'Gần đây',
-              author: f.authorName || 'Nhà tuyển dụng',
-            }));
+            const allFeedbacks = [];
+            delivs.forEach((d) => {
+              (d.feedbacks || []).forEach((f) => {
+                allFeedbacks.push({
+                  version: d.version,
+                  text: f.content || f.feedbackText || '',
+                  at: f.createdAt ? new Date(f.createdAt).toLocaleDateString('vi-VN') : 'Gần đây',
+                  author: f.authorName || 'Nhà tuyển dụng',
+                });
+              });
+            });
             results[jId] = {
               deliverable: latest,
-              deliverableFeedback: feedbacks,
+              deliverableFeedback: allFeedbacks,
+              allDeliverables: delivs,
             };
           }
 
@@ -167,8 +231,11 @@ export default function MyWork() {
         deadlineAt: a.deadlineAt || jobInfo?.deadlineAt || matchingJob?.deadlineAt || null,
         revisionCount: a.revisionCount !== undefined && a.revisionCount !== null ? a.revisionCount : (matchingJob?.revisionCount || 0),
         revisionLimit: a.revisionLimit !== undefined && a.revisionLimit !== null ? a.revisionLimit : (matchingJob?.revisionLimit || 2),
-        deliverable: delivData.deliverable || null,
-        deliverableFeedback: delivData.deliverableFeedback || [],
+        deliverable: delivData.deliverable || matchingJob?.deliverable || null,
+        deliverableFeedback: (delivData.deliverableFeedback?.length > 0)
+          ? delivData.deliverableFeedback
+          : (matchingJob?.deliverableFeedback || []),
+        allDeliverables: delivData.allDeliverables || (delivData.deliverable ? [delivData.deliverable] : (matchingJob?.deliverable ? [matchingJob.deliverable] : [])),
         emp: a.employerName || a.emp || jobInfo?.employerName || matchingJob?.emp || 'Nhà tuyển dụng',
         empAvatar: employerAvatar,
       };
@@ -569,6 +636,7 @@ export default function MyWork() {
                   const empName = j.emp || 'Nhà tuyển dụng';
                   const targetJobId = j.jobId || j.id;
                   const urgency = getDeadlineUrgency(j.deadlineAt);
+                  const isOverdue = urgency === 'overdue' || (j.deadlineAt && (new Date(j.deadlineAt).getTime() <= Date.now()));
 
                   return (
                     <div
@@ -905,6 +973,55 @@ export default function MyWork() {
                           </div>
                         )}
 
+                        {/* Overdue Alert Banner if deadline has passed */}
+                        {isOverdue && (
+                          <div style={{
+                            background: '#fff1f2',
+                            border: '1.5px solid #fda4af',
+                            borderRadius: 12,
+                            padding: '12px 16px',
+                            margin: '12px 0 14px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: 10
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
+                              <span style={{ fontSize: 22 }}>⏰</span>
+                              <div>
+                                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#be123c' }}>
+                                  Đã quá hạn bàn giao ({formatDeadline(j.deadlineAt)})
+                                </div>
+                                <div style={{ fontSize: 12, color: '#9f1239', marginTop: 2 }}>
+                                  Hệ thống tạm khóa tính năng nộp và cập nhật sản phẩm. Vui lòng nhắn tin trao đổi với Nhà tuyển dụng để được hỗ trợ gia hạn thêm deadline.
+                                </div>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              style={{
+                                background: '#be123c',
+                                color: '#ffffff',
+                                border: 'none',
+                                fontWeight: 700,
+                                fontSize: 12,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                padding: '7px 14px',
+                                borderRadius: 8,
+                                cursor: 'pointer'
+                              }}
+                              onClick={() => openChatWithPerson(empName, `Chào ${empName}, dự án "${j.title}" hiện đã hết hạn nộp sản phẩm. Em xin phép trao đổi để anh/chị hỗ trợ gia hạn deadline giúp em nhé!`)}
+                            >
+                              💬 Nhắn tin xin gia hạn
+                            </button>
+                          </div>
+                        )}
+
                         {/* Revision feedback alert box */}
                         {isRevision && j.deliverableFeedback?.length > 0 && (
                           <div style={{
@@ -924,65 +1041,437 @@ export default function MyWork() {
                           </div>
                         )}
 
-                        {/* Deliverable submission details if exists */}
-                        {j.deliverable && (
+                        {/* DELIVERABLE SHOWCASE SECTION */}
+                        {j.deliverable ? (
                           <div style={{
-                            background: '#f8fafc',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: 10,
-                            padding: '10px 14px',
-                            margin: '10px 0',
-                            fontSize: 12.5,
-                            color: '#475569',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            flexWrap: 'wrap',
-                            gap: 8
+                            background: '#ffffff',
+                            border: isRevision ? '1.5px solid #fda4af' : (isSubmitted ? '1.5px solid #bae6fd' : '1px solid #e2e8f0'),
+                            borderRadius: 14,
+                            margin: '16px 0 12px',
+                            overflow: 'hidden',
+                            boxShadow: '0 4px 14px rgba(0,0,0,0.03)'
                           }}>
-                            <div>
-                              📦 <b>Bản bàn giao gần nhất (v{j.deliverable.version || 1}):</b> {j.deliverable.fileName || j.deliverable.externalUrl || 'File sản phẩm'}
+                            {/* Deliverable Header */}
+                            <div style={{
+                              padding: '12px 18px',
+                              background: isRevision
+                                ? 'linear-gradient(135deg, #fff1f2, #ffe4e6)'
+                                : (isSubmitted ? 'linear-gradient(135deg, #f0f9ff, #e0f2fe)' : '#f8fafc'),
+                              borderBottom: isRevision ? '1px solid #fecdd3' : (isSubmitted ? '1px solid #bae6fd' : '1px solid #e2e8f0'),
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              flexWrap: 'wrap',
+                              gap: 10
+                            }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <span style={{ fontSize: 20 }}>📦</span>
+                                <div>
+                                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                                    Sản phẩm bàn giao (Phiên bản v{j.deliverable.version || 1})
+                                  </div>
+                                  {j.deliverable.submittedAt && (
+                                    <div style={{ fontSize: 11.5, color: '#64748b' }}>
+                                      🕒 Đã nộp lúc: {formatDateTime(j.deliverable.submittedAt)}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                {isSubmitted && (
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    background: '#0284c7',
+                                    color: '#ffffff',
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    padding: '4px 12px',
+                                    borderRadius: 20,
+                                    boxShadow: '0 2px 6px rgba(2, 132, 199, 0.25)'
+                                  }}>
+                                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#38bdf8', display: 'inline-block' }} />
+                                    Đang chờ NTD nghiệm thu
+                                  </span>
+                                )}
+                                {isRevision && (
+                                  <span style={{
+                                    background: '#e11d48',
+                                    color: '#ffffff',
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    padding: '4px 12px',
+                                    borderRadius: 20
+                                  }}>
+                                    ✏️ Cần nộp lại bản sửa
+                                  </span>
+                                )}
+                                {isCompleted && (
+                                  <span style={{
+                                    background: '#059669',
+                                    color: '#ffffff',
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    padding: '4px 12px',
+                                    borderRadius: 20
+                                  }}>
+                                    ✅ Đã nghiệm thu & Hoàn tất
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            {j.deliverable.submittedAt && (
-                              <span style={{ color: '#94a3b8' }}>Nộp lúc: {new Date(j.deliverable.submittedAt).toString() !== 'Invalid Date' ? new Date(j.deliverable.submittedAt).toLocaleString('vi-VN') : j.deliverable.submittedAt}</span>
-                            )}
+
+                            {/* Deliverable Body */}
+                            <div style={{ padding: '16px 18px' }}>
+                              {/* Asset Info Card */}
+                              {(() => {
+                                const fileMeta = getDeliverableFileMeta(j.deliverable.fileName, j.deliverable.fileType);
+                                const isExternal = j.deliverable.mode === 'link' || (!j.deliverable.previewFileUrl && j.deliverable.externalUrl) || j.deliverable.fileType === 'url';
+                                const assetUrl = j.deliverable.url || j.deliverable.externalUrl || j.deliverable.previewFileUrl;
+
+                                return (
+                                  <div style={{
+                                    background: '#f8fafc',
+                                    border: '1px solid #e2e8f0',
+                                    borderRadius: 10,
+                                    padding: '12px 14px',
+                                    marginBottom: 14,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    flexWrap: 'wrap',
+                                    gap: 12
+                                  }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 240 }}>
+                                      <div style={{
+                                        width: 44,
+                                        height: 44,
+                                        borderRadius: 10,
+                                        background: fileMeta.bg,
+                                        color: fileMeta.color,
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: 22,
+                                        flexShrink: 0
+                                      }}>
+                                        {fileMeta.icon}
+                                      </div>
+                                      <div style={{ overflow: 'hidden' }}>
+                                        <div style={{
+                                          fontSize: 13.5,
+                                          fontWeight: 700,
+                                          color: '#1e293b',
+                                          wordBreak: 'break-all'
+                                        }}>
+                                          {formatDeliverableDisplayName(j.deliverable.fileName, targetJobId, j.deliverable.version, isExternal)}
+                                        </div>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 2, fontSize: 11.5, color: '#64748b' }}>
+                                          <span style={{ fontWeight: 600, color: fileMeta.color }}>{fileMeta.label}</span>
+                                          {j.deliverable.fileSize && (
+                                            <>
+                                              <span>•</span>
+                                              <span>{formatFileSize(j.deliverable.fileSize)}</span>
+                                            </>
+                                          )}
+                                          <span>•</span>
+                                          <span>{isExternal ? '🔗 Liên kết ngoài' : '📁 Tệp đính kèm'}</span>
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                      {isExternal ? (
+                                        <a
+                                          href={assetUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="btn btn-outline btn-sm"
+                                          style={{
+                                            fontSize: 12,
+                                            padding: '6px 14px',
+                                            borderColor: '#4338ca',
+                                            color: '#4338ca',
+                                            textDecoration: 'none',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                            fontWeight: 600
+                                          }}
+                                        >
+                                          🔗 Mở liên kết ↗
+                                        </a>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          className="btn btn-outline btn-sm"
+                                          style={{
+                                            fontSize: 12,
+                                            padding: '6px 14px',
+                                            borderColor: '#0284c7',
+                                            color: '#0284c7',
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 4,
+                                            fontWeight: 600
+                                          }}
+                                          onClick={async () => {
+                                            showToast(`Đang tải file: ${j.deliverable.fileName || 'deliverable.zip'}`, '⬇️');
+                                            await downloadDeliverableFile(targetJobId, j.deliverable.id, j.deliverable.fileName, 'final');
+                                          }}
+                                        >
+                                          ⬇️ Tải file đã nộp về máy
+                                        </button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
+
+                              {/* Protected Live Preview */}
+                              <div style={{ marginBottom: 14 }}>
+                                <DeliverablePreview d={j.deliverable} revealFinal={isCompleted} />
+                              </div>
+
+                              {/* Student Note */}
+                              {j.deliverable.note ? (
+                                <div style={{
+                                  background: '#f8fafc',
+                                  borderLeft: '4px solid #4338ca',
+                                  borderRadius: '0 8px 8px 0',
+                                  padding: '10px 14px',
+                                  marginBottom: 14,
+                                  fontSize: 13
+                                }}>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                    <span>💬 Ghi chú từ bạn khi nộp:</span>
+                                  </div>
+                                  <div style={{ color: '#334155', fontStyle: 'italic', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
+                                    "{j.deliverable.note}"
+                                  </div>
+                                </div>
+                              ) : (
+                                <div style={{
+                                  fontSize: 12,
+                                  color: '#94a3b8',
+                                  fontStyle: 'italic',
+                                  marginBottom: 14
+                                }}>
+                                  (Bạn không để lại ghi chú khi nộp sản phẩm này)
+                                </div>
+                              )}
+
+                              {/* Escrow & Rights Protection Panel */}
+                              <div style={{
+                                background: '#f0fdf4',
+                                border: '1px solid #bbf7d0',
+                                borderRadius: 10,
+                                padding: '12px 16px',
+                                marginBottom: 14,
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                                gap: 12
+                              }}>
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    🛡️ Ký quỹ Escrow bảo hộ
+                                  </div>
+                                  <div style={{ fontSize: 12, color: '#166534', marginTop: 2 }}>
+                                    Thù lao <b>{fmtVND(j.budget)}</b> đang được tạm giữ an toàn trong quỹ. NTD chỉ nhận file hoàn thiện sau khi giải ngân.
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    ⚡ Giải ngân tự động
+                                  </div>
+                                  <div style={{ fontSize: 12, color: '#166534', marginTop: 2 }}>
+                                    Số dư ví của bạn sẽ được cộng tự động 100% ngay khi Nhà tuyển dụng xác nhận nghiệm thu.
+                                  </div>
+                                </div>
+
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d', display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    🔄 Giới hạn sửa đổi
+                                  </div>
+                                  <div style={{ fontSize: 12, color: '#166534', marginTop: 2 }}>
+                                    Đã sửa <b>{j.revisionCount || 0}/{j.revisionLimit || 2} lượt</b>. Bảo vệ sinh viên khỏi các yêu cầu vô lý.
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Version History Toggle & Details (If more than 1 version) */}
+                              {j.allDeliverables && j.allDeliverables.length > 1 && (
+                                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed #e2e8f0' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedVersions(prev => ({ ...prev, [targetJobId]: !prev[targetJobId] }))}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: '#4338ca',
+                                      fontSize: 12.5,
+                                      fontWeight: 600,
+                                      cursor: 'pointer',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 6,
+                                      padding: 0
+                                    }}
+                                  >
+                                    <span>🕒 {expandedVersions[targetJobId] ? '▼ Thu gọn' : '▶ Xem'} lịch sử các phiên bản bàn giao ({j.allDeliverables.length} phiên bản)</span>
+                                  </button>
+
+                                  {expandedVersions[targetJobId] && (
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                                      {j.allDeliverables.map((vItem) => (
+                                        <div
+                                          key={vItem.id || vItem.version}
+                                          style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            justifyContent: 'space-between',
+                                            padding: '8px 12px',
+                                            background: vItem.version === j.deliverable.version ? '#eef2ff' : '#f8fafc',
+                                            border: '1px solid #e2e8f0',
+                                            borderRadius: 8,
+                                            fontSize: 12,
+                                            flexWrap: 'wrap',
+                                            gap: 8
+                                          }}
+                                        >
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                            <span style={{ fontWeight: 700, color: '#4338ca' }}>v{vItem.version}</span>
+                                            <span style={{ color: '#334155' }}>{formatDeliverableDisplayName(vItem.fileName, targetJobId, vItem.version, vItem.fileType === 'url')}</span>
+                                            <span style={{ color: '#94a3b8' }}>• {formatDateTime(vItem.submittedAt)}</span>
+                                            {vItem.version === j.deliverable.version && (
+                                              <span style={{ background: '#c7d2fe', color: '#3730a3', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4 }}>
+                                                Mới nhất
+                                              </span>
+                                            )}
+                                          </div>
+                                          {vItem.id && (
+                                            <button
+                                              type="button"
+                                              className="btn btn-outline btn-sm"
+                                              style={{ fontSize: 11, padding: '2px 8px' }}
+                                              onClick={() => downloadDeliverableFile(targetJobId, vItem.id, vItem.fileName, 'final')}
+                                            >
+                                              ⬇ Tải v{vItem.version}
+                                            </button>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        )}
+                        ) : isSubmitted ? (
+                          /* Fallback card if job is submitted but deliverable object is pending */
+                          <div style={{
+                            background: '#f0f9ff',
+                            border: '1.5px solid #bae6fd',
+                            borderRadius: 14,
+                            padding: '16px 20px',
+                            margin: '16px 0 12px'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <span style={{ fontSize: 24 }}>📤</span>
+                                <div>
+                                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0369a1' }}>
+                                    Dự án đã được nộp bàn giao thành công!
+                                  </div>
+                                  <div style={{ fontSize: 12.5, color: '#0284c7', marginTop: 2 }}>
+                                    Sản phẩm của bạn đang trong danh sách chờ Nhà tuyển dụng xem xét nghiệm thu và giải ngân thù lao <b>{fmtVND(j.budget)}</b>.
+                                  </div>
+                                </div>
+                              </div>
+                              <span style={{
+                                background: '#0284c7',
+                                color: '#ffffff',
+                                fontSize: 12,
+                                fontWeight: 700,
+                                padding: '4px 12px',
+                                borderRadius: 20
+                              }}>
+                                ⏳ Chờ nghiệm thu
+                              </span>
+                            </div>
+                          </div>
+                        ) : null}
 
                         {/* Action buttons */}
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
                           {isRevision && (
-                            <button
-                              className="btn btn-primary"
-                              style={{ background: 'linear-gradient(135deg, #f43f5e, #e11d48)', fontWeight: 700 }}
-                              onClick={() => handleOpenDeliverableModal(targetJobId, j)}
-                            >
-                              📤 Nộp lại bài sửa (Lượt {(j.revisionCount || 0) + 1}/{j.revisionLimit || 2})
-                            </button>
+                            isOverdue ? (
+                              <button
+                                className="btn btn-primary"
+                                style={{ background: '#94a3b8', cursor: 'not-allowed', opacity: 0.75, fontWeight: 700, border: 'none' }}
+                                disabled={true}
+                                title="Đã quá hạn bàn giao, vui lòng xin gia hạn deadline từ NTD"
+                              >
+                                🔒 Đã quá hạn — Khóa nộp bài sửa
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-primary"
+                                style={{ background: 'linear-gradient(135deg, #f43f5e, #e11d48)', fontWeight: 700 }}
+                                onClick={() => handleOpenDeliverableModal(targetJobId, j)}
+                              >
+                                📤 Nộp lại bài sửa (Lượt {(j.revisionCount || 0) + 1}/{j.revisionLimit || 2})
+                              </button>
+                            )
                           )}
                           {isSubmitted && (
-                            <button
-                              className="btn btn-outline"
-                              style={{ borderColor: '#4338ca', color: '#4338ca', fontWeight: 600 }}
-                              onClick={() => handleOpenDeliverableModal(targetJobId, j)}
-                            >
-                              ✏️ Cập nhật file / link bàn giao
-                            </button>
+                            isOverdue ? (
+                              <button
+                                className="btn btn-outline"
+                                style={{ borderColor: '#cbd5e1', color: '#94a3b8', cursor: 'not-allowed', opacity: 0.75, fontWeight: 600 }}
+                                disabled={true}
+                                title="Đã quá hạn bàn giao, không thể cập nhật thêm"
+                              >
+                                🔒 Đã quá hạn — Khóa cập nhật
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-outline"
+                                style={{ borderColor: '#4338ca', color: '#4338ca', fontWeight: 600 }}
+                                onClick={() => handleOpenDeliverableModal(targetJobId, j)}
+                              >
+                                ✏️ Cập nhật file / link bàn giao
+                              </button>
+                            )
                           )}
                           {isInProgress && (
-                            <button
-                              className="btn btn-primary"
-                              style={{ background: 'linear-gradient(135deg, #4f46e5, #4338ca)', fontWeight: 700 }}
-                              onClick={() => handleOpenDeliverableModal(targetJobId, j)}
-                            >
-                              📤 Nộp bàn giao / sản phẩm
-                            </button>
+                            isOverdue ? (
+                              <button
+                                className="btn btn-primary"
+                                style={{ background: '#94a3b8', cursor: 'not-allowed', opacity: 0.75, fontWeight: 700, border: 'none' }}
+                                disabled={true}
+                                title="Đã quá hạn bàn giao, vui lòng xin gia hạn deadline từ NTD"
+                              >
+                                🔒 Đã quá hạn — Khóa nộp sản phẩm
+                              </button>
+                            ) : (
+                              <button
+                                className="btn btn-primary"
+                                style={{ background: 'linear-gradient(135deg, #4f46e5, #4338ca)', fontWeight: 700 }}
+                                onClick={() => handleOpenDeliverableModal(targetJobId, j)}
+                              >
+                                📤 Nộp bàn giao / sản phẩm
+                              </button>
+                            )
                           )}
 
                           <button
                             className="btn btn-outline"
                             style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-                            onClick={() => openChatWithPerson(empName)}
+                            onClick={() => openChatWithPerson(empName, `Chào ${empName}, em đã gửi sản phẩm bàn giao cho dự án "${j.title}". Anh/chị kiểm tra và nghiệm thu giúp em nhé!`)}
                           >
                             💬 Chat với NTD
                           </button>

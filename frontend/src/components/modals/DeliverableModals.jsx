@@ -334,12 +334,17 @@ function getFileIcon(fileName) {
   }
 }
 
-function formatDeliverableDisplayName(fileName, isImage = false, version = 1) {
-  if (!fileName) return isImage ? 'Hình ảnh sản phẩm' : 'Tệp sản phẩm bàn giao';
-  if (isImage || fileName.length > 25 || /^[a-z0-9_]{20,}\.[a-z0-9]+$/i.test(fileName)) {
-    return isImage ? `Hình ảnh sản phẩm (v${version || 1})` : `Tệp sản phẩm bàn giao (v${version || 1})`;
+function formatDeliverableDisplayName(fileName, isImage = false, version = 1, jobId = null) {
+  if (!fileName) return isImage ? `Hình ảnh sản phẩm (v${version || 1})` : `Tệp sản phẩm (v${version || 1})`;
+  const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+  const cleanExt = ext ? `.${ext}` : '';
+  if (jobId) {
+    return `SkillBridge_Job${jobId}_v${version || 1}${cleanExt}`;
   }
-  return fileName;
+  if (fileName.toLowerCase().startsWith('skillbridge_job')) {
+    return fileName;
+  }
+  return `SkillBridge_BanGiao_v${version || 1}${cleanExt}`;
 }
 
 function DeliverablePreview({ d, revealFinal }) {
@@ -650,6 +655,7 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
   const [errorMsg, setErrorMsg] = useState('');
 
   if (!job) return null;
+  const isOverdue = job?.deadlineAt && (new Date(job.deadlineAt).getTime() <= Date.now());
   const isUpdate = ['submitted', 'revision_requested'].includes(job.status) && !!(prev.url || prev.fileName || prev.externalUrl);
   const allFeedbacks = job.deliverableFeedback?.length ? job.deliverableFeedback : apiFeedbacks;
   const lastFeedback = job.status === 'revision_requested' && allFeedbacks.length
@@ -659,6 +665,11 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
     setErrorMsg('');
     if (!numericJobId || isNaN(numericJobId)) {
       setErrorMsg('Mã công việc không hợp lệ.');
+      return;
+    }
+
+    if (isOverdue) {
+      setErrorMsg('Công việc đã quá hạn bàn giao (Deadline). Vui lòng liên hệ Nhà tuyển dụng để được gia hạn thời gian.');
       return;
     }
 
@@ -731,6 +742,23 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
     <ModalShell onClose={onClose}>
       <h3>📤 {isUpdate ? 'Cập nhật' : 'Nộp'} bàn giao công việc</h3>
       <p>Gửi sản phẩm hoàn thiện cho "<b>{job.title}</b>" để nhà tuyển dụng xác nhận và giải ngân.</p>
+      {isOverdue && (
+        <div style={{
+          background: '#fee2e2',
+          border: '1.5px solid #fca5a5',
+          borderRadius: 10,
+          padding: '12px 14px',
+          marginBottom: 14,
+          fontSize: 13,
+          color: '#991b1b',
+          lineHeight: 1.5
+        }}>
+          <b>⏰ Công việc này đã quá hạn bàn giao (Deadline)!</b>
+          <div style={{ marginTop: 4 }}>
+            Hệ thống đã khóa tính năng nộp và cập nhật sản phẩm. Vui lòng liên hệ với Nhà tuyển dụng qua tin nhắn để được xem xét gia hạn thêm thời gian trước khi nộp bài.
+          </div>
+        </div>
+      )}
       {lastFeedback && (
         <div className="empty-state" style={{ textAlign: 'left', background: 'var(--surface)', borderRadius: 10, padding: 12, marginBottom: 12 }}>
           <b style={{ fontSize: 12.5, color: 'var(--coral)' }}>✏️ NTD yêu cầu sửa:</b>
@@ -775,20 +803,35 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
 
       {isSubmitting && file && (
         <div style={{ margin: '10px 0 14px', padding: '10px 14px', background: 'rgba(99, 102, 241, 0.08)', borderRadius: 8, border: '1px solid rgba(99, 102, 241, 0.2)', fontSize: 12.5, color: 'var(--ink)' }}>
-          ⏳ Đang mã hóa và đẩy tệp <b>{file.name}</b> ({(file.size / (1024 * 1024)).toFixed(1)} MB) lên đám mây Cloudflare R2. Quá trình có thể mất từ 10 - 25 giây tùy theo tốc độ mạng của bạn, vui lòng không tắt cửa sổ.
+          ⏳ Đang tải tệp lên hệ thống, vui lòng chờ trong giây lát...
         </div>
       )}
 
       <div className="modal-actions">
-        <button className="btn btn-primary" onClick={submit} disabled={isSubmitting} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <button
+          className="btn btn-primary"
+          onClick={submit}
+          disabled={isSubmitting || isOverdue}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            opacity: isOverdue ? 0.6 : 1,
+            cursor: isOverdue ? 'not-allowed' : 'pointer'
+          }}
+        >
           {isSubmitting ? (
             <>
               <span style={{ width: 14, height: 14, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.8s linear infinite' }} />
               <span>Đang tải {file ? `(${(file.size / (1024 * 1024)).toFixed(1)} MB)...` : '...'}</span>
             </>
-          ) : (isUpdate ? 'Cập nhật bàn giao' : 'Gửi bàn giao')}
+          ) : isOverdue ? (
+            '🔒 Đã quá hạn bàn giao'
+          ) : (
+            isUpdate ? 'Cập nhật bàn giao' : 'Gửi bàn giao'
+          )}
         </button>
-        <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Hủy</button>
+        <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Đóng</button>
       </div>
     </ModalShell>
   );

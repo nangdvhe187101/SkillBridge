@@ -115,12 +115,18 @@ export async function downloadCandidateCv(cvFileId, originalFileName = 'CV_UngVi
     }
 }
 
-export async function downloadDeliverableFile(jobId, deliverableId, originalFileName = 'deliverable.zip', type = 'final') {
-    let fileName = originalFileName || 'deliverable';
-    if (fileName.length > 25 || /^[a-z0-9_]{20,}\.[a-z0-9]+$/i.test(fileName)) {
-        const ext = fileName.includes('.') ? fileName.split('.').pop() : 'zip';
-        fileName = `SkillBridge_BanGiao_Job${jobId}_${type === 'preview' ? 'Preview' : 'Final'}.${ext}`;
+export async function downloadDeliverableFile(jobId, deliverableId, originalFileName = 'deliverable.zip', type = 'final', version = 1) {
+    let rawName = (originalFileName || 'san_pham_ban_giao').trim();
+    rawName = rawName.replace(/[/\\?%*:|"<>]/g, '_').replace(/\s+/g, '_');
+    const ext = rawName.includes('.') ? rawName.split('.').pop() : 'zip';
+    const baseName = rawName.includes('.') ? rawName.substring(0, rawName.lastIndexOf('.')) : rawName;
+
+    let fileName = rawName;
+    if (!rawName.toLowerCase().startsWith(`skillbridge_job${jobId}`)) {
+        const previewPrefix = type === 'preview' ? 'Preview_' : '';
+        fileName = `SkillBridge_Job${jobId}_v${version || 1}_${previewPrefix}${baseName}.${ext}`;
     }
+
     if (!jobId || !deliverableId) return;
 
     try {
@@ -133,6 +139,15 @@ export async function downloadDeliverableFile(jobId, deliverableId, originalFile
         }
         const res = await fetch(downloadUrl, { headers, credentials: 'include' });
         if (res.ok) {
+            // Đọc tên file chuẩn từ Header Content-Disposition của backend nếu có
+            const disposition = res.headers.get('content-disposition');
+            if (disposition && disposition.includes('filename=')) {
+                const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                if (match && match[1]) {
+                    fileName = match[1].replace(/['"]/g, '').trim();
+                }
+            }
+
             const blob = await res.blob();
             const blobUrl = URL.createObjectURL(blob);
             const a = document.createElement('a');
