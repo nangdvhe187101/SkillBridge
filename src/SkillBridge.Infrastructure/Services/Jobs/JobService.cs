@@ -167,6 +167,15 @@ public class JobService : IJobService
                 app.Status = "cancelled";
                 app.UpdatedAt = DateTime.UtcNow;
             }
+
+            // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên để không lẫn vào lượt tuyển dụng mới
+            var pendingDeliverables = await _dbContext.JobDeliverables
+                .Where(d => d.JobId == jobId && d.Status != "accepted")
+                .ToListAsync();
+            foreach (var del in pendingDeliverables)
+            {
+                del.Status = "cancelled";
+            }
         }
 
         await _jobRepository.CancelJobAsync(job);

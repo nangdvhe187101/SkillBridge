@@ -98,9 +98,14 @@ public class DeliverableService : IDeliverableService
             // Sinh viên chỉ được xem deliverables do chính mình nộp cho job này (chặn IDOR)
             query = query.Where(d => d.StudentId == userId);
         }
-        else if (job.HiredApplicantId.HasValue)
+        else
         {
-            // Nhà tuyển dụng chỉ xem các bản bàn giao của ứng viên đang được thuê hiện tại (tránh lẫn với sinh viên cũ đã hủy việc)
+            // Nhà tuyển dụng chỉ xem các bản bàn giao của ứng viên được thuê chính thức (tránh rò rỉ khi job chưa thuê ai hoặc đã reset)
+            if (!job.HiredApplicantId.HasValue)
+            {
+                return new List<DeliverableDto>();
+            }
+
             query = query.Where(d => d.StudentId == job.HiredApplicantId.Value);
         }
 
@@ -418,8 +423,9 @@ public class DeliverableService : IDeliverableService
         }
         else if (normalizedStatus == "accepted")
         {
-            // Cập nhật trạng thái Job sang completed
+            // Cập nhật trạng thái Job sang completed và giải phóng EscrowAmount (đã giải ngân xong cho sinh viên)
             job.Status = "completed";
+            job.EscrowAmount = null;
             job.UpdatedAt = DateTime.UtcNow;
 
             // Cập nhật Application của sinh viên sang completed

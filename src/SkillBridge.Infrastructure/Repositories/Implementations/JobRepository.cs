@@ -77,7 +77,9 @@ public class JobRepository : IJobRepository
             IsSaved = job.IsSaved,
             HiredApplicantId = job.Job.HiredApplicantId,
             HiredStudentName = job.HiredStudentName,
-            EscrowAmount = job.Job.EscrowAmount ?? (job.Job.HiredApplicantId.HasValue ? job.Job.Budget : null),
+            EscrowAmount = (job.Job.Status == "in_progress" || job.Job.Status == "submitted" || job.Job.Status == "revision_requested")
+                ? (job.Job.EscrowAmount ?? (job.Job.HiredApplicantId.HasValue ? job.Job.Budget : null))
+                : null,
             Requirements = job.Requirements.Select(r => new JobRequirementDto
             {
                 Id = r.Id,
@@ -179,7 +181,9 @@ public class JobRepository : IJobRepository
                 AttachmentCount = j.Attachments.Count(),
                 HiredApplicantId = j.HiredApplicantId,
                 HiredStudentName = j.HiredApplicant != null ? j.HiredApplicant.FullName : null,
-                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null),
+                EscrowAmount = (j.Status == "in_progress" || j.Status == "submitted" || j.Status == "revision_requested")
+                    ? (j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null))
+                    : null,
                 RevisionLimit = j.RevisionLimit,
                 RevisionCount = j.RevisionCount
             })
@@ -242,7 +246,9 @@ public class JobRepository : IJobRepository
                 AttachmentCount = j.Attachments.Count(),
                 HiredApplicantId = j.HiredApplicantId,
                 HiredStudentName = j.HiredApplicant != null ? j.HiredApplicant.FullName : null,
-                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null),
+                EscrowAmount = (j.Status == "in_progress" || j.Status == "submitted" || j.Status == "revision_requested")
+                    ? (j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null))
+                    : null,
                 RevisionLimit = j.RevisionLimit,
                 RevisionCount = j.RevisionCount
             })
@@ -360,6 +366,10 @@ public class JobRepository : IJobRepository
         try
         {
             job.Status = "cancelled";
+            job.HiredApplicantId = null;
+            job.EscrowAmount = null;
+            job.DeadlineAt = null;
+            job.RevisionCount = 0;
             job.UpdatedAt = DateTime.UtcNow;
             _context.Jobs.Update(job);
             await _context.SaveChangesAsync();
@@ -379,6 +389,10 @@ public class JobRepository : IJobRepository
         try
         {
             job.Status = "open";
+            job.HiredApplicantId = null;
+            job.EscrowAmount = null;
+            job.DeadlineAt = null;
+            job.RevisionCount = 0;
             job.UpdatedAt = DateTime.UtcNow;
             _context.Jobs.Update(job);
             await _context.SaveChangesAsync();
@@ -617,7 +631,9 @@ public class JobRepository : IJobRepository
                 AttachmentCount = j.Attachments.Count(),
                 HiredApplicantId = j.HiredApplicantId,
                 HiredStudentName = j.HiredApplicant != null ? j.HiredApplicant.FullName : null,
-                EscrowAmount = j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null),
+                EscrowAmount = (j.Status == "in_progress" || j.Status == "submitted" || j.Status == "revision_requested")
+                    ? (j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null))
+                    : null,
                 RevisionLimit = j.RevisionLimit,
                 RevisionCount = j.RevisionCount
             })
