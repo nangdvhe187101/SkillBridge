@@ -80,6 +80,16 @@ public class JobController : ControllerBase
     }
 
     [Authorize(Policy = "RequireEmployerRole")]
+    [HttpPatch("{id:int}/extend-deadline")]
+    [EnableRateLimiting("ResourceCreationPolicy")]
+    public async Task<IActionResult> ExtendDeadline(int id, [FromBody] ExtendDeadlineRequest request)
+    {
+        var employerId = User.GetRequiredUserId();
+        await _jobService.ExtendDeadlineAsync(employerId, id, request);
+        return Ok(new { message = "Gia hạn thời gian hoàn thành thành công." });
+    }
+
+    [Authorize(Policy = "RequireEmployerRole")]
     [HttpDelete("{id:int}")]
     [EnableRateLimiting("ResourceCreationPolicy")]
     public async Task<IActionResult> DeleteJob(int id)

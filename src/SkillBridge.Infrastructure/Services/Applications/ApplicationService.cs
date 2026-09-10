@@ -9,6 +9,9 @@ using SkillBridge.Application.DTOs.Applications;
 using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.Interfaces.Applications;
 using SkillBridge.Application.Interfaces.Storage;
+using SkillBridge.Application.Interfaces.Payments;
+using SkillBridge.Application.Interfaces.Users;
+using SkillBridge.Application.Interfaces.Notifications;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
@@ -22,6 +25,9 @@ public class ApplicationService : IApplicationService
     private readonly ICvFileRepository _cvFileRepository;
     private readonly SkillBridgeDbContext _dbContext;
     private readonly IStorageService _storageService;
+    private readonly IEscrowPaymentService _escrowPaymentService;
+    private readonly IUserReliabilityService _reliabilityService;
+    private readonly INotificationService _notificationService;
     private readonly ILogger<ApplicationService> _logger;
 
     public ApplicationService(
@@ -30,6 +36,9 @@ public class ApplicationService : IApplicationService
         ICvFileRepository cvFileRepository,
         SkillBridgeDbContext dbContext,
         IStorageService storageService,
+        IEscrowPaymentService escrowPaymentService,
+        IUserReliabilityService reliabilityService,
+        INotificationService notificationService,
         ILogger<ApplicationService> logger)
     {
         _applicationRepository = applicationRepository;
@@ -37,6 +46,9 @@ public class ApplicationService : IApplicationService
         _cvFileRepository = cvFileRepository;
         _dbContext = dbContext;
         _storageService = storageService;
+        _escrowPaymentService = escrowPaymentService;
+        _reliabilityService = reliabilityService;
+        _notificationService = notificationService;
         _logger = logger;
     }
 
@@ -301,36 +313,19 @@ public class ApplicationService : IApplicationService
                 // Ghi nhận ký quỹ Escrow vào sổ cái giao dịch
                 if (currentJob.Budget > 0)
                 {
-                    var escrowHoldTx = new Transaction
-                    {
-                        UserId = employerId,
-                        Type = "escrow_hold",
-                        Label = $"Tạm giữ Ký quỹ Escrow — Job #{currentJob.Id} · {currentJob.Title}",
-                        Amount = currentJob.Budget,
-                        Sign = -1,
-                        ReferenceId = currentJob.Id,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    await _dbContext.Transactions.AddAsync(escrowHoldTx);
-
-                    var employerWallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == employerId);
-                    if (employerWallet != null && employerWallet.Balance >= currentJob.Budget)
-                    {
-                        employerWallet.Balance -= currentJob.Budget;
-                    }
+                    await _escrowPaymentService.HoldEscrowAsync(
+                        employerId,
+                        currentJob.Id,
+                        currentJob.Title,
+                        currentJob.Budget);
                 }
 
                 // Gửi thông báo trúng tuyển cho sinh viên
-                var studentNotif = new Notification
-                {
-                    UserId = currentApp.StudentId,
-                    Icon = "🎉",
-                    MessageText = $"Chúc mừng! Bạn đã được chọn thực hiện công việc \"{currentJob.Title}\".",
-                    Link = "/mywork",
-                    IsRead = false,
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _dbContext.Notifications.AddAsync(studentNotif);
+                await _notificationService.SendAsync(
+                    currentApp.StudentId,
+                    "🎉",
+                    $"Chúc mừng! Bạn đã được chọn thực hiện công việc \"{currentJob.Title}\".",
+                    "/mywork");
 
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -398,14 +393,10 @@ public class ApplicationService : IApplicationService
                 // Nếu đang trong quá trình thực hiện việc (đã được thuê), trừ 10 điểm uy tín sinh viên
                 if (isHiredOrInProgress)
                 {
-                    var student = application.Student ?? await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == studentId);
-                    if (student != null)
-                    {
-                        var oldScore = student.ReliabilityScore;
-                        student.ReliabilityScore = Math.Max(0, student.ReliabilityScore - 10);
-                        _logger.LogWarning("Sinh viên {StudentId} hủy việc đang làm tại Job {JobId}. Điểm uy tín giảm từ {OldScore} xuống {NewScore}. Lý do: {Reason}",
-                            studentId, jobId, oldScore, student.ReliabilityScore, reason ?? "Không có lý do");
-                    }
+                    await _reliabilityService.PenalizeScoreAsync(
+                        studentId,
+                        10,
+                        $"Sinh viên hủy việc đang làm tại Job #{jobId}. Lý do: {reason ?? "Không có lý do"}");
 
                     // Reset Job về trạng thái open để NTD có thể chọn người khác
                     var job = application.Job ?? await _jobRepository.GetByIdAsync(jobId);
@@ -422,44 +413,20 @@ public class ApplicationService : IApplicationService
                         // Hoàn tiền ký quỹ lại cho Nhà tuyển dụng vì sinh viên đơn phương hủy việc
                         if (job.Budget > 0)
                         {
-                            var refundTx = new Transaction
-                            {
-                                UserId = job.EmployerId,
-                                Type = "escrow_refund",
-                                Label = $"Hoàn tiền ký quỹ do sinh viên hủy nhận việc Job #{job.Id} · {job.Title}",
-                                Amount = job.Budget,
-                                Sign = 1,
-                                ReferenceId = job.Id,
-                                CreatedAt = DateTime.UtcNow
-                            };
-                            await _dbContext.Transactions.AddAsync(refundTx);
-
-                            var employerWallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == job.EmployerId);
-                            if (employerWallet != null)
-                            {
-                                employerWallet.Balance += job.Budget;
-                            }
-                            else
-                            {
-                                await _dbContext.Wallets.AddAsync(new Wallet
-                                {
-                                    UserId = job.EmployerId,
-                                    Balance = job.Budget
-                                });
-                            }
+                            await _escrowPaymentService.RefundEscrowAsync(
+                                job.EmployerId,
+                                job.Id,
+                                job.Title,
+                                job.Budget,
+                                $"Hoàn tiền ký quỹ do sinh viên hủy nhận việc Job #{job.Id} · {job.Title}");
                         }
 
                         // Gửi thông báo cho Nhà tuyển dụng
-                        var empNotif = new Notification
-                        {
-                            UserId = job.EmployerId,
-                            Icon = "⚠️",
-                            MessageText = $"Sinh viên đã hủy thực hiện công việc \"{job.Title}\". Số tiền ký quỹ {job.Budget:N0}đ đã được hoàn lại vào ví của bạn.",
-                            Link = $"/jobs/{job.Id}/applicants",
-                            IsRead = false,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        await _dbContext.Notifications.AddAsync(empNotif);
+                        await _notificationService.SendAsync(
+                            job.EmployerId,
+                            "⚠️",
+                            $"Sinh viên đã hủy thực hiện công việc \"{job.Title}\". Số tiền ký quỹ {job.Budget:N0}đ đã được hoàn lại vào ví của bạn.",
+                            $"/jobs/{job.Id}/applicants");
 
                         // Khôi phục lại các đơn ứng tuyển của các sinh viên khác (từng bị auto-rejected khi thuê) về lại pending để NTD có thể chọn tiếp
                         var autoRejectedApps = await _dbContext.Applications
@@ -472,13 +439,34 @@ public class ApplicationService : IApplicationService
                         }
                     }
 
-                    // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên này để không lẫn vào lượt thuê mới
+                    // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên này và dọn dẹp file R2
                     var pendingDeliverables = await _dbContext.JobDeliverables
                         .Where(d => d.JobId == jobId && d.StudentId == studentId && d.Status != "accepted")
                         .ToListAsync();
                     foreach (var del in pendingDeliverables)
                     {
                         del.Status = "cancelled";
+                        if (!string.Equals(del.FileType, "url", StringComparison.OrdinalIgnoreCase))
+                        {
+                            foreach (var url in new[] { del.PreviewFileUrl, del.FinalFileUrl })
+                            {
+                                var key = StorageKeyHelper.ExtractKey(url);
+                                if (!string.IsNullOrWhiteSpace(key))
+                                {
+                                    try
+                                    {
+                                        await _storageService.DeleteFileAsync(key);
+                                        _logger.LogInformation("Đã dọn dẹp file R2 {FileKey} của deliverable khi sinh viên hủy việc (Job #{JobId}).", key, jobId);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        _logger.LogWarning(ex, "Không thể xóa file {FileKey} trên R2 khi sinh viên hủy việc Job #{JobId}.", key, jobId);
+                                    }
+                                }
+                            }
+                        }
+                        del.PreviewFileUrl = null;
+                        del.FinalFileUrl = null;
                     }
                 }
 

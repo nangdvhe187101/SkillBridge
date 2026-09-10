@@ -29,6 +29,12 @@ public class UpdateJobRequest
     public List<string> Requirements { get; set; } = new();
 }
 
+public class ExtendDeadlineRequest
+{
+    public DateTime NewDeadlineAt { get; set; }
+    public string? Reason { get; set; }
+}
+
 public class JobRequirementDto
 {
     public int Id { get; set; }

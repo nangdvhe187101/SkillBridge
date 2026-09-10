@@ -10,6 +10,7 @@ public interface IJobService
     Task<JobDetailDto> UpdateJobAsync(int employerId, int jobId, UpdateJobRequest request);
     Task CancelJobAsync(int employerId, int jobId);
     Task ReopenJobAsync(int employerId, int jobId);
+    Task ExtendDeadlineAsync(int employerId, int jobId, ExtendDeadlineRequest request);
     Task DeleteJobAsync(int employerId, int jobId);
     Task<PagedResult<JobSummaryDto>> GetEmployerJobsAsync(int employerId, string? status, int page, int pageSize);
     Task<PagedResult<JobSummaryDto>> GetPublicJobsAsync(JobQueryParameters query, int? currentUserId = null);

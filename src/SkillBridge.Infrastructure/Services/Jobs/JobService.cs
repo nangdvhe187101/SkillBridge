@@ -8,6 +8,9 @@ using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.Interfaces.Jobs;
 using SkillBridge.Application.Interfaces.Storage;
+using SkillBridge.Application.Interfaces.Payments;
+using SkillBridge.Application.Interfaces.Users;
+using SkillBridge.Application.Interfaces.Notifications;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
@@ -20,6 +23,9 @@ public class JobService : IJobService
     private readonly ICategoryRepository _categoryRepository;
     private readonly SkillBridgeDbContext _dbContext;
     private readonly IStorageService _storageService;
+    private readonly IEscrowPaymentService _escrowPaymentService;
+    private readonly IUserReliabilityService _reliabilityService;
+    private readonly INotificationService _notificationService;
     private readonly ILogger<JobService> _logger;
 
     public JobService(
@@ -27,12 +33,18 @@ public class JobService : IJobService
         ICategoryRepository categoryRepository,
         SkillBridgeDbContext dbContext,
         IStorageService storageService,
+        IEscrowPaymentService escrowPaymentService,
+        IUserReliabilityService reliabilityService,
+        INotificationService notificationService,
         ILogger<JobService> logger)
     {
         _jobRepository = jobRepository;
         _categoryRepository = categoryRepository;
         _dbContext = dbContext;
         _storageService = storageService;
+        _escrowPaymentService = escrowPaymentService;
+        _reliabilityService = reliabilityService;
+        _notificationService = notificationService;
         _logger = logger;
     }
 
@@ -148,14 +160,10 @@ public class JobService : IJobService
         // Nếu NTD tự ý hủy khi đang có sinh viên làm việc, trừ 10 điểm uy tín NTD
         if (isHired)
         {
-            var employer = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == employerId);
-            if (employer != null)
-            {
-                var oldScore = employer.ReliabilityScore;
-                employer.ReliabilityScore = Math.Max(0, employer.ReliabilityScore - 10);
-                _logger.LogWarning("Nhà tuyển dụng {EmployerId} hủy Job {JobId} đang có sinh viên thực hiện. Điểm uy tín giảm từ {OldScore} xuống {NewScore}.",
-                    employerId, jobId, oldScore, employer.ReliabilityScore);
-            }
+            await _reliabilityService.PenalizeScoreAsync(
+                employerId,
+                10,
+                $"Nhà tuyển dụng tự ý hủy Job #{jobId} đang có sinh viên thực hiện");
 
             // Hủy các application đang hired liên quan
             var hiredApps = await _dbContext.Applications
@@ -168,59 +176,56 @@ public class JobService : IJobService
                 app.UpdatedAt = DateTime.UtcNow;
             }
 
-            // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên để không lẫn vào lượt tuyển dụng mới
+            // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên và dọn dẹp file R2
             var pendingDeliverables = await _dbContext.JobDeliverables
                 .Where(d => d.JobId == jobId && d.Status != "accepted")
                 .ToListAsync();
             foreach (var del in pendingDeliverables)
             {
                 del.Status = "cancelled";
+                if (!string.Equals(del.FileType, "url", StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (var url in new[] { del.PreviewFileUrl, del.FinalFileUrl })
+                    {
+                        var key = StorageKeyHelper.ExtractKey(url);
+                        if (!string.IsNullOrWhiteSpace(key))
+                        {
+                            try
+                            {
+                                await _storageService.DeleteFileAsync(key);
+                                _logger.LogInformation("Đã dọn dẹp file R2 {FileKey} của deliverable bị hủy khi hủy Job #{JobId}.", key, jobId);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Không thể xóa file {FileKey} trên R2 khi hủy Job #{JobId}.", key, jobId);
+                            }
+                        }
+                    }
+                }
+                del.PreviewFileUrl = null;
+                del.FinalFileUrl = null;
             }
 
             // Hoàn lại tiền ký quỹ cho Nhà tuyển dụng
             if (job.Budget > 0)
             {
-                var refundTx = new Transaction
-                {
-                    UserId = employerId,
-                    Type = "escrow_refund",
-                    Label = $"Hoàn tiền ký quỹ do hủy công việc #{job.Id} · {job.Title}",
-                    Amount = job.Budget,
-                    Sign = 1,
-                    ReferenceId = job.Id,
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _dbContext.Transactions.AddAsync(refundTx);
-
-                var employerWallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == employerId);
-                if (employerWallet != null)
-                {
-                    employerWallet.Balance += job.Budget;
-                }
-                else
-                {
-                    await _dbContext.Wallets.AddAsync(new Wallet
-                    {
-                        UserId = employerId,
-                        Balance = job.Budget
-                    });
-                }
+                await _escrowPaymentService.RefundEscrowAsync(
+                    employerId,
+                    job.Id,
+                    job.Title,
+                    job.Budget,
+                    $"Hoàn tiền ký quỹ do hủy công việc #{job.Id} · {job.Title}");
             }
 
             // Gửi thông báo cho sinh viên đang được thuê
             var hiredStudentId = job.HiredApplicantId;
             if (hiredStudentId.HasValue)
             {
-                var studentNotif = new Notification
-                {
-                    UserId = hiredStudentId.Value,
-                    Icon = "⚠️",
-                    MessageText = $"Nhà tuyển dụng đã hủy công việc \"{job.Title}\".",
-                    Link = "/mywork",
-                    IsRead = false,
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _dbContext.Notifications.AddAsync(studentNotif);
+                await _notificationService.SendAsync(
+                    hiredStudentId.Value,
+                    "⚠️",
+                    $"Nhà tuyển dụng đã hủy công việc \"{job.Title}\".",
+                    "/mywork");
             }
         }
 
@@ -243,10 +248,59 @@ public class JobService : IJobService
 
         if (job.Status != "cancelled")
         {
-            throw new BusinessException("Chỉ có thể mở lại công việc đang ở trạng thái đã đóng ('cancelled').");
+            throw new BusinessException("Chỉ có thể mở lại công việc đã bị hủy.");
         }
 
-        await _jobRepository.ReopenJobAsync(job);
+        job.Status = "open";
+        job.HiredApplicantId = null;
+        job.DeadlineAt = null;
+        job.EscrowAmount = null;
+        job.RevisionCount = 0;
+        job.UpdatedAt = DateTime.UtcNow;
+
+        await _jobRepository.UpdateJobAsync(job);
+    }
+
+    public async Task ExtendDeadlineAsync(int employerId, int jobId, ExtendDeadlineRequest request)
+    {
+        var job = await _jobRepository.GetByIdAsync(jobId);
+        if (job == null)
+        {
+            throw new BusinessException("Không tìm thấy công việc.");
+        }
+
+        if (job.EmployerId != employerId)
+        {
+            throw new BusinessException("Bạn không có quyền gia hạn thời gian cho công việc này.");
+        }
+
+        var allowedStatuses = new[] { "in_progress", "revision_requested", "submitted" };
+        if (!allowedStatuses.Contains(job.Status))
+        {
+            throw new BusinessException("Chỉ có thể gia hạn thời gian cho công việc đang trong giai đoạn thực hiện.");
+        }
+
+        if (request.NewDeadlineAt <= DateTime.UtcNow)
+        {
+            throw new BusinessException("Thời hạn mới phải lớn hơn thời điểm hiện tại.");
+        }
+
+        job.DeadlineAt = request.NewDeadlineAt;
+        job.UpdatedAt = DateTime.UtcNow;
+        await _jobRepository.UpdateJobAsync(job);
+
+        // Gửi thông báo cho sinh viên đang được thuê
+        if (job.HiredApplicantId.HasValue)
+        {
+            await _notificationService.SendAsync(
+                job.HiredApplicantId.Value,
+                "⏰",
+                $"Nhà tuyển dụng đã gia hạn hoàn thành công việc \"{job.Title}\" đến {request.NewDeadlineAt.ToLocalTime():HH:mm dd/MM/yyyy}.",
+                "/mywork");
+        }
+
+        _logger.LogInformation("Nhà tuyển dụng {EmployerId} đã gia hạn deadline Job {JobId} đến {NewDeadline}.",
+            employerId, jobId, request.NewDeadlineAt);
     }
 
     public async Task DeleteJobAsync(int employerId, int jobId)
@@ -268,7 +322,7 @@ public class JobService : IJobService
             throw new BusinessException("Công việc đang trong quá trình thực hiện bởi sinh viên nên không thể xóa. Bạn chỉ có thể xóa sau khi hai bên đã hoàn thành giao dịch thành công (hoàn tất nghiệm thu) hoặc công việc chưa chọn người làm.");
         }
 
-        // Lấy danh sách attachments trước khi xóa Job (vì cascade sẽ xóa luôn record JobAttachment)
+        // Lấy danh sách file attachments trước khi xóa Job
         var attachmentUrls = await _dbContext.JobAttachments
             .Where(a => a.JobId == jobId)
             .Select(a => a.FileUrl)
@@ -285,7 +339,7 @@ public class JobService : IJobService
         // Dọn dẹp các tệp đính kèm vật lý trên Cloudflare R2 sau khi xóa record
         foreach (var fileUrl in attachmentUrls)
         {
-            var fileKey = ExtractFileKeyFromUrl(fileUrl);
+            var fileKey = StorageKeyHelper.ExtractKey(fileUrl);
             if (!string.IsNullOrWhiteSpace(fileKey))
             {
                 try
@@ -306,7 +360,7 @@ public class JobService : IJobService
         {
             foreach (var url in new[] { d.PreviewFileUrl, d.FinalFileUrl })
             {
-                var fileKey = ExtractFileKeyFromUrl(url);
+                var fileKey = StorageKeyHelper.ExtractKey(url);
                 if (!string.IsNullOrWhiteSpace(fileKey) && cleanedKeys.Add(fileKey))
                 {
                     try
@@ -321,29 +375,6 @@ public class JobService : IJobService
                 }
             }
         }
-    }
-
-    private static string? ExtractFileKeyFromUrl(string? fileUrl)
-    {
-        if (string.IsNullOrWhiteSpace(fileUrl)) return null;
-
-        if (Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
-        {
-            var path = Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/');
-            var delivIdx = path.IndexOf("job-deliverables/", StringComparison.OrdinalIgnoreCase);
-            if (delivIdx >= 0)
-            {
-                return path.Substring(delivIdx);
-            }
-            var jobsIdx = path.IndexOf("jobs/", StringComparison.OrdinalIgnoreCase);
-            if (jobsIdx >= 0)
-            {
-                return path.Substring(jobsIdx);
-            }
-            return path;
-        }
-
-        return fileUrl;
     }
 
     public async Task<PagedResult<JobSummaryDto>> GetEmployerJobsAsync(int employerId, string? status, int page, int pageSize)

@@ -99,3 +99,10 @@ export async function deleteJobAttachment(jobId, attachmentId) {
         method: 'DELETE',
     });
 }
+
+export async function extendDeadline(jobId, newDeadlineAt, reason = '') {
+    return apiFetch(`/jobs/${jobId}/extend-deadline`, {
+        method: 'PATCH',
+        body: JSON.stringify({ newDeadlineAt, reason }),
+    });
+}

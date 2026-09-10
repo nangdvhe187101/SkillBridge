@@ -154,7 +154,7 @@ export default function Messages() {
                                         </span>
                                         {active.jobBudget && (
                                             <span className="chip chip-lime" style={{ fontSize: 11, padding: '1px 6px' }}>
-                                                {fmtVND(active.jobBudget)} · 🛡️ Escrow đã ký quỹ
+                                                {fmtVND(active.jobBudget)} · Đã ký quỹ
                                             </span>
                                         )}
                                     </div>
@@ -173,7 +173,7 @@ export default function Messages() {
                                 </div>
                             )}
 
-                            {/* Trust & Safety Escrow Notice Banner */}
+                            {/* Trust & Safety Notice Banner */}
                             {showSafetyBanner && (
                                 <div
                                     style={{
@@ -189,7 +189,7 @@ export default function Messages() {
                                     }}
                                 >
                                     <span>
-                                        🛡️ <b>Mẹo an toàn:</b> Luôn nghiệm thu & giải ngân qua SkillBridge Escrow. Không chuyển khoản cọc riêng qua Zalo/Telegram.
+                                        <b>Mẹo an toàn:</b> Luôn nghiệm thu & giải ngân qua nền tảng. Không giao dịch riêng ngoài hệ thống.
                                     </span>
                                     <button
                                         onClick={() => setShowSafetyBanner(false)}
@@ -316,7 +316,7 @@ export default function Messages() {
                                                 onClick={() => downloadJobAttachment({ name: file.fileName }, active.jobTitle || 'Tin_Nhan')}
                                                 title="Tải về máy"
                                             >
-                                                ⬇ Tải
+                                                Tải file
                                             </button>
                                         </div>
                                     ))}

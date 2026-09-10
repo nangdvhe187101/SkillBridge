@@ -105,12 +105,9 @@ export function UpgradeVipModal({ onClose }) {
   };
   return (
     <ModalShell onClose={onClose}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <div style={{ fontSize: 32 }}>👑</div>
-        <div>
-          <h3 style={{ margin: 0, fontSize: 18 }}>Nâng cấp VIP Business Suite</h3>
-          <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Dành cho Doanh nghiệp & Agency</span>
-        </div>
+      <div style={{ marginBottom: 12 }}>
+        <h3 style={{ margin: 0, fontSize: 18 }}>Nâng cấp VIP Business Suite</h3>
+        <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Dành cho Doanh nghiệp & Agency</span>
       </div>
 
       <div className="checkout-summary">
@@ -125,7 +122,7 @@ export function UpgradeVipModal({ onClose }) {
 
       <div className="modal-actions">
         <button className="btn btn-primary" onClick={confirm}>
-          👑 Thanh toán & Kích hoạt VIP
+          Thanh toán & Kích hoạt VIP
         </button>
         <button className="btn btn-outline" onClick={onClose}>Hủy</button>
       </div>
@@ -208,10 +205,10 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
 
       {isWalletInsufficient && (
         <div style={{ background: 'rgba(255, 92, 122, 0.12)', border: '1px solid var(--coral)', borderRadius: 10, padding: 12, margin: '12px 0', fontSize: 13 }}>
-          <b style={{ color: 'var(--coral)' }}>⚠️ Số dư ví không đủ ({fmtVND(state.balance)} / {fmtVND(total)})</b>
+          <b style={{ color: 'var(--coral)' }}>Số dư ví không đủ ({fmtVND(state.balance)} / {fmtVND(total)})</b>
           <p style={{ marginTop: 4, color: 'var(--ink-soft)' }}>Bạn có thể chọn thanh toán qua <b>QR ngân hàng</b> hoặc nạp thêm tiền vào ví.</p>
           <button type="button" className="btn btn-outline btn-sm" style={{ marginTop: 8 }} onClick={handleTopup}>
-            💳 Nạp thêm vào ví →
+            Nạp thêm vào ví
           </button>
         </div>
       )}
@@ -245,7 +242,7 @@ export function ClaimModal({ onClose }) {
 
   return (
     <ModalShell onClose={onClose}>
-      <h3>🛡️ Gửi khiếu nại bồi thường</h3>
+      <h3>Gửi khiếu nại bồi thường</h3>
       <p>Quỹ Bảo hiểm Tương hỗ Cộng đồng có thể bồi thường 30–50% giá trị công việc nếu bạn bị quỵt tiền.</p>
       {eligibleApps.length === 0 ? (
         <div className="empty-state">Bạn chưa có công việc nào đủ điều kiện gửi khiếu nại.</div>

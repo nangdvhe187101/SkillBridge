@@ -329,22 +329,22 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                 </div>
               </div>
               <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 10, marginBottom: 0 }}>
-                💡 Tiền rút sẽ được chuyển trực tiếp vào tài khoản này trong vòng 5–15 phút sau khi duyệt.
+                Tiền rút sẽ được chuyển trực tiếp vào tài khoản này trong vòng 5–15 phút sau khi duyệt.
               </p>
             </div>
 
             {/* Community Insurance Fund Card & Claims Tracker */}
             <div className="pcard" style={{ border: '1px solid var(--lime)', marginTop: 22 }}>
-              <h4>🛡️ Quỹ Bảo hiểm Tương hỗ Cộng đồng</h4>
+              <h4>Quỹ Bảo hiểm Tương hỗ</h4>
               <p className="sub" style={{ marginTop: -6 }}>
-                Trích 10% từ doanh thu Premium & Ads, dùng để bồi thường 30–50% giá trị công việc nếu bạn gặp rủi ro bị quỵt tiền.
+                Trích từ doanh thu nền tảng, dùng để hỗ trợ bồi thường nếu phát sinh rủi ro trong quá trình làm việc.
               </p>
               <div className="wallet-balance-num" style={{ fontSize: 28, margin: '8px 0', color: 'var(--primary)' }}>
                 {fmtVND(state.insuranceFund)}
               </div>
               <div className="sub" style={{ marginBottom: 12 }}>Số dư quỹ an toàn hiện tại</div>
               <button className="btn btn-lime btn-block" onClick={() => openModal('claim')}>
-                🛡️ Gửi khiếu nại bồi thường
+                Gửi khiếu nại bồi thường
               </button>
 
               <h4 style={{ marginTop: 20, marginBottom: 10 }}>Hồ sơ khiếu nại của bạn</h4>
@@ -474,7 +474,7 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button className="btn btn-outline btn-sm" onClick={() => setReceiptModal(null)}>Đóng</button>
               <button className="btn btn-primary btn-sm" onClick={() => handleDownloadReceipt(receiptModal)}>
-                ⬇ Tải biên nhận về máy (.txt)
+                Tải biên nhận (.txt)
               </button>
             </div>
           </div>
