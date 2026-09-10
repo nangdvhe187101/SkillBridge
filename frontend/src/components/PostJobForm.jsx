@@ -468,7 +468,7 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                                             <div style={{ minWidth: 0, overflow: 'hidden' }}>
                                                 <b style={{ fontSize: 13, display: 'block', color: 'var(--ink)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={f.name}>{f.name}</b>
                                                 <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
-                                                    {formatFileSize(f.size)} · {f.isExisting ? '📁 File đã lưu trên hệ thống' : '✨ File mới thêm (chờ lưu)'}
+                                                    {formatFileSize(f.size)} · {f.isExisting ? 'Tệp đính kèm' : 'Tệp mới thêm'}
                                                 </span>
                                             </div>
                                         </div>
@@ -481,7 +481,7 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                                                     style={{ fontSize: 11.5, padding: '4px 10px', whiteSpace: 'nowrap' }}
                                                     onClick={() => downloadJobAttachment(f, title, state.editingJobId)}
                                                 >
-                                                    ⬇ Tải xem
+                                                    Tải file
                                                 </button>
                                             )}
                                             <button

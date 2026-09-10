@@ -10,7 +10,7 @@ import { useConfirm } from '../../context/ConfirmContext';
 import { DeliverablePreview } from '../../components/modals/DeliverableModals';
 import { slugify } from '../../data/companies';
 import { getJobApplicants } from '../../api/applicationApi';
-import { getJobById } from '../../api/jobApi';
+import { getJobById, extendDeadline } from '../../api/jobApi';
 import { getJobDeliverables } from '../../api/deliverableApi';
 import { downloadCandidateCv, downloadJobAttachment } from '../../utils/fileDownloader';
 import '../../styles/account-settings.css';
@@ -357,11 +357,11 @@ export default function JobApplicants() {
                     </span>
                   ) : null}
                   <span style={{ color: 'var(--ink-soft)' }}>
-                    📅 Đăng ngày: <b style={{ color: 'var(--ink)' }}>{job.posted || 'gần đây'}</b>
+                    Đăng ngày: <b style={{ color: 'var(--ink)' }}>{job.posted || 'gần đây'}</b>
                   </span>
                   {job.location && (
                     <span style={{ color: 'var(--ink-soft)' }}>
-                      📍 Địa điểm: <b style={{ color: 'var(--ink)' }}>{job.location}</b>
+                      Địa điểm: <b style={{ color: 'var(--ink)' }}>{job.location}</b>
                     </span>
                   )}
                 </div>
@@ -377,7 +377,7 @@ export default function JobApplicants() {
                     onClick={() => openModal('receipt', { justCompletedId: job.id })}
                     title="Xem và xuất biên nhận thanh toán / phiếu thu điện tử"
                   >
-                    🧾 Xuất hóa đơn / Phiếu thu
+                    Xuất hóa đơn / Phiếu thu
                   </button>
                 )}
 
@@ -389,7 +389,7 @@ export default function JobApplicants() {
                     onClick={() => openModal('review', { jobTitle: job.title, withName: job.hiredApplicant, direction: 'toStudent', dashJobId: job.id })}
                     title="Viết đánh giá và nhận xét chất lượng công việc cho sinh viên"
                   >
-                    ⭐ Đánh giá sinh viên
+                    Đánh giá sinh viên
                   </button>
                 )}
 
@@ -401,7 +401,7 @@ export default function JobApplicants() {
                     onClick={() => setExtendDeadlineModalOpen(true)}
                     title="Gia hạn thêm thời gian hoàn thành cho sinh viên"
                   >
-                    ⏰ Gia hạn thời gian
+                    Gia hạn hoàn thành
                   </button>
                 )}
 
@@ -410,7 +410,7 @@ export default function JobApplicants() {
                     className="btn btn-outline btn-sm"
                     onClick={() => navigate(`/employer/jobs/${job.id}/edit`)}
                   >
-                    ✏️ Chỉnh sửa tin
+                    Chỉnh sửa tin
                   </button>
                 )}
 
@@ -419,7 +419,7 @@ export default function JobApplicants() {
                     className="btn btn-lime btn-sm"
                     onClick={handleReopen}
                   >
-                    🔄 Mở lại tin tuyển dụng
+                    Mở lại tin
                   </button>
                 )}
 
@@ -429,7 +429,7 @@ export default function JobApplicants() {
                     style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
                     onClick={handleCancel}
                   >
-                    ✕ Hủy việc & Hoàn tiền
+                    Hủy việc & Hoàn tiền
                   </button>
                 ) : job.status === 'open' ? (
                   <button
@@ -437,7 +437,7 @@ export default function JobApplicants() {
                     style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
                     onClick={handleCancel}
                   >
-                    ✕ Đóng tin tuyển dụng
+                    Đóng tin tuyển dụng
                   </button>
                 ) : null}
 
@@ -447,7 +447,7 @@ export default function JobApplicants() {
                     style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
                     onClick={handleDelete}
                   >
-                    🗑 Xóa tin
+                    Xóa tin
                   </button>
                 )}
               </div>
@@ -456,8 +456,8 @@ export default function JobApplicants() {
             {/* Inline Job Content & Requirements Details */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginTop: 18 }}>
               <div>
-                <h4 style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>📝</span> Mô tả chi tiết công việc
+                <h4 style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--ink)' }}>
+                  Mô tả chi tiết công việc
                 </h4>
                 <p style={{ margin: 0, fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>
                   {job.description || job.desc || 'Chưa có mô tả chi tiết.'}
@@ -465,8 +465,8 @@ export default function JobApplicants() {
               </div>
 
               <div>
-                <h4 style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>✅</span> Yêu cầu công việc & Tiêu chí
+                <h4 style={{ margin: '0 0 8px', fontSize: 14, color: 'var(--ink)' }}>
+                  Yêu cầu công việc
                 </h4>
                 {(() => {
                   const reqs = Array.isArray(job.requirements)
@@ -492,8 +492,8 @@ export default function JobApplicants() {
               if (attachments.length === 0) return null;
               return (
                 <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px dashed var(--border)' }}>
-                  <h4 style={{ margin: '0 0 10px', fontSize: 13.5, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span>📎</span> Đề bài & Tài liệu đính kèm ({attachments.length})
+                  <h4 style={{ margin: '0 0 10px', fontSize: 13.5, color: 'var(--ink)' }}>
+                    Đề bài & Tài liệu đính kèm ({attachments.length})
                   </h4>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
                     {attachments.map((file, idx) => (
@@ -510,7 +510,6 @@ export default function JobApplicants() {
                           fontSize: 12.5,
                         }}
                       >
-                        <span>📄</span>
                         <b style={{ color: 'var(--ink)' }}>{file.fileName || file.name || 'Tai_lieu.pdf'}</b>
                         <button
                           type="button"
@@ -518,7 +517,7 @@ export default function JobApplicants() {
                           style={{ fontSize: 11, padding: '2px 8px', marginLeft: 4 }}
                           onClick={() => downloadJobAttachment(file, job.title, job.id)}
                         >
-                          ⬇ Tải về
+                          Tải về
                         </button>
                       </div>
                     ))}
@@ -532,8 +531,8 @@ export default function JobApplicants() {
           {job.deliverable && (
             <div className="dash-panel dash-panel-pad" style={{ marginBottom: 24, border: '1px solid var(--accent)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
-                <h3 style={{ margin: 0, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>📤</span> Sản phẩm bàn giao (Phiên bản {job.deliverable.version || 1})
+                <h3 style={{ margin: 0, fontSize: 16 }}>
+                  Sản phẩm bàn giao (Phiên bản {job.deliverable.version || 1})
                 </h3>
                 <span className="chip chip-lime">Nộp lúc: {job.deliverable.submittedAt}</span>
               </div>
@@ -549,32 +548,40 @@ export default function JobApplicants() {
               {job.status === 'submitted' && (
                 <div style={{ marginTop: 16, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <button
-                    className="btn btn-primary btn-sm"
-                    onClick={() => openModal('deliverableReview', { jobId: job.id, deliverable: job.deliverable, job, onReviewed: loadData })}
+                    className="btn btn-lime"
+                    style={{ fontWeight: 700 }}
+                    onClick={() => openModal('deliverableReview', {
+                      job,
+                      deliverable: job.deliverable,
+                      onCompleted: refreshJobData
+                    })}
                   >
-                    ✓ Nghiệm thu & Giải ngân {fmtVND(job.escrowAmount || job.budget)}
+                    Xem xét nghiệm thu & Giải ngân
                   </button>
                   <button
-                    className="btn btn-outline btn-sm"
-                    style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
-                    disabled={job.revisionCount >= job.revisionLimit}
-                    onClick={() => openModal('revision', { jobId: job.id, deliverable: job.deliverable, job, onReviewed: loadData })}
+                    className="btn btn-outline"
+                    style={{ color: '#e11d48', borderColor: '#fecdd3' }}
+                    onClick={() => openModal('revision', {
+                      job,
+                      deliverable: job.deliverable,
+                      onRequested: refreshJobData
+                    })}
                   >
-                    ✏️ Yêu cầu sửa đổi ({job.revisionCount || 0}/{job.revisionLimit} lượt)
+                    Yêu cầu chỉnh sửa lại
                   </button>
                 </div>
               )}
 
               {job.status === 'revision_requested' && (
                 <div style={{ marginTop: 12, padding: 10, background: 'rgba(255, 92, 122, 0.1)', borderRadius: 8, color: 'var(--coral)', fontSize: 13 }}>
-                  ⏳ Đang chờ <b>{job.hiredApplicant}</b> nộp lại phiên bản chỉnh sửa theo yêu cầu của bạn.
+                  Đang chờ <b>{job.hiredApplicant}</b> nộp lại phiên bản chỉnh sửa theo yêu cầu của bạn.
                 </div>
               )}
 
               {job.deliverableFeedback?.length > 0 && (
                 <details style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
                   <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
-                    📝 Xem lịch sử yêu cầu chỉnh sửa ({job.deliverableFeedback.length})
+                    Xem lịch sử yêu cầu chỉnh sửa ({job.deliverableFeedback.length})
                   </summary>
                   <div style={{ marginTop: 8 }}>
                     {job.deliverableFeedback.map((f, i) => (
@@ -591,19 +598,16 @@ export default function JobApplicants() {
           {!job.deliverable && ['in_progress', 'revision_requested'].includes(job.status) && (
             <div className="dash-panel dash-panel-pad" style={{ marginBottom: 24, background: 'linear-gradient(135deg, rgba(2, 132, 199, 0.05) 0%, rgba(108, 76, 255, 0.05) 100%)', border: '1px solid rgba(2, 132, 199, 0.25)', borderRadius: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 26 }}>⏳</span>
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: 16, color: 'var(--ink)' }}>Công việc đang trong tiến độ thực hiện</h3>
-                    <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-                      Sinh viên được giao: <b style={{ color: 'var(--ink)' }}>{job.hiredApplicant}</b>
-                    </span>
-                  </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 16, color: 'var(--ink)' }}>Công việc đang trong tiến độ thực hiện</h3>
+                  <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                    Sinh viên được giao: <b style={{ color: 'var(--ink)' }}>{job.hiredApplicant}</b>
+                  </span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ background: 'rgba(2, 132, 199, 0.12)', color: '#0284c7', padding: '6px 14px', borderRadius: 8, fontWeight: 700, fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    ⏰ {formatDeadline(job.deadlineAt)}
+                  <span style={{ background: 'rgba(2, 132, 199, 0.12)', color: '#0284c7', padding: '6px 14px', borderRadius: 8, fontWeight: 700, fontSize: 13 }}>
+                    Hạn chót: {formatDeadline(job.deadlineAt)}
                   </span>
                   <button
                     type="button"
@@ -611,7 +615,7 @@ export default function JobApplicants() {
                     style={{ color: '#0284c7', borderColor: '#0284c7', fontWeight: 600, background: '#fff' }}
                     onClick={() => setExtendDeadlineModalOpen(true)}
                   >
-                    + Gia hạn thêm thời gian
+                    Gia hạn thời gian
                   </button>
                 </div>
               </div>
@@ -631,8 +635,8 @@ export default function JobApplicants() {
           <div className="dash-panel">
             <div className="dash-panel-head" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>👥</span> Hồ sơ ứng tuyển ({allApplicants.length})
+                <h4 style={{ margin: 0 }}>
+                  Hồ sơ ứng tuyển ({allApplicants.length})
                 </h4>
 
                 {/* Sắp xếp ứng viên */}
@@ -643,9 +647,9 @@ export default function JobApplicants() {
                     onChange={(e) => setSortBy(e.target.value)}
                     style={{ padding: '4px 10px', fontSize: 12.5, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', cursor: 'pointer' }}
                   >
-                    <option value="score_desc">⭐ Điểm uy tín cao nhất</option>
-                    <option value="newest">📅 Mới ứng tuyển nhất</option>
-                    <option value="jobs_done">💼 Nhiều việc đã xong nhất</option>
+                    <option value="score_desc">Điểm uy tín cao nhất</option>
+                    <option value="newest">Mới ứng tuyển nhất</option>
+                    <option value="jobs_done">Nhiều việc đã xong nhất</option>
                   </select>
                 </div>
               </div>
@@ -878,15 +882,6 @@ export default function JobApplicants() {
                           >
                             <Icon name="eye" />
                           </button>
-
-                          <button
-                            className="reject"
-                            title="Báo cáo vi phạm"
-                            style={{ color: 'var(--coral)' }}
-                            onClick={() => openModal('report', { withName: a.name })}
-                          >
-                            🚩
-                          </button>
                         </div>
                       </div>
                     </div>
@@ -908,17 +903,14 @@ export default function JobApplicants() {
                       >
                         {a.coverLetter && (
                           <div style={{ color: 'var(--ink)', lineHeight: 1.5 }}>
-                            <b>💬 Lời nhắn từ sinh viên:</b> "{a.coverLetter}"
+                            <b>Lời nhắn từ sinh viên:</b> "{a.coverLetter}"
                           </div>
                         )}
                         {(a.cvFileName || a.cvFileId) && (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingTop: a.coverLetter ? 8 : 0, borderTop: a.coverLetter ? '1px dashed var(--border)' : 'none' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                              <span style={{ fontSize: 20 }}>📄</span>
-                              <div>
-                                <b style={{ fontSize: 13.5, display: 'block' }}>{a.cvFileName || 'CV_UngVien.pdf'}</b>
-                                <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Bản CV chuyên ngành gửi kèm hồ sơ</span>
-                              </div>
+                            <div>
+                              <b style={{ fontSize: 13.5, display: 'block' }}>{a.cvFileName || 'CV_UngVien.pdf'}</b>
+                              <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Bản CV chuyên ngành gửi kèm hồ sơ</span>
                             </div>
                             {a.cvFileId && (
                               <button
@@ -927,7 +919,7 @@ export default function JobApplicants() {
                                 style={{ fontSize: 12, padding: '4px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                                 onClick={() => downloadCandidateCv(a.cvFileId, a.cvFileName)}
                               >
-                                ⬇ Tải CV về xem
+                                Tải CV
                               </button>
                             )}
                           </div>
@@ -960,34 +952,44 @@ export default function JobApplicants() {
         <ExtendDeadlineModal
           job={job}
           onClose={() => setExtendDeadlineModalOpen(false)}
-          onExtend={(newDeadlineAt) => {
+          onExtend={async (newDeadlineAt) => {
             setExtendDeadlineModalOpen(false);
-            if (apiJob) setApiJob((prev) => ({ ...prev, deadlineAt: newDeadlineAt }));
+            try {
+              if (job?.id) {
+                await extendDeadline(job.id, newDeadlineAt);
+              }
+              if (apiJob) setApiJob((prev) => ({ ...prev, deadlineAt: newDeadlineAt }));
+              loadData();
+            } catch (err) {
+              console.error("Lỗi gia hạn thời gian:", err);
+              alert(err?.message || "Không thể gia hạn thời gian.");
+            }
           }}
         />
       )}
 
-      {/* Quick View Student Modal */}
+      {/* View Full Student Profile & CV Modal */}
       {viewStudentModal && (
         <ModalShell onClose={() => setViewStudentModal(null)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-            <Avatar name={viewStudentModal.name} src={viewStudentModal.avatar} fontSize={22} style={{ width: 56, height: 56 }} />
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700 }}>
+              {viewStudentModal.name?.charAt(0) || 'S'}
+            </div>
             <div>
-              <h3 style={{ margin: 0, fontSize: 19, display: 'flex', alignItems: 'center', gap: 8 }}>
-                {viewStudentModal.name}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: 18 }}>{viewStudentModal.name}</h3>
                 <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px' }}>
-                  ✓ Đã xác thực eKYC
+                  {viewStudentModal.tier || 'SILVER'}
                 </span>
-              </h3>
-              <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4 }}>
-                🎓 {viewStudentModal.school} · ⭐ {viewStudentModal.score}/100 Điểm uy tín
               </div>
+              <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                {viewStudentModal.school} · {viewStudentModal.score}/100 Điểm uy tín
+              </span>
             </div>
           </div>
 
-          <div style={{ background: 'var(--surface)', padding: 14, borderRadius: 10, border: '1px solid var(--border)', marginBottom: 16 }}>
-            <h4 style={{ margin: '0 0 10px', fontSize: 14 }}>Thông tin liên hệ trực tiếp</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, fontSize: 13 }}>
+          <div style={{ background: 'var(--surface)', padding: 14, borderRadius: 10, border: '1px solid var(--border)', marginBottom: 16, fontSize: 13 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10 }}>
               <div>
                 <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Gmail / Email:</span>
                 <b>{viewStudentModal.email || 'Chưa cung cấp'}</b>
@@ -998,39 +1000,36 @@ export default function JobApplicants() {
               </div>
               <div>
                 <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Trường đại học:</span>
-                <b>{viewStudentModal.school || 'Đại học / Cao đẳng'}</b>
+                <b>{viewStudentModal.school || 'Đại học tại Việt Nam'}</b>
               </div>
               <div>
                 <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Công việc đã hoàn thành:</span>
-                <b style={{ color: 'var(--primary)' }}>{viewStudentModal.jobsDone || 0} công việc</b>
+                <b>{viewStudentModal.jobsDone || 0} dự án</b>
               </div>
             </div>
           </div>
 
-          {viewStudentModal.coverLetter && (
-            <div style={{ marginBottom: 16, background: 'rgba(0,0,0,0.02)', padding: 12, borderRadius: 8, border: '1px solid var(--border)' }}>
-              <h4 style={{ margin: '0 0 6px', fontSize: 13.5 }}>💬 Thư giới thiệu / Lời nhắn:</h4>
-              <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
-                "{viewStudentModal.coverLetter}"
+          {viewStudentModal.bio && (
+            <div style={{ marginBottom: 16 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink)', display: 'block', marginBottom: 4 }}>Giới thiệu bản thân:</span>
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--ink-soft)', lineHeight: 1.6, background: 'var(--surface)', padding: 10, borderRadius: 8, border: '1px solid var(--border)' }}>
+                {viewStudentModal.bio}
               </p>
             </div>
           )}
 
           {viewStudentModal.cvFileId && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px', background: 'rgba(108, 76, 255, 0.05)', borderRadius: 10, border: '1px solid rgba(108, 76, 255, 0.2)', marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontSize: 24 }}>📄</span>
-                <div>
-                  <b style={{ fontSize: 13.5, display: 'block' }}>{viewStudentModal.cvFileName || 'CV_SinhVien.pdf'}</b>
-                  <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Hồ sơ ứng tuyển kèm theo</span>
-                </div>
+              <div>
+                <b style={{ fontSize: 13.5, display: 'block' }}>{viewStudentModal.cvFileName || 'CV_SinhVien.pdf'}</b>
+                <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Hồ sơ ứng tuyển kèm theo</span>
               </div>
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
                 onClick={() => downloadCandidateCv(viewStudentModal.cvFileId, viewStudentModal.cvFileName)}
               >
-                ⬇ Tải bản CV đầy đủ
+                Tải CV
               </button>
             </div>
           )}
@@ -1044,7 +1043,7 @@ export default function JobApplicants() {
                 openChatWithPerson(name);
               }}
             >
-              💬 Nhắn tin trực tiếp
+              Nhắn tin
             </button>
             <button
               className="btn btn-outline"
@@ -1088,12 +1087,9 @@ function CannedReplyModal({ applicant, jobTitle, onClose, onSend }) {
 
   return (
     <ModalShell onClose={onClose}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <span style={{ fontSize: 24 }}>💬</span>
-        <div>
-          <h3 style={{ margin: 0, fontSize: 18 }}>Mẫu tin nhắn phản hồi nhanh</h3>
-          <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Gửi đến ứng viên: <b>{applicant.name}</b></span>
-        </div>
+      <div style={{ marginBottom: 14 }}>
+        <h3 style={{ margin: 0, fontSize: 18 }}>Mẫu tin nhắn phản hồi nhanh</h3>
+        <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Gửi đến ứng viên: <b>{applicant.name}</b></span>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
@@ -1126,7 +1122,6 @@ function CannedReplyModal({ applicant, jobTitle, onClose, onSend }) {
               }}
               onClick={() => handleSelectTemplate(tpl)}
             >
-              <span style={{ fontSize: 16, flexShrink: 0 }}>{tpl.icon}</span>
               <span style={{ flex: 1 }}>{tpl.title}</span>
             </button>
           ))}
@@ -1135,7 +1130,7 @@ function CannedReplyModal({ applicant, jobTitle, onClose, onSend }) {
 
       <div style={{ marginBottom: 16 }}>
         <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-          Nội dung tin nhắn (Có thể chỉnh sửa):
+          Nội dung tin nhắn:
         </label>
         <textarea
           rows={4}
@@ -1154,7 +1149,7 @@ function CannedReplyModal({ applicant, jobTitle, onClose, onSend }) {
           className="btn btn-primary"
           onClick={() => onSend(customMsg)}
         >
-          📨 Gửi tin nhắn ngay
+          Gửi tin nhắn
         </button>
       </div>
     </ModalShell>
@@ -1178,12 +1173,9 @@ function ExtendDeadlineModal({ job, onClose, onExtend }) {
 
   return (
     <ModalShell onClose={onClose}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <span style={{ fontSize: 24 }}>⏰</span>
-        <div>
-          <h3 style={{ margin: 0, fontSize: 18 }}>Gia hạn thời gian hoàn thành</h3>
-          <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Hỗ trợ sinh viên có thêm thời gian hoàn thiện sản phẩm</span>
-        </div>
+      <div style={{ marginBottom: 14 }}>
+        <h3 style={{ margin: 0, fontSize: 18 }}>Gia hạn thời gian hoàn thành</h3>
+        <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Thời hạn mới sẽ được cập nhật cho công việc này</span>
       </div>
 
       <div style={{ background: 'var(--surface)', padding: 14, borderRadius: 10, border: '1px solid var(--border)', marginBottom: 16, fontSize: 13 }}>
@@ -1231,7 +1223,7 @@ function ExtendDeadlineModal({ job, onClose, onExtend }) {
         </label>
         <input
           type="text"
-          placeholder="Ví dụ: Sinh viên xin thêm 1 ngày để hoàn thiện kỹ hơn phần animation..."
+          placeholder="Ví dụ: Cần thêm thời gian hoàn thiện..."
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border)', padding: '8px 12px', fontSize: 13, boxSizing: 'border-box' }}
@@ -1243,7 +1235,7 @@ function ExtendDeadlineModal({ job, onClose, onExtend }) {
           Hủy
         </button>
         <button type="button" className="btn btn-primary" onClick={handleConfirm}>
-          ✓ Xác nhận gia hạn
+          Xác nhận gia hạn
         </button>
       </div>
     </ModalShell>

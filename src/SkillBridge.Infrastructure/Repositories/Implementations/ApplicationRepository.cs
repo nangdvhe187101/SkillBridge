@@ -38,7 +38,7 @@ public class ApplicationRepository : IApplicationRepository
     public async Task<bool> ExistsAsync(int jobId, int studentId)
     {
         return await _context.Applications
-            .AnyAsync(a => a.JobId == jobId && a.StudentId == studentId);
+            .AnyAsync(a => a.JobId == jobId && a.StudentId == studentId && a.Status != "cancelled" && a.Status != "rejected");
     }
 
     public async Task<List<JobApplication>> GetByJobIdAsync(int jobId)

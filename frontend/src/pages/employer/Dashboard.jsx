@@ -273,7 +273,7 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
         <div className="dash-panel" style={{ marginBottom: 24, border: '1px solid var(--coral)', background: 'rgba(255, 92, 122, 0.02)' }}>
           <div className="dash-panel-head" style={{ background: 'rgba(255, 92, 122, 0.08)', borderRadius: '14px 14px 0 0' }}>
             <h4 style={{ color: 'var(--coral)', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
-              <span style={{ fontSize: 20 }}>⏳</span> Cần bạn xác nhận bàn giao ({needsAttention.length} công việc)
+              Cần bạn xác nhận bàn giao ({needsAttention.length} công việc)
             </h4>
             <span className="chip chip-coral">Ưu tiên xử lý ngay</span>
           </div>
@@ -1058,14 +1058,9 @@ function AdsTab({ state, updateAdsSettings, openChatWithPerson }) {
               </div>
             </div>
 
-            {/* Anti-fraud banner */}
-            <div style={{ marginTop: 16, padding: '10px 12px', background: 'rgba(34, 197, 94, 0.08)', borderRadius: 10, border: '1px solid rgba(34, 197, 94, 0.2)', fontSize: 12 }}>
-              🛡️ <b>Hệ thống Anti-Fraud kích hoạt:</b> Tự động chặn IP ảo, bot crawler và click trùng lặp từ cùng 1 tài khoản trong 24h. Chỉ tính phí khi sinh viên mở xem hồ sơ.
-            </div>
-
             <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button className="btn btn-primary" onClick={handleSave}>
-                💾 Lưu & Kích hoạt chiến dịch
+                Lưu & Kích hoạt chiến dịch
               </button>
             </div>
           </div>
@@ -1076,12 +1071,12 @@ function AdsTab({ state, updateAdsSettings, openChatWithPerson }) {
           {/* Live Ad Preview Card */}
           <div className="pcard" style={{ border: '1px solid var(--primary)', background: 'linear-gradient(to bottom, var(--surface), rgba(108, 76, 255, 0.03))' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <h4 style={{ margin: 0 }}>👁️ Xem trước Banner (Live Preview)</h4>
+              <h4 style={{ margin: 0 }}>Xem trước Banner</h4>
               <span className="chip chip-lime" style={{ fontSize: 10.5 }}>Hiển thị trên /jobs</span>
             </div>
 
             <div className="ad-card" style={{ margin: 0, cursor: 'pointer', border: '1px solid var(--border)' }}>
-              <span className="ad-badge">📢 Được tài trợ · {sponsor || 'Doanh nghiệp'}</span>
+              <span className="ad-badge">Được tài trợ · {sponsor || 'Doanh nghiệp'}</span>
               <h3 style={{ fontSize: 15, margin: '8px 0 4px' }}>{title || 'Tiêu đề quảng cáo'}</h3>
               <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', lineHeight: 1.5, margin: 0 }}>
                 {desc || 'Nội dung mô tả chiến dịch quảng cáo...'}

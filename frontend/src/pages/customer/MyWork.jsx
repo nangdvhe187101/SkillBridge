@@ -357,13 +357,13 @@ export default function MyWork() {
               color: '#a5b4fc',
               marginBottom: 10
             }}>
-              ✨ Cổng việc làm sinh viên · Workspace
+              Không gian làm việc
             </div>
             <h1 style={{ fontSize: 28, fontWeight: 800, margin: '0 0 8px', color: '#ffffff', letterSpacing: '-0.5px' }}>
               Quản lý công việc & Bàn giao
             </h1>
             <p style={{ margin: 0, fontSize: 14.5, color: '#c7d2fe', maxWidth: 620, lineHeight: 1.5 }}>
-              Theo dõi tiến độ việc đang làm, nộp sản phẩm đúng hạn để nhận thù lao bảo đảm qua Escrow và xem kết quả ứng tuyển.
+              Theo dõi tiến độ việc đang làm, nộp sản phẩm đúng hạn và xem kết quả ứng tuyển.
             </p>
           </div>
           <div style={{ display: 'flex', gap: 12 }}>
@@ -680,29 +680,29 @@ export default function MyWork() {
                             alignItems: 'center',
                             gap: 4
                           }}>
-                            🛡️ Ký quỹ Escrow an toàn
+                            Đã ký quỹ bảo đảm
                           </span>
                         </div>
 
                         <div>
                           {isRevision && (
                             <span style={{ background: '#f43f5e', color: '#fff', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20 }}>
-                              ✏️ Yêu cầu sửa đổi (Lượt {(j.revisionCount || 0) + 1}/{j.revisionLimit || 2})
+                              Yêu cầu sửa đổi (Lượt {(j.revisionCount || 0) + 1}/{j.revisionLimit || 2})
                             </span>
                           )}
                           {isSubmitted && (
                             <span style={{ background: '#0284c7', color: '#fff', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20 }}>
-                              📤 Đã nộp bàn giao (Chờ duyệt)
+                              Đã nộp bàn giao (Chờ duyệt)
                             </span>
                           )}
                           {isCompleted && (
                             <span style={{ background: '#10b981', color: '#fff', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20 }}>
-                              ✅ Đã hoàn thành & Nhận tiền
+                              Đã hoàn thành
                             </span>
                           )}
                           {isInProgress && (
                             <span style={{ background: '#4f46e5', color: '#fff', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20 }}>
-                              ⚡ Đang thực hiện
+                              Đang thực hiện
                             </span>
                           )}
                         </div>
@@ -961,11 +961,11 @@ export default function MyWork() {
                                       gap: 4
                                     }}
                                     onClick={async () => {
-                                      showToast(`Đang tải file: ${f.fileName || f.name}`, '⬇️');
+                                      showToast(`Đang tải file: ${f.fileName || f.name}`);
                                       await downloadJobAttachment(f, j.title, targetJobId);
                                     }}
                                   >
-                                    ⬇ Tải file về
+                                    Tải file về
                                   </button>
                                 </div>
                               ))}
@@ -1117,7 +1117,7 @@ export default function MyWork() {
                                     padding: '4px 12px',
                                     borderRadius: 20
                                   }}>
-                                    ✅ Đã nghiệm thu & Hoàn tất
+                                    Đã nghiệm thu
                                   </span>
                                 )}
                               </div>
@@ -1177,7 +1177,7 @@ export default function MyWork() {
                                             </>
                                           )}
                                           <span>•</span>
-                                          <span>{isExternal ? '🔗 Liên kết ngoài' : '📁 Tệp đính kèm'}</span>
+                                          <span>{isExternal ? 'Liên kết ngoài' : 'Tệp đính kèm'}</span>
                                         </div>
                                       </div>
                                     </div>
@@ -1201,8 +1201,12 @@ export default function MyWork() {
                                             fontWeight: 600
                                           }}
                                         >
-                                          🔗 Mở liên kết ↗
+                                          Mở liên kết
                                         </a>
+                                      ) : (!j.deliverable.previewFileUrl && !j.deliverable.finalFileUrl) ? (
+                                        <span style={{ fontSize: 12, color: '#94a3b8', fontStyle: 'italic', padding: '6px 10px' }}>
+                                          (Đã lưu trữ)
+                                        </span>
                                       ) : (
                                         <button
                                           type="button"
@@ -1218,11 +1222,11 @@ export default function MyWork() {
                                             fontWeight: 600
                                           }}
                                           onClick={async () => {
-                                            showToast(`Đang tải file: ${j.deliverable.fileName || 'deliverable.zip'}`, '⬇️');
+                                            showToast(`Đang tải file: ${j.deliverable.fileName || 'deliverable.zip'}`);
                                             await downloadDeliverableFile(targetJobId, j.deliverable.id, j.deliverable.fileName, 'final');
                                           }}
                                         >
-                                          ⬇️ Tải file đã nộp về máy
+                                          Tải file đã nộp
                                         </button>
                                       )}
                                     </div>
@@ -1246,7 +1250,7 @@ export default function MyWork() {
                                   fontSize: 13
                                 }}>
                                   <div style={{ fontSize: 12, fontWeight: 700, color: '#4338ca', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                    <span>💬 Ghi chú từ bạn khi nộp:</span>
+                                    <span>Ghi chú bàn giao:</span>
                                   </div>
                                   <div style={{ color: '#334155', fontStyle: 'italic', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
                                     "{j.deliverable.note}"
@@ -1262,45 +1266,6 @@ export default function MyWork() {
                                   (Bạn không để lại ghi chú khi nộp sản phẩm này)
                                 </div>
                               )}
-
-                              {/* Escrow & Rights Protection Panel */}
-                              <div style={{
-                                background: '#f0fdf4',
-                                border: '1px solid #bbf7d0',
-                                borderRadius: 10,
-                                padding: '12px 16px',
-                                marginBottom: 14,
-                                display: 'grid',
-                                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                                gap: 12
-                              }}>
-                                <div>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    🛡️ Ký quỹ Escrow bảo hộ
-                                  </div>
-                                  <div style={{ fontSize: 12, color: '#166534', marginTop: 2 }}>
-                                    Thù lao <b>{fmtVND(j.budget)}</b> đang được tạm giữ an toàn trong quỹ. NTD chỉ nhận file hoàn thiện sau khi giải ngân.
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    ⚡ Giải ngân tự động
-                                  </div>
-                                  <div style={{ fontSize: 12, color: '#166534', marginTop: 2 }}>
-                                    Số dư ví của bạn sẽ được cộng tự động 100% ngay khi Nhà tuyển dụng xác nhận nghiệm thu.
-                                  </div>
-                                </div>
-
-                                <div>
-                                  <div style={{ fontSize: 12, fontWeight: 700, color: '#15803d', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    🔄 Giới hạn sửa đổi
-                                  </div>
-                                  <div style={{ fontSize: 12, color: '#166534', marginTop: 2 }}>
-                                    Đã sửa <b>{j.revisionCount || 0}/{j.revisionLimit || 2} lượt</b>. Bảo vệ sinh viên khỏi các yêu cầu vô lý.
-                                  </div>
-                                </div>
-                              </div>
 
                               {/* Version History Toggle & Details (If more than 1 version) */}
                               {j.allDeliverables && j.allDeliverables.length > 1 && (
@@ -1321,7 +1286,7 @@ export default function MyWork() {
                                       padding: 0
                                     }}
                                   >
-                                    <span>🕒 {expandedVersions[targetJobId] ? '▼ Thu gọn' : '▶ Xem'} lịch sử các phiên bản bàn giao ({j.allDeliverables.length} phiên bản)</span>
+                                    <span>{expandedVersions[targetJobId] ? 'Thu gọn' : 'Xem'} lịch sử bàn giao ({j.allDeliverables.length})</span>
                                   </button>
 
                                   {expandedVersions[targetJobId] && (
@@ -1359,7 +1324,7 @@ export default function MyWork() {
                                               style={{ fontSize: 11, padding: '2px 8px' }}
                                               onClick={() => downloadDeliverableFile(targetJobId, vItem.id, vItem.fileName, 'final')}
                                             >
-                                              ⬇ Tải v{vItem.version}
+                                              Tải v{vItem.version}
                                             </button>
                                           )}
                                         </div>
@@ -1380,15 +1345,12 @@ export default function MyWork() {
                             margin: '16px 0 12px'
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <span style={{ fontSize: 24 }}>📤</span>
-                                <div>
-                                  <div style={{ fontSize: 14, fontWeight: 700, color: '#0369a1' }}>
-                                    Dự án đã được nộp bàn giao thành công!
-                                  </div>
-                                  <div style={{ fontSize: 12.5, color: '#0284c7', marginTop: 2 }}>
-                                    Sản phẩm của bạn đang trong danh sách chờ Nhà tuyển dụng xem xét nghiệm thu và giải ngân thù lao <b>{fmtVND(j.budget)}</b>.
-                                  </div>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: '#0369a1' }}>
+                                  Dự án đã bàn giao
+                                </div>
+                                <div style={{ fontSize: 12.5, color: '#0284c7', marginTop: 2 }}>
+                                  Đang chờ nhà tuyển dụng xem xét nghiệm thu.
                                 </div>
                               </div>
                               <span style={{
@@ -1399,7 +1361,7 @@ export default function MyWork() {
                                 padding: '4px 12px',
                                 borderRadius: 20
                               }}>
-                                ⏳ Chờ nghiệm thu
+                                Chờ nghiệm thu
                               </span>
                             </div>
                           </div>
@@ -1659,38 +1621,6 @@ export default function MyWork() {
             )}
           </div>
         )}
-
-        {/* Quick Tips & Safety Guidelines */}
-        <div style={{
-          marginTop: 32,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: 16
-        }}>
-          <div style={{ background: '#ffffff', borderRadius: 14, padding: 18, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 20, marginBottom: 6 }}>⏱️</div>
-            <h4 style={{ margin: '0 0 6px', fontSize: 14, fontWeight: 700, color: '#1e293b' }}>Bàn giao đúng tiến độ</h4>
-            <p style={{ margin: 0, fontSize: 12.5, color: '#64748b', lineHeight: 1.5 }}>
-              Nộp bàn giao sớm trước hạn giúp bạn duy trì điểm uy tín cao (Reliability Score) và được ưu tiên gợi ý cho các dự án lớn.
-            </p>
-          </div>
-
-          <div style={{ background: '#ffffff', borderRadius: 14, padding: 18, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 20, marginBottom: 6 }}>🛡️</div>
-            <h4 style={{ margin: '0 0 6px', fontSize: 14, fontWeight: 700, color: '#1e293b' }}>Thù lao bảo đảm qua Escrow</h4>
-            <p style={{ margin: 0, fontSize: 12.5, color: '#64748b', lineHeight: 1.5 }}>
-              100% tiền công đã được nhà tuyển dụng ký quỹ trước khi giao việc. Ngay khi NTD bấm nghiệm thu, tiền sẽ vào ví của bạn lập tức.
-            </p>
-          </div>
-
-          <div style={{ background: '#ffffff', borderRadius: 14, padding: 18, border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: 20, marginBottom: 6 }}>🤝</div>
-            <h4 style={{ margin: '0 0 6px', fontSize: 14, fontWeight: 700, color: '#1e293b' }}>Trao đổi minh bạch</h4>
-            <p style={{ margin: 0, fontSize: 12.5, color: '#64748b', lineHeight: 1.5 }}>
-              Sử dụng tính năng Chat để cập nhật tiến độ liên tục với NTD, tránh hiểu lầm và giảm thiểu số lần yêu cầu chỉnh sửa lại.
-            </p>
-          </div>
-        </div>
       </div>
 
       {/* Modal xác nhận hủy nhận việc */}

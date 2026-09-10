@@ -349,11 +349,11 @@ export default function JobDetail() {
                           className="btn btn-outline btn-sm"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                           onClick={async () => {
-                            showToast(`Đang tải xuống: ${f.fileName || f.name}`, '⬇️');
+                            showToast(`Đang tải xuống: ${f.fileName || f.name}`);
                             await downloadJobAttachment(f, j.title, j.id);
                           }}
                         >
-                          ⬇ Tải file về
+                          Tải file về
                         </button>
                       </div>
                     ))}

@@ -7,14 +7,14 @@ using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
-using SkiaSharp;
-using PdfSharpCore.Pdf;
-using PdfSharpCore.Pdf.IO;
-using PdfSharpCore.Drawing;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.Interfaces.Jobs;
 using SkillBridge.Application.Interfaces.Storage;
+using SkillBridge.Application.Interfaces.Media;
+using SkillBridge.Application.Interfaces.Payments;
+using SkillBridge.Application.Interfaces.Users;
+using SkillBridge.Application.Interfaces.Notifications;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 
@@ -24,6 +24,10 @@ public class DeliverableService : IDeliverableService
 {
     private readonly SkillBridgeDbContext _dbContext;
     private readonly IStorageService _storageService;
+    private readonly IWatermarkService _watermarkService;
+    private readonly IEscrowPaymentService _escrowPaymentService;
+    private readonly IUserReliabilityService _reliabilityService;
+    private readonly INotificationService _notificationService;
     private readonly ILogger<DeliverableService> _logger;
 
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -64,10 +68,18 @@ public class DeliverableService : IDeliverableService
     public DeliverableService(
         SkillBridgeDbContext dbContext,
         IStorageService storageService,
+        IWatermarkService watermarkService,
+        IEscrowPaymentService escrowPaymentService,
+        IUserReliabilityService reliabilityService,
+        INotificationService notificationService,
         ILogger<DeliverableService> logger)
     {
         _dbContext = dbContext;
         _storageService = storageService;
+        _watermarkService = watermarkService;
+        _escrowPaymentService = escrowPaymentService;
+        _reliabilityService = reliabilityService;
+        _notificationService = notificationService;
         _logger = logger;
     }
 
@@ -98,9 +110,14 @@ public class DeliverableService : IDeliverableService
             // Sinh viên chỉ được xem deliverables do chính mình nộp cho job này (chặn IDOR)
             query = query.Where(d => d.StudentId == userId);
         }
-        else if (job.HiredApplicantId.HasValue)
+        else
         {
-            // Nhà tuyển dụng chỉ xem các bản bàn giao của ứng viên đang được thuê hiện tại (tránh lẫn với sinh viên cũ đã hủy việc)
+            // Nhà tuyển dụng chỉ xem các bản bàn giao của ứng viên được thuê chính thức (tránh rò rỉ khi job chưa thuê ai hoặc đã reset)
+            if (!job.HiredApplicantId.HasValue)
+            {
+                return new List<DeliverableDto>();
+            }
+
             query = query.Where(d => d.StudentId == job.HiredApplicantId.Value);
         }
 
@@ -157,7 +174,8 @@ public class DeliverableService : IDeliverableService
         // Kiểm tra thời hạn bàn giao (Deadline)
         if (job.DeadlineAt.HasValue && job.DeadlineAt.Value < DateTime.UtcNow)
         {
-            throw new BusinessException("Công việc này đã quá hạn bàn giao (Deadline). Vui lòng liên hệ Nhà tuyển dụng để được gia hạn thời gian trước khi nộp hoặc cập nhật sản phẩm.");
+            _logger.LogWarning("Sinh viên {StudentId} nộp bài trễ hạn cho Job {JobId}. Hạn chót: {Deadline}, Nộp lúc: {Now}",
+                studentId, jobId, job.DeadlineAt.Value, DateTime.UtcNow);
         }
 
         string? previewUrl = null;
@@ -226,38 +244,21 @@ public class DeliverableService : IDeliverableService
                 finalUrl = uploadFinalResult.FileKey;
             }
 
-            // 2. Tạo bản Preview có Watermark (Hỗ trợ Ảnh và PDF server-side)
-            var isImage = ImageExtensions.Contains(fileExt);
-            var isPdf = string.Equals(fileExt, ".pdf", StringComparison.OrdinalIgnoreCase);
-
-            if (isImage)
+            // 2. Tạo bản Preview có Watermark (Hỗ trợ định dạng qua IWatermarkService)
+            if (_watermarkService.IsSupported(fileExt))
             {
-                using var imageStream = new MemoryStream(fileBytes);
-                using var watermarkedStream = ApplyImageWatermark(imageStream, fileExt, jobId);
+                using var sourceStream = new MemoryStream(fileBytes);
+                using var watermarkedStream = _watermarkService.ApplyWatermark(sourceStream, fileExt, jobId);
                 if (watermarkedStream != null)
                 {
                     var previewFileName = $"preview_{Guid.NewGuid():N}_{cleanFileName}";
+                    var isPdf = string.Equals(fileExt, ".pdf", StringComparison.OrdinalIgnoreCase);
+                    var previewContentType = isPdf ? "application/pdf" : (contentType ?? "image/jpeg");
+
                     var uploadPreviewResult = await _storageService.UploadStreamAsync(
                         watermarkedStream,
                         previewFileName,
-                        contentType ?? "image/jpeg",
-                        folder: $"job-deliverables/{jobId}",
-                        cancellationToken: cancellationToken);
-
-                    previewUrl = uploadPreviewResult.FileKey;
-                }
-            }
-            else if (isPdf)
-            {
-                using var pdfStream = new MemoryStream(fileBytes);
-                using var watermarkedPdfStream = ApplyPdfWatermark(pdfStream, jobId);
-                if (watermarkedPdfStream != null)
-                {
-                    var previewFileName = $"preview_{Guid.NewGuid():N}_{cleanFileName}";
-                    var uploadPreviewResult = await _storageService.UploadStreamAsync(
-                        watermarkedPdfStream,
-                        previewFileName,
-                        "application/pdf",
+                        previewContentType,
                         folder: $"job-deliverables/{jobId}",
                         cancellationToken: cancellationToken);
 
@@ -308,6 +309,23 @@ public class DeliverableService : IDeliverableService
                 // Đồng bộ cập nhật trạng thái Job sang "submitted"
                 job.Status = "submitted";
                 job.UpdatedAt = DateTime.UtcNow;
+
+                // Đồng bộ trạng thái Application của sinh viên sang "submitted"
+                var studentApp = await _dbContext.Applications
+                    .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == studentId, cancellationToken);
+                if (studentApp != null && studentApp.Status == "hired")
+                {
+                    studentApp.Status = "submitted";
+                    studentApp.UpdatedAt = DateTime.UtcNow;
+                }
+
+                // Gửi thông báo cho Nhà tuyển dụng
+                await _notificationService.SendAsync(
+                    job.EmployerId,
+                    "📤",
+                    $"Sinh viên đã nộp sản phẩm bàn giao v{deliverable.Version} cho công việc \"{job.Title}\".",
+                    $"/jobs/{job.Id}/applicants",
+                    cancellationToken);
 
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 createdEntity = deliverable;
@@ -415,11 +433,29 @@ public class DeliverableService : IDeliverableService
             job.RevisionCount += 1;
             job.Status = "revision_requested";
             job.UpdatedAt = DateTime.UtcNow;
+
+            // Đưa Application về lại trạng thái "hired" (đang làm) để sinh viên tiếp tục hoàn thiện
+            var studentApp = await _dbContext.Applications
+                .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == deliverable.StudentId, cancellationToken);
+            if (studentApp != null && studentApp.Status == "submitted")
+            {
+                studentApp.Status = "hired";
+                studentApp.UpdatedAt = DateTime.UtcNow;
+            }
+
+            // Gửi thông báo yêu cầu sửa đổi cho sinh viên
+            await _notificationService.SendAsync(
+                deliverable.StudentId,
+                "🔄",
+                $"Nhà tuyển dụng yêu cầu chỉnh sửa bản bàn giao v{deliverable.Version} cho công việc \"{job.Title}\".",
+                "/mywork",
+                cancellationToken);
         }
         else if (normalizedStatus == "accepted")
         {
-            // Cập nhật trạng thái Job sang completed
+            // Cập nhật trạng thái Job sang completed và giải phóng EscrowAmount (đã giải ngân xong cho sinh viên)
             job.Status = "completed";
+            job.EscrowAmount = null;
             job.UpdatedAt = DateTime.UtcNow;
 
             // Cập nhật Application của sinh viên sang completed
@@ -431,33 +467,81 @@ public class DeliverableService : IDeliverableService
                 application.UpdatedAt = DateTime.UtcNow;
             }
 
-            // Tăng số việc đã xong (JobsDoneCount) và điểm uy tín (ReliabilityScore) của sinh viên
-            var student = await _dbContext.Users
-                .FirstOrDefaultAsync(u => u.Id == deliverable.StudentId, cancellationToken);
-            if (student != null)
-            {
-                student.JobsDoneCount += 1;
-                student.ReliabilityScore = Math.Min(100, student.ReliabilityScore + 3);
-                _logger.LogInformation("Sinh viên {StudentId} hoàn thành công việc {JobId}. JobsDoneCount: {JobsDone}, ReliabilityScore: {Score}.", 
-                    student.Id, jobId, student.JobsDoneCount, student.ReliabilityScore);
-            }
+            // Tăng số việc đã xong và điểm uy tín cho sinh viên (qua IUserReliabilityService)
+            await _reliabilityService.RewardCompletionAsync(deliverable.StudentId, 3, cancellationToken);
 
-            // Ghi nhận giải ngân Escrow thực tế vào Transaction ledger
+            // Ghi nhận giải ngân Escrow thực tế vào Transaction ledger & cập nhật ví sinh viên (qua IEscrowPaymentService)
             if (job.Budget > 0)
             {
-                var escrowReleaseTx = new Transaction
+                await _escrowPaymentService.ReleaseEscrowAsync(
+                    deliverable.StudentId,
+                    job.EmployerId,
+                    job.Id,
+                    job.Title,
+                    job.Budget,
+                    cancellationToken);
+
+                // Gửi thông báo nghiệm thu & giải ngân cho sinh viên
+                await _notificationService.SendAsync(
+                    deliverable.StudentId,
+                    "🎉",
+                    $"Sản phẩm bàn giao cho công việc \"{job.Title}\" đã được nghiệm thu thành công! Thù lao {job.Budget:N0}đ đã được chuyển vào ví của bạn.",
+                    "/mywork",
+                    cancellationToken);
+            }
+
+            // 🚀 TỐI ƯU HÓA CLOUDFLARE R2 (Cách 1): Dọn dẹp các tệp nháp cũ & bản watermark dư thừa sau khi nghiệm thu thành công
+            var filesToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // 1. Dọn dẹp file Preview có đóng watermark của chính bản được duyệt (vì NTD đã có quyền tải bản gốc sạch Final)
+            if (!string.IsNullOrWhiteSpace(deliverable.PreviewFileUrl)
+                && !string.Equals(deliverable.PreviewFileUrl, deliverable.FinalFileUrl, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(deliverable.FileType, "url", StringComparison.OrdinalIgnoreCase))
+            {
+                var previewKey = StorageKeyHelper.ExtractKey(deliverable.PreviewFileUrl);
+                if (!string.IsNullOrWhiteSpace(previewKey))
                 {
-                    UserId = deliverable.StudentId,
-                    Type = "escrow_release",
-                    Label = $"Nhận thù lao giải ngân công việc #{job.Id} · {job.Title}",
-                    Amount = job.Budget,
-                    Sign = 1,
-                    ReferenceId = job.Id,
-                    CreatedAt = DateTime.UtcNow
-                };
-                await _dbContext.Transactions.AddAsync(escrowReleaseTx, cancellationToken);
-                _logger.LogInformation("Đã tạo giao dịch escrow_release cho sinh viên {StudentId} với số tiền {Amount}đ từ Job {JobId}.", 
-                    deliverable.StudentId, job.Budget, job.Id);
+                    filesToDelete.Add(previewKey);
+                }
+                deliverable.PreviewFileUrl = null;
+            }
+
+            // 2. Lấy tất cả các bản bàn giao cũ (v1, v2...) của Job này để dọn dẹp file vật lý trên R2
+            var olderDeliverables = await _dbContext.JobDeliverables
+                .Where(d => d.JobId == jobId && d.Id != deliverable.Id)
+                .ToListAsync(cancellationToken);
+
+            foreach (var old in olderDeliverables)
+            {
+                if (!string.Equals(old.FileType, "url", StringComparison.OrdinalIgnoreCase))
+                {
+                    foreach (var url in new[] { old.PreviewFileUrl, old.FinalFileUrl })
+                    {
+                        var key = StorageKeyHelper.ExtractKey(url);
+                        if (!string.IsNullOrWhiteSpace(key))
+                        {
+                            filesToDelete.Add(key);
+                        }
+                    }
+                }
+
+                // Bảo lưu record và feedback trong DB để giữ lịch sử đánh giá, dọn dẹp liên kết file vật lý đã xóa
+                old.PreviewFileUrl = null;
+                old.FinalFileUrl = null;
+            }
+
+            // 3. Thực hiện xóa vật lý các tệp nháp trên Cloudflare R2
+            foreach (var key in filesToDelete)
+            {
+                try
+                {
+                    await _storageService.DeleteFileAsync(key, cancellationToken);
+                    _logger.LogInformation("Đã dọn dẹp tệp R2 dư thừa sau nghiệm thu: {FileKey} (Job #{JobId}).", key, jobId);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Không thể xóa tệp {FileKey} trên Cloudflare R2 khi dọn dẹp sau nghiệm thu Job #{JobId}.", key, jobId);
+                }
             }
         }
 
@@ -508,6 +592,11 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Sản phẩm bàn giao không tồn tại.");
         }
 
+        if (string.Equals(deliverable.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Sản phẩm bàn giao này đã bị hủy.");
+        }
+
         var ext = Path.GetExtension(deliverable.FileName)?.ToLowerInvariant() ?? string.Empty;
 
         // Quyền truy cập IDOR: Chỉ Nhà tuyển dụng đăng việc HOẶC Sinh viên nộp deliverable này mới được tải
@@ -520,14 +609,12 @@ public class DeliverableService : IDeliverableService
         }
 
         var isAccepted = string.Equals(deliverable.Status, "accepted", StringComparison.OrdinalIgnoreCase);
+        var isPreviewRequest = string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase);
 
-        // ⚠️ BẢO VỆ SẢN PHẨM: Nếu Nhà tuyển dụng yêu cầu tải bản Final, bắt buộc sản phẩm phải đã được duyệt (accepted)
-        if (isEmployer && string.Equals(type, "final", StringComparison.OrdinalIgnoreCase))
+        // ⚠️ BẢO VỆ SẢN PHẨM: Nếu Nhà tuyển dụng chưa nghiệm thu sản phẩm, TUYỆT ĐỐI KHÔNG được tải bản gốc (Final)
+        if (isEmployer && !isAccepted && !isPreviewRequest)
         {
-            if (!isAccepted)
-            {
-                throw new BusinessException("Chỉ có thể tải bản gốc (Final) sau khi bạn đã xác nhận nghiệm thu sản phẩm và giải ngân cho sinh viên.");
-            }
+            throw new BusinessException("Chỉ có thể tải bản gốc (Final) sau khi bạn đã xác nhận nghiệm thu sản phẩm và giải ngân cho sinh viên.");
         }
 
         var isVideo = IsVideoFile(deliverable.FileName, deliverable.FileType);
@@ -570,10 +657,10 @@ public class DeliverableService : IDeliverableService
 
         if (string.IsNullOrWhiteSpace(targetUrl))
         {
-            throw new BusinessException("Không tìm thấy đường dẫn file sản phẩm bàn giao.");
+            throw new BusinessException("Tệp sản phẩm của bản nộp này đã được dọn dẹp để tối ưu hóa lưu trữ sau khi công việc được nghiệm thu. Vui lòng tải bản nghiệm thu chính thức (Final).");
         }
 
-        var fileKey = ExtractFileKeyFromUrl(targetUrl);
+        var fileKey = StorageKeyHelper.ExtractKey(targetUrl);
         if (string.IsNullOrWhiteSpace(fileKey))
         {
             throw new BusinessException("Không xác định được vị trí file trên hệ thống lưu trữ.");
@@ -621,140 +708,6 @@ public class DeliverableService : IDeliverableService
 
         var downloadFileName = GenerateDownloadFileName(deliverable.FileName, deliverable.JobId, deliverable.Version, type);
         return (downloadResult.Value.Stream, contentType, downloadFileName);
-    }
-
-    private static Stream? ApplyImageWatermark(Stream inputStream, string ext, int jobId)
-    {
-        try
-        {
-            inputStream.Position = 0;
-            using var originalBitmap = SKBitmap.Decode(inputStream);
-            if (originalBitmap == null) return null;
-
-            using var surface = SKSurface.Create(new SKImageInfo(originalBitmap.Width, originalBitmap.Height));
-            var canvas = surface.Canvas;
-
-            // Vẽ ảnh gốc
-            using var originalImage = SKImage.FromBitmap(originalBitmap);
-            canvas.DrawImage(originalImage, 0, 0, new SKSamplingOptions());
-
-            // Cấu hình chữ Watermark thanh mảnh, trong suốt tinh tế (không che lấp chi tiết ảnh)
-            var fontSize = Math.Max(16f, originalBitmap.Width / 26f);
-            using var typeface = SKTypeface.FromFamilyName("Arial", SKFontStyleWeight.SemiBold, SKFontStyleWidth.Normal, SKFontStyleSlant.Upright);
-            using var font = new SKFont(typeface, fontSize);
-
-            using var fillPaint = new SKPaint
-            {
-                Color = new SKColor(255, 255, 255, 48), // Màu trắng mờ tinh tế ~18%
-                IsAntialias = true
-            };
-
-            using var strokePaint = new SKPaint
-            {
-                Color = new SKColor(0, 0, 0, 26), // Viền tối siêu mờ
-                IsAntialias = true,
-                Style = SKPaintStyle.Stroke,
-                StrokeWidth = 1
-            };
-
-            var mainLabel = $"SKILLBRIDGE · BẢN XEM TRƯỚC · Job #{jobId}";
-
-            // 1. Vẽ 1 đường chéo thanh mảnh chạy qua trung tâm ảnh
-            canvas.Save();
-            canvas.Translate(originalBitmap.Width / 2f, originalBitmap.Height / 2f);
-            canvas.RotateDegrees(-22);
-
-            canvas.DrawText(mainLabel, 0, 0, SKTextAlign.Center, font, strokePaint);
-            canvas.DrawText(mainLabel, 0, 0, SKTextAlign.Center, font, fillPaint);
-
-            canvas.Restore();
-
-            // 2. Vẽ huy hiệu bản quyền nhỏ kín đáo ở góc dưới bên phải
-            var badgeFontSize = Math.Max(11f, fontSize * 0.45f);
-            using var badgeFont = new SKFont(typeface, badgeFontSize);
-            var badgeLabel = $"© SkillBridge Protected · Job #{jobId}";
-            var badgeMargin = 16f;
-            canvas.DrawText(badgeLabel, originalBitmap.Width - badgeMargin, originalBitmap.Height - badgeMargin, SKTextAlign.Right, badgeFont, fillPaint);
-
-            using var image = surface.Snapshot();
-            var encodedFormat = ext.ToLowerInvariant() switch
-            {
-                ".png" => SKEncodedImageFormat.Png,
-                ".webp" => SKEncodedImageFormat.Webp,
-                _ => SKEncodedImageFormat.Jpeg
-            };
-
-            using var data = image.Encode(encodedFormat, 85);
-            var memoryStream = new MemoryStream();
-            data.SaveTo(memoryStream);
-            memoryStream.Position = 0;
-            return memoryStream;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static Stream? ApplyPdfWatermark(Stream inputStream, int jobId)
-    {
-        try
-        {
-            inputStream.Position = 0;
-            using var document = PdfReader.Open(inputStream, PdfDocumentOpenMode.Modify);
-
-            var font = new XFont("Helvetica", 22, XFontStyle.Bold);
-            var watermarkColor = XColor.FromArgb(45, 99, 102, 241);
-            var brush = new XSolidBrush(watermarkColor);
-            var text = $"SKILLBRIDGE · BẢN XEM TRƯỚC · Job #{jobId}";
-
-            for (int i = 0; i < document.Pages.Count; i++)
-            {
-                var page = document.Pages[i];
-                using var gfx = XGraphics.FromPdfPage(page);
-
-                var size = gfx.MeasureString(text, font);
-                var centerX = page.Width.Point / 2;
-                var centerY = page.Height.Point / 2;
-
-                gfx.Save();
-                gfx.TranslateTransform(centerX, centerY);
-                gfx.RotateTransform(-30);
-                gfx.DrawString(text, font, brush, -size.Width / 2, size.Height / 2);
-                gfx.Restore();
-
-                var badgeFont = new XFont("Helvetica", 10, XFontStyle.Regular);
-                var badgeText = $"© SkillBridge Protected · Job #{jobId}";
-                gfx.DrawString(badgeText, badgeFont, brush, page.Width.Point - 180, page.Height.Point - 18);
-            }
-
-            var outputStream = new MemoryStream();
-            document.Save(outputStream, false);
-            outputStream.Position = 0;
-            return outputStream;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private static string? ExtractFileKeyFromUrl(string? fileUrl)
-    {
-        if (string.IsNullOrWhiteSpace(fileUrl)) return null;
-
-        if (Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
-        {
-            var path = Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/');
-            var idx = path.IndexOf("job-deliverables/", StringComparison.OrdinalIgnoreCase);
-            if (idx >= 0)
-            {
-                return path[idx..];
-            }
-            return path;
-        }
-
-        return fileUrl;
     }
 
     private static DeliverableDto MapToDeliverableDto(JobDeliverable d, bool isEmployer)
