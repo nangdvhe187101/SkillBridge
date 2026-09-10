@@ -219,6 +219,12 @@ public class JobService : IJobService
             .Select(a => a.FileUrl)
             .ToListAsync();
 
+        // Lấy danh sách file deliverables trước khi xóa Job
+        var deliverableFiles = await _dbContext.JobDeliverables
+            .Where(d => d.JobId == jobId)
+            .Select(d => new { d.PreviewFileUrl, d.FinalFileUrl })
+            .ToListAsync();
+
         await _jobRepository.DeleteJobAsync(job);
 
         // Dọn dẹp các tệp đính kèm vật lý trên Cloudflare R2 sau khi xóa record
@@ -238,6 +244,28 @@ public class JobService : IJobService
                 }
             }
         }
+
+        // Dọn dẹp các tệp deliverables vật lý trên Cloudflare R2 sau khi xóa record
+        var cleanedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var d in deliverableFiles)
+        {
+            foreach (var url in new[] { d.PreviewFileUrl, d.FinalFileUrl })
+            {
+                var fileKey = ExtractFileKeyFromUrl(url);
+                if (!string.IsNullOrWhiteSpace(fileKey) && cleanedKeys.Add(fileKey))
+                {
+                    try
+                    {
+                        await _storageService.DeleteFileAsync(fileKey);
+                        _logger.LogInformation("Đã dọn dẹp file deliverable R2 {FileKey} của Job {JobId}.", fileKey, jobId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Không thể xóa file deliverable {FileKey} trên Cloudflare R2 khi xóa Job {JobId}.", fileKey, jobId);
+                    }
+                }
+            }
+        }
     }
 
     private static string? ExtractFileKeyFromUrl(string? fileUrl)
@@ -247,6 +275,11 @@ public class JobService : IJobService
         if (Uri.TryCreate(fileUrl, UriKind.Absolute, out var uri))
         {
             var path = Uri.UnescapeDataString(uri.AbsolutePath).TrimStart('/');
+            var delivIdx = path.IndexOf("job-deliverables/", StringComparison.OrdinalIgnoreCase);
+            if (delivIdx >= 0)
+            {
+                return path.Substring(delivIdx);
+            }
             var jobsIdx = path.IndexOf("jobs/", StringComparison.OrdinalIgnoreCase);
             if (jobsIdx >= 0)
             {
