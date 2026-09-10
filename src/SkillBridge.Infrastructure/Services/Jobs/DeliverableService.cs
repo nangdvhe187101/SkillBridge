@@ -314,6 +314,27 @@ public class DeliverableService : IDeliverableService
                 job.Status = "submitted";
                 job.UpdatedAt = DateTime.UtcNow;
 
+                // Đồng bộ trạng thái Application của sinh viên sang "submitted"
+                var studentApp = await _dbContext.Applications
+                    .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == studentId, cancellationToken);
+                if (studentApp != null && studentApp.Status == "hired")
+                {
+                    studentApp.Status = "submitted";
+                    studentApp.UpdatedAt = DateTime.UtcNow;
+                }
+
+                // Gửi thông báo cho Nhà tuyển dụng
+                var submitNotif = new Notification
+                {
+                    UserId = job.EmployerId,
+                    Icon = "📤",
+                    MessageText = $"Sinh viên đã nộp sản phẩm bàn giao v{deliverable.Version} cho công việc \"{job.Title}\".",
+                    Link = $"/jobs/{job.Id}/applicants",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _dbContext.Notifications.AddAsync(submitNotif, cancellationToken);
+
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 createdEntity = deliverable;
                 break;
@@ -420,6 +441,27 @@ public class DeliverableService : IDeliverableService
             job.RevisionCount += 1;
             job.Status = "revision_requested";
             job.UpdatedAt = DateTime.UtcNow;
+
+            // Đưa Application về lại trạng thái "hired" (đang làm) để sinh viên tiếp tục hoàn thiện
+            var studentApp = await _dbContext.Applications
+                .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == deliverable.StudentId, cancellationToken);
+            if (studentApp != null && studentApp.Status == "submitted")
+            {
+                studentApp.Status = "hired";
+                studentApp.UpdatedAt = DateTime.UtcNow;
+            }
+
+            // Gửi thông báo yêu cầu sửa đổi cho sinh viên
+            var revisionNotif = new Notification
+            {
+                UserId = deliverable.StudentId,
+                Icon = "🔄",
+                MessageText = $"Nhà tuyển dụng yêu cầu chỉnh sửa bản bàn giao v{deliverable.Version} cho công việc \"{job.Title}\".",
+                Link = "/mywork",
+                IsRead = false,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _dbContext.Notifications.AddAsync(revisionNotif, cancellationToken);
         }
         else if (normalizedStatus == "accepted")
         {
@@ -448,7 +490,7 @@ public class DeliverableService : IDeliverableService
                     student.Id, jobId, student.JobsDoneCount, student.ReliabilityScore);
             }
 
-            // Ghi nhận giải ngân Escrow thực tế vào Transaction ledger
+            // Ghi nhận giải ngân Escrow thực tế vào Transaction ledger & cập nhật ví sinh viên
             if (job.Budget > 0)
             {
                 var escrowReleaseTx = new Transaction
@@ -462,7 +504,47 @@ public class DeliverableService : IDeliverableService
                     CreatedAt = DateTime.UtcNow
                 };
                 await _dbContext.Transactions.AddAsync(escrowReleaseTx, cancellationToken);
-                _logger.LogInformation("Đã tạo giao dịch escrow_release cho sinh viên {StudentId} với số tiền {Amount}đ từ Job {JobId}.", 
+
+                var studentWallet = await _dbContext.Wallets
+                    .FirstOrDefaultAsync(w => w.UserId == deliverable.StudentId, cancellationToken);
+                if (studentWallet != null)
+                {
+                    studentWallet.Balance += job.Budget;
+                }
+                else
+                {
+                    await _dbContext.Wallets.AddAsync(new Wallet
+                    {
+                        UserId = deliverable.StudentId,
+                        Balance = job.Budget
+                    }, cancellationToken);
+                }
+
+                var receipt = new Receipt
+                {
+                    JobId = job.Id,
+                    StudentId = deliverable.StudentId,
+                    EmployerId = job.EmployerId,
+                    Budget = job.Budget,
+                    Commission = 0,
+                    Total = job.Budget,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _dbContext.Receipts.AddAsync(receipt, cancellationToken);
+
+                // Gửi thông báo nghiệm thu & giải ngân cho sinh viên
+                var acceptedNotif = new Notification
+                {
+                    UserId = deliverable.StudentId,
+                    Icon = "🎉",
+                    MessageText = $"Sản phẩm bàn giao cho công việc \"{job.Title}\" đã được nghiệm thu thành công! Thù lao {job.Budget:N0}đ đã được chuyển vào ví của bạn.",
+                    Link = "/mywork",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _dbContext.Notifications.AddAsync(acceptedNotif, cancellationToken);
+
+                _logger.LogInformation("Đã tạo giao dịch escrow_release và cập nhật ví cho sinh viên {StudentId} với số tiền {Amount}đ từ Job {JobId}.", 
                     deliverable.StudentId, job.Budget, job.Id);
             }
         }
@@ -526,14 +608,12 @@ public class DeliverableService : IDeliverableService
         }
 
         var isAccepted = string.Equals(deliverable.Status, "accepted", StringComparison.OrdinalIgnoreCase);
+        var isPreviewRequest = string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase);
 
-        // ⚠️ BẢO VỆ SẢN PHẨM: Nếu Nhà tuyển dụng yêu cầu tải bản Final, bắt buộc sản phẩm phải đã được duyệt (accepted)
-        if (isEmployer && string.Equals(type, "final", StringComparison.OrdinalIgnoreCase))
+        // ⚠️ BẢO VỆ SẢN PHẨM: Nếu Nhà tuyển dụng chưa nghiệm thu sản phẩm, TUYỆT ĐỐI KHÔNG được tải bản gốc (Final)
+        if (isEmployer && !isAccepted && !isPreviewRequest)
         {
-            if (!isAccepted)
-            {
-                throw new BusinessException("Chỉ có thể tải bản gốc (Final) sau khi bạn đã xác nhận nghiệm thu sản phẩm và giải ngân cho sinh viên.");
-            }
+            throw new BusinessException("Chỉ có thể tải bản gốc (Final) sau khi bạn đã xác nhận nghiệm thu sản phẩm và giải ngân cho sinh viên.");
         }
 
         var isVideo = IsVideoFile(deliverable.FileName, deliverable.FileType);

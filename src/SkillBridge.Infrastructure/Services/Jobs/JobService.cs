@@ -176,6 +176,52 @@ public class JobService : IJobService
             {
                 del.Status = "cancelled";
             }
+
+            // Hoàn lại tiền ký quỹ cho Nhà tuyển dụng
+            if (job.Budget > 0)
+            {
+                var refundTx = new Transaction
+                {
+                    UserId = employerId,
+                    Type = "escrow_refund",
+                    Label = $"Hoàn tiền ký quỹ do hủy công việc #{job.Id} · {job.Title}",
+                    Amount = job.Budget,
+                    Sign = 1,
+                    ReferenceId = job.Id,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _dbContext.Transactions.AddAsync(refundTx);
+
+                var employerWallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == employerId);
+                if (employerWallet != null)
+                {
+                    employerWallet.Balance += job.Budget;
+                }
+                else
+                {
+                    await _dbContext.Wallets.AddAsync(new Wallet
+                    {
+                        UserId = employerId,
+                        Balance = job.Budget
+                    });
+                }
+            }
+
+            // Gửi thông báo cho sinh viên đang được thuê
+            var hiredStudentId = job.HiredApplicantId;
+            if (hiredStudentId.HasValue)
+            {
+                var studentNotif = new Notification
+                {
+                    UserId = hiredStudentId.Value,
+                    Icon = "⚠️",
+                    MessageText = $"Nhà tuyển dụng đã hủy công việc \"{job.Title}\".",
+                    Link = "/mywork",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _dbContext.Notifications.AddAsync(studentNotif);
+            }
         }
 
         await _jobRepository.CancelJobAsync(job);

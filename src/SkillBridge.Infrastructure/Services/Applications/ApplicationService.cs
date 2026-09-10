@@ -58,14 +58,53 @@ public class ApplicationService : IApplicationService
             throw new BusinessException("Bạn không thể ứng tuyển vào công việc do chính mình đăng.");
         }
 
-        var alreadyApplied = await _applicationRepository.ExistsAsync(request.JobId, studentId);
-        if (alreadyApplied)
+        var existingApp = await _applicationRepository.GetByJobAndStudentAsync(request.JobId, studentId);
+        if (existingApp != null)
         {
-            throw new BusinessException("Bạn đã gửi đơn ứng tuyển cho công việc này rồi.");
+            if (existingApp.Status != "cancelled" && existingApp.Status != "rejected")
+            {
+                throw new BusinessException("Bạn đã gửi đơn ứng tuyển cho công việc này rồi.");
+            }
+
+            // Nếu đơn cũ đã bị 'cancelled' hoặc 'rejected', cho phép ứng tuyển lại bằng cách cập nhật bản ghi cũ
+            // (Đảm bảo tuân thủ unique constraint (job_id, student_id) trong cơ sở dữ liệu)
+            var cv = await _cvFileRepository.GetByIdAsync(request.CvFileId);
+            if (cv == null || cv.StudentId != studentId)
+            {
+                throw new BusinessException("Bản CV được chọn không hợp lệ hoặc không thuộc tài khoản của bạn.");
+            }
+
+            existingApp.CvFileId = request.CvFileId;
+            existingApp.CoverLetter = string.IsNullOrWhiteSpace(request.CoverLetter) ? null : request.CoverLetter.Trim();
+            existingApp.Status = "pending";
+            existingApp.AppliedAt = DateTime.UtcNow;
+            existingApp.UpdatedAt = DateTime.UtcNow;
+
+            await _applicationRepository.UpdateAsync(existingApp);
+
+            return new JobApplicationResponseDto
+            {
+                Id = existingApp.Id,
+                JobId = job.Id,
+                JobTitle = job.Title,
+                EmployerName = job.Employer?.FullName ?? "Nhà tuyển dụng",
+                Budget = job.Budget,
+                StudentId = studentId,
+                CvFileId = cv.Id,
+                CvFileName = cv.FileName,
+                CvFileUrl = $"/api/cv-files/{cv.Id}/download",
+                CoverLetter = existingApp.CoverLetter,
+                Status = existingApp.Status,
+                AppliedAt = existingApp.AppliedAt,
+                JobStatus = job.Status,
+                DeadlineAt = job.DeadlineAt,
+                RevisionLimit = job.RevisionLimit,
+                RevisionCount = job.RevisionCount
+            };
         }
 
-        var cv = await _cvFileRepository.GetByIdAsync(request.CvFileId);
-        if (cv == null || cv.StudentId != studentId)
+        var newCv = await _cvFileRepository.GetByIdAsync(request.CvFileId);
+        if (newCv == null || newCv.StudentId != studentId)
         {
             throw new BusinessException("Bản CV được chọn không hợp lệ hoặc không thuộc tài khoản của bạn.");
         }
@@ -91,9 +130,9 @@ public class ApplicationService : IApplicationService
             EmployerName = job.Employer?.FullName ?? "Nhà tuyển dụng",
             Budget = job.Budget,
             StudentId = studentId,
-            CvFileId = cv.Id,
-            CvFileName = cv.FileName,
-            CvFileUrl = $"/api/cv-files/{cv.Id}/download",
+            CvFileId = newCv.Id,
+            CvFileName = newCv.FileName,
+            CvFileUrl = $"/api/cv-files/{newCv.Id}/download",
             CoverLetter = application.CoverLetter,
             Status = application.Status,
             AppliedAt = application.AppliedAt,
@@ -205,9 +244,14 @@ public class ApplicationService : IApplicationService
             throw new BusinessException("Hồ sơ ứng tuyển không tồn tại hoặc không thuộc công việc này.");
         }
 
-        if (application.Status == "rejected")
+        if (application.Status == "cancelled")
         {
-            throw new BusinessException("Hồ sơ ứng tuyển này đã bị từ chối trước đó.");
+            throw new BusinessException("Ứng viên này đã rút đơn ứng tuyển, không thể thuê.");
+        }
+
+        if (application.Status == "hired" || application.Status == "completed")
+        {
+            throw new BusinessException("Hồ sơ ứng tuyển này đã được xử lý trước đó.");
         }
 
         var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
@@ -226,7 +270,7 @@ public class ApplicationService : IApplicationService
                 var currentApp = await _dbContext.Applications
                     .Include(a => a.Student)
                     .FirstOrDefaultAsync(a => a.Id == applicationId && a.JobId == jobId);
-                if (currentApp == null || currentApp.Status == "rejected" || currentApp.Status == "hired")
+                if (currentApp == null || currentApp.Status == "cancelled" || currentApp.Status == "hired" || currentApp.Status == "completed")
                 {
                     throw new BusinessException("Hồ sơ ứng tuyển này không còn hợp lệ hoặc đã được xử lý trước đó.");
                 }
@@ -244,7 +288,7 @@ public class ApplicationService : IApplicationService
                 currentApp.Status = "hired";
                 currentApp.UpdatedAt = DateTime.UtcNow;
 
-                // Đánh dấu từ chối các ứng viên khác cho công việc này
+                // Đánh dấu từ chối các ứng viên khác đang pending cho công việc này
                 var otherApplications = await _dbContext.Applications
                     .Where(a => a.JobId == jobId && a.Id != applicationId && a.Status == "pending")
                     .ToListAsync();
@@ -253,6 +297,40 @@ public class ApplicationService : IApplicationService
                     other.Status = "rejected";
                     other.UpdatedAt = DateTime.UtcNow;
                 }
+
+                // Ghi nhận ký quỹ Escrow vào sổ cái giao dịch
+                if (currentJob.Budget > 0)
+                {
+                    var escrowHoldTx = new Transaction
+                    {
+                        UserId = employerId,
+                        Type = "escrow_hold",
+                        Label = $"Tạm giữ Ký quỹ Escrow — Job #{currentJob.Id} · {currentJob.Title}",
+                        Amount = currentJob.Budget,
+                        Sign = -1,
+                        ReferenceId = currentJob.Id,
+                        CreatedAt = DateTime.UtcNow
+                    };
+                    await _dbContext.Transactions.AddAsync(escrowHoldTx);
+
+                    var employerWallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == employerId);
+                    if (employerWallet != null && employerWallet.Balance >= currentJob.Budget)
+                    {
+                        employerWallet.Balance -= currentJob.Budget;
+                    }
+                }
+
+                // Gửi thông báo trúng tuyển cho sinh viên
+                var studentNotif = new Notification
+                {
+                    UserId = currentApp.StudentId,
+                    Icon = "🎉",
+                    MessageText = $"Chúc mừng! Bạn đã được chọn thực hiện công việc \"{currentJob.Title}\".",
+                    Link = "/mywork",
+                    IsRead = false,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _dbContext.Notifications.AddAsync(studentNotif);
 
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -304,8 +382,18 @@ public class ApplicationService : IApplicationService
                     throw new BusinessException("Công việc đã hoàn thành, không thể hủy.");
                 }
 
-                var isHiredOrInProgress = application.Status == "hired" ||
-                    (application.Job != null && new[] { "in_progress", "submitted", "revision_requested" }.Contains(application.Job.Status));
+                if (application.Status == "rejected")
+                {
+                    throw new BusinessException("Hồ sơ ứng tuyển này đã bị từ chối, không thể rút đơn.");
+                }
+
+                var isHiredForThisJob = application.Status == "hired" ||
+                    (application.Job != null && application.Job.HiredApplicantId == studentId);
+
+                var isJobInProgress = application.Job != null &&
+                    new[] { "in_progress", "submitted", "revision_requested" }.Contains(application.Job.Status);
+
+                var isHiredOrInProgress = isHiredForThisJob && isJobInProgress;
 
                 // Nếu đang trong quá trình thực hiện việc (đã được thuê), trừ 10 điểm uy tín sinh viên
                 if (isHiredOrInProgress)
@@ -330,6 +418,58 @@ public class ApplicationService : IApplicationService
                         job.RevisionCount = 0; // Reset số lần chỉnh sửa cho lượt thuê mới
                         job.UpdatedAt = DateTime.UtcNow;
                         _dbContext.Jobs.Update(job);
+
+                        // Hoàn tiền ký quỹ lại cho Nhà tuyển dụng vì sinh viên đơn phương hủy việc
+                        if (job.Budget > 0)
+                        {
+                            var refundTx = new Transaction
+                            {
+                                UserId = job.EmployerId,
+                                Type = "escrow_refund",
+                                Label = $"Hoàn tiền ký quỹ do sinh viên hủy nhận việc Job #{job.Id} · {job.Title}",
+                                Amount = job.Budget,
+                                Sign = 1,
+                                ReferenceId = job.Id,
+                                CreatedAt = DateTime.UtcNow
+                            };
+                            await _dbContext.Transactions.AddAsync(refundTx);
+
+                            var employerWallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == job.EmployerId);
+                            if (employerWallet != null)
+                            {
+                                employerWallet.Balance += job.Budget;
+                            }
+                            else
+                            {
+                                await _dbContext.Wallets.AddAsync(new Wallet
+                                {
+                                    UserId = job.EmployerId,
+                                    Balance = job.Budget
+                                });
+                            }
+                        }
+
+                        // Gửi thông báo cho Nhà tuyển dụng
+                        var empNotif = new Notification
+                        {
+                            UserId = job.EmployerId,
+                            Icon = "⚠️",
+                            MessageText = $"Sinh viên đã hủy thực hiện công việc \"{job.Title}\". Số tiền ký quỹ {job.Budget:N0}đ đã được hoàn lại vào ví của bạn.",
+                            Link = $"/jobs/{job.Id}/applicants",
+                            IsRead = false,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await _dbContext.Notifications.AddAsync(empNotif);
+
+                        // Khôi phục lại các đơn ứng tuyển của các sinh viên khác (từng bị auto-rejected khi thuê) về lại pending để NTD có thể chọn tiếp
+                        var autoRejectedApps = await _dbContext.Applications
+                            .Where(a => a.JobId == jobId && a.Id != application.Id && a.Status == "rejected")
+                            .ToListAsync();
+                        foreach (var other in autoRejectedApps)
+                        {
+                            other.Status = "pending";
+                            other.UpdatedAt = DateTime.UtcNow;
+                        }
                     }
 
                     // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên này để không lẫn vào lượt thuê mới
