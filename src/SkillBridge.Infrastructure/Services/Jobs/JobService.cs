@@ -230,7 +230,6 @@ public class JobService : IJobService
         }
 
         await _jobRepository.CancelJobAsync(job);
-        await _dbContext.SaveChangesAsync();
     }
 
     public async Task ReopenJobAsync(int employerId, int jobId)

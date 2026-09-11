@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using SkillBridge.Application.Common;
 using SkillBridge.Application.Interfaces.Payments;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
@@ -24,6 +25,18 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (amount <= 0) return;
 
+        var employerWallet = await _dbContext.Wallets
+            .FirstOrDefaultAsync(w => w.UserId == employerId, cancellationToken);
+
+        if (employerWallet == null || employerWallet.Balance < amount)
+        {
+            var currentBalance = employerWallet?.Balance ?? 0;
+            throw new BusinessException(
+                $"Số dư ví không đủ để ký quỹ công việc. Cần: {amount:N0}đ, Hiện có: {currentBalance:N0}đ. Vui lòng nạp thêm tiền vào ví trước khi thuê.");
+        }
+
+        employerWallet.Balance -= amount;
+
         var escrowHoldTx = new Transaction
         {
             UserId = employerId,
@@ -35,14 +48,6 @@ public class EscrowPaymentService : IEscrowPaymentService
             CreatedAt = DateTime.UtcNow
         };
         await _dbContext.Transactions.AddAsync(escrowHoldTx, cancellationToken);
-
-        var employerWallet = await _dbContext.Wallets
-            .FirstOrDefaultAsync(w => w.UserId == employerId, cancellationToken);
-
-        if (employerWallet != null && employerWallet.Balance >= amount)
-        {
-            employerWallet.Balance -= amount;
-        }
 
         _logger.LogInformation("Đã giữ ký quỹ {Amount:N0}đ cho Job #{JobId} của Nhà tuyển dụng {EmployerId}.", amount, jobId, employerId);
     }

@@ -173,33 +173,27 @@ export default function JobApplicants() {
   }, [jobId]);
 
   const allApplicants = useMemo(() => {
-    if (apiApplicants && apiApplicants.length > 0) {
-      return apiApplicants.map((a) => ({
-        id: a.applicationId,
-        studentId: a.studentId,
-        name: a.studentName,
-        email: a.studentEmail,
-        phone: a.studentPhone,
-        avatar: a.studentAvatarUrl,
-        school: a.school || 'Sinh viên đại học',
-        tier: a.tier || 'gold',
-        score: a.reliabilityScore || 95,
-        jobsDone: a.jobsDoneCount || 0,
-        kycStatus: a.kycStatus || 'verified',
-        status: a.status || 'pending',
-        appliedAt: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString('vi-VN') : 'Mới nộp',
-        coverLetter: a.coverLetter,
-        cvFileId: a.cvFileId,
-        cvFileName: a.cvFileName,
-        cvFileUrl: a.cvFileUrl,
-        cvLabel: a.cvLabel,
-        isHired: a.status === 'hired' || (job?.hiredApplicantId && a.studentId === job.hiredApplicantId) || job?.hiredApplicant === a.studentName || job?.hiredApplicant === a.name,
-        rejected: a.status === 'rejected',
-      }));
-    }
-    return (job?.applicants || []).map((a) => ({
-      ...a,
-      isHired: (job?.hiredApplicantId && a.studentId === job.hiredApplicantId) || job?.hiredApplicant === a.name || job?.hiredApplicant === a.studentName,
+    return (apiApplicants || []).map((a) => ({
+      id: a.applicationId,
+      studentId: a.studentId,
+      name: a.studentName,
+      email: a.studentEmail,
+      phone: a.studentPhone,
+      avatar: a.studentAvatarUrl,
+      school: a.school || 'Sinh viên đại học',
+      tier: a.tier || 'gold',
+      score: a.reliabilityScore || 95,
+      jobsDone: a.jobsDoneCount || 0,
+      kycStatus: a.kycStatus || 'verified',
+      status: a.status || 'pending',
+      appliedAt: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString('vi-VN') : 'Mới nộp',
+      coverLetter: a.coverLetter,
+      cvFileId: a.cvFileId,
+      cvFileName: a.cvFileName,
+      cvFileUrl: a.cvFileUrl,
+      cvLabel: a.cvLabel,
+      isHired: a.status === 'hired' || (job?.hiredApplicantId && a.studentId === job.hiredApplicantId) || job?.hiredApplicant === a.studentName || job?.hiredApplicant === a.name,
+      rejected: a.status === 'rejected',
     }));
   }, [apiApplicants, job]);
 
