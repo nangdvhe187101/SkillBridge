@@ -10,6 +10,7 @@ import * as cvApi from '../api/cvApi';
 import * as applicationApi from '../api/applicationApi';
 import * as userApi from '../api/userApi';
 import * as deliverableApi from '../api/deliverableApi';
+import * as walletApi from '../api/walletApi';
 import { setAccessToken, clearAccessToken } from '../api/tokenStore';
 
 const StoreContext = createContext(null);
@@ -525,6 +526,13 @@ function reducer(state, action) {
     }
 
     /* ---- wallet ---- */
+    case 'SET_WALLET': {
+      return {
+        ...state,
+        balance: action.balance !== undefined ? action.balance : state.balance,
+        transactions: action.transactions || state.transactions
+      };
+    }
     case 'TOPUP': {
       const balance = state.balance + action.amount;
       const transactions = addTxTo(state.transactions, 'topup', 'Nạp tiền qua ' + action.methodLabel, action.amount, 1);
@@ -800,8 +808,23 @@ export function StoreProvider({ children }) {
           if (profile && isMounted) {
             dispatch({ type: 'UPDATE_PROFILE', patch: profile });
           }
+          const wallet = await walletApi.getMyWallet();
+          if (wallet && isMounted) {
+            dispatch({
+              type: 'SET_WALLET',
+              balance: wallet.balance,
+              transactions: (wallet.transactions || []).map(t => ({
+                id: t.id,
+                type: t.type,
+                label: t.label,
+                amount: t.amount,
+                sign: t.sign,
+                date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
+              }))
+            });
+          }
         } catch (e) {
-          console.warn('Không thể tải hồ sơ chi tiết khi khởi động:', e);
+          console.warn('Không thể tải hồ sơ hoặc ví chi tiết khi khởi động:', e);
         }
       } catch (err) {
         if (!isMounted) return;
@@ -838,9 +861,7 @@ export function StoreProvider({ children }) {
     try {
       const res = await jobApi.getJobs({ page: 1, pageSize: 50 });
       const items = res?.items || (Array.isArray(res) ? res : []);
-      if (items.length > 0) {
-        dispatch({ type: 'SET_JOBS', jobs: items.map(mapPublicJob) });
-      }
+      dispatch({ type: 'SET_JOBS', jobs: items.map(mapPublicJob) });
     } catch (err) {
       console.error('Không thể tải danh sách công việc từ backend:', err);
     }
@@ -850,11 +871,31 @@ export function StoreProvider({ children }) {
     try {
       const res = await jobApi.getMyJobs(null, 1, 50);
       const items = res?.items || (Array.isArray(res) ? res : []);
-      if (items.length > 0) {
-        dispatch({ type: 'SET_MY_JOBS', myJobs: items.map(mapMyJob) });
-      }
+      dispatch({ type: 'SET_MY_JOBS', myJobs: items.map(mapMyJob) });
     } catch (err) {
       console.error('Không thể tải công việc của tôi từ backend:', err);
+    }
+  }, []);
+
+  const refreshWallet = useCallback(async () => {
+    try {
+      const res = await walletApi.getMyWallet();
+      if (res) {
+        dispatch({
+          type: 'SET_WALLET',
+          balance: res.balance,
+          transactions: (res.transactions || []).map(t => ({
+            id: t.id,
+            type: t.type,
+            label: t.label,
+            amount: t.amount,
+            sign: t.sign,
+            date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
+          }))
+        });
+      }
+    } catch {
+      // Bỏ qua khi chưa đăng nhập hoặc lỗi mạng tạm thời
     }
   }, []);
 
@@ -1069,11 +1110,36 @@ export function StoreProvider({ children }) {
             escrowAmount: hireResult?.escrowAmount
           }
         });
-        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
+        await Promise.allSettled([refreshJobs(), refreshMyJobs(), refreshWallet()]);
         showToast('Đã thuê ứng viên và ký quỹ thành công!', '🤝');
       },
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),
-      topup: (amount, methodLabel) => { dispatch({ type: 'TOPUP', amount, methodLabel }); showToast(`Nạp ${amount.toLocaleString('vi-VN')}đ thành công!`, '✓'); },
+      topup: async (amount, methodLabel) => {
+        try {
+          const res = await walletApi.topupWallet(amount, methodLabel);
+          if (res) {
+            dispatch({
+              type: 'SET_WALLET',
+              balance: res.balance,
+              transactions: (res.transactions || []).map(t => ({
+                id: t.id,
+                type: t.type,
+                label: t.label,
+                amount: t.amount,
+                sign: t.sign,
+                date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
+              }))
+            });
+          } else {
+            dispatch({ type: 'TOPUP', amount, methodLabel });
+          }
+          showToast(`Nạp ${amount.toLocaleString('vi-VN')}đ thành công!`, '✓');
+        } catch (err) {
+          showToast(err?.message || 'Không thể nạp tiền vào ví.', '⚠️');
+          throw err;
+        }
+      },
+      refreshWallet,
       withdraw: (amount) => { dispatch({ type: 'WITHDRAW', amount }); showToast(`Đã gửi yêu cầu rút ${amount.toLocaleString('vi-VN')}đ.`, '✓'); },
       updateBankAccount: (payload) => { dispatch({ type: 'UPDATE_BANK_ACCOUNT', payload }); showToast('Cập nhật tài khoản ngân hàng thành công!', '✓'); },
       subscribePro: (amount, method) => dispatch({ type: 'SUBSCRIBE_PRO', amount, method }),
@@ -1137,6 +1203,7 @@ export function StoreProvider({ children }) {
         } catch (e) {
           console.warn('Không thể tải hồ sơ chi tiết khi đăng nhập:', e);
         }
+        await refreshWallet();
         showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, '👋');
         return result;
       },
@@ -1153,7 +1220,7 @@ export function StoreProvider({ children }) {
       },
       reviewDeliverableAsync: async (jobId, deliverableId, reviewData) => {
         const res = await deliverableApi.reviewJobDeliverable(jobId, deliverableId, reviewData);
-        await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
+        await Promise.allSettled([refreshJobs(), refreshMyJobs(), refreshWallet()]);
         if (reviewData?.status === 'accepted') {
           dispatch({ type: 'RECORD_REAL_RECEIPT', payload: { jobId, deliverableResult: res } });
           showToast('Nghiệm thu sản phẩm & giải ngân thành công!', '🎉');
@@ -1202,7 +1269,7 @@ export function StoreProvider({ children }) {
     act.toggleSaveJob = act.toggleSaveJobAsync;
     return act;
   },
-  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, state.cvFiles, state.myApplications]
+  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, refreshWallet, state.cvFiles, state.myApplications]
 );
 
   const value = useMemo(() => ({ state, dispatch, ...actions }), [state, actions]);

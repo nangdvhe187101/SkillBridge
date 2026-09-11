@@ -241,9 +241,14 @@ export default function MyWork() {
       };
     });
 
+    // Nếu người dùng đã đăng nhập, luôn sử dụng dữ liệu thực tế (kể cả khi rỗng, không rò rỉ mock)
+    if (state.currentUser) {
+      return appsWork;
+    }
+
     if (appsWork.length > 0) return appsWork;
 
-    // Fallback cho dữ liệu mock state.myJobs
+    // Fallback cho dữ liệu mock state.myJobs (chỉ khi chưa đăng nhập / demo)
     return (state.myJobs || []).filter((j) =>
       ['in_progress', 'submitted', 'revision_requested'].includes(j.status) && j.hiredApplicant
     ).map((j) => ({
@@ -253,7 +258,7 @@ export default function MyWork() {
       emp: state.jobs.find((pj) => pj.dashJobId === j.id)?.emp || 'Nhà tuyển dụng',
       empAvatar: j.employerAvatar || j.empAvatar || null
     }));
-  }, [activeApps, deliverablesMap, state.jobs, state.myJobs]);
+  }, [activeApps, deliverablesMap, state.jobs, state.myJobs, state.currentUser]);
 
   // Thống kê nhanh
   const stats = useMemo(() => {

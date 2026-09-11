@@ -287,6 +287,16 @@ public class ApplicationService : IApplicationService
                     throw new BusinessException("Hồ sơ ứng tuyển này không còn hợp lệ hoặc đã được xử lý trước đó.");
                 }
 
+                // Fail-fast: Kiểm tra số dư ví và ký quỹ Escrow trước khi thay đổi trạng thái
+                if (currentJob.Budget > 0)
+                {
+                    await _escrowPaymentService.HoldEscrowAsync(
+                        employerId,
+                        currentJob.Id,
+                        currentJob.Title,
+                        currentJob.Budget);
+                }
+
                 var durationDays = request?.Days.HasValue == true && request.Days.Value > 0 ? request.Days.Value : 3;
 
                 // Cập nhật trạng thái công việc
@@ -308,16 +318,6 @@ public class ApplicationService : IApplicationService
                 {
                     other.Status = "rejected";
                     other.UpdatedAt = DateTime.UtcNow;
-                }
-
-                // Ghi nhận ký quỹ Escrow vào sổ cái giao dịch
-                if (currentJob.Budget > 0)
-                {
-                    await _escrowPaymentService.HoldEscrowAsync(
-                        employerId,
-                        currentJob.Id,
-                        currentJob.Title,
-                        currentJob.Budget);
                 }
 
                 // Gửi thông báo trúng tuyển cho sinh viên
