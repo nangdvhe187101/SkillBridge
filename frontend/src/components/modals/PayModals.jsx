@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import ModalShell from './ModalShell';
 import PaymentMethods, { payMethodLabel } from './PaymentMethods';
 import { useStore, commissionRate, fmtVND } from '../../context/StoreContext';
@@ -143,7 +143,25 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
 
   // Smart default: If wallet has enough funds use 'wallet', else default to 'bank' (QR)
   const [method, setMethod] = useState(() => (state.balance >= total ? 'wallet' : 'bank'));
-  const [days, setDays] = useState(3);
+
+  // Pre-fill số ngày từ cam kết lúc đăng job (giữa deadlineAt và postedAt)
+  const committedDays = useMemo(() => {
+    if (job?.deadlineAt && job?.postedAt) {
+      const diffMs = new Date(job.deadlineAt).getTime() - new Date(job.postedAt).getTime();
+      if (diffMs > 0) {
+        return Math.max(1, Math.round(diffMs / 86400000));
+      }
+    }
+    if (job?.deadlineAt) {
+      const diffMs = new Date(job.deadlineAt).getTime() - Date.now();
+      if (diffMs > 0) {
+        return Math.max(1, Math.round(diffMs / 86400000));
+      }
+    }
+    return 3;
+  }, [job?.deadlineAt, job?.postedAt]);
+
+  const [days, setDays] = useState(committedDays);
   const [errorMsg, setErrorMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -198,7 +216,14 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
         <div className="cs-row total"><span>Tổng cần thanh toán</span><span>{fmtVND(total)}</span></div>
       </div>
       <div className="field">
-        <label>Hạn hoàn thành (số ngày)</label>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <label style={{ margin: 0, fontWeight: 600 }}>Hạn hoàn thành (số ngày)</label>
+          {committedDays > 0 && (
+            <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 500 }}>
+              ⏱️ Cam kết lúc đăng job: {committedDays} ngày
+            </span>
+          )}
+        </div>
         <input type="number" min="1" step="1" value={days} onChange={(e) => { setDays(e.target.value); setErrorMsg(''); }} />
       </div>
       <PaymentMethods selected={method} onSelect={(m) => { setMethod(m); setErrorMsg(''); }} walletBalance={state.balance} />

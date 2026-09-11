@@ -297,7 +297,11 @@ public class ApplicationService : IApplicationService
                         currentJob.Budget);
                 }
 
-                var durationDays = request?.Days.HasValue == true && request.Days.Value > 0 ? request.Days.Value : 3;
+                var initialDurationDays = currentJob.DeadlineAt.HasValue && currentJob.DeadlineAt.Value > currentJob.PostedAt
+                    ? Math.Max(1, (int)Math.Round((currentJob.DeadlineAt.Value - currentJob.PostedAt).TotalDays))
+                    : 3;
+
+                var durationDays = request?.Days.HasValue == true && request.Days.Value > 0 ? request.Days.Value : initialDurationDays;
 
                 // Cập nhật trạng thái công việc
                 currentJob.HiredApplicantId = currentApp.StudentId;
