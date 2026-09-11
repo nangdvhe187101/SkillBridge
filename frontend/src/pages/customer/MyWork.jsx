@@ -611,7 +611,24 @@ export default function MyWork() {
         {/* TAB 1: VIỆC ĐANG LÀM */}
         {activeTab === 'active' && (
           <div>
-            {activeWork.length === 0 ? (
+            {loadingDeliverables ? (
+              <div style={{
+                background: '#ffffff',
+                border: '1px solid #e2e8f0',
+                borderRadius: 16,
+                padding: '60px 20px',
+                textAlign: 'center',
+                margin: '10px 0 20px'
+              }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>⏳</div>
+                <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', margin: '0 0 6px' }}>
+                  Đang đồng bộ tiến độ & sản phẩm bàn giao...
+                </h3>
+                <p style={{ color: '#64748b', fontSize: 13.5, margin: 0 }}>
+                  Vui lòng đợi trong giây lát trong khi hệ thống tải dữ liệu mới nhất.
+                </p>
+              </div>
+            ) : activeWork.length === 0 ? (
               <div style={{
                 background: '#ffffff',
                 border: '2px dashed #cbd5e1',

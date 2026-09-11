@@ -281,57 +281,6 @@ function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
   );
 }
 
-function getFileIcon(fileName) {
-  const ext = (fileName || '').split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'zip':
-    case 'rar':
-    case '7z':
-    case 'tar':
-    case 'gz':
-      return '📦';
-    case 'doc':
-    case 'docx':
-      return '📝';
-    case 'xls':
-    case 'xlsx':
-    case 'csv':
-      return '📊';
-    case 'pdf':
-      return '📑';
-    case 'ppt':
-    case 'pptx':
-      return '📊';
-    case 'js':
-    case 'ts':
-    case 'py':
-    case 'java':
-    case 'cpp':
-    case 'html':
-    case 'css':
-    case 'json':
-      return '💻';
-    case 'mp4':
-    case 'mov':
-    case 'm4v':
-    case 'webm':
-    case 'avi':
-    case 'mkv':
-    case 'wmv':
-    case 'flv':
-      return '🎥';
-    case 'mp3':
-    case 'wav':
-    case 'm4a':
-    case 'aac':
-    case 'flac':
-    case 'ogg':
-      return '🎵';
-    default:
-      return '📁';
-  }
-}
-
 function formatDeliverableDisplayName(fileName, isImage = false, version = 1, jobId = null) {
   if (!fileName) return isImage ? `Hình ảnh sản phẩm (v${version || 1})` : `Tệp sản phẩm (v${version || 1})`;
   const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
