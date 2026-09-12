@@ -137,10 +137,10 @@ THÔNG TIN GIAO DỊCH:
 
 CHI TIẾT TÀI CHÍNH:
 - Tổng số tiền hợp đồng: ${fmtVND(r.total)}
-- Phí nền tảng SkillBridge: 0đ (Miễn phí 100%)
+- Phí nền tảng SkillBridge: ${r.commission > 0 ? fmtVND(r.commission) : '0đ (Miễn phí 100%)'}
 - Thuế TNCN (khấu trừ tại nguồn): 0đ
 -----------------------------------------------------
-SỐ TIỀN THỰC NHẬN VÀO VÍ: ${fmtVND(r.net || r.total)}
+SỐ TIỀN THỰC NHẬN VÀO VÍ: ${fmtVND(r.net || (r.total - (r.commission || 0)))}
 =====================================================
 Căn cứ xác thực điện tử bởi Hệ thống Ký quỹ SkillBridge
 Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
@@ -157,7 +157,7 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
     URL.revokeObjectURL(url);
   };
 
-  const escrowLockedAmount = state.escrowLocked || 250000;
+  const escrowLockedAmount = state.escrowLocked || 0;
   const totalAssets = state.balance + escrowLockedAmount;
 
   return (
@@ -643,13 +643,13 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                 <span>Giá trị hợp đồng:</span>
                 <span>{fmtVND(receiptModal.total)}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13, color: '#16a34a' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 13, color: receiptModal.commission > 0 ? '#ea580c' : '#16a34a' }}>
                 <span>Phí nền tảng SkillBridge:</span>
-                <b>0đ (Miễn phí)</b>
+                <b>{receiptModal.commission > 0 ? fmtVND(receiptModal.commission) : '0đ (Miễn phí)'}</b>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 15, fontWeight: 700 }}>
                 <span>Thực nhận vào ví:</span>
-                <span style={{ color: 'var(--primary)', fontSize: 18 }}>{fmtVND(receiptModal.net || receiptModal.total)}</span>
+                <span style={{ color: 'var(--primary)', fontSize: 18 }}>{fmtVND(receiptModal.net || (receiptModal.total - (receiptModal.commission || 0)))}</span>
               </div>
             </div>
 

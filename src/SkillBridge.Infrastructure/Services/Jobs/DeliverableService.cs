@@ -370,201 +370,226 @@ public class DeliverableService : IDeliverableService
         ReviewDeliverableRequest request,
         CancellationToken cancellationToken = default)
     {
-        var job = await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId, cancellationToken);
-        if (job == null || job.EmployerId != employerId)
-        {
-            throw new BusinessException("Bạn không có quyền đánh giá sản phẩm của công việc này.");
-        }
-
-        var deliverable = await _dbContext.JobDeliverables
-            .Include(d => d.Student)
-            .Include(d => d.DeliverableFeedbacks)
-                .ThenInclude(f => f.Employer)
-            .FirstOrDefaultAsync(d => d.Id == deliverableId && d.JobId == jobId, cancellationToken);
-
-        if (deliverable == null)
-        {
-            throw new BusinessException("Bản nộp sản phẩm không tồn tại.");
-        }
-
-        // BẢO MẬT & TOÀN VẸN NGHIỆP VỤ: Đảm bảo bản nộp thuộc về ứng viên đang được thuê chính thức hiện tại
-        if (!job.HiredApplicantId.HasValue || deliverable.StudentId != job.HiredApplicantId.Value)
-        {
-            throw new BusinessException("Bản nộp sản phẩm này không thuộc về sinh viên đang được thuê hiện tại của công việc.");
-        }
-
-        if (string.Equals(deliverable.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new BusinessException("Bản nộp sản phẩm này đã bị hủy do sinh viên trước đó đã rút khỏi công việc.");
-        }
-
-        if (job.Status == "completed")
-        {
-            throw new BusinessException("Công việc này đã hoàn thành và nghiệm thu xong, không thể đánh giá lại sản phẩm.");
-        }
-
-        if (job.Status == "cancelled")
-        {
-            throw new BusinessException("Công việc này đã bị hủy, không thể đánh giá sản phẩm.");
-        }
-
-        if (job.Status != "submitted")
-        {
-            throw new BusinessException("Công việc hiện không ở trạng thái chờ duyệt sản phẩm.");
-        }
-
-        if (deliverable.Status != "submitted")
-        {
-            throw new BusinessException("Bản nộp sản phẩm này đã được đánh giá trước đó.");
-        }
-
-        var normalizedStatus = request.Status.ToLowerInvariant().Trim();
+        var normalizedStatus = request.Status?.ToLowerInvariant().Trim() ?? string.Empty;
         if (normalizedStatus != "accepted" && normalizedStatus != "revision_requested")
         {
             throw new BusinessException("Trạng thái đánh giá không hợp lệ (chỉ chấp nhận 'accepted' hoặc 'revision_requested').");
         }
 
-        if (normalizedStatus == "revision_requested")
+        var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
+        return await executionStrategy.ExecuteAsync(async () =>
         {
-            if (job.RevisionCount >= job.RevisionLimit)
-            {
-                throw new BusinessException($"Công việc này đã đạt giới hạn chỉnh sửa tối đa ({job.RevisionLimit} lần).");
-            }
-            job.RevisionCount += 1;
-            job.Status = "revision_requested";
-            job.UpdatedAt = DateTime.UtcNow;
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-            // Đưa Application về lại trạng thái "hired" (đang làm) để sinh viên tiếp tục hoàn thiện
-            var studentApp = await _dbContext.Applications
-                .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == deliverable.StudentId, cancellationToken);
-            if (studentApp != null && studentApp.Status == "submitted")
+            // Re-check công việc và bản nộp bên trong transaction để chống race condition (double click / duplicate request)
+            var currentJob = await _dbContext.Jobs
+                .FirstOrDefaultAsync(j => j.Id == jobId, cancellationToken);
+
+            if (currentJob == null || currentJob.EmployerId != employerId)
             {
-                studentApp.Status = "hired";
-                studentApp.UpdatedAt = DateTime.UtcNow;
+                throw new BusinessException("Công việc không tồn tại hoặc bạn không có quyền đánh giá sản phẩm của công việc này.");
             }
 
-            // Gửi thông báo yêu cầu sửa đổi cho sinh viên
-            await _notificationService.SendAsync(
-                deliverable.StudentId,
-                "🔄",
-                $"Nhà tuyển dụng yêu cầu chỉnh sửa bản bàn giao v{deliverable.Version} cho công việc \"{job.Title}\".",
-                "/mywork",
-                cancellationToken);
-        }
-        else if (normalizedStatus == "accepted")
-        {
-            // Cập nhật trạng thái Job sang completed và giải phóng EscrowAmount (đã giải ngân xong cho sinh viên)
-            job.Status = "completed";
-            job.EscrowAmount = null;
-            job.UpdatedAt = DateTime.UtcNow;
+            var currentDeliverable = await _dbContext.JobDeliverables
+                .Include(d => d.Student)
+                .Include(d => d.DeliverableFeedbacks)
+                    .ThenInclude(f => f.Employer)
+                .FirstOrDefaultAsync(d => d.Id == deliverableId && d.JobId == jobId, cancellationToken);
 
-            // Cập nhật Application của sinh viên sang completed
-            var application = await _dbContext.Applications
-                .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == deliverable.StudentId, cancellationToken);
-            if (application != null)
+            if (currentDeliverable == null)
             {
-                application.Status = "completed";
-                application.UpdatedAt = DateTime.UtcNow;
+                throw new BusinessException("Bản nộp sản phẩm không tồn tại.");
             }
 
-            // Tăng số việc đã xong và điểm uy tín cho sinh viên (qua IUserReliabilityService)
-            await _reliabilityService.RewardCompletionAsync(deliverable.StudentId, 3, cancellationToken);
-
-            // Ghi nhận giải ngân Escrow thực tế vào Transaction ledger & cập nhật ví sinh viên (qua IEscrowPaymentService)
-            if (job.Budget > 0)
+            // Kiểm soát tranh chấp & Idempotency: Nếu job hoặc deliverable không còn ở trạng thái submitted
+            if (currentJob.Status != "submitted" || currentDeliverable.Status != "submitted")
             {
-                await _escrowPaymentService.ReleaseEscrowAsync(
-                    deliverable.StudentId,
-                    job.EmployerId,
-                    job.Id,
-                    job.Title,
-                    job.Budget,
-                    cancellationToken);
+                _logger.LogWarning("⚠️ PHÁT HIỆN TRÙNG LẶP/RACE CONDITION khi duyệt sản phẩm: Job #{JobId} (Status={JobStatus}), Deliverable #{DeliverableId} (Status={DeliverableStatus}), EmployerId={EmployerId}. Hủy bỏ request trùng.",
+                    jobId, currentJob.Status, deliverableId, currentDeliverable.Status, employerId);
+                throw new BusinessException("Công việc hoặc bản nộp này không còn ở trạng thái chờ duyệt sản phẩm (có thể đã được xử lý trước đó).");
+            }
 
-                // Gửi thông báo nghiệm thu & giải ngân cho sinh viên
+            // BẢO MẬT & TOÀN VẸN NGHIỆP VỤ: Đảm bảo bản nộp thuộc về ứng viên đang được thuê chính thức hiện tại
+            if (!currentJob.HiredApplicantId.HasValue || currentDeliverable.StudentId != currentJob.HiredApplicantId.Value)
+            {
+                throw new BusinessException("Bản nộp sản phẩm này không thuộc về sinh viên đang được thuê hiện tại của công việc.");
+            }
+
+            if (string.Equals(currentDeliverable.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BusinessException("Bản nộp sản phẩm này đã bị hủy do sinh viên trước đó đã rút khỏi công việc.");
+            }
+
+            decimal? computedBudget = null;
+            decimal? computedCommission = null;
+            decimal? computedNetPayout = null;
+
+            var filesToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            if (normalizedStatus == "revision_requested")
+            {
+                if (currentJob.RevisionCount >= currentJob.RevisionLimit)
+                {
+                    throw new BusinessException($"Công việc này đã đạt giới hạn chỉnh sửa tối đa ({currentJob.RevisionLimit} lần).");
+                }
+                currentJob.RevisionCount += 1;
+                currentJob.Status = "revision_requested";
+                currentJob.UpdatedAt = DateTime.UtcNow;
+
+                // Đưa Application về lại trạng thái "hired" (đang làm) để sinh viên tiếp tục hoàn thiện
+                var studentApp = await _dbContext.Applications
+                    .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == currentDeliverable.StudentId, cancellationToken);
+                if (studentApp != null && studentApp.Status == "submitted")
+                {
+                    studentApp.Status = "hired";
+                    studentApp.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+            else if (normalizedStatus == "accepted")
+            {
+                // Cập nhật trạng thái Job sang completed và giải phóng EscrowAmount (đã giải ngân xong cho sinh viên)
+                currentJob.Status = "completed";
+                currentJob.EscrowAmount = null;
+                currentJob.UpdatedAt = DateTime.UtcNow;
+
+                // Cập nhật Application của sinh viên sang completed
+                var application = await _dbContext.Applications
+                    .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == currentDeliverable.StudentId, cancellationToken);
+                if (application != null)
+                {
+                    application.Status = "completed";
+                    application.UpdatedAt = DateTime.UtcNow;
+                }
+
+                // Tăng số việc đã xong và điểm uy tín cho sinh viên (qua IUserReliabilityService)
+                await _reliabilityService.RewardCompletionAsync(currentDeliverable.StudentId, 3, cancellationToken);
+
+                // Tính toán hoa hồng nền tảng (VIP Business: 5%, Thường: 10%)
+                decimal commissionRate = 0.10m;
+                var hasVipSubscription = await _dbContext.Subscriptions
+                    .AnyAsync(s => s.UserId == currentJob.EmployerId && s.Status == "active" && s.PlanName.Contains("VIP"), cancellationToken);
+                if (hasVipSubscription)
+                {
+                    commissionRate = 0.05m;
+                }
+
+                computedBudget = currentJob.Budget;
+                computedCommission = Math.Round(currentJob.Budget * commissionRate);
+                computedNetPayout = currentJob.Budget - computedCommission.Value;
+
+                // Ghi nhận giải ngân Escrow thực tế vào Transaction ledger & cập nhật ví sinh viên (qua IEscrowPaymentService)
+                if (currentJob.Budget > 0)
+                {
+                    await _escrowPaymentService.ReleaseEscrowAsync(
+                        currentDeliverable.StudentId,
+                        currentJob.EmployerId,
+                        currentJob.Id,
+                        currentJob.Title,
+                        currentJob.Budget,
+                        cancellationToken);
+                }
+
+                // 🚀 TỐI ƯU HÓA CLOUDFLARE R2: Chuẩn bị dọn dẹp các tệp nháp cũ & bản watermark dư thừa sau khi nghiệm thu thành công
+                if (!string.IsNullOrWhiteSpace(currentDeliverable.PreviewFileUrl)
+                    && !string.Equals(currentDeliverable.PreviewFileUrl, currentDeliverable.FinalFileUrl, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(currentDeliverable.FileType, "url", StringComparison.OrdinalIgnoreCase))
+                {
+                    var previewKey = StorageKeyHelper.ExtractKey(currentDeliverable.PreviewFileUrl);
+                    if (!string.IsNullOrWhiteSpace(previewKey))
+                    {
+                        filesToDelete.Add(previewKey);
+                    }
+                    currentDeliverable.PreviewFileUrl = null;
+                }
+
+                var olderDeliverables = await _dbContext.JobDeliverables
+                    .Where(d => d.JobId == jobId && d.Id != currentDeliverable.Id)
+                    .ToListAsync(cancellationToken);
+
+                foreach (var old in olderDeliverables)
+                {
+                    if (!string.Equals(old.FileType, "url", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foreach (var url in new[] { old.PreviewFileUrl, old.FinalFileUrl })
+                        {
+                            var key = StorageKeyHelper.ExtractKey(url);
+                            if (!string.IsNullOrWhiteSpace(key))
+                            {
+                                filesToDelete.Add(key);
+                            }
+                        }
+                    }
+
+                    old.PreviewFileUrl = null;
+                    old.FinalFileUrl = null;
+                }
+            }
+
+            currentDeliverable.Status = normalizedStatus;
+            currentDeliverable.ReviewedAt = DateTime.UtcNow;
+
+            if (!string.IsNullOrWhiteSpace(request.FeedbackComment))
+            {
+                var feedback = new DeliverableFeedback
+                {
+                    DeliverableId = currentDeliverable.Id,
+                    EmployerId = employerId,
+                    FeedbackText = request.FeedbackComment.Trim(),
+                    CreatedAt = DateTime.UtcNow
+                };
+                await _dbContext.DeliverableFeedbacks.AddAsync(feedback, cancellationToken);
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+
+            _logger.LogInformation("Nhà tuyển dụng {EmployerId} đã duyệt deliverable {DeliverableId} với trạng thái {Status}. Trạng thái Job: {JobStatus}.", 
+                employerId, deliverableId, normalizedStatus, currentJob.Status);
+
+            // POST-COMMIT: Gửi thông báo và dọn dẹp R2 ngoại tuyến sau khi giao dịch tài chính đã commit an toàn
+            if (normalizedStatus == "revision_requested")
+            {
                 await _notificationService.SendAsync(
-                    deliverable.StudentId,
-                    "🎉",
-                    $"Sản phẩm bàn giao cho công việc \"{job.Title}\" đã được nghiệm thu thành công! Thù lao {job.Budget:N0}đ đã được chuyển vào ví của bạn.",
+                    currentDeliverable.StudentId,
+                    "🔄",
+                    $"Nhà tuyển dụng yêu cầu chỉnh sửa bản bàn giao v{currentDeliverable.Version} cho công việc \"{currentJob.Title}\".",
                     "/mywork",
                     cancellationToken);
             }
-
-            // 🚀 TỐI ƯU HÓA CLOUDFLARE R2 (Cách 1): Dọn dẹp các tệp nháp cũ & bản watermark dư thừa sau khi nghiệm thu thành công
-            var filesToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            // 1. Dọn dẹp file Preview có đóng watermark của chính bản được duyệt (vì NTD đã có quyền tải bản gốc sạch Final)
-            if (!string.IsNullOrWhiteSpace(deliverable.PreviewFileUrl)
-                && !string.Equals(deliverable.PreviewFileUrl, deliverable.FinalFileUrl, StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(deliverable.FileType, "url", StringComparison.OrdinalIgnoreCase))
+            else if (normalizedStatus == "accepted")
             {
-                var previewKey = StorageKeyHelper.ExtractKey(deliverable.PreviewFileUrl);
-                if (!string.IsNullOrWhiteSpace(previewKey))
-                {
-                    filesToDelete.Add(previewKey);
-                }
-                deliverable.PreviewFileUrl = null;
-            }
+                var payoutText = computedNetPayout.HasValue && computedCommission.HasValue && computedCommission.Value > 0
+                    ? $"Thù lao {computedNetPayout.Value:N0}đ (đã trừ phí sàn {computedCommission.Value:N0}đ)"
+                    : $"Thù lao {currentJob.Budget:N0}đ";
 
-            // 2. Lấy tất cả các bản bàn giao cũ (v1, v2...) của Job này để dọn dẹp file vật lý trên R2
-            var olderDeliverables = await _dbContext.JobDeliverables
-                .Where(d => d.JobId == jobId && d.Id != deliverable.Id)
-                .ToListAsync(cancellationToken);
+                await _notificationService.SendAsync(
+                    currentDeliverable.StudentId,
+                    "🎉",
+                    $"Sản phẩm bàn giao cho công việc \"{currentJob.Title}\" đã được nghiệm thu thành công! {payoutText} đã được chuyển vào ví của bạn.",
+                    "/mywork",
+                    cancellationToken);
 
-            foreach (var old in olderDeliverables)
-            {
-                if (!string.Equals(old.FileType, "url", StringComparison.OrdinalIgnoreCase))
+                // Dọn dẹp tệp R2 sau commit
+                foreach (var key in filesToDelete)
                 {
-                    foreach (var url in new[] { old.PreviewFileUrl, old.FinalFileUrl })
+                    try
                     {
-                        var key = StorageKeyHelper.ExtractKey(url);
-                        if (!string.IsNullOrWhiteSpace(key))
-                        {
-                            filesToDelete.Add(key);
-                        }
+                        await _storageService.DeleteFileAsync(key, cancellationToken);
+                        _logger.LogInformation("Đã dọn dẹp tệp R2 dư thừa sau nghiệm thu: {FileKey} (Job #{JobId}).", key, jobId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Không thể xóa tệp {FileKey} trên Cloudflare R2 khi dọn dẹp sau nghiệm thu Job #{JobId}.", key, jobId);
                     }
                 }
-
-                // Bảo lưu record và feedback trong DB để giữ lịch sử đánh giá, dọn dẹp liên kết file vật lý đã xóa
-                old.PreviewFileUrl = null;
-                old.FinalFileUrl = null;
             }
 
-            // 3. Thực hiện xóa vật lý các tệp nháp trên Cloudflare R2
-            foreach (var key in filesToDelete)
-            {
-                try
-                {
-                    await _storageService.DeleteFileAsync(key, cancellationToken);
-                    _logger.LogInformation("Đã dọn dẹp tệp R2 dư thừa sau nghiệm thu: {FileKey} (Job #{JobId}).", key, jobId);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Không thể xóa tệp {FileKey} trên Cloudflare R2 khi dọn dẹp sau nghiệm thu Job #{JobId}.", key, jobId);
-                }
-            }
-        }
-
-        deliverable.Status = normalizedStatus;
-        deliverable.ReviewedAt = DateTime.UtcNow;
-
-        if (!string.IsNullOrWhiteSpace(request.FeedbackComment))
-        {
-            var feedback = new DeliverableFeedback
-            {
-                DeliverableId = deliverable.Id,
-                EmployerId = employerId,
-                FeedbackText = request.FeedbackComment.Trim(),
-                CreatedAt = DateTime.UtcNow
-            };
-            await _dbContext.DeliverableFeedbacks.AddAsync(feedback, cancellationToken);
-        }
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        _logger.LogInformation("Nhà tuyển dụng {EmployerId} đã duyệt deliverable {DeliverableId} với trạng thái {Status}. Trạng thái Job: {JobStatus}.", 
-            employerId, deliverableId, normalizedStatus, job.Status);
-        return MapToDeliverableDto(deliverable, isEmployer: true);
+            var dto = MapToDeliverableDto(currentDeliverable, isEmployer: true);
+            dto.Budget = computedBudget;
+            dto.Commission = computedCommission;
+            dto.NetPayout = computedNetPayout;
+            return dto;
+        });
     }
 
     public async Task<(Stream Stream, string ContentType, string FileName)?> GetDeliverableFileStreamAsync(

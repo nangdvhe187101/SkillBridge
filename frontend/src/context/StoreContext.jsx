@@ -103,6 +103,24 @@ export function commissionRate(state) {
   return state.vipBusiness ? 0.05 : 0.1;
 }
 
+export function mapReceiptsFromApi(apiReceipts) {
+  if (!Array.isArray(apiReceipts) || apiReceipts.length === 0) return null;
+  return apiReceipts.map((r) => ({
+    id: 'rc-' + r.id,
+    code: r.code || `SB-REC-${r.jobId}-${r.id}`,
+    dashJobId: r.jobId,
+    jobId: r.jobId,
+    jobTitle: r.jobTitle,
+    budget: r.budget,
+    commission: r.commission,
+    total: r.total || r.budget,
+    net: r.netPayout !== undefined && r.netPayout !== null ? r.netPayout : (r.budget - (r.commission || 0)),
+    student: r.studentName || 'Sinh viên',
+    employer: r.employerName || 'Nhà tuyển dụng',
+    date: r.createdAt ? new Date(r.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
+  }));
+}
+
 const TX_ICON = {
   topup: 'arrow-down-left',
   withdraw: 'arrow-up-right',
@@ -142,7 +160,7 @@ const initialClaimsSeed = [
 
 const initialState = {
   balance: 350000,
-  escrowLocked: 250000,
+  escrowLocked: 0,
   transactions: initialTransactionsSeed,
   receipts: initialReceiptsSeed,
   insuranceFund: 8200000,
@@ -452,7 +470,10 @@ function reducer(state, action) {
       if (!job) return state;
 
       const studentName = job.hiredApplicant || job.hiredStudentName || deliverableResult?.studentName || 'Sinh viên';
-      const budget = job.budget || deliverableResult?.budget || 0;
+      const budget = deliverableResult?.budget ?? job.budget ?? 0;
+      const commission = deliverableResult?.commission ?? 0;
+      const net = deliverableResult?.netPayout ?? (budget - commission);
+      const total = deliverableResult?.total ?? budget;
       const receiptCode = `SB-REC-${job.id}-${Date.now().toString().slice(-4)}`;
       const receipt = {
         id: 'rc-' + job.id + '-' + Date.now(),
@@ -461,9 +482,9 @@ function reducer(state, action) {
         jobId: job.id,
         jobTitle: job.title,
         budget: budget,
-        commission: 0,
-        total: budget,
-        net: budget,
+        commission: commission,
+        total: total,
+        net: net,
         student: studentName,
         employer: job.employerName || 'Nhà tuyển dụng',
         date: fmtNow()
@@ -474,12 +495,17 @@ function reducer(state, action) {
       const myApplications = state.myApplications.map((a) => (a.jobId === job.id || a.dashJobId === job.id ? { ...a, status: 'completed', jobStatus: 'completed' } : a));
 
       let transactions = state.transactions;
-      const txLabel = `Giải ngân cho ${studentName} · ${job.title}`;
+      const txLabel = commission > 0
+        ? `Nhận thù lao giải ngân công việc #${job.id} · ${job.title}`
+        : `Giải ngân cho ${studentName} · ${job.title}`;
       const alreadyReleased = transactions.some(
-        (t) => t.type === 'escrow_release' && (t.referenceId === job.id || t.dashJobId === job.id || t.label === txLabel)
+        (t) => (t.type === 'escrow_release' || t.type === 'commission') && (t.referenceId === job.id || t.dashJobId === job.id || t.label === txLabel)
       );
       if (!alreadyReleased) {
-        transactions = addTxTo(transactions, 'escrow_release', txLabel, budget, 1, job.id);
+        transactions = addTxTo(transactions, 'escrow_release', txLabel, net, 1, job.id);
+        if (commission > 0) {
+          transactions = addTxTo(transactions, 'commission', `Phí nền tảng · ${job.title}`, commission, -1, job.id);
+        }
       }
 
       const notifications = addNotifTo(
@@ -536,7 +562,9 @@ function reducer(state, action) {
       return {
         ...state,
         balance: action.balance !== undefined ? action.balance : state.balance,
-        transactions: action.transactions || state.transactions
+        escrowLocked: action.escrowLocked !== undefined ? action.escrowLocked : state.escrowLocked,
+        transactions: action.transactions || state.transactions,
+        receipts: action.receipts !== undefined ? action.receipts : state.receipts
       };
     }
     case 'TOPUP': {
@@ -816,9 +844,11 @@ export function StoreProvider({ children }) {
           }
           const wallet = await walletApi.getMyWallet();
           if (wallet && isMounted) {
+            const mappedReceipts = mapReceiptsFromApi(wallet.receipts);
             dispatch({
               type: 'SET_WALLET',
               balance: wallet.balance,
+              escrowLocked: wallet.escrowLocked ?? 0,
               transactions: (wallet.transactions || []).map(t => ({
                 id: t.id,
                 type: t.type,
@@ -826,7 +856,8 @@ export function StoreProvider({ children }) {
                 amount: t.amount,
                 sign: t.sign,
                 date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
-              }))
+              })),
+              receipts: mappedReceipts || undefined
             });
           }
         } catch (e) {
@@ -887,9 +918,11 @@ export function StoreProvider({ children }) {
     try {
       const res = await walletApi.getMyWallet();
       if (res) {
+        const mappedReceipts = mapReceiptsFromApi(res.receipts);
         dispatch({
           type: 'SET_WALLET',
           balance: res.balance,
+          escrowLocked: res.escrowLocked ?? 0,
           transactions: (res.transactions || []).map(t => ({
             id: t.id,
             type: t.type,
@@ -897,7 +930,8 @@ export function StoreProvider({ children }) {
             amount: t.amount,
             sign: t.sign,
             date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
-          }))
+          })),
+          receipts: mappedReceipts || undefined
         });
       }
     } catch {
