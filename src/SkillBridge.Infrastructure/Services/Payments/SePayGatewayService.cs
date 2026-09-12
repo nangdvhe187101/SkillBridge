@@ -97,6 +97,16 @@ public class SePayGatewayService : ISePayGatewayService
                 return result;
             }
 
+            if (!string.Equals(payload.TransferType, "in", StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogWarning("SePay webhook: Bỏ qua giao dịch không phải tiền vào (transferType: '{TransferType}', Id: {Id})", payload.TransferType, payload.Id);
+                result.Message = $"Giao dịch không phải tiền vào (transferType: {payload.TransferType})";
+                result.IsSuccess = false;
+                result.GatewayTransactionId = payload.Id.ToString(CultureInfo.InvariantCulture);
+                result.Amount = payload.TransferAmount;
+                return result;
+            }
+
             // SePay: parse order code from transaction content (narrative) or fallback to code
             var orderCode = ExtractOrderCode(payload.Content) ?? ExtractOrderCode(payload.Code);
             if (string.IsNullOrWhiteSpace(orderCode))

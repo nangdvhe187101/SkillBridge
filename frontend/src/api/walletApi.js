@@ -4,9 +4,9 @@ export async function getMyWallet() {
   return apiFetch('/wallets/me', { method: 'GET' });
 }
 
-export async function topupWallet(amount, paymentMethod) {
-  return apiFetch('/wallets/topup', {
+export async function purchaseSubscription(planType) {
+  return apiFetch('/subscriptions/purchase', {
     method: 'POST',
-    body: JSON.stringify({ amount, paymentMethod }),
+    body: JSON.stringify({ planType }),
   });
 }

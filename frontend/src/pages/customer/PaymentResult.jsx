@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { getPaymentOrderStatusPublic } from '../../api/paymentApi';
+import { getPaymentOrderStatus } from '../../api/paymentApi';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
 
@@ -26,7 +26,7 @@ export default function PaymentResult() {
     try {
       setLoading(true);
       setError('');
-      const data = await getPaymentOrderStatusPublic(orderCode);
+      const data = await getPaymentOrderStatus(orderCode);
       setOrder(data);
 
       if (data?.status === 'paid') {

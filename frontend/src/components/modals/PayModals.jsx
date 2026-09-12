@@ -502,13 +502,27 @@ export function WithdrawModal({ onClose }) {
 
 export function SubscribeModal({ onClose }) {
   const { subscribePro, state } = useStore();
-  const [method, setMethod] = useState('wallet');
+  const { openModal } = useModal();
   const amount = 49000;
-  const confirm = () => {
-    if (method === 'wallet' && state.balance < amount) return;
-    subscribePro(amount, method);
-    onClose();
+  const isInsufficient = state.balance < amount;
+  const shortfall = amount - state.balance;
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const confirm = async () => {
+    if (isInsufficient) return;
+    try {
+      setSubmitting(true);
+      setErrorMsg('');
+      await subscribePro();
+      onClose();
+    } catch (err) {
+      setErrorMsg(err?.message || 'Có lỗi xảy ra khi đăng ký gói Freelance Pro.');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
   return (
     <ModalShell onClose={onClose}>
       <h3>Thanh toán gói Freelance Pro</h3>
@@ -517,10 +531,55 @@ export function SubscribeModal({ onClose }) {
         <div className="cs-row"><span>Thuế / phí xử lý</span><span>0đ</span></div>
         <div className="cs-row total"><span>Tổng thanh toán</span><span>{fmtVND(amount)}</span></div>
       </div>
-      <PaymentMethods selected={method} onSelect={setMethod} walletBalance={state.balance} />
+
+      <div style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid var(--primary)', background: 'rgba(22, 163, 74, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '12px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(22, 163, 74, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
+            <Icon name="wallet" width="18" height="18" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13.5 }}>Số dư Ví SkillBridge</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+              Hiện có: <b>{fmtVND(state.balance)}</b>
+            </div>
+          </div>
+        </div>
+        <span className="badge badge-success" style={{ fontSize: 11 }}>Trừ từ ví</span>
+      </div>
+
+      {isInsufficient && (
+        <div style={{ background: 'rgba(255, 92, 122, 0.12)', border: '1px solid var(--coral)', borderRadius: 10, padding: 12, margin: '12px 0', fontSize: 13 }}>
+          <b style={{ color: 'var(--coral)' }}>Số dư ví không đủ ({fmtVND(state.balance)} / {fmtVND(amount)})</b>
+          <p style={{ marginTop: 4, color: 'var(--ink-soft)' }}>
+            Bạn cần nạp thêm <b>{fmtVND(shortfall)}</b> vào ví để đăng ký gói Pro.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            style={{ marginTop: 8 }}
+            onClick={() => {
+              onClose();
+              openModal('topup', { initialOrder: { amount: shortfall } });
+            }}
+          >
+            + Nạp thêm {fmtVND(shortfall)} vào ví
+          </button>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="field-error" style={{ margin: '10px 0' }}>{errorMsg}</div>
+      )}
+
       <div className="modal-actions">
-        <button className="btn btn-primary" onClick={confirm}>Thanh toán & nâng cấp</button>
-        <button className="btn btn-outline" onClick={onClose}>Hủy</button>
+        <button
+          className="btn btn-primary"
+          disabled={submitting || isInsufficient}
+          onClick={confirm}
+        >
+          {submitting ? 'Đang xử lý...' : 'Thanh toán & nâng cấp'}
+        </button>
+        <button className="btn btn-outline" disabled={submitting} onClick={onClose}>Hủy</button>
       </div>
     </ModalShell>
   );
@@ -528,13 +587,27 @@ export function SubscribeModal({ onClose }) {
 
 export function UpgradeVipModal({ onClose }) {
   const { upgradeVip, state } = useStore();
+  const { openModal } = useModal();
   const amount = 199000;
-  const [method, setMethod] = useState(() => (state.balance >= amount ? 'wallet' : 'bank'));
-  const confirm = () => {
-    if (method === 'wallet' && state.balance < amount) return;
-    upgradeVip(amount, method);
-    onClose();
+  const isInsufficient = state.balance < amount;
+  const shortfall = amount - state.balance;
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const confirm = async () => {
+    if (isInsufficient) return;
+    try {
+      setSubmitting(true);
+      setErrorMsg('');
+      await upgradeVip();
+      onClose();
+    } catch (err) {
+      setErrorMsg(err?.message || 'Có lỗi xảy ra khi nâng cấp VIP.');
+    } finally {
+      setSubmitting(false);
+    }
   };
+
   return (
     <ModalShell onClose={onClose}>
       <div style={{ marginBottom: 12 }}>
@@ -550,13 +623,54 @@ export function UpgradeVipModal({ onClose }) {
         <div className="cs-row total"><span>Tổng thanh toán</span><span>{fmtVND(amount)}</span></div>
       </div>
 
-      <PaymentMethods selected={method} onSelect={setMethod} walletBalance={state.balance} />
+      <div style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid var(--primary)', background: 'rgba(22, 163, 74, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '12px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(22, 163, 74, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
+            <Icon name="wallet" width="18" height="18" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13.5 }}>Số dư Ví SkillBridge</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+              Hiện có: <b>{fmtVND(state.balance)}</b>
+            </div>
+          </div>
+        </div>
+        <span className="badge badge-success" style={{ fontSize: 11 }}>Trừ từ ví</span>
+      </div>
+
+      {isInsufficient && (
+        <div style={{ background: 'rgba(255, 92, 122, 0.12)', border: '1px solid var(--coral)', borderRadius: 10, padding: 12, margin: '12px 0', fontSize: 13 }}>
+          <b style={{ color: 'var(--coral)' }}>Số dư ví không đủ ({fmtVND(state.balance)} / {fmtVND(amount)})</b>
+          <p style={{ marginTop: 4, color: 'var(--ink-soft)' }}>
+            Bạn cần nạp thêm <b>{fmtVND(shortfall)}</b> vào ví để kích hoạt gói VIP.
+          </p>
+          <button
+            type="button"
+            className="btn btn-primary btn-sm"
+            style={{ marginTop: 8 }}
+            onClick={() => {
+              onClose();
+              openModal('topup', { initialOrder: { amount: shortfall } });
+            }}
+          >
+            + Nạp thêm {fmtVND(shortfall)} vào ví
+          </button>
+        </div>
+      )}
+
+      {errorMsg && (
+        <div className="field-error" style={{ margin: '10px 0' }}>{errorMsg}</div>
+      )}
 
       <div className="modal-actions">
-        <button className="btn btn-primary" onClick={confirm}>
-          Thanh toán & Kích hoạt VIP
+        <button
+          className="btn btn-primary"
+          disabled={submitting || isInsufficient}
+          onClick={confirm}
+        >
+          {submitting ? 'Đang kích hoạt...' : 'Thanh toán & Kích hoạt VIP'}
         </button>
-        <button className="btn btn-outline" onClick={onClose}>Hủy</button>
+        <button className="btn btn-outline" disabled={submitting} onClick={onClose}>Hủy</button>
       </div>
     </ModalShell>
   );
@@ -572,9 +686,6 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
   const rate = commissionRate(state);
   const commission = Math.round((job?.budget || 0) * rate);
   const total = (job?.budget || 0) + commission;
-
-  // Smart default: If wallet has enough funds use 'wallet', else default to 'bank' (QR)
-  const [method, setMethod] = useState(() => (state.balance >= total ? 'wallet' : 'bank'));
 
   // Pre-fill số ngày từ cam kết lúc đăng job (giữa deadlineAt và postedAt)
   const committedDays = useMemo(() => {
@@ -599,7 +710,8 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
 
   if (!job || !a) return null;
 
-  const isWalletInsufficient = method === 'wallet' && state.balance < total;
+  const isWalletInsufficient = state.balance < total;
+  const shortfall = total - state.balance;
 
   const confirm = async () => {
     setErrorMsg('');
@@ -608,7 +720,7 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
       return;
     }
     if (isWalletInsufficient) {
-      setErrorMsg(`Số dư ví hiện tại (${fmtVND(state.balance)}) không đủ để ký quỹ ${fmtVND(total)}. Vui lòng nạp thêm hoặc chọn phương thức thanh toán khác.`);
+      setErrorMsg(`Số dư ví hiện tại (${fmtVND(state.balance)}) không đủ để ký quỹ ${fmtVND(total)}. Vui lòng nạp thêm tiền vào ví.`);
       return;
     }
     try {
@@ -620,7 +732,7 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
         applicant: a,
         applicationId: a.applicationId || a.id,
         days: Number(days),
-        method
+        method: 'wallet'
       });
       if (typeof onHired === 'function') {
         await onHired();
@@ -635,7 +747,7 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
 
   const handleTopup = () => {
     onClose();
-    openModal('topup');
+    openModal('topup', { initialOrder: { amount: shortfall > 0 ? shortfall : 200000 } });
   };
 
   return (
@@ -658,24 +770,40 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
         </div>
         <input type="number" min="1" step="1" value={days} onChange={(e) => { setDays(e.target.value); setErrorMsg(''); }} />
       </div>
-      <PaymentMethods selected={method} onSelect={(m) => { setMethod(m); setErrorMsg(''); }} walletBalance={state.balance} />
+
+      <div style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid var(--primary)', background: 'rgba(22, 163, 74, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '12px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(22, 163, 74, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
+            <Icon name="wallet" width="18" height="18" />
+          </div>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 13.5 }}>Số dư Ví SkillBridge</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+              Hiện có: <b>{fmtVND(state.balance)}</b>
+            </div>
+          </div>
+        </div>
+        <span className="badge badge-success" style={{ fontSize: 11 }}>Trừ từ ví</span>
+      </div>
 
       {isWalletInsufficient && (
         <div style={{ background: 'rgba(255, 92, 122, 0.12)', border: '1px solid var(--coral)', borderRadius: 10, padding: 12, margin: '12px 0', fontSize: 13 }}>
           <b style={{ color: 'var(--coral)' }}>Số dư ví không đủ ({fmtVND(state.balance)} / {fmtVND(total)})</b>
-          <p style={{ marginTop: 4, color: 'var(--ink-soft)' }}>Bạn có thể chọn thanh toán qua <b>QR ngân hàng</b> hoặc nạp thêm tiền vào ví.</p>
-          <button type="button" className="btn btn-outline btn-sm" style={{ marginTop: 8 }} onClick={handleTopup}>
-            Nạp thêm vào ví
+          <p style={{ marginTop: 4, color: 'var(--ink-soft)' }}>
+            Bạn cần nạp thêm <b>{fmtVND(shortfall)}</b> vào ví để hoàn tất ký quỹ hợp đồng.
+          </p>
+          <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 8 }} onClick={handleTopup}>
+            + Nạp thêm {fmtVND(shortfall)} vào ví
           </button>
         </div>
       )}
 
-      {errorMsg && !isWalletInsufficient && (
+      {errorMsg && (
         <div className="field-error" style={{ margin: '10px 0' }}>{errorMsg}</div>
       )}
 
       <div className="modal-actions">
-        <button className="btn btn-primary" disabled={submitting} onClick={confirm}>
+        <button className="btn btn-primary" disabled={submitting || isWalletInsufficient} onClick={confirm}>
           {submitting ? 'Đang xử lý...' : 'Xác nhận thuê & ký quỹ'}
         </button>
         <button className="btn btn-outline" disabled={submitting} onClick={onClose}>Hủy</button>

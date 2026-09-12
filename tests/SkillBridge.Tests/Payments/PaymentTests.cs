@@ -168,7 +168,7 @@ public class PaymentTests
         // Arrange
         var service = new SePayGatewayService(_config, _sePayLoggerMock.Object);
         var authHeader = "Apikey SEPAY_TEST_API_KEY_123456789";
-        var payload = "{\"id\":998877,\"gateway\":\"MBBank\",\"transferAmount\":300000,\"content\":\"Chuyen tien SB20260912120000188 tu Nguyen Van A\"}";
+        var payload = "{\"id\":998877,\"gateway\":\"MBBank\",\"transferType\":\"in\",\"transferAmount\":300000,\"content\":\"Chuyen tien SB20260912120000188 tu Nguyen Van A\"}";
 
         // Act
         var result = service.ProcessWebhook(authHeader, payload);
@@ -179,5 +179,39 @@ public class PaymentTests
         Assert.Equal("SB20260912120000188", result.OrderCode);
         Assert.Equal("998877", result.GatewayTransactionId);
         Assert.Equal(300000m, result.Amount);
+    }
+
+    [Fact]
+    public void SePay_ProcessWebhook_TransferTypeOut_ShouldReject()
+    {
+        // Arrange
+        var service = new SePayGatewayService(_config, _sePayLoggerMock.Object);
+        var authHeader = "Apikey SEPAY_TEST_API_KEY_123456789";
+        var payload = "{\"id\":998878,\"gateway\":\"MBBank\",\"transferType\":\"out\",\"transferAmount\":300000,\"content\":\"Chuyen tien SB20260912120000188 tai quay\"}";
+
+        // Act
+        var result = service.ProcessWebhook(authHeader, payload);
+
+        // Assert
+        Assert.True(result.IsValidApiKey);
+        Assert.False(result.IsSuccess);
+        Assert.Contains("transferType", result.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SePay_ProcessWebhook_TransferTypeMissing_ShouldReject()
+    {
+        // Arrange
+        var service = new SePayGatewayService(_config, _sePayLoggerMock.Object);
+        var authHeader = "Apikey SEPAY_TEST_API_KEY_123456789";
+        var payload = "{\"id\":998879,\"gateway\":\"MBBank\",\"transferAmount\":300000,\"content\":\"SB20260912120000188\"}";
+
+        // Act
+        var result = service.ProcessWebhook(authHeader, payload);
+
+        // Assert
+        Assert.True(result.IsValidApiKey);
+        Assert.False(result.IsSuccess);
+        Assert.Contains("transferType", result.Message, StringComparison.OrdinalIgnoreCase);
     }
 }
