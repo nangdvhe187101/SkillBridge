@@ -315,10 +315,17 @@ public class JobService : IJobService
             throw new BusinessException("Bạn không có quyền xóa công việc này.");
         }
 
-        var allowedDeleteStatuses = new[] { "open", "completed", "cancelled" };
+        var allowedDeleteStatuses = new[] { "open", "cancelled" };
         if (!allowedDeleteStatuses.Contains(job.Status))
         {
-            throw new BusinessException("Công việc đang trong quá trình thực hiện bởi sinh viên nên không thể xóa. Bạn chỉ có thể xóa sau khi hai bên đã hoàn thành giao dịch thành công (hoàn tất nghiệm thu) hoặc công việc chưa chọn người làm.");
+            throw new BusinessException("Không thể xóa công việc đã hoàn thành hoặc đang thực hiện để bảo vệ chứng từ tài chính và lịch sử giao dịch của cả hai bên.");
+        }
+
+        // Bảo vệ chứng từ tài chính: Không được phép xóa nếu công việc đã có biên nhận giải ngân
+        var hasReceipt = await _dbContext.Receipts.AnyAsync(r => r.JobId == jobId);
+        if (hasReceipt)
+        {
+            throw new BusinessException("Công việc này đã hoàn tất thanh toán và có biên nhận tài chính hợp lệ. Để bảo đảm tính minh bạch và chứng từ kế toán, công việc không thể bị xóa.");
         }
 
         // Lấy danh sách file attachments trước khi xóa Job
