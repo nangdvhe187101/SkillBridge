@@ -134,102 +134,134 @@ public class JobService : IJobService
 
     public async Task CancelJobAsync(int employerId, int jobId)
     {
-        var job = await _jobRepository.GetByIdAsync(jobId);
-        if (job == null)
+        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            throw new BusinessException("Không tìm thấy công việc.");
-        }
-
-        if (job.EmployerId != employerId)
-        {
-            throw new BusinessException("Bạn không có quyền hủy công việc này.");
-        }
-
-        if (job.Status == "cancelled")
-        {
-            throw new BusinessException("Công việc này đã bị hủy trước đó.");
-        }
-
-        if (job.Status == "completed")
-        {
-            throw new BusinessException("Không thể hủy công việc đã hoàn thành.");
-        }
-
-        var isHired = job.Status == "in_progress" || job.HiredApplicantId.HasValue || new[] { "submitted", "revision_requested" }.Contains(job.Status);
-
-        // Nếu NTD tự ý hủy khi đang có sinh viên làm việc, trừ 10 điểm uy tín NTD
-        if (isHired)
-        {
-            await _reliabilityService.PenalizeScoreAsync(
-                employerId,
-                10,
-                $"Nhà tuyển dụng tự ý hủy Job #{jobId} đang có sinh viên thực hiện");
-
-            // Hủy các application đang hired liên quan
-            var hiredApps = await _dbContext.Applications
-                .Where(a => a.JobId == jobId && (a.Status == "hired" || a.Status == "submitted" || a.Status == "revision_requested"))
-                .ToListAsync();
-
-            foreach (var app in hiredApps)
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            try
             {
-                app.Status = "cancelled";
-                app.UpdatedAt = DateTime.UtcNow;
-            }
-
-            // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên và dọn dẹp file R2
-            var pendingDeliverables = await _dbContext.JobDeliverables
-                .Where(d => d.JobId == jobId && d.Status != "accepted")
-                .ToListAsync();
-            foreach (var del in pendingDeliverables)
-            {
-                del.Status = "cancelled";
-                if (!string.Equals(del.FileType, "url", StringComparison.OrdinalIgnoreCase))
+                var job = await _jobRepository.GetByIdAsync(jobId);
+                if (job == null)
                 {
-                    foreach (var url in new[] { del.PreviewFileUrl, del.FinalFileUrl })
+                    throw new BusinessException("Không tìm thấy công việc.");
+                }
+
+                if (job.EmployerId != employerId)
+                {
+                    throw new BusinessException("Bạn không có quyền hủy công việc này.");
+                }
+
+                if (job.Status == "cancelled")
+                {
+                    throw new BusinessException("Công việc này đã bị hủy trước đó.");
+                }
+
+                if (job.Status == "completed")
+                {
+                    throw new BusinessException("Không thể hủy công việc đã hoàn thành.");
+                }
+
+                var isHired = job.Status == "in_progress" || job.HiredApplicantId.HasValue || new[] { "submitted", "revision_requested" }.Contains(job.Status);
+                var filesToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                int? hiredStudentIdToNotify = null;
+
+                // Nếu NTD tự ý hủy khi đang có sinh viên làm việc, trừ 10 điểm uy tín NTD
+                if (isHired)
+                {
+                    await _reliabilityService.PenalizeScoreAsync(
+                        employerId,
+                        10,
+                        $"Nhà tuyển dụng tự ý hủy Job #{jobId} đang có sinh viên thực hiện");
+
+                    // Hủy các application đang hired liên quan
+                    var hiredApps = await _dbContext.Applications
+                        .Where(a => a.JobId == jobId && (a.Status == "hired" || a.Status == "submitted" || a.Status == "revision_requested"))
+                        .ToListAsync();
+
+                    foreach (var app in hiredApps)
                     {
-                        var key = StorageKeyHelper.ExtractKey(url);
-                        if (!string.IsNullOrWhiteSpace(key))
+                        app.Status = "cancelled";
+                        app.UpdatedAt = DateTime.UtcNow;
+                    }
+
+                    // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên và thu thập file R2
+                    var pendingDeliverables = await _dbContext.JobDeliverables
+                        .Where(d => d.JobId == jobId && d.Status != "accepted")
+                        .ToListAsync();
+                    foreach (var del in pendingDeliverables)
+                    {
+                        del.Status = "cancelled";
+                        if (!string.Equals(del.FileType, "url", StringComparison.OrdinalIgnoreCase))
                         {
-                            try
+                            foreach (var url in new[] { del.PreviewFileUrl, del.FinalFileUrl })
                             {
-                                await _storageService.DeleteFileAsync(key);
-                                _logger.LogInformation("Đã dọn dẹp file R2 {FileKey} của deliverable bị hủy khi hủy Job #{JobId}.", key, jobId);
-                            }
-                            catch (Exception ex)
-                            {
-                                _logger.LogWarning(ex, "Không thể xóa file {FileKey} trên R2 khi hủy Job #{JobId}.", key, jobId);
+                                var key = StorageKeyHelper.ExtractKey(url);
+                                if (!string.IsNullOrWhiteSpace(key))
+                                {
+                                    filesToDelete.Add(key);
+                                }
                             }
                         }
+                        del.PreviewFileUrl = null;
+                        del.FinalFileUrl = null;
+                    }
+
+                    // Hoàn lại tiền ký quỹ cho Nhà tuyển dụng (được bảo vệ bởi row lock trong transaction)
+                    if (job.Budget > 0)
+                    {
+                        await _escrowPaymentService.RefundEscrowAsync(
+                            employerId,
+                            job.Id,
+                            job.Title,
+                            job.Budget,
+                            $"Hoàn tiền ký quỹ do hủy công việc #{job.Id} · {job.Title}");
+                    }
+
+                    hiredStudentIdToNotify = job.HiredApplicantId;
+                }
+
+                await _jobRepository.CancelJobAsync(job);
+                await _dbContext.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                _logger.LogInformation("Nhà tuyển dụng {EmployerId} đã hủy thành công Job #{JobId}.", employerId, jobId);
+
+                // POST-COMMIT: Gửi thông báo và dọn dẹp R2 ngoại tuyến sau khi giao dịch DB đã commit an toàn
+                if (hiredStudentIdToNotify.HasValue)
+                {
+                    try
+                    {
+                        await _notificationService.SendAsync(
+                            hiredStudentIdToNotify.Value,
+                            "⚠️",
+                            $"Nhà tuyển dụng đã hủy công việc \"{job.Title}\".",
+                            "/mywork");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Không thể gửi thông báo cho sinh viên {StudentId} khi hủy Job #{JobId}.", hiredStudentIdToNotify.Value, jobId);
                     }
                 }
-                del.PreviewFileUrl = null;
-                del.FinalFileUrl = null;
-            }
 
-            // Hoàn lại tiền ký quỹ cho Nhà tuyển dụng
-            if (job.Budget > 0)
+                foreach (var key in filesToDelete)
+                {
+                    try
+                    {
+                        await _storageService.DeleteFileAsync(key);
+                        _logger.LogInformation("Đã dọn dẹp file R2 {FileKey} của deliverable bị hủy khi hủy Job #{JobId}.", key, jobId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Không thể xóa file {FileKey} trên R2 khi hủy Job #{JobId}.", key, jobId);
+                    }
+                }
+            }
+            catch
             {
-                await _escrowPaymentService.RefundEscrowAsync(
-                    employerId,
-                    job.Id,
-                    job.Title,
-                    job.Budget,
-                    $"Hoàn tiền ký quỹ do hủy công việc #{job.Id} · {job.Title}");
+                await transaction.RollbackAsync();
+                throw;
             }
-
-            // Gửi thông báo cho sinh viên đang được thuê
-            var hiredStudentId = job.HiredApplicantId;
-            if (hiredStudentId.HasValue)
-            {
-                await _notificationService.SendAsync(
-                    hiredStudentId.Value,
-                    "⚠️",
-                    $"Nhà tuyển dụng đã hủy công việc \"{job.Title}\".",
-                    "/mywork");
-            }
-        }
-
-        await _jobRepository.CancelJobAsync(job);
+        });
     }
 
     public async Task ReopenJobAsync(int employerId, int jobId)

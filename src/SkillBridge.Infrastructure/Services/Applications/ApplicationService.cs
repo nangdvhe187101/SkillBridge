@@ -393,6 +393,11 @@ public class ApplicationService : IApplicationService
                     new[] { "in_progress", "submitted", "revision_requested" }.Contains(application.Job.Status);
 
                 var isHiredOrInProgress = isHiredForThisJob && isJobInProgress;
+                var filesToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                int? notifyEmployerId = null;
+                string? notifyJobTitle = null;
+                decimal? notifyBudget = null;
+                int? notifyJobId = null;
 
                 // Nếu đang trong quá trình thực hiện việc (đã được thuê), trừ 10 điểm uy tín sinh viên
                 if (isHiredOrInProgress)
@@ -425,12 +430,10 @@ public class ApplicationService : IApplicationService
                                 $"Hoàn tiền ký quỹ do sinh viên hủy nhận việc Job #{job.Id} · {job.Title}");
                         }
 
-                        // Gửi thông báo cho Nhà tuyển dụng
-                        await _notificationService.SendAsync(
-                            job.EmployerId,
-                            "⚠️",
-                            $"Sinh viên đã hủy thực hiện công việc \"{job.Title}\". Số tiền ký quỹ {job.Budget:N0}đ đã được hoàn lại vào ví của bạn.",
-                            $"/jobs/{job.Id}/applicants");
+                        notifyEmployerId = job.EmployerId;
+                        notifyJobTitle = job.Title;
+                        notifyBudget = job.Budget;
+                        notifyJobId = job.Id;
 
                         // Khôi phục lại các đơn ứng tuyển của các sinh viên khác (từng bị auto-rejected khi thuê) về lại pending để NTD có thể chọn tiếp
                         var autoRejectedApps = await _dbContext.Applications
@@ -443,7 +446,7 @@ public class ApplicationService : IApplicationService
                         }
                     }
 
-                    // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên này và dọn dẹp file R2
+                    // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên này và thu thập file R2
                     var pendingDeliverables = await _dbContext.JobDeliverables
                         .Where(d => d.JobId == jobId && d.StudentId == studentId && d.Status != "accepted")
                         .ToListAsync();
@@ -457,15 +460,7 @@ public class ApplicationService : IApplicationService
                                 var key = StorageKeyHelper.ExtractKey(url);
                                 if (!string.IsNullOrWhiteSpace(key))
                                 {
-                                    try
-                                    {
-                                        await _storageService.DeleteFileAsync(key);
-                                        _logger.LogInformation("Đã dọn dẹp file R2 {FileKey} của deliverable khi sinh viên hủy việc (Job #{JobId}).", key, jobId);
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        _logger.LogWarning(ex, "Không thể xóa file {FileKey} trên R2 khi sinh viên hủy việc Job #{JobId}.", key, jobId);
-                                    }
+                                    filesToDelete.Add(key);
                                 }
                             }
                         }
@@ -484,6 +479,36 @@ public class ApplicationService : IApplicationService
 
                 _logger.LogInformation("Đã xử lý hủy đơn/việc cho sinh viên {StudentId} tại Job {JobId}. Đang làm: {IsHiredOrInProgress}",
                     studentId, jobId, isHiredOrInProgress);
+
+                // POST-COMMIT: Gửi thông báo cho Nhà tuyển dụng và dọn dẹp R2 sau khi giao dịch đã commit an toàn
+                if (notifyEmployerId.HasValue && notifyJobId.HasValue)
+                {
+                    try
+                    {
+                        await _notificationService.SendAsync(
+                            notifyEmployerId.Value,
+                            "⚠️",
+                            $"Sinh viên đã hủy thực hiện công việc \"{notifyJobTitle}\". Số tiền ký quỹ {notifyBudget ?? 0:N0}đ đã được hoàn lại vào ví của bạn.",
+                            $"/jobs/{notifyJobId.Value}/applicants");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Không thể gửi thông báo cho Nhà tuyển dụng {EmployerId} khi sinh viên hủy việc Job #{JobId}.", notifyEmployerId.Value, notifyJobId.Value);
+                    }
+                }
+
+                foreach (var key in filesToDelete)
+                {
+                    try
+                    {
+                        await _storageService.DeleteFileAsync(key);
+                        _logger.LogInformation("Đã dọn dẹp file R2 {FileKey} của deliverable khi sinh viên hủy việc (Job #{JobId}).", key, jobId);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Không thể xóa file {FileKey} trên R2 khi sinh viên hủy việc Job #{JobId}.", key, jobId);
+                    }
+                }
             }
             catch
             {
