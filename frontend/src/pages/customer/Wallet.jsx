@@ -1,18 +1,31 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useStore, fmtVND, TX_ICON } from '../../context/StoreContext';
+import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import Pagination from '../../components/Pagination';
 import { exportTransactionsToCSV } from '../../utils/fileDownloader';
+import { getActivePendingOrder, cancelPendingOrder } from '../../api/paymentApi';
+import Icon from '../../components/Icon';
 
-const TX_FILTER_MAP = {
-  all: 'Tất cả',
-  topup: '💰 Nạp tiền',
-  withdraw: '🏦 Rút tiền',
-  escrow_release: '💼 Giải ngân',
-  escrow_hold: '🔒 Ký quỹ Escrow',
-  insurance_payout: '🛡️ Bồi thường BH',
+const TX_CONFIG = {
+  topup: { icon: 'arrow-down-left', label: 'Nạp tiền', color: '#16a34a', bg: 'rgba(22, 163, 74, 0.12)' },
+  withdraw: { icon: 'arrow-up-right', label: 'Rút tiền', color: '#ea580c', bg: 'rgba(234, 88, 12, 0.12)' },
+  escrow_release: { icon: 'check', label: 'Giải ngân', color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)' },
+  escrow_hold: { icon: 'lock', label: 'Ký quỹ Escrow', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)' },
+  insurance_payout: { icon: 'shield-check', label: 'Bồi thường BH', color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.12)' },
+  subscription: { icon: 'crown', label: 'Gói đặc quyền', color: '#eab308', bg: 'rgba(234, 179, 8, 0.12)' },
+  commission: { icon: 'receipt', label: 'Phí nền tảng', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)' },
+  default: { icon: 'card', label: 'Giao dịch', color: 'var(--primary)', bg: 'rgba(99, 102, 241, 0.12)' },
 };
+
+const TX_FILTER_LIST = [
+  { key: 'all', label: 'Tất cả', icon: null },
+  { key: 'topup', label: 'Nạp tiền', icon: 'arrow-down-left' },
+  { key: 'withdraw', label: 'Rút tiền', icon: 'arrow-up-right' },
+  { key: 'escrow_release', label: 'Giải ngân', icon: 'check' },
+  { key: 'escrow_hold', label: 'Ký quỹ Escrow', icon: 'lock' },
+  { key: 'insurance_payout', label: 'Bồi thường BH', icon: 'shield-check' },
+];
 
 const VN_BANKS = [
   'MB Bank (Ngân hàng Quân Đội)',
@@ -28,9 +41,40 @@ const VN_BANKS = [
 ];
 
 export default function Wallet() {
-  const { state, updateBankAccount } = useStore();
+  const { state, updateBankAccount, showToast } = useStore();
   const { openModal } = useModal();
   const navigate = useNavigate();
+
+  // Pending payment order state (Resume pending payment)
+  const [pendingOrder, setPendingOrder] = useState(null);
+  const [cancellingOrder, setCancellingOrder] = useState(false);
+
+  const loadPendingOrder = async () => {
+    try {
+      const res = await getActivePendingOrder();
+      setPendingOrder(res || null);
+    } catch {
+      setPendingOrder(null);
+    }
+  };
+
+  useEffect(() => {
+    loadPendingOrder();
+  }, [state.balance]);
+
+  const handleCancelPending = async (orderCode) => {
+    if (!orderCode || cancellingOrder) return;
+    try {
+      setCancellingOrder(true);
+      await cancelPendingOrder(orderCode);
+      setPendingOrder(null);
+      if (typeof showToast === 'function') showToast('Đã hủy đơn nạp tiền đang chờ.', 'check');
+    } catch (err) {
+      if (typeof showToast === 'function') showToast(err?.message || 'Không thể hủy đơn.', 'x');
+    } finally {
+      setCancellingOrder(false);
+    }
+  };
 
   // Transaction filter & pagination state
   const [txFilter, setTxFilter] = useState('all');
@@ -132,7 +176,10 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                 backdropFilter: 'blur(10px)'
               }}
             >
-              <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 6 }}>🟢 Số dư khả dụng (Có thể rút ngay)</div>
+              <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+                Số dư khả dụng (Có thể rút ngay)
+              </div>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 32, fontWeight: 700, color: '#CBFF4D' }}>
                 {fmtVND(state.balance)}
               </div>
@@ -148,7 +195,10 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                 backdropFilter: 'blur(10px)'
               }}
             >
-              <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 6 }}>🔒 Đang tạm giữ Ký quỹ (Escrow)</div>
+              <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="lock" width="13" height="13" />
+                Đang tạm giữ Ký quỹ (Escrow)
+              </div>
               <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 32, fontWeight: 700, color: '#57C7FF' }}>
                 {fmtVND(escrowLockedAmount)}
               </div>
@@ -168,13 +218,16 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
               }}
             >
               <div>
-                <div style={{ fontSize: 13, opacity: 0.85, marginBottom: 6 }}>💎 Tổng tài sản ví SkillBridge</div>
+                <div style={{ fontSize: 13, opacity: 0.9, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="gem" width="16" height="16" />
+                  <span>Tổng tài sản ví SkillBridge</span>
+                </div>
                 <div style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: 32, fontWeight: 700, color: '#fff' }}>
                   {fmtVND(totalAssets)}
                 </div>
               </div>
               <div className="wallet-actions" style={{ marginTop: 12 }}>
-                <button className="btn btn-lime btn-sm" onClick={() => openModal('topup')}>+ Nạp tiền</button>
+                <button className="btn btn-lime btn-sm" onClick={() => openModal('topup', pendingOrder ? { initialOrder: pendingOrder } : {})}>+ Nạp tiền</button>
                 <button className="btn btn-sm" style={{ background: 'rgba(255,255,255,0.2)', color: '#fff' }} onClick={() => openModal('withdraw')}>Rút tiền</button>
               </div>
             </div>
@@ -183,21 +236,109 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
       </div>
 
       <div className="wallet-body wrap">
+        {/* Pending Payment Order Banner (Resume pending transaction - Cách 2) */}
+        {pendingOrder && (
+          <div
+            style={{
+              background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(99, 102, 241, 0.08))',
+              border: '1px solid rgba(245, 158, 11, 0.35)',
+              borderRadius: 16,
+              padding: '16px 20px',
+              marginBottom: 20,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 16,
+              flexWrap: 'wrap',
+              boxShadow: '0 4px 20px rgba(245, 158, 11, 0.08)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 12,
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  color: '#d97706',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                <Icon name="hourglass" width="22" height="22" />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--ink)' }}>
+                    Bạn có một giao dịch nạp tiền đang chờ quét mã
+                  </span>
+                  <span
+                    style={{
+                      background: 'rgba(245, 158, 11, 0.2)',
+                      color: '#b45309',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '2px 8px',
+                      borderRadius: 999
+                    }}
+                  >
+                    Đang chờ
+                  </span>
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--ink-soft)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <span>Số tiền: <b style={{ color: 'var(--primary)', fontWeight: 700 }}>{fmtVND(pendingOrder.amount)}</b></span>
+                  <span>•</span>
+                  <span>Mã đơn: <code>{pendingOrder.orderCode}</code></span>
+                  <span>•</span>
+                  <span>Phương thức: <b>VietQR</b></span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                className="btn btn-sm btn-outline"
+                style={{ borderColor: 'rgba(239, 68, 68, 0.3)', color: '#dc2626', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                disabled={cancellingOrder}
+                onClick={() => handleCancelPending(pendingOrder.orderCode)}
+              >
+                <Icon name="x" width="13" height="13" />
+                <span>{cancellingOrder ? 'Đang hủy...' : 'Hủy đơn'}</span>
+              </button>
+              <button
+                className="btn btn-sm btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, boxShadow: '0 2px 10px rgba(99, 102, 241, 0.3)' }}
+                onClick={() => openModal('topup', { initialOrder: pendingOrder })}
+              >
+                <Icon name="qr" width="15" height="15" />
+                <span>Tiếp tục quét mã QR</span>
+                <Icon name="arrow" width="13" height="13" />
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="wallet-grid">
           {/* Left Column: Transaction History & E-Receipts */}
           <div>
             {/* Transaction History Card with Filters & Pagination */}
             <div className="pcard">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
-                <h4 style={{ margin: 0 }}>📊 Lịch sử giao dịch</h4>
+                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="chart-bar" width="18" height="18" style={{ color: 'var(--primary)' }} />
+                  <span>Lịch sử giao dịch</span>
+                </h4>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <button
                     className="btn btn-outline btn-sm"
-                    style={{ fontSize: 11.5, padding: '3px 9px', display: 'flex', alignItems: 'center', gap: 4 }}
+                    style={{ fontSize: 11.5, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6 }}
                     onClick={() => exportTransactionsToCSV(filteredTransactions, `Sao_ke_vi_${state.currentUser?.fullName || 'User'}.csv`)}
                     title="Xuất danh sách giao dịch ra file Excel/CSV"
                   >
-                    📥 Xuất Excel/CSV
+                    <Icon name="download" width="13" height="13" />
+                    <span>Xuất Excel/CSV</span>
                   </button>
                   <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
                     Tổng: <b>{filteredTransactions.length}</b> mục
@@ -207,14 +348,15 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
 
               {/* Transaction Filter Chips */}
               <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 10, marginBottom: 12, borderBottom: '1px solid var(--border)', scrollbarWidth: 'none' }}>
-                {Object.entries(TX_FILTER_MAP).map(([key, label]) => (
+                {TX_FILTER_LIST.map((item) => (
                   <button
-                    key={key}
-                    className={'chip ' + (txFilter === key ? 'is-active' : '')}
-                    onClick={() => setTxFilter(key)}
-                    style={{ fontSize: 12, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    key={item.key}
+                    className={'chip ' + (txFilter === item.key ? 'is-active' : '')}
+                    onClick={() => setTxFilter(item.key)}
+                    style={{ fontSize: 12, padding: '5px 12px', cursor: 'pointer', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   >
-                    {label}
+                    {item.icon && <Icon name={item.icon} width="13" height="13" />}
+                    <span>{item.label}</span>
                   </button>
                 ))}
               </div>
@@ -223,18 +365,23 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
               {filteredTransactions.length === 0 ? (
                 <div className="empty-state">Không có giao dịch nào thuộc bộ lọc này.</div>
               ) : (
-                pagedTransactions.map((t) => (
-                  <div className="tx-row" key={t.id}>
-                    <div className="tx-ic">{TX_ICON[t.type] || '💳'}</div>
-                    <div className="tx-main">
-                      <b>{t.label}</b>
-                      <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{t.date}</span>
+                pagedTransactions.map((t) => {
+                  const cfg = TX_CONFIG[t.type] || TX_CONFIG.default;
+                  return (
+                    <div className="tx-row" key={t.id}>
+                      <div className="tx-ic" style={{ background: cfg.bg, color: cfg.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon name={cfg.icon} width="17" height="17" />
+                      </div>
+                      <div className="tx-main">
+                        <b>{t.label}</b>
+                        <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{t.date}</span>
+                      </div>
+                      <div className={'tx-amt' + (t.sign > 0 ? ' pos' : ' neg')} style={{ fontWeight: 700, fontSize: 14 }}>
+                        {t.sign > 0 ? '+' : '-'}{fmtVND(t.amount)}
+                      </div>
                     </div>
-                    <div className={'tx-amt' + (t.sign > 0 ? ' pos' : ' neg')} style={{ fontWeight: 700, fontSize: 14 }}>
-                      {t.sign > 0 ? '+' : '-'}{fmtVND(t.amount)}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
 
               {/* Reusable Pagination Component */}
@@ -251,7 +398,10 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
             {/* E-Receipts Card */}
             <div className="pcard" style={{ marginTop: 22 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <h4 style={{ margin: 0 }}>🧾 Biên nhận điện tử (E-Receipts)</h4>
+                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="receipt" width="18" height="18" style={{ color: 'var(--primary)' }} />
+                  <span>Biên nhận điện tử (E-Receipts)</span>
+                </h4>
               </div>
               <p className="sub" style={{ marginTop: 0, marginBottom: 14 }}>
                 Biên nhận được tạo tự động sau mỗi lần giải ngân — dùng làm chứng từ minh bạch thu nhập. Bấm vào để xem chi tiết hoặc tải về máy.
@@ -268,7 +418,9 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                     onClick={() => setReceiptModal(r)}
                     title="Bấm để xem và tải biên nhận"
                   >
-                    <div className="tx-ic" style={{ background: 'rgba(108, 76, 255, 0.1)', color: 'var(--primary)' }}>🧾</div>
+                    <div className="tx-ic" style={{ background: 'rgba(108, 76, 255, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="receipt" width="17" height="17" />
+                    </div>
                     <div className="tx-main">
                       <b>{r.jobTitle}</b>
                       <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
@@ -290,13 +442,17 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
             {/* Linked Payout Bank Account Manager Card */}
             <div className="pcard" style={{ border: '1px solid rgba(108, 76, 255, 0.25)', background: 'linear-gradient(to bottom, var(--surface), rgba(108, 76, 255, 0.03))' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <h4 style={{ margin: 0 }}>🏦 Tài khoản Ngân hàng nhận tiền</h4>
+                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="bank" width="18" height="18" style={{ color: 'var(--primary)' }} />
+                  <span>Tài khoản Ngân hàng nhận tiền</span>
+                </h4>
                 <button
                   className="btn btn-outline btn-sm"
-                  style={{ fontSize: 11.5, padding: '3px 8px' }}
+                  style={{ fontSize: 11.5, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                   onClick={() => setBankModalOpen(true)}
                 >
-                  ✏️ Thay đổi
+                  <Icon name="edit" width="12" height="12" />
+                  <span>Thay đổi</span>
                 </button>
               </div>
 
@@ -311,7 +467,9 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                   overflow: 'hidden'
                 }}
               >
-                <div style={{ position: 'absolute', right: -10, top: -10, fontSize: 72, opacity: 0.08 }}>💳</div>
+                <div style={{ position: 'absolute', right: 12, top: 12, opacity: 0.12, color: '#fff' }}>
+                  <Icon name="card" width="56" height="56" />
+                </div>
                 <div style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   {state.bankAccount?.bankName || 'MB Bank'}
                 </div>
@@ -323,8 +481,9 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                     <span style={{ fontSize: 10, color: '#94a3b8', display: 'block' }}>CHỦ TÀI KHOẢN</span>
                     <b style={{ textTransform: 'uppercase' }}>{state.bankAccount?.accountHolder || 'NGUYEN VAN A'}</b>
                   </div>
-                  <span style={{ fontSize: 11, background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '2px 6px', borderRadius: 4 }}>
-                    ✓ Đã liên kết
+                  <span style={{ fontSize: 11, background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '2px 8px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="check" width="11" height="11" />
+                    <span>Đã liên kết</span>
                   </span>
                 </div>
               </div>
@@ -335,7 +494,10 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
 
             {/* Community Insurance Fund Card & Claims Tracker */}
             <div className="pcard" style={{ border: '1px solid var(--lime)', marginTop: 22 }}>
-              <h4>Quỹ Bảo hiểm Tương hỗ</h4>
+              <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="shield-check" width="18" height="18" style={{ color: 'var(--primary)' }} />
+                <span>Quỹ Bảo hiểm Tương hỗ</span>
+              </h4>
               <p className="sub" style={{ marginTop: -6 }}>
                 Trích từ doanh thu nền tảng, dùng để hỗ trợ bồi thường nếu phát sinh rủi ro trong quá trình làm việc.
               </p>
@@ -359,7 +521,9 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                     onClick={() => setClaimModal(c)}
                     title="Bấm để xem tiến độ khiếu nại"
                   >
-                    <div className="tx-ic">🛡️</div>
+                    <div className="tx-ic" style={{ background: 'rgba(6, 182, 212, 0.12)', color: '#06b6d4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Icon name="shield-check" width="17" height="17" />
+                    </div>
                     <div className="tx-main">
                       <b>{c.jobTitle}</b>
                       <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{c.desc}</span>
@@ -373,7 +537,7 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                           color: c.status === 'approved' || c.status === 'resolved' ? '#16a34a' : '#d97706'
                         }}
                       >
-                        {c.statusLabel || (c.status === 'approved' ? '✅ Đã bồi thường' : '⏳ Chờ duyệt')}
+                        {c.statusLabel || (c.status === 'approved' ? 'Đã bồi thường' : 'Chờ duyệt')}
                       </span>
                       {c.payout > 0 && <div className="tx-amt pos" style={{ fontSize: 12, marginTop: 2 }}>+{fmtVND(c.payout)}</div>}
                     </div>
@@ -384,10 +548,23 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
 
             {/* Subscriptions Card */}
             <div className="pcard" style={{ marginTop: 22 }}>
-              <h4>Gói đặc quyền & Đăng ký</h4>
+              <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="crown" width="18" height="18" style={{ color: '#eab308' }} />
+                <span>Gói đặc quyền & Đăng ký</span>
+              </h4>
               <div style={{ marginBottom: 14 }}>
-                {state.subscriptionPro && <div className="chip chip-lime" style={{ marginBottom: 8 }}>⭐ Freelance Pro — đang hoạt động</div>}
-                {state.vipBusiness && <div className="chip chip-lime" style={{ marginBottom: 8 }}>👑 VIP Business Suite — đang hoạt động</div>}
+                {state.subscriptionPro && (
+                  <div className="chip chip-lime" style={{ marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="star" width="13" height="13" />
+                    <span>Freelance Pro — đang hoạt động</span>
+                  </div>
+                )}
+                {state.vipBusiness && (
+                  <div className="chip chip-lime" style={{ marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="crown" width="13" height="13" />
+                    <span>VIP Business Suite — đang hoạt động</span>
+                  </div>
+                )}
                 {!state.subscriptionPro && !state.vipBusiness && (
                   <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Bạn đang dùng gói Miễn phí. Nâng cấp để mở khoá huy hiệu uy tín và giảm phí giao dịch.</p>
                 )}
@@ -427,10 +604,12 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 12, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 22 }}>🧾</span>
+                <Icon name="receipt" width="22" height="22" style={{ color: 'var(--primary)' }} />
                 <h3 style={{ margin: 0, fontSize: 18 }}>Biên nhận điện tử hợp lệ</h3>
               </div>
-              <button onClick={() => setReceiptModal(null)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--ink-soft)' }}>✕</button>
+              <button onClick={() => setReceiptModal(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-soft)', display: 'flex', alignItems: 'center' }}>
+                <Icon name="x" width="16" height="16" />
+              </button>
             </div>
 
             <div style={{ background: 'rgba(108, 76, 255, 0.05)', border: '1px dashed var(--primary)', borderRadius: 12, padding: 16, marginBottom: 16 }}>
@@ -444,7 +623,10 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 13 }}>
                 <span style={{ color: 'var(--ink-soft)' }}>Trạng thái:</span>
-                <span className="chip" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#16a34a', fontSize: 11 }}>✓ ĐÃ GIẢI NGÂN</span>
+                <span className="chip" style={{ background: 'rgba(34, 197, 94, 0.15)', color: '#16a34a', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="check" width="11" height="11" />
+                  <span>ĐÃ GIẢI NGÂN</span>
+                </span>
               </div>
               <div style={{ borderTop: '1px solid var(--border)', margin: '10px 0' }} />
               <div style={{ fontSize: 13, marginBottom: 6 }}>
@@ -509,10 +691,12 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 12, marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 22 }}>🛡️</span>
+                <Icon name="shield-check" width="22" height="22" style={{ color: '#06b6d4' }} />
                 <h3 style={{ margin: 0, fontSize: 18 }}>Hồ sơ Khiếu nại Quỹ Bảo hiểm</h3>
               </div>
-              <button onClick={() => setClaimModal(null)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer' }}>✕</button>
+              <button onClick={() => setClaimModal(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--ink-soft)' }}>
+                <Icon name="x" width="16" height="16" />
+              </button>
             </div>
 
             <div style={{ fontSize: 13.5, lineHeight: 1.6, marginBottom: 16 }}>
@@ -529,7 +713,7 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                     fontSize: 12
                   }}
                 >
-                  {claimModal.statusLabel || (claimModal.status === 'approved' ? '✅ Đã duyệt chi trả' : '⏳ Đang thẩm định')}
+                  {claimModal.statusLabel || (claimModal.status === 'approved' ? 'Đã duyệt chi trả' : 'Đang thẩm định')}
                 </span>
               </p>
               {claimModal.payout > 0 && (
@@ -575,8 +759,13 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: 12, marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: 18 }}>🏦 Cập nhật Tài khoản Ngân hàng Rút tiền</h3>
-              <button type="button" onClick={() => setBankModalOpen(false)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer' }}>✕</button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="bank" width="18" height="18" style={{ color: 'var(--primary)' }} />
+                <h3 style={{ margin: 0, fontSize: 18 }}>Cập nhật Tài khoản Ngân hàng Rút tiền</h3>
+              </div>
+              <button type="button" onClick={() => setBankModalOpen(false)} style={{ border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: 'var(--ink-soft)' }}>
+                <Icon name="x" width="16" height="16" />
+              </button>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>

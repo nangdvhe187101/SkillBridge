@@ -103,6 +103,8 @@ public partial class SkillBridgeDbContext : DbContext
     public virtual DbSet<Wallet> Wallets { get; set; }
 
     public virtual DbSet<WithdrawalRequest> WithdrawalRequests { get; set; }
+    public virtual DbSet<PaymentOrder> PaymentOrders { get; set; }
+    public virtual DbSet<WebhookLog> WebhookLogs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -742,6 +744,26 @@ public partial class SkillBridgeDbContext : DbContext
             entity.HasOne(d => d.User).WithMany(p => p.WithdrawalRequests)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_withdrawalreq_user");
+        });
+
+        modelBuilder.Entity<PaymentOrder>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.Status).HasDefaultValueSql("'pending'");
+
+            entity.HasOne(d => d.User).WithMany(p => p.PaymentOrders)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_paymentorders_user");
+        });
+
+        modelBuilder.Entity<WebhookLog>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.ProcessedStatus).HasDefaultValueSql("'pending'");
         });
 
         OnModelCreatingPartial(modelBuilder);

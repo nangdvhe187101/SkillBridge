@@ -31,34 +31,34 @@ export function AdminProvider({ children }) {
 
   const actions = {
     setViewRole,
-    verifyUser: (id) => { setUsers((u) => u.map((x) => (x.id === id ? { ...x, kyc: 'verified', status: 'active' } : x))); log('Xác thực eKYC người dùng ' + id); showToast('Đã xác thực người dùng.', '✓'); },
-    lockUser: (id) => { setUsers((u) => u.map((x) => (x.id === id ? { ...x, status: x.status === 'locked' ? 'active' : 'locked' } : x))); log('Khoá/mở khoá tài khoản ' + id); showToast('Đã cập nhật trạng thái tài khoản.', '✓'); },
+    verifyUser: (id) => { setUsers((u) => u.map((x) => (x.id === id ? { ...x, kyc: 'verified', status: 'active' } : x))); log('Xác thực eKYC người dùng ' + id); showToast('Đã xác thực người dùng.', 'check'); },
+    lockUser: (id) => { setUsers((u) => u.map((x) => (x.id === id ? { ...x, status: x.status === 'locked' ? 'active' : 'locked' } : x))); log('Khoá/mở khoá tài khoản ' + id); showToast('Đã cập nhật trạng thái tài khoản.', 'check'); },
     adjustReliability: (id, value, note) => {
       const u = users.find((x) => x.id === id);
       const val = Math.max(0, Math.min(100, isNaN(value) ? u.reliability : value));
       setUsers((list) => list.map((x) => (x.id === id ? { ...x, reliability: val } : x)));
       log(`Đã điều chỉnh Reliability Score của ${u?.name} thành ${val}/100.${note ? ' Lý do: ' + note : ''}`);
-      showToast('Đã cập nhật Reliability Score.', '✓');
+      showToast('Đã cập nhật Reliability Score.', 'check');
     },
     blacklistUser: (id, reason) => {
       const u = users.find((x) => x.id === id);
       setUsers((list) => list.map((x) => (x.id === id ? { ...x, status: 'blacklisted' } : x)));
       setBlacklist((b) => [{ name: u?.name, reason, date: new Date().toLocaleDateString('vi-VN') }, ...b]);
       log(`Đã đưa ${u?.name} vào Blacklist. Lý do: ${reason}`);
-      showToast('Đã thêm vào Blacklist Board.', '🚫');
+      showToast('Đã thêm vào Blacklist Board.', 'ban');
     },
     removeFromBlacklist: (idx) => setBlacklist((b) => b.filter((_, i) => i !== idx)),
 
-    approveJob: (id) => { setQueue((q) => q.filter((x) => x.id !== id)); log('Duyệt tin đăng ' + id); showToast('Đã duyệt tin đăng.', '✓'); },
-    rejectJob: (id) => { setQueue((q) => q.filter((x) => x.id !== id)); log('Từ chối tin đăng ' + id); showToast('Đã từ chối tin đăng.', '🚫'); },
+    approveJob: (id) => { setQueue((q) => q.filter((x) => x.id !== id)); log('Duyệt tin đăng ' + id); showToast('Đã duyệt tin đăng.', 'check'); },
+    rejectJob: (id) => { setQueue((q) => q.filter((x) => x.id !== id)); log('Từ chối tin đăng ' + id); showToast('Đã từ chối tin đăng.', 'ban'); },
     warnPoster: (id) => {
       const m = queue.find((x) => x.id === id);
       log(`Đã gửi cảnh báo tới người đăng "${m?.emp}" về tin "${m?.title}".`);
-      showToast('Đã gửi cảnh báo tới người đăng tin.', '⚠️');
+      showToast('Đã gửi cảnh báo tới người đăng tin.', 'warning');
     },
-    addCategory: (name) => { if (!name.trim()) return; setCategories((c) => [...c, name.trim()]); log('Thêm danh mục: ' + name); showToast('Đã thêm danh mục mới.', '✓'); },
+    addCategory: (name) => { if (!name.trim()) return; setCategories((c) => [...c, name.trim()]); log('Thêm danh mục: ' + name); showToast('Đã thêm danh mục mới.', 'check'); },
     removeCategory: (idx) => setCategories((c) => c.filter((_, i) => i !== idx)),
-    approveFeatured: (id) => { setFeatured((f) => f.filter((x) => x.id !== id)); showToast('Đã gắn nhãn Featured Listing.', '⭐'); },
+    approveFeatured: (id) => { setFeatured((f) => f.filter((x) => x.id !== id)); showToast('Đã gắn nhãn Featured Listing.', 'star'); },
 
     resolveDispute: (id, decision, rate, note) => {
       const d = disputes.find((x) => x.id === id);
@@ -78,29 +78,29 @@ export function AdminProvider({ children }) {
         return u;
       }));
       log(`Đã đóng case tranh chấp "${d.jobTitle}" — ${decision === 'accept' ? 'chấp nhận bồi thường ' + payout.toLocaleString('vi-VN') + 'đ' : 'từ chối bồi thường'}. Reliability Score của 2 bên đã được cập nhật. Ghi chú: ${note}`);
-      showToast('Đã đóng case và cập nhật Reliability Score.', '✓');
+      showToast('Đã đóng case và cập nhật Reliability Score.', 'check');
     },
 
-    approvePartner: (id) => { setPartners((p) => p.map((x) => (x.id === id ? { ...x, status: 'approved' } : x))); showToast('Đã duyệt đối tác.', '✓'); },
+    approvePartner: (id) => { setPartners((p) => p.map((x) => (x.id === id ? { ...x, status: 'approved' } : x))); showToast('Đã duyệt đối tác.', 'check'); },
     toggleCampaign: (id) => setCampaigns((c) => c.map((x) => (x.id === id ? { ...x, status: x.status === 'active' ? 'paused' : 'active' } : x))),
-    approveAdContent: (id) => { setAdQueue((a) => a.filter((x) => x.id !== id)); showToast('Đã duyệt nội dung quảng cáo.', '✓'); },
+    approveAdContent: (id) => { setAdQueue((a) => a.filter((x) => x.id !== id)); showToast('Đã duyệt nội dung quảng cáo.', 'check'); },
 
-    resolveTicket: (id) => { setTickets((t) => t.map((x) => (x.id === id ? { ...x, status: 'closed' } : x))); showToast('Đã đóng ticket hỗ trợ.', '✓'); },
-    saveConfig: (newConfig) => { setConfig(newConfig); log('Cập nhật cấu hình hệ thống'); showToast('Đã lưu cấu hình hệ thống.', '⚙️'); },
+    resolveTicket: (id) => { setTickets((t) => t.map((x) => (x.id === id ? { ...x, status: 'closed' } : x))); showToast('Đã đóng ticket hỗ trợ.', 'check'); },
+    saveConfig: (newConfig) => { setConfig(newConfig); log('Cập nhật cấu hình hệ thống'); showToast('Đã lưu cấu hình hệ thống.', 'check'); },
     removeTeamMember: (idx) => setTeam((t) => t.filter((_, i) => i !== idx)),
     addTeamMember: (member) => setTeam((t) => [...t, member]),
-    changeTeamRole: (idx, role) => { setTeam((t) => t.map((m, i) => (i === idx ? { ...m, role } : m))); showToast('Đã đổi vai trò thành viên.', '✓'); },
+    changeTeamRole: (idx, role) => { setTeam((t) => t.map((m, i) => (i === idx ? { ...m, role } : m))); showToast('Đã đổi vai trò thành viên.', 'check'); },
     renewSubscription: (id) => {
       const s = subscriptions.find((x) => x.id === id);
       setSubscriptions((list) => list.map((x) => (x.id === id ? { ...x, status: 'active' } : x)));
       log(`Đã gia hạn gói ${s?.plan} cho ${s?.user}.`);
-      showToast('Đã gia hạn gói.', '✓');
+      showToast('Đã gia hạn gói.', 'check');
     },
     cancelSubscription: (id) => {
       const s = subscriptions.find((x) => x.id === id);
       setSubscriptions((list) => list.filter((x) => x.id !== id));
       log(`Đã huỷ gói ${s?.plan} của ${s?.user}.`);
-      showToast('Đã huỷ gói.', '🚫');
+      showToast('Đã huỷ gói.', 'ban');
     },
 
     // Feature RBAC Matrix
@@ -111,16 +111,16 @@ export function AdminProvider({ children }) {
         const nextRoles = exists ? f.roles.filter((r) => r !== roleCode) : [...f.roles, roleCode];
         return { ...f, roles: nextRoles };
       }));
-      showToast('Đã cập nhật quyền truy cập tính năng.', '🔑');
+      showToast('Đã cập nhật quyền truy cập tính năng.', 'check');
     },
     addFeature: (feat) => {
       setFeatures((list) => [...list, { ...feat, id: 'f_' + Date.now() }]);
       log(`Thêm tính năng URL mới: ${feat.name} (${feat.url})`);
-      showToast('Đã thêm tính năng/URL vào ma trận phân quyền.', '✓');
+      showToast('Đã thêm tính năng/URL vào ma trận phân quyền.', 'check');
     },
     removeFeature: (featureId) => {
       setFeatures((list) => list.filter((f) => f.id !== featureId));
-      showToast('Đã xoá tính năng khỏi ma trận phân quyền.', '🗑️');
+      showToast('Đã xoá tính năng khỏi ma trận phân quyền.', 'check');
     },
 
     // Admin Chat & Communications Monitor
@@ -130,23 +130,23 @@ export function AdminProvider({ children }) {
         const warningMsg = {
           id: 'w_' + Date.now(),
           sender: 'Hệ thống Quản trị SkillBridge',
-          text: '⚠️ CẢNH BÁO: Cuộc hội thoại này có dấu hiệu vi phạm chính sách giao dịch ngoài sàn. Vui lòng giao dịch qua Escrow để được bảo vệ.',
+          text: 'CẢNH BÁO: Cuộc hội thoại này có dấu hiệu vi phạm chính sách giao dịch ngoài sàn. Vui lòng giao dịch qua Escrow để được bảo vệ.',
           time: 'Vừa xong',
           isSystem: true
         };
         return { ...c, status: 'warned', messages: [...c.messages, warningMsg] };
       }));
       log(`Gửi cảnh báo gian lận phòng chat #${chatId}`);
-      showToast('Đã gửi cảnh báo gian lận vào phòng chat.', '⚠️');
+      showToast('Đã gửi cảnh báo gian lận vào phòng chat.', 'warning');
     },
     lockChatThread: (chatId) => {
       setAdminChats((list) => list.map((c) => (c.id === chatId ? { ...c, status: 'locked' } : c)));
       log(`Khoá phòng chat #${chatId}`);
-      showToast('Đã khoá phòng chat vi phạm.', '🔒');
+      showToast('Đã khoá phòng chat vi phạm.', 'lock');
     },
     sendAdminBroadcast: (title, message, targetRole = 'all') => {
       log(`Phát thông báo hệ thống "${title}" tới ${targetRole}`);
-      showToast(`Đã phát thông báo toàn sàn tới nhóm: ${targetRole === 'all' ? 'Tất cả người dùng' : targetRole}.`, '📢');
+      showToast(`Đã phát thông báo toàn sàn tới nhóm: ${targetRole === 'all' ? 'Tất cả người dùng' : targetRole}.`, 'info');
     },
   };
 

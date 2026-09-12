@@ -1,11 +1,12 @@
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
+import Icon from './Icon';
 
 export const DASHBOARD_TABS = [
-    { id: 'overview', path: '/employer/dashboard', label: 'Tổng quan', icon: '📊' },
-    { id: 'jobs', path: '/employer/jobs', label: 'Tin đã đăng', icon: '📋' },
-    { id: 'post', path: '/employer/post-job', label: 'Đăng tin mới', icon: '✍️' },
-    { id: 'ads', path: '/employer/ads', label: 'Quảng cáo Affiliate', icon: '📢' },
+    { id: 'overview', path: '/employer/dashboard', label: 'Tổng quan', icon: 'chart-bar' },
+    { id: 'jobs', path: '/employer/jobs', label: 'Tin đã đăng', icon: 'file-text' },
+    { id: 'post', path: '/employer/post-job', label: 'Đăng tin mới', icon: 'edit' },
+    { id: 'ads', path: '/employer/ads', label: 'Quảng cáo Affiliate', icon: 'megaphone' },
 ];
 
 export default function DashboardSidebar({ activeTab, onTabClick }) {
@@ -40,7 +41,7 @@ export default function DashboardSidebar({ activeTab, onTabClick }) {
                             onClick={() => handleClick(t)}
                             style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                         >
-                            <span>{t.icon}</span>
+                            <Icon name={t.icon} width="16" height="16" />
                             <span>{t.label}</span>
                             {badge}
                         </button>

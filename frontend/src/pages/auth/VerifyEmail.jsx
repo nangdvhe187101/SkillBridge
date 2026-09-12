@@ -131,8 +131,9 @@ export default function VerifyEmail() {
                                 </>
                             ) : (
                                 <div style={{ marginTop: 12 }}>
-                                    <div className="auth-mobile-trust" style={{ display: 'flex', marginBottom: 12 }}>
-                                        ✉️ <span>Đã gửi liên kết xác thực mới tới <b>{resendEmail}</b>. Vui lòng kiểm tra hộp thư.</span>
+                                    <div className="auth-mobile-trust" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                                        <Icon name="mail" width="16" height="16" style={{ flexShrink: 0 }} />
+                                        <span>Đã gửi liên kết xác thực mới tới <b>{resendEmail}</b>. Vui lòng kiểm tra hộp thư.</span>
                                     </div>
                                     {countdown > 0 ? (
                                         <div className="sub" style={{ fontSize: 13 }}>Bạn có thể gửi lại sau <b>{countdown}s</b>.</div>

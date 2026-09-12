@@ -147,7 +147,7 @@ export default function JobDetail() {
   let applyDisabled = false;
 
   if (isOwner) {
-    applyLabel = '💼 Tin đăng của bạn';
+    applyLabel = 'Tin đăng của bạn';
     applyDisabled = true;
   } else if (isEmployer) {
     applyLabel = 'Nhà tuyển dụng không thể ứng tuyển';
@@ -158,12 +158,12 @@ export default function JobDetail() {
     applyDisabled = false;
   } else if (hasApplied) {
     applyDisabled = true;
-    if (appStatus === 'hired') applyLabel = '✓ Đã trúng tuyển — nộp bàn giao bên trên';
-    else if (appStatus === 'submitted') applyLabel = '📤 Đã nộp bàn giao — chờ xác nhận';
-    else if (appStatus === 'completed') applyLabel = '✅ Đã hoàn thành';
+    if (appStatus === 'hired') applyLabel = 'Đã trúng tuyển — nộp bàn giao bên trên';
+    else if (appStatus === 'submitted') applyLabel = 'Đã nộp bàn giao — chờ xác nhận';
+    else if (appStatus === 'completed') applyLabel = 'Đã hoàn thành';
     else if (appStatus === 'rejected') applyLabel = 'Rất tiếc, bạn chưa được chọn';
     else if (appStatus === 'cancelled') applyLabel = 'Đã hủy';
-    else applyLabel = '✓ Đã ứng tuyển';
+    else applyLabel = 'Đã ứng tuyển';
   } else if (j?.status && j.status !== 'open') {
     applyLabel = 'Đã đóng tuyển';
     applyDisabled = true;
@@ -171,13 +171,13 @@ export default function JobDetail() {
 
   const handleStartApply = () => {
     if (!state.currentUser) {
-      showToast('Vui lòng đăng nhập tài khoản Sinh viên để ứng tuyển.', '🔒');
+      showToast('Vui lòng đăng nhập tài khoản Sinh viên để ứng tuyển.', 'lock');
       navigate(`/auth?tab=login&redirect=${encodeURIComponent(`/jobs/${jobId}?action=apply`)}`);
       return;
     }
 
     if (state.currentUser.roleCode === 'employer') {
-      showToast('Tài khoản Nhà tuyển dụng không thể ứng tuyển công việc.', '⚠️');
+      showToast('Tài khoản Nhà tuyển dụng không thể ứng tuyển công việc.', 'x');
       return;
     }
 
@@ -202,7 +202,7 @@ export default function JobDetail() {
   const handleUploadCvSubmit = async (e) => {
     e.preventDefault();
     if (!uploadFile && !uploadLabel) {
-      showToast('Vui lòng chọn file CV hoặc đặt tên bản CV.', '⚠️');
+      showToast('Vui lòng chọn file CV hoặc đặt tên bản CV.', 'x');
       return;
     }
     setIsSubmitting(true);
@@ -223,7 +223,7 @@ export default function JobDetail() {
       setSelectedCvId(createdCv.id);
       setApplyModalOpen(true);
     } catch (err) {
-      showToast(err.message || 'Không thể tải lên CV.', '❌');
+      showToast(err.message || 'Không thể tải lên CV.', 'x');
     } finally {
       setIsSubmitting(false);
     }
@@ -231,7 +231,7 @@ export default function JobDetail() {
 
   const handleConfirmApply = async () => {
     if (!selectedCvId) {
-      showToast('Vui lòng chọn một bản CV để ứng tuyển.', '⚠️');
+      showToast('Vui lòng chọn một bản CV để ứng tuyển.', 'x');
       return;
     }
     setIsSubmitting(true);
@@ -239,9 +239,9 @@ export default function JobDetail() {
       await applyJobAsync(jobId, selectedCvId, coverLetter);
       setApplyModalOpen(false);
       const chosenCv = (state.cvFiles || []).find((c) => c.id === selectedCvId);
-      showToast(`Đã gửi đơn ứng tuyển kèm ${chosenCv?.label || 'CV'} tới ${j.emp}!`, '🚀');
+      showToast(`Đã gửi đơn ứng tuyển kèm ${chosenCv?.label || 'CV'} tới ${j.emp}!`, 'check');
     } catch (err) {
-      showToast(err.message || 'Không thể gửi đơn ứng tuyển.', '❌');
+      showToast(err.message || 'Không thể gửi đơn ứng tuyển.', 'x');
     } finally {
       setIsSubmitting(false);
     }
@@ -308,8 +308,8 @@ export default function JobDetail() {
                   const dur = formatDurationDetail(j.deadlineAt, j.postedAt);
                   if (!dur) return null;
                   return (
-                    <span className="chip" style={{ background: 'rgba(108, 76, 255, 0.1)', color: 'var(--primary)', fontWeight: 600 }}>
-                      ⏱️ Hoàn thành trong: {dur}
+                    <span className="chip" style={{ background: 'rgba(108, 76, 255, 0.1)', color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <Icon name="clock" width="14" height="14" /> Hoàn thành trong: {dur}
                     </span>
                   );
                 })()}
@@ -331,12 +331,16 @@ export default function JobDetail() {
 
               {((j.attachments && j.attachments.length > 0) || (dashJob?.attachments && dashJob?.attachments?.length > 0)) && (
                 <div className="jd-block">
-                  <h4>📎 Tài liệu & Đề bài đính kèm</h4>
+                  <h4 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="paperclip" width="18" height="18" /> Tài liệu & Đề bài đính kèm
+                  </h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
                     {(j.attachments || dashJob?.attachments || []).map((f, i) => (
                       <div key={f.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <span style={{ fontSize: 22 }}>📁</span>
+                          <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0 }}>
+                            <Icon name="folder" width="18" height="18" />
+                          </div>
                           <div>
                             <b style={{ fontSize: 13.5, display: 'block' }}>{f.fileName || f.name}</b>
                             <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
@@ -384,43 +388,61 @@ export default function JobDetail() {
                         <div className="jdw-dl"><Icon name="clock" /> Hạn chót: <b>{formatDeadline(j.deadlineAt || dashJob?.deadlineAt)}</b></div>
                       </div>
                       <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '10px 0' }}>Sau khi hoàn thành, hãy nộp sản phẩm kèm bản xem trước có đóng dấu bản quyền.</p>
-                      <button className="btn btn-primary btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>
-                        📤 Nộp sản phẩm bàn giao
+                      <button className="btn btn-primary btn-block" style={{ marginBottom: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>
+                        <Icon name="send" width="16" height="16" /> Nộp sản phẩm bàn giao
                       </button>
-                      <button className="btn btn-outline btn-block" onClick={() => openChatWithPerson(j.emp)}>💬 Trao đổi với NTD</button>
+                      <button className="btn btn-outline btn-block" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => openChatWithPerson(j.emp)}>
+                        <Icon name="chat" width="16" height="16" /> Trao đổi với NTD
+                      </button>
                     </div>
                   )}
                   {currentWorkStatus === 'submitted' && (
                     <div className="jd-card">
-                      <h4>⏳ Đã nộp bàn giao</h4>
+                      <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--primary)' }}>
+                        <Icon name="hourglass" width="18" height="18" /> Đã nộp bàn giao
+                      </h4>
                       <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: '6px 0 12px' }}>Đang chờ nhà tuyển dụng xác nhận hoặc yêu cầu sửa.</p>
                       {activeDeliverable && <DeliverablePreview d={activeDeliverable} />}
-                      <button className="btn btn-outline btn-block" style={{ marginTop: 8 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>
-                        ✏️ Cập nhật bàn giao
+                      <button className="btn btn-outline btn-block" style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>
+                        <Icon name="edit" width="15" height="15" /> Cập nhật bàn giao
                       </button>
                     </div>
                   )}
                   {currentWorkStatus === 'revision_requested' && (
                     <div className="jd-card" style={{ borderColor: 'var(--coral)' }}>
-                      <h4>⚠️ Yêu cầu sửa đổi bàn giao</h4>
+                      <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--coral)' }}>
+                        <Icon name="alert-triangle" width="18" height="18" /> Yêu cầu sửa đổi bàn giao
+                      </h4>
                       {activeFeedbacks && activeFeedbacks.length > 0 && (
                         <div className="feedback-box" style={{ background: 'var(--coral-dim)', padding: 10, borderRadius: 8, margin: '8px 0' }}>
                           <b>Góp ý từ NTD:</b>
                           <p style={{ marginTop: 4, fontSize: 13 }}>{activeFeedbacks[activeFeedbacks.length - 1].text}</p>
                         </div>
                       )}
-                      <button className="btn btn-primary btn-block" style={{ marginBottom: 8 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>📤 Nộp lại bàn giao</button>
-                      <button className="btn btn-outline btn-block" onClick={() => openChatWithPerson(j.emp)}>💬 Hỏi thêm NTD</button>
+                      <button className="btn btn-primary btn-block" style={{ marginBottom: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>
+                        <Icon name="send" width="16" height="16" /> Nộp lại bàn giao
+                      </button>
+                      <button className="btn btn-outline btn-block" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => openChatWithPerson(j.emp)}>
+                        <Icon name="chat" width="16" height="16" /> Hỏi thêm NTD
+                      </button>
                     </div>
                   )}
                   {currentWorkStatus === 'completed' && (
                     <div className="jd-card">
-                      <h4>✅ Đã hoàn thành & nhận thanh toán</h4>
+                      <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#16a34a' }}>
+                        <Icon name="check" width="18" height="18" /> Đã hoàn thành & nhận thanh toán
+                      </h4>
                       <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 6 }}>Cảm ơn bạn đã hoàn thành công việc trên SkillBridge.</p>
                       {activeDeliverable && <DeliverablePreview d={activeDeliverable} revealFinal />}
                     </div>
                   )}
-                  {currentWorkStatus === 'cancelled' && <div className="jd-card"><h4>🚫 Công việc đã bị hủy</h4></div>}
+                  {currentWorkStatus === 'cancelled' && (
+                    <div className="jd-card">
+                      <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink-soft)' }}>
+                        <Icon name="x" width="18" height="18" /> Công việc đã bị hủy
+                      </h4>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -434,8 +456,8 @@ export default function JobDetail() {
                     if (!dur) return null;
                     return (
                       <div style={{ margin: '14px 0', padding: '10px 12px', background: 'rgba(108, 76, 255, 0.06)', borderRadius: 8, border: '1px solid rgba(108, 76, 255, 0.2)', fontSize: 13 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: 2 }}>
-                          ⏱️ Thời hạn hoàn thành: {dur}
+                        <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Icon name="clock" width="15" height="15" /> Thời hạn hoàn thành: {dur}
                         </div>
                         <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
                           Tính từ khi được nhà tuyển dụng xác nhận chọn làm việc
@@ -445,7 +467,9 @@ export default function JobDetail() {
                   })()}
 
                   <div style={{ padding: '12px 14px', background: 'rgba(108, 76, 255, 0.08)', borderRadius: 10, margin: '14px 0 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 24 }}>👑</span>
+                    <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(255, 180, 0, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', flexShrink: 0 }}>
+                      <Icon name="crown" width="20" height="20" />
+                    </div>
                     <div>
                       <b style={{ fontSize: 13.5, display: 'block', color: 'var(--ink)' }}>Tin tuyển dụng của bạn</b>
                       <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Bạn là chủ sở hữu của tin đăng này</span>
@@ -455,27 +479,28 @@ export default function JobDetail() {
                   <button
                     type="button"
                     className="btn btn-primary btn-block"
-                    style={{ marginBottom: 10, fontWeight: 700, padding: '10px 16px' }}
+                    style={{ marginBottom: 10, fontWeight: 700, padding: '10px 16px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                     onClick={() => navigate(`/employer/jobs/${jobId}`)}
                   >
-                    👥 Quản lý ứng viên ({apiJob?.applicantCount || 0}) →
+                    <Icon name="users" width="16" height="16" /> Quản lý ứng viên ({apiJob?.applicantCount || 0}) →
                   </button>
 
                   <button
                     type="button"
                     className="btn btn-outline btn-block"
-                    style={{ marginBottom: 10 }}
+                    style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                     onClick={() => navigate(`/employer/jobs/${jobId}/edit`)}
                   >
-                    ✏️ Chỉnh sửa nội dung tin
+                    <Icon name="edit" width="16" height="16" /> Chỉnh sửa nội dung tin
                   </button>
 
                   <button
                     type="button"
                     className="btn btn-outline btn-block"
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                     onClick={() => navigate('/employer/jobs')}
                   >
-                    📋 Về danh sách tin tuyển dụng
+                    <Icon name="file-text" width="16" height="16" /> Về danh sách tin tuyển dụng
                   </button>
                 </div>
               ) : isEmployer ? (
@@ -488,8 +513,8 @@ export default function JobDetail() {
                     if (!dur) return null;
                     return (
                       <div style={{ margin: '14px 0', padding: '10px 12px', background: 'rgba(108, 76, 255, 0.06)', borderRadius: 8, border: '1px solid rgba(108, 76, 255, 0.2)', fontSize: 13 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: 2 }}>
-                          ⏱️ Thời hạn hoàn thành: {dur}
+                        <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Icon name="clock" width="15" height="15" /> Thời hạn hoàn thành: {dur}
                         </div>
                         <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
                           Tính từ khi được nhà tuyển dụng xác nhận chọn làm việc
@@ -499,7 +524,9 @@ export default function JobDetail() {
                   })()}
 
                   <div style={{ padding: '12px 14px', background: 'rgba(0, 0, 0, 0.03)', borderRadius: 10, margin: '14px 0 16px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 24, marginBottom: 4 }}>🏢</div>
+                    <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', margin: '0 auto 6px' }}>
+                      <Icon name="building" width="22" height="22" />
+                    </div>
                     <b style={{ fontSize: 13.5, display: 'block', color: 'var(--ink)' }}>Tài khoản Nhà tuyển dụng</b>
                     <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginTop: 4 }}>
                       Bạn đang đăng nhập với vai trò Nhà tuyển dụng. Các tính năng nộp CV và lưu việc chỉ dành cho tài khoản Sinh viên / Ứng viên.
@@ -509,10 +536,10 @@ export default function JobDetail() {
                   <button
                     type="button"
                     className="btn btn-primary btn-block"
-                    style={{ marginBottom: 10 }}
+                    style={{ marginBottom: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
                     onClick={() => navigate('/employer/post')}
                   >
-                    ➕ Đăng tin tuyển dụng mới
+                    <Icon name="plus" width="16" height="16" /> Đăng tin tuyển dụng mới
                   </button>
 
                   <button
@@ -533,8 +560,8 @@ export default function JobDetail() {
                     if (!dur) return null;
                     return (
                       <div style={{ margin: '14px 0', padding: '10px 12px', background: 'rgba(108, 76, 255, 0.06)', borderRadius: 8, border: '1px solid rgba(108, 76, 255, 0.2)', fontSize: 13 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: 2 }}>
-                          ⏱️ Thời hạn hoàn thành: {dur}
+                        <div style={{ fontWeight: 600, color: 'var(--primary)', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Icon name="clock" width="15" height="15" /> Thời hạn hoàn thành: {dur}
                         </div>
                         <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
                           Tính từ khi được nhà tuyển dụng xác nhận chọn làm việc
@@ -561,7 +588,11 @@ export default function JobDetail() {
                       marginBottom: 10,
                       color: (state.savedJobIds || []).includes(jobId) ? '#ef4444' : undefined,
                       borderColor: (state.savedJobIds || []).includes(jobId) ? '#ef4444' : undefined,
-                      background: (state.savedJobIds || []).includes(jobId) ? 'rgba(239, 68, 68, 0.08)' : undefined
+                      background: (state.savedJobIds || []).includes(jobId) ? 'rgba(239, 68, 68, 0.08)' : undefined,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6
                     }}
                     onClick={async () => {
                       try {
@@ -571,10 +602,13 @@ export default function JobDetail() {
                       }
                     }}
                   >
-                    {(state.savedJobIds || []).includes(jobId) ? '❤️ Đã lưu vào yêu thích' : '🤍 Lưu công việc'}
+                    <Icon name="heart" width="16" height="16" />
+                    {(state.savedJobIds || []).includes(jobId) ? 'Đã lưu vào yêu thích' : 'Lưu công việc'}
                   </button>
-                  <button className="btn btn-outline btn-block" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
-                    onClick={() => openModal('report', { withName: j.emp })}>🚩 Báo cáo nhà tuyển dụng</button>
+                  <button className="btn btn-outline btn-block" style={{ color: 'var(--coral)', borderColor: 'var(--coral)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                    onClick={() => openModal('report', { withName: j.emp })}>
+                    <Icon name="flag" width="15" height="15" /> Báo cáo nhà tuyển dụng
+                  </button>
                 </div>
               )}
               <div className="jd-card">
@@ -599,7 +633,9 @@ export default function JobDetail() {
       {uploadCvModalOpen && (
         <ModalShell onClose={() => setUploadCvModalOpen(false)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div style={{ fontSize: 28 }}>📄</div>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0 }}>
+              <Icon name="file-text" width="22" height="22" />
+            </div>
             <div>
               <h3 style={{ margin: 0, fontSize: 18 }}>Tải lên CV Ứng tuyển</h3>
               <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
@@ -609,7 +645,9 @@ export default function JobDetail() {
           </div>
 
           <div style={{ background: 'rgba(255, 158, 87, 0.12)', border: '1px solid rgba(255, 158, 87, 0.35)', padding: '12px 14px', borderRadius: 10, marginBottom: 16 }}>
-            <b style={{ color: '#FF9E57', fontSize: 13.5, display: 'block', marginBottom: 2 }}>⚠️ Bạn chưa có bản CV nào trong hồ sơ</b>
+            <b style={{ color: '#FF9E57', fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+              <Icon name="alert-triangle" width="16" height="16" /> Bạn chưa có bản CV nào trong hồ sơ
+            </b>
             <span style={{ fontSize: 12.5, color: 'var(--ink-soft)', lineHeight: 1.4 }}>
               Nhà tuyển dụng yêu cầu xem CV chuyên ngành để duyệt hồ sơ. Vui lòng tải lên CV (PDF hoặc Word) của bạn để tiếp tục ứng tuyển.
             </span>
@@ -649,7 +687,9 @@ export default function JobDetail() {
               >
                 {uploadFile ? (
                   <div>
-                    <span style={{ fontSize: 26 }}>📄</span>
+                    <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', margin: '0 auto 6px' }}>
+                      <Icon name="file-text" width="24" height="24" />
+                    </div>
                     <b style={{ display: 'block', marginTop: 6, fontSize: 14 }}>{uploadFile.name}</b>
                     <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
                       {(uploadFile.size / 1024).toFixed(0)} KB · Bấm để đổi file khác
@@ -657,7 +697,9 @@ export default function JobDetail() {
                   </div>
                 ) : (
                   <div>
-                    <span style={{ fontSize: 28 }}>☁️</span>
+                    <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(108, 76, 255, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', margin: '0 auto 6px' }}>
+                      <Icon name="download" width="22" height="22" style={{ transform: 'rotate(180deg)' }} />
+                    </div>
                     <b style={{ display: 'block', marginTop: 6, fontSize: 13.5 }}>Nhấn để chọn file CV từ thiết bị</b>
                     <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Hỗ trợ PDF, DOC, DOCX dung lượng tối đa 10MB</span>
                   </div>
@@ -713,7 +755,9 @@ export default function JobDetail() {
       {applyModalOpen && (
         <ModalShell onClose={() => setApplyModalOpen(false)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div style={{ fontSize: 28 }}>📨</div>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0 }}>
+              <Icon name="send" width="22" height="22" />
+            </div>
             <div>
               <h3 style={{ margin: 0, fontSize: 18 }}>Chọn bản CV ứng tuyển</h3>
               <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
@@ -765,15 +809,15 @@ export default function JobDetail() {
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 3 }}>
                         <span className="chip" style={{ fontSize: 10.5, padding: '1px 7px' }}>{cv.category}</span>
                         {isMatch && (
-                          <span className="chip chip-lime" style={{ fontSize: 10.5, padding: '1px 6px' }}>
-                            🎯 Khớp ngành tuyển dụng
+                          <span className="chip chip-lime" style={{ fontSize: 10.5, padding: '1px 6px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Icon name="sparkles" width="12" height="12" /> Khớp ngành tuyển dụng
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
 
-                  <span style={{ fontSize: 18 }}>📄</span>
+                  <Icon name="file-text" width="18" height="18" style={{ color: 'var(--ink-soft)' }} />
                 </div>
               );
             })}
@@ -815,8 +859,9 @@ export default function JobDetail() {
               className="btn btn-primary"
               disabled={isSubmitting || !selectedCvId}
               onClick={handleConfirmApply}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              {isSubmitting ? 'Đang nộp...' : '🚀 Xác nhận nộp hồ sơ'}
+              {isSubmitting ? 'Đang nộp...' : <><Icon name="send" width="15" height="15" /> Xác nhận nộp hồ sơ</>}
             </button>
           </div>
         </ModalShell>

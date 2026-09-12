@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { adsPool } from '../data/ads';
+import Icon from './Icon';
 
 export default function HomeAdCarousel() {
   const [index, setIndex] = useState(0);
@@ -22,7 +23,9 @@ export default function HomeAdCarousel() {
   return (
     <>
       <div className="home-ad reveal" onClick={showAdDemo}>
-        <span className="home-ad-label">📢 Quảng cáo · Được tài trợ</span>
+        <span className="home-ad-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Icon name="megaphone" width="12" height="12" /> Quảng cáo · Được tài trợ
+        </span>
         <div className="home-ad-logo" style={{ background: ad.grad }} />
         <div className="home-ad-body">
           <h4>{ad.title}</h4>

@@ -1328,7 +1328,6 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasColumnName("note");
 
                     b.Property<string>("PreviewFileUrl")
-                        .IsRequired()
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)")
                         .HasColumnName("preview_file_url");
@@ -1498,6 +1497,84 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.HasIndex(new[] { "UserId", "IsRead" }, "idx_notifications_user_read");
 
                     b.ToTable("notifications");
+                });
+
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.PaymentOrder", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12)
+                        .HasColumnType("decimal(12,0)")
+                        .HasColumnName("amount");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("GatewayTransactionId")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("gateway_transaction_id");
+
+                    b.Property<string>("OrderCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("order_code");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("datetime")
+                        .HasColumnName("paid_at");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("RawWebhookPayload")
+                        .HasColumnType("longtext")
+                        .HasColumnName("raw_webhook_payload");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'pending'");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("PRIMARY");
+
+                    b.HasIndex(new[] { "Status", "ExpiresAt" }, "idx_payment_orders_status_expires");
+
+                    b.HasIndex(new[] { "UserId", "CreatedAt" }, "idx_payment_orders_user_created")
+                        .IsDescending(false, true);
+
+                    b.HasIndex(new[] { "GatewayTransactionId" }, "uq_payment_orders_gateway_txn")
+                        .IsUnique();
+
+                    b.HasIndex(new[] { "OrderCode" }, "uq_payment_orders_order_code")
+                        .IsUnique();
+
+                    b.ToTable("payment_orders");
                 });
 
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.Permission", b =>
@@ -2439,6 +2516,77 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.ToTable("wallets");
                 });
 
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.WebhookLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("HttpMethod")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("http_method");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(45)
+                        .HasColumnType("varchar(45)")
+                        .HasColumnName("ip_address");
+
+                    b.Property<bool>("IsValidSignature")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("is_valid_signature");
+
+                    b.Property<string>("ProcessedStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("processed_status")
+                        .HasDefaultValueSql("'pending'");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("varchar(32)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("RawPayload")
+                        .IsRequired()
+                        .HasColumnType("longtext")
+                        .HasColumnName("raw_payload");
+
+                    b.Property<string>("RequestUrl")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("request_url");
+
+                    b.HasKey("Id")
+                        .HasName("PRIMARY");
+
+                    b.HasIndex(new[] { "Provider", "CreatedAt" }, "idx_webhook_logs_provider_created")
+                        .IsDescending(false, true);
+
+                    b.HasIndex(new[] { "ProcessedStatus" }, "idx_webhook_logs_status");
+
+                    b.ToTable("webhook_logs");
+                });
+
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.WithdrawalRequest", b =>
                 {
                     b.Property<int>("Id")
@@ -2956,6 +3104,17 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.PaymentOrder", b =>
+                {
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "User")
+                        .WithMany("PaymentOrders")
+                        .HasForeignKey("UserId")
+                        .IsRequired()
+                        .HasConstraintName("fk_paymentorders_user");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.PortfolioUpload", b =>
                 {
                     b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "Student")
@@ -3455,6 +3614,8 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Navigation("JobHiredApplicants");
 
                     b.Navigation("Notifications");
+
+                    b.Navigation("PaymentOrders");
 
                     b.Navigation("PortfolioUploads");
 

@@ -136,7 +136,18 @@ builder.Services.Scan(scan => scan
     .AsImplementedInterfaces()
     .WithScopedLifetime());
 
-builder.Services.AddSignalR();
+builder.Services.AddHostedService<SkillBridge.Infrastructure.Services.Payments.PaymentReconciliationJob>();
+
+var signalR = builder.Services.AddSignalR();
+if (!string.IsNullOrWhiteSpace(redisConnection))
+{
+    signalR.AddStackExchangeRedis(redisConnection, options =>
+    {
+        options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("SkillBridge_SignalR");
+    });
+}
+
+builder.Services.AddScoped<SkillBridge.Application.Interfaces.Payments.IPaymentRealtimeNotifier, SkillBridge.API.Services.SignalRPaymentRealtimeService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -288,7 +299,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-// app.MapHub<ChatHub>("/hubs/chat");
-// app.MapHub<NotificationHub>("/hubs/notification");
+app.MapHub<SkillBridge.API.Hubs.PaymentHub>("/hubs/payment");
 
 app.Run();

@@ -48,25 +48,25 @@ function formatDeadline(ts) {
 const CANNED_TEMPLATES = [
   {
     id: 'interview',
-    icon: '📞',
+    icon: 'phone',
     title: 'Mời phỏng vấn nhanh online',
     text: (jobTitle, studentName) => `Chào ${studentName}, mình đã xem qua hồ sơ ứng tuyển của bạn cho công việc "${jobTitle}" và thấy rất ấn tượng. Bạn có thể sắp xếp 15 phút trao đổi trực tuyến (Google Meet/Zalo) trong hôm nay hoặc ngày mai không?`
   },
   {
     id: 'sample',
-    icon: '📁',
+    icon: 'folder',
     title: 'Yêu cầu gửi Portfolio mẫu',
     text: (jobTitle, studentName) => `Chào ${studentName}, cảm ơn bạn đã ứng tuyển vào "${jobTitle}". Để bên mình tiện đánh giá chuyên môn, bạn có thể gửi thêm link 1-2 sản phẩm hoặc dự án tương tự mà bạn đã từng thực hiện được không?`
   },
   {
     id: 'terms',
-    icon: '🤝',
+    icon: 'handshake',
     title: 'Thỏa thuận tiến độ & bàn giao',
     text: (jobTitle, studentName) => `Chào ${studentName}, vị trí "${jobTitle}" bên mình cần hoàn thành đúng tiến độ. Bạn có thể cam kết bàn giao đúng hạn và bắt đầu làm việc ngay khi bên mình ký quỹ trên SkillBridge không?`
   },
   {
     id: 'reject',
-    icon: '💌',
+    icon: 'mail',
     title: 'Thư cảm ơn & Từ chối lịch sự',
     text: (jobTitle, studentName) => `Chào ${studentName}, cảm ơn bạn đã dành thời gian ứng tuyển vị trí "${jobTitle}". Đợt này bên mình đã tìm được ứng viên phù hợp với tiêu chí hiện tại. Chúc bạn luôn thành công và hy vọng có dịp hợp tác cùng bạn ở các dự án tiếp theo!`
   }
@@ -326,17 +326,17 @@ export default function JobApplicants() {
                 </div>
                 <div style={{ marginTop: 10, fontSize: 13, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                   {job.hiredApplicant && (
-                    <span style={{ background: 'rgba(108, 76, 255, 0.1)', color: '#6C4CFF', border: '1px solid rgba(108, 76, 255, 0.25)', borderRadius: 6, padding: '3px 10px', fontWeight: 600 }}>
-                      👤 Đang làm: {job.hiredApplicant}
+                    <span style={{ background: 'rgba(108, 76, 255, 0.1)', color: '#6C4CFF', border: '1px solid rgba(108, 76, 255, 0.25)', borderRadius: 6, padding: '3px 10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="user" width={13} height={13} /> Đang làm: {job.hiredApplicant}
                     </span>
                   )}
                   {wasEscrowed && job.deadlineAt ? (
-                    <span style={{ background: 'rgba(2, 132, 199, 0.1)', color: '#0284c7', border: '1px solid rgba(2, 132, 199, 0.25)', borderRadius: 6, padding: '3px 10px', fontWeight: 600 }}>
-                      ⏰ Thời hạn còn lại: {formatDeadline(job.deadlineAt)}
+                    <span style={{ background: 'rgba(2, 132, 199, 0.1)', color: '#0284c7', border: '1px solid rgba(2, 132, 199, 0.25)', borderRadius: 6, padding: '3px 10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="clock" width={13} height={13} /> Thời hạn còn lại: {formatDeadline(job.deadlineAt)}
                     </span>
                   ) : job.deadlineAt ? (
-                    <span style={{ background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', border: '1px solid rgba(108, 76, 255, 0.2)', borderRadius: 6, padding: '3px 10px', fontWeight: 600 }}>
-                      ⏱️ Thời hạn hoàn thành: {(() => {
+                    <span style={{ background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', border: '1px solid rgba(108, 76, 255, 0.2)', borderRadius: 6, padding: '3px 10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="clock" width={13} height={13} /> Thời hạn hoàn thành: {(() => {
                         const start = job.postedAt ? new Date(job.postedAt).getTime() : Date.now();
                         const end = new Date(job.deadlineAt).getTime();
                         const diffMs = end - start;
@@ -652,7 +652,7 @@ export default function JobApplicants() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, paddingTop: 10, borderTop: '1px solid var(--border)' }}>
                 {/* Search Box */}
                 <div style={{ position: 'relative', flex: '1 1 240px', maxWidth: 360 }}>
-                  <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, opacity: 0.6 }}>🔍</span>
+                  <Icon name="search" width={14} height={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-soft)' }} />
                   <input
                     type="text"
                     placeholder="Tìm theo tên, trường, email, kỹ năng..."
@@ -672,9 +672,9 @@ export default function JobApplicants() {
                     <button
                       type="button"
                       onClick={() => setSearchQuery('')}
-                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--ink-soft)' }}
+                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center' }}
                     >
-                      ✕
+                      <Icon name="x" width={12} height={12} />
                     </button>
                   )}
                 </div>
@@ -699,28 +699,28 @@ export default function JobApplicants() {
                     {shortlistedCount > 0 && (
                       <button
                         className={'btn btn-sm ' + (applicantFilter === 'shortlisted' ? 'btn-primary' : 'btn-outline')}
-                        style={{ fontSize: 12, padding: '4px 10px', color: applicantFilter === 'shortlisted' ? '#fff' : '#eab308', borderColor: '#eab308' }}
+                        style={{ fontSize: 12, padding: '4px 10px', color: applicantFilter === 'shortlisted' ? '#fff' : '#eab308', borderColor: '#eab308', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                         onClick={() => setApplicantFilter('shortlisted')}
                       >
-                        ⭐ Đã lưu ({shortlistedCount})
+                        <Icon name="star" width={12} height={12} /> Đã lưu ({shortlistedCount})
                       </button>
                     )}
                     {hasHired && (
                       <button
                         className={'btn btn-sm ' + (applicantFilter === 'hired' ? 'btn-primary' : 'btn-outline')}
-                        style={{ fontSize: 12, padding: '4px 10px' }}
+                        style={{ fontSize: 12, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                         onClick={() => setApplicantFilter('hired')}
                       >
-                        ✓ Đã thuê (1)
+                        <Icon name="check" width={12} height={12} /> Đã thuê (1)
                       </button>
                     )}
                     {allApplicants.some(a => a.rejected) && (
                       <button
                         className={'btn btn-sm ' + (applicantFilter === 'rejected' ? 'btn-primary' : 'btn-outline')}
-                        style={{ fontSize: 12, padding: '4px 10px' }}
+                        style={{ fontSize: 12, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                         onClick={() => setApplicantFilter('rejected')}
                       >
-                        ✕ Đã từ chối
+                        <Icon name="x" width={11} height={11} /> Đã từ chối
                       </button>
                     )}
                   </div>
@@ -730,12 +730,16 @@ export default function JobApplicants() {
 
             {/* List Body */}
             {loading ? (
-              <div className="empty-state" style={{ padding: '30px' }}>
-                ⏳ Đang tải danh sách hồ sơ ứng viên...
+              <div className="empty-state" style={{ padding: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                <Icon name="hourglass" width={16} height={16} /> Đang tải danh sách hồ sơ ứng viên...
               </div>
             ) : allApplicants.length === 0 ? (
               <div className="empty-state" style={{ padding: '40px 20px' }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>👥</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="users" width={28} height={28} />
+                  </div>
+                </div>
                 <b>Chưa có ứng viên nào nộp hồ sơ</b>
                 <p style={{ color: 'var(--ink-soft)', marginTop: 4 }}>
                   Tin đăng của bạn đang hiển thị công khai trên bảng việc làm. Hồ sơ mới sẽ xuất hiện tại đây ngay khi sinh viên ứng tuyển.
@@ -779,13 +783,13 @@ export default function JobApplicants() {
                             </b>
                             {tierIconEl(a.tier)}
                             {isHiredOne && (
-                              <span className="chip chip-lime" style={{ padding: '2px 8px', fontSize: 11 }}>
-                                ✓ Đã thuê
+                              <span className="chip chip-lime" style={{ padding: '2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                <Icon name="check" width={11} height={11} /> Đã thuê
                               </span>
                             )}
                             {isShortlisted && (
-                              <span className="chip" style={{ padding: '2px 8px', fontSize: 11, background: 'rgba(234, 179, 8, 0.12)', color: '#b45309', fontWeight: 600 }}>
-                                ⭐ Tiềm năng
+                              <span className="chip" style={{ padding: '2px 8px', fontSize: 11, background: 'rgba(234, 179, 8, 0.12)', color: '#b45309', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                <Icon name="star" width={11} height={11} /> Tiềm năng
                               </span>
                             )}
                             {a.rejected && (
@@ -797,20 +801,20 @@ export default function JobApplicants() {
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--ink-soft)' }}>
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              🎓 <b>{a.school}</b>
+                              <Icon name="graduation" width={13} height={13} /> <b>{a.school}</b>
                             </span>
                             {a.email && (
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--primary)' }}>
-                                ✉️ <b>{a.email}</b>
+                                <Icon name="mail" width={13} height={13} /> <b>{a.email}</b>
                               </span>
                             )}
                             {a.phone && (
                               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#10b981' }}>
-                                📞 <b>{a.phone}</b>
+                                <Icon name="phone" width={13} height={13} /> <b>{a.phone}</b>
                               </span>
                             )}
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              📅 <b>{a.appliedAt}</b>
+                              <Icon name="clock" width={13} height={13} /> <b>{a.appliedAt}</b>
                             </span>
                           </div>
                         </div>
@@ -818,7 +822,9 @@ export default function JobApplicants() {
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                         <div className="app-score" title="Độ uy tín & số công việc hoàn thành" style={{ fontWeight: 600, fontSize: 13, textAlign: 'right' }}>
-                          <div>⭐ {a.score}/100</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 3 }}>
+                            <Icon name="star" width={12} height={12} style={{ color: '#eab308' }} /> {a.score}/100
+                          </div>
                           <span style={{ fontSize: 11, color: 'var(--ink-soft)', fontWeight: 400 }}>{a.jobsDone} việc xong</span>
                         </div>
 
@@ -830,12 +836,15 @@ export default function JobApplicants() {
                             style={{
                               color: isShortlisted ? '#eab308' : 'var(--ink-soft)',
                               background: isShortlisted ? 'rgba(234, 179, 8, 0.1)' : 'transparent',
-                              borderColor: isShortlisted ? '#eab308' : 'var(--border)'
+                              borderColor: isShortlisted ? '#eab308' : 'var(--border)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
                             }}
                             title={isShortlisted ? "Bỏ lưu ứng viên này" : "Lưu vào danh sách tiềm năng (Shortlist)"}
                             onClick={() => toggleShortlist(a.id || a.name)}
                           >
-                            {isShortlisted ? '⭐' : '☆'}
+                            <Icon name="star" width={14} height={14} style={{ color: isShortlisted ? '#eab308' : 'var(--ink-soft)' }} />
                           </button>
 
                           {/* Nút Mẫu phản hồi nhanh (Canned Replies) */}
@@ -844,8 +853,9 @@ export default function JobApplicants() {
                             className="reject"
                             title="Chọn mẫu tin nhắn phản hồi nhanh"
                             onClick={() => setCannedModalApplicant(a)}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                           >
-                            💬
+                            <Icon name="chat" width={14} height={14} />
                           </button>
 
                           {job.status === 'open' && !hasHired && (
@@ -1041,17 +1051,19 @@ export default function JobApplicants() {
             </button>
             <button
               className="btn btn-outline"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
               onClick={() => {
                 const sName = viewStudentModal.name;
                 setViewStudentModal(null);
                 navigate(`/u/${slugify(sName)}`);
               }}
             >
-              🌐 Xem Portfolio công khai
+              <Icon name="eye" width={14} height={14} /> Xem Portfolio công khai
             </button>
             {job?.status === 'open' && !hasHired && (
               <button
                 className="btn btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 onClick={() => {
                   const s = viewStudentModal;
                   setViewStudentModal(null);
@@ -1059,7 +1071,7 @@ export default function JobApplicants() {
                   openModal('hire', { jobId: job.id, applicantIdx: realIdx >= 0 ? realIdx : 0, applicantName: s.name, applicant: s, job, onHired: loadData });
                 }}
               >
-                ✓ Thuê sinh viên này & Ký quỹ
+                <Icon name="check" width={14} height={14} /> Thuê sinh viên này & Ký quỹ
               </button>
             )}
           </div>

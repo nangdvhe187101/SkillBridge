@@ -23,13 +23,13 @@ function formatFileSize(bytes) {
 
 function getFileIcon(fileName) {
     const ext = (fileName || '').split('.').pop().toLowerCase();
-    if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return '🖼️';
-    if (['pdf'].includes(ext)) return '📕';
-    if (['doc', 'docx'].includes(ext)) return '📘';
-    if (['xls', 'xlsx', 'csv'].includes(ext)) return '📊';
-    if (['zip', 'rar', '7z'].includes(ext)) return '🗜️';
-    if (['mp4', 'mov', 'avi', 'mkv'].includes(ext)) return '🎬';
-    return '📄';
+    if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return 'image';
+    if (['pdf'].includes(ext)) return 'file-text';
+    if (['doc', 'docx'].includes(ext)) return 'file-text';
+    if (['xls', 'xlsx', 'csv'].includes(ext)) return 'chart-bar';
+    if (['zip', 'rar', '7z'].includes(ext)) return 'archive';
+    if (['mp4', 'mov', 'avi', 'mkv'].includes(ext)) return 'video';
+    return 'file-text';
 }
 
 export default function PostJobForm({ onDone, onCancelEdit }) {
@@ -130,7 +130,7 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
             isExisting: false,
         }));
         setAttachments((prev) => [...prev, ...newFiles]);
-        showToast(`Đã thêm ${newFiles.length} tài liệu đính kèm mới.`, '📎');
+        showToast(`Đã thêm ${newFiles.length} tài liệu đính kèm mới.`, 'check');
     };
 
     const handleFileChange = (e) => {
@@ -147,14 +147,14 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
         if (jobId && (typeof fileId === 'number' || fileToRemove?.isExisting)) {
             try {
                 await deleteJobAttachment(jobId, fileId);
-                showToast(`Đã xóa vĩnh viễn tệp "${fileToRemove?.name || 'tài liệu'}" khỏi tin tuyển dụng.`, '🗑️');
+                showToast(`Đã xóa vĩnh viễn tệp "${fileToRemove?.name || 'tài liệu'}" khỏi tin tuyển dụng.`, 'trash');
             } catch (e) {
                 console.error('Lỗi xóa attachment trên server:', e);
-                showToast('Không thể xóa tệp trên server, vui lòng thử lại.', '⚠️');
+                showToast('Không thể xóa tệp trên server, vui lòng thử lại.', 'alert-triangle');
                 return;
             }
         } else {
-            showToast('Đã bỏ chọn tệp đính kèm.', '🗑️');
+            showToast('Đã bỏ chọn tệp đính kèm.', 'trash');
         }
 
         setAttachments((prev) => prev.filter((f) => f.id !== fileId));
@@ -181,13 +181,13 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
     const submit = async (e) => {
         e.preventDefault();
         if (!title.trim() || !desc.trim() || !budget) {
-            showToast('Vui lòng điền đầy đủ tiêu đề, ngân sách và mô tả.', '⚠️');
+            showToast('Vui lòng điền đầy đủ tiêu đề, ngân sách và mô tả.', 'alert-triangle');
             return;
         }
 
         const numBudget = Math.round(Number(budget));
         if (isNaN(numBudget) || numBudget <= 0) {
-            showToast('Ngân sách phải là số nguyên dương (VNĐ).', '⚠️');
+            showToast('Ngân sách phải là số nguyên dương (VNĐ).', 'alert-triangle');
             return;
         }
 
@@ -247,7 +247,7 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
             clearEditJob();
             onDone?.();
         } catch (err) {
-            showToast(err.message || 'Không thể lưu tin tuyển dụng, vui lòng thử lại.', '⚠️');
+            showToast(err.message || 'Không thể lưu tin tuyển dụng, vui lòng thử lại.', 'alert-triangle');
         } finally {
             setIsSubmitting(false);
         }
@@ -315,7 +315,10 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                 {/* Thời gian hoàn thành dự kiến */}
                 <div className="field">
                     <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>⏱️ Thời hạn hoàn thành công việc <span style={{ color: 'var(--coral)' }}>*</span></span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <Icon name="clock" style={{ width: 15, height: 15, color: 'var(--primary)' }} />
+                            <span>Thời hạn hoàn thành công việc <span style={{ color: 'var(--coral)' }}>*</span></span>
+                        </span>
                         <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}>
                             {durationDays > 0 ? `${durationDays} ngày ` : ''}{durationHours > 0 ? `${durationHours} giờ` : (durationDays === 0 ? '0 giờ' : '')}
                         </span>
@@ -352,12 +355,12 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                         <span style={{ fontSize: 11.5, color: 'var(--ink-soft)', alignSelf: 'center', marginRight: 4 }}>Chọn nhanh:</span>
                         {[
-                            { label: '⚡ 12 giờ', d: 0, h: 12 },
-                            { label: '⚡ 24 giờ (1 ngày)', d: 1, h: 0 },
-                            { label: '⏱️ 2 ngày', d: 2, h: 0 },
-                            { label: '⏱️ 3 ngày', d: 3, h: 0 },
-                            { label: '⏱️ 5 ngày', d: 5, h: 0 },
-                            { label: '⏱️ 7 ngày', d: 7, h: 0 },
+                            { label: '12 giờ', d: 0, h: 12, urgent: true },
+                            { label: '24 giờ (1 ngày)', d: 1, h: 0, urgent: true },
+                            { label: '2 ngày', d: 2, h: 0 },
+                            { label: '3 ngày', d: 3, h: 0 },
+                            { label: '5 ngày', d: 5, h: 0 },
+                            { label: '7 ngày', d: 7, h: 0 },
                         ].map((preset, idx) => (
                             <button
                                 key={idx}
@@ -366,6 +369,9 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                                 style={{
                                     fontSize: 11.5,
                                     padding: '2px 8px',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4,
                                     background: durationDays === preset.d && durationHours === preset.h ? 'rgba(108, 76, 255, 0.12)' : 'transparent',
                                     borderColor: durationDays === preset.d && durationHours === preset.h ? 'var(--primary)' : 'var(--border)',
                                     color: durationDays === preset.d && durationHours === preset.h ? 'var(--primary)' : 'var(--ink)',
@@ -375,7 +381,9 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                                     setDurationHours(preset.h);
                                 }}
                             >
-                                {preset.label}
+                                {preset.urgent && <Icon name="zap" style={{ width: 12, height: 12, color: '#f59e0b' }} />}
+                                {!preset.urgent && <Icon name="clock" style={{ width: 12, height: 12, opacity: 0.7 }} />}
+                                <span>{preset.label}</span>
                             </button>
                         ))}
                     </div>
@@ -405,7 +413,10 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                 {/* Upload Zone for Job Brief & Attachments */}
                 <div className="field">
                     <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>📎 Tài liệu đính kèm (Brief, ảnh mẫu, file đề bài)</span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <Icon name="paperclip" style={{ width: 14, height: 14, color: 'var(--primary)' }} />
+                            <span>Tài liệu đính kèm (Brief, ảnh mẫu, file đề bài)</span>
+                        </span>
                         <span style={{ fontSize: 12, color: 'var(--ink-soft)', fontWeight: 400 }}>Tùy chọn</span>
                     </label>
 
@@ -433,7 +444,9 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                             style={{ display: 'none' }}
                             onChange={handleFileChange}
                         />
-                        <div className="uz-ic" style={{ fontSize: 28, marginBottom: 4 }}>📤</div>
+                        <div className="uz-ic" style={{ marginBottom: 6, color: 'var(--primary)' }}>
+                            <Icon name="download" style={{ width: 28, height: 28, transform: 'rotate(180deg)' }} />
+                        </div>
                         <b style={{ display: 'block', fontSize: 14 }}>Bấm để tải lên hoặc kéo thả file vào đây</b>
                         <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
                             Hỗ trợ PDF, Word, Excel, ZIP, Ảnh minh họa, Footage mẫu (Tối đa 50MB/file)
@@ -464,7 +477,9 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                                         }}
                                     >
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: '1 1 200px' }}>
-                                            <span style={{ fontSize: 22, flexShrink: 0 }}>{getFileIcon(f.name)}</span>
+                                            <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', flexShrink: 0 }}>
+                                                <Icon name={getFileIcon(f.name)} style={{ width: 18, height: 18 }} />
+                                            </span>
                                             <div style={{ minWidth: 0, overflow: 'hidden' }}>
                                                 <b style={{ fontSize: 13, display: 'block', color: 'var(--ink)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={f.name}>{f.name}</b>
                                                 <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
@@ -487,14 +502,15 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                                             <button
                                                 type="button"
                                                 className="btn btn-outline btn-sm"
-                                                style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--coral)', borderColor: 'var(--coral)', whiteSpace: 'nowrap' }}
+                                                style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--coral)', borderColor: 'var(--coral)', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleRemoveFile(f.id);
                                                 }}
                                                 title="Xóa tài liệu này"
                                             >
-                                                🗑️ Xóa file
+                                                <Icon name="trash" style={{ width: 13, height: 13 }} />
+                                                <span>Xóa file</span>
                                             </button>
                                         </div>
                                     </div>
@@ -506,8 +522,9 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
 
                 <div className="check-row" style={{ marginTop: 8 }}>
                     <input type="checkbox" id="pjUrgent" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} />
-                    <label htmlFor="pjUrgent">
-                        ⚡ Đánh dấu là công việc cần tuyển gấp (Ưu tiên hiển thị Featured Listing, +20.000đ)
+                    <label htmlFor="pjUrgent" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Icon name="zap" style={{ width: 15, height: 15, color: '#f59e0b' }} />
+                        <span>Đánh dấu là công việc cần tuyển gấp (Ưu tiên hiển thị Featured Listing, +20.000đ)</span>
                     </label>
                 </div>
 
@@ -525,8 +542,9 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
 
             {/* Live Preview Card */}
             <div>
-                <div className="preview-label" style={{ fontWeight: 600, marginBottom: 10, color: 'var(--ink-soft)' }}>
-                    👁 Xem trước thẻ tin đăng
+                <div className="preview-label" style={{ fontWeight: 600, marginBottom: 10, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="eye" style={{ width: 16, height: 16 }} />
+                    <span>Xem trước thẻ tin đăng</span>
                 </div>
 
                 <div className="job-card" style={{ cursor: 'default' }}>
@@ -546,13 +564,15 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                     <div className="jc-tags" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         <span className="chip">{categoriesList.find(c => c.id === categoryId)?.name || 'Danh mục'}</span>
                         {(durationDays > 0 || durationHours > 0) && (
-                            <span className="chip" style={{ background: 'rgba(108, 76, 255, 0.1)', color: 'var(--primary)', fontWeight: 600 }}>
-                                ⏱️ {durationDays > 0 ? `${durationDays} ngày ` : ''}{durationHours > 0 ? `${durationHours} giờ` : ''}
+                            <span className="chip" style={{ background: 'rgba(108, 76, 255, 0.1)', color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <Icon name="clock" style={{ width: 12, height: 12 }} />
+                                <span>{durationDays > 0 ? `${durationDays} ngày ` : ''}{durationHours > 0 ? `${durationHours} giờ` : ''}</span>
                             </span>
                         )}
                         {attachments.length > 0 && (
-                            <span className="chip chip-lime" style={{ fontSize: 11 }}>
-                                📎 {attachments.length} file đính kèm
+                            <span className="chip chip-lime" style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <Icon name="paperclip" style={{ width: 12, height: 12 }} />
+                                <span>{attachments.length} file đính kèm</span>
                             </span>
                         )}
                     </div>

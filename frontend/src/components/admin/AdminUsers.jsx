@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import Icon from '../Icon';
 import { useAdmin } from '../../context/AdminContext';
 import Pagination from '../Pagination';
 
@@ -17,8 +18,8 @@ const STATUS_STYLE = {
 };
 
 const KYC_LABEL = {
-  verified: '✓ Đã xác thực',
-  pending: '⏳ Chờ duyệt'
+  verified: 'Đã xác thực',
+  pending: 'Chờ duyệt'
 };
 
 export default function AdminUsers() {
@@ -111,8 +112,8 @@ export default function AdminUsers() {
           />
           <select value={roleF} onChange={(e) => setRoleF(e.target.value)}>
             <option value="all">Tất cả vai trò</option>
-            <option value="student">🎓 Sinh viên</option>
-            <option value="employer">🏢 Nhà tuyển dụng</option>
+            <option value="student">Sinh viên</option>
+            <option value="employer">Nhà tuyển dụng</option>
           </select>
           <select value={statusF} onChange={(e) => setStatusF(e.target.value)}>
             <option value="all">Tất cả trạng thái</option>
@@ -174,10 +175,14 @@ export default function AdminUsers() {
                       style={{
                         background: u.role === 'employer' ? 'rgba(99, 102, 241, 0.1)' : 'rgba(59, 130, 246, 0.1)',
                         color: u.role === 'employer' ? '#6366f1' : '#3b82f6',
-                        fontSize: 12
+                        fontSize: 12,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4
                       }}
                     >
-                      {u.role === 'student' ? '🎓 Sinh viên' : '🏢 Nhà tuyển dụng'}
+                      <Icon name={u.role === 'student' ? 'graduation' : 'building'} style={{ width: 13, height: 13 }} />
+                      <span>{u.role === 'student' ? 'Sinh viên' : 'Nhà tuyển dụng'}</span>
                     </span>
                   </td>
 
@@ -188,10 +193,14 @@ export default function AdminUsers() {
                       style={{
                         background: u.kyc === 'verified' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(245, 158, 11, 0.1)',
                         color: u.kyc === 'verified' ? '#16a34a' : '#d97706',
-                        fontSize: 11.5
+                        fontSize: 11.5,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4
                       }}
                     >
-                      {KYC_LABEL[u.kyc] || u.kyc}
+                      <Icon name={u.kyc === 'verified' ? 'check' : 'hourglass'} style={{ width: 11, height: 11 }} />
+                      <span>{KYC_LABEL[u.kyc] || u.kyc}</span>
                     </span>
                   </td>
 
@@ -208,10 +217,14 @@ export default function AdminUsers() {
                         fontWeight: 700,
                         color: 'var(--primary)',
                         fontSize: 12,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4
                       }}
                       title="Bấm để sửa điểm uy tín"
                     >
-                      {u.reliability}/100 ✏️
+                      <span>{u.reliability}/100</span>
+                      <Icon name="edit" style={{ width: 11, height: 11 }} />
                     </button>
                   </td>
 
@@ -298,7 +311,10 @@ export default function AdminUsers() {
       {/* Blacklist Board */}
       <div className="adm-card" style={{ marginTop: 24 }}>
         <div className="adm-card-head">
-          <h4>🚫 Blacklist Board (Danh sách đen vi phạm)</h4>
+          <h4 style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="ban" style={{ width: 16, height: 16, color: 'var(--coral)' }} />
+            <span>Blacklist Board (Danh sách đen vi phạm)</span>
+          </h4>
           <span className="sub">Tài khoản bị cấm giao dịch do quỵt tiền hoặc bỏ ngang công việc</span>
         </div>
         {blacklist.length === 0 ? (
@@ -323,8 +339,13 @@ export default function AdminUsers() {
       {modal?.type === 'reliability' && (
         <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setModal(null); }}>
           <div className="modal-box">
-            <button className="modal-close" onClick={() => setModal(null)}>✕</button>
-            <h3>✏️ Điều chỉnh Reliability Score</h3>
+            <button className="modal-close" onClick={() => setModal(null)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" style={{ width: 16, height: 16 }} />
+            </button>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="edit" style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+              <span>Điều chỉnh Reliability Score</span>
+            </h3>
             <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
               Điều chỉnh điểm uy tín của <b>{modal.user.name}</b> khi có khiếu nại hoặc xem xét lại vi phạm. Điểm hiện tại: <b>{modal.user.reliability}/100</b>.
             </p>
@@ -348,8 +369,13 @@ export default function AdminUsers() {
       {modal?.type === 'history' && (
         <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setModal(null); }}>
           <div className="modal-box">
-            <button className="modal-close" onClick={() => setModal(null)}>✕</button>
-            <h3>📜 Hồ sơ & Lịch sử hoạt động</h3>
+            <button className="modal-close" onClick={() => setModal(null)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" style={{ width: 16, height: 16 }} />
+            </button>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="file-text" style={{ width: 18, height: 18, color: 'var(--primary)' }} />
+              <span>Hồ sơ & Lịch sử hoạt động</span>
+            </h3>
             <p style={{ marginBottom: 14, fontSize: 13.5, color: 'var(--ink-soft)' }}>
               <b>{modal.user.name}</b> · {modal.user.role === 'student' ? 'Sinh viên' : 'Nhà tuyển dụng'} {modal.user.school !== '—' ? `· ${modal.user.school}` : ''}
             </p>
@@ -370,8 +396,13 @@ export default function AdminUsers() {
       {modal?.type === 'blacklist' && (
         <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setModal(null); }}>
           <div className="modal-box">
-            <button className="modal-close" onClick={() => setModal(null)}>✕</button>
-            <h3 style={{ color: 'var(--coral)' }}>🚫 Đưa vào Blacklist Board</h3>
+            <button className="modal-close" onClick={() => setModal(null)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" style={{ width: 16, height: 16 }} />
+            </button>
+            <h3 style={{ color: 'var(--coral)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="ban" style={{ width: 18, height: 18 }} />
+              <span>Đưa vào Blacklist Board</span>
+            </h3>
             <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
               Bạn đang đưa tài khoản <b>{modal.user.name}</b> ({modal.user.email}) vào danh sách đen. Tài khoản này sẽ bị khoá quyền ứng tuyển và đăng tin.
             </p>

@@ -22,7 +22,9 @@ export function ReceiptModal({ onClose, justCompletedId }) {
 
   return (
     <ModalShell onClose={onClose}>
-      <h3>🧾 Biên nhận giao dịch</h3>
+      <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Icon name="receipt" width="22" height="22" /> Biên nhận giao dịch
+      </h3>
       <div className="checkout-summary">
         <div className="cs-row"><span>Công việc</span><span>{receipt.jobTitle}</span></div>
         <div className="cs-row"><span>Sinh viên nhận</span><span>{receipt.student}</span></div>
@@ -51,9 +53,17 @@ export function ViewJobModal({ onClose, jobId }) {
     <ModalShell onClose={onClose}>
       <h3>{job.title}</h3>
       <div className="modal-tags" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', margin: '10px 0 14px' }}>
-        <span className="chip chip-lime">📂 {job.cat}</span>
-        <span className="chip">💰 {fmtVND(job.budget)}</span>
-        {job.urgent && <span className="chip chip-coral">⚡ Tuyển gấp</span>}
+        <span className="chip chip-lime" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Icon name="folder" width="13" height="13" /> {job.cat}
+        </span>
+        <span className="chip" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Icon name="wallet" width="13" height="13" /> {fmtVND(job.budget)}
+        </span>
+        {job.urgent && (
+          <span className="chip chip-coral" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="bolt" width="13" height="13" /> Tuyển gấp
+          </span>
+        )}
         <span className={'djr-status ' + job.status} style={{ display: 'inline-block' }}>
           {job.status === 'open' ? 'Đang tuyển' : job.status === 'in_progress' ? 'Đang thực hiện' : job.status === 'submitted' ? 'Chờ xác nhận bàn giao' : job.status === 'completed' ? 'Đã hoàn thành' : job.status}
         </span>
@@ -75,12 +85,18 @@ export function ViewJobModal({ onClose, jobId }) {
 
       {job.attachments && job.attachments.length > 0 && (
         <div style={{ background: 'var(--surface)', borderRadius: 10, padding: 14, marginBottom: 14 }}>
-          <h4 style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8 }}>📎 TÀI LIỆU ĐÍNH KÈM ({job.attachments.length})</h4>
+          <h4 style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="paperclip" width="14" height="14" /> TÀI LIỆU ĐÍNH KÈM ({job.attachments.length})
+          </h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {job.attachments.map((f, idx) => (
               <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 10px', background: 'var(--surface-card, rgba(255,255,255,0.05))', borderRadius: 6, fontSize: 12.5 }}>
-                <span>📁 <b>{f.name}</b> {f.size ? `(${f.size > 1024*1024 ? (f.size/(1024*1024)).toFixed(1)+' MB' : (f.size/1024).toFixed(0)+' KB'})` : ''}</span>
-                <span className="chip" style={{ fontSize: 11, cursor: 'pointer' }} onClick={() => downloadJobAttachment(f, job.title)}>⬇ Tải về</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="file-text" width="14" height="14" /> <b>{f.name}</b> {f.size ? `(${f.size > 1024*1024 ? (f.size/(1024*1024)).toFixed(1)+' MB' : (f.size/1024).toFixed(0)+' KB'})` : ''}
+                </span>
+                <span className="chip" style={{ fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => downloadJobAttachment(f, job.title)}>
+                  <Icon name="download" width="12" height="12" /> Tải về
+                </span>
               </div>
             ))}
           </div>
@@ -89,18 +105,20 @@ export function ViewJobModal({ onClose, jobId }) {
 
       {job.hiredApplicant && (
         <div style={{ background: 'rgba(87, 199, 255, 0.1)', border: '1px solid var(--accent)', borderRadius: 10, padding: 12, marginBottom: 14 }}>
-          <b style={{ color: 'var(--accent)', fontSize: 13 }}>👤 Đã thuê: {job.hiredApplicant}</b>
+          <b style={{ color: 'var(--accent)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="users" width="15" height="15" /> Đã thuê: {job.hiredApplicant}
+          </b>
         </div>
       )}
 
       <div className="modal-actions">
         {!hasHired && (
-          <button className="btn btn-primary" onClick={() => { onClose(); startEditJob(job.id); navigate('/dashboard?tab=post'); }}>
-            ✏️ Chỉnh sửa tin
+          <button className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { onClose(); startEditJob(job.id); navigate('/dashboard?tab=post'); }}>
+            <Icon name="edit" width="14" height="14" /> Chỉnh sửa tin
           </button>
         )}
-        <button className="btn btn-outline" onClick={() => { onClose(); navigate(`/dashboard/jobs/${job.id}`); }}>
-          👥 Xem ứng viên ({job.applicants?.length || 0})
+        <button className="btn btn-outline" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { onClose(); navigate(`/dashboard/jobs/${job.id}`); }}>
+          <Icon name="users" width="14" height="14" /> Xem ứng viên ({job.applicants?.length || 0})
         </button>
         <button className="btn btn-outline" onClick={onClose}>Đóng</button>
       </div>
@@ -111,7 +129,9 @@ export function ViewJobModal({ onClose, jobId }) {
 export function ReportModal({ onClose, withName }) {
   return (
     <ModalShell onClose={onClose}>
-      <h3>🚩 Báo cáo {withName}</h3>
+      <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Icon name="flag" width="20" height="20" style={{ color: 'var(--coral)' }} /> Báo cáo {withName}
+      </h3>
       <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Cho chúng tôi biết vấn đề bạn gặp phải — đội ngũ Trust & Safety sẽ xem xét trong 24 giờ.</p>
       <div className="field">
         <label>Lý do báo cáo</label>

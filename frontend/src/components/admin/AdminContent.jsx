@@ -1,13 +1,14 @@
 import { useState } from 'react';
+import Icon from '../Icon';
 import { useAdmin } from '../../context/AdminContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import { downloadJobAttachment } from '../../utils/fileDownloader';
 import { fmtVND } from '../../context/StoreContext';
 
 const RISK_LABEL = {
-  high: '🔴 Rủi ro cao',
-  medium: '🟡 Rủi ro vừa',
-  low: '🟢 Rủi ro thấp'
+  high: 'Rủi ro cao',
+  medium: 'Rủi ro vừa',
+  low: 'Rủi ro thấp'
 };
 
 const RISK_STYLE = {
@@ -96,29 +97,34 @@ export default function AdminContent() {
                         Người đăng: <b>{m.emp}</b> · Ngân sách: <b style={{ color: 'var(--primary)' }}>{fmtVND(m.budget || 300000)}</b> · {m.postedAt || 'Vừa xong'}
                       </div>
                     </div>
-                    <span className="chip" style={{ ...RISK_STYLE[m.risk], fontSize: 11 }}>
-                      {RISK_LABEL[m.risk]}
+                    <span className="chip" style={{ ...RISK_STYLE[m.risk], fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                      <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
+                      <span>{RISK_LABEL[m.risk]}</span>
                     </span>
                   </div>
 
                   {m.flag && (
-                    <div style={{ fontSize: 12.5, background: 'rgba(239, 68, 68, 0.08)', padding: '6px 10px', borderRadius: 6, color: '#dc2626' }}>
-                      ⚠️ <b>Lý do gắn cờ:</b> {m.flag}
+                    <div style={{ fontSize: 12.5, background: 'rgba(239, 68, 68, 0.08)', padding: '6px 10px', borderRadius: 6, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Icon name="alert-triangle" style={{ width: 14, height: 14, flexShrink: 0 }} />
+                      <div><b>Lý do gắn cờ:</b> {m.flag}</div>
                     </div>
                   )}
 
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
-                    <button className="btn btn-outline btn-sm" onClick={() => setViewJob(m)}>
-                      🔍 Xem chi tiết nội dung tin
+                    <button className="btn btn-outline btn-sm" onClick={() => setViewJob(m)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="search" style={{ width: 13, height: 13 }} />
+                      <span>Xem chi tiết nội dung tin</span>
                     </button>
-                    <button className="btn btn-primary btn-sm" onClick={() => handleApprove(m)}>
-                      ✓ Duyệt tin
+                    <button className="btn btn-primary btn-sm" onClick={() => handleApprove(m)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="check" style={{ width: 13, height: 13 }} />
+                      <span>Duyệt tin</span>
                     </button>
                     <button className="btn btn-outline btn-sm" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} onClick={() => handleReject(m)}>
                       Từ chối
                     </button>
-                    <button className="btn btn-outline btn-sm" onClick={() => handleWarn(m)}>
-                      ⚠️ Cảnh báo người đăng
+                    <button className="btn btn-outline btn-sm" onClick={() => handleWarn(m)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="alert-triangle" style={{ width: 13, height: 13 }} />
+                      <span>Cảnh báo người đăng</span>
                     </button>
                   </div>
                 </div>
@@ -147,7 +153,9 @@ export default function AdminContent() {
             {categories.map((c, i) => (
               <span className="chip" key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 {c}
-                <button onClick={() => handleRemoveCat(c)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--coral)', fontWeight: 'bold' }}>✕</button>
+                <button onClick={() => handleRemoveCat(c)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--coral)', display: 'inline-flex', alignItems: 'center' }}>
+                  <Icon name="x" style={{ width: 12, height: 12 }} />
+                </button>
               </span>
             ))}
           </div>
@@ -171,8 +179,9 @@ export default function AdminContent() {
                     {f.emp} · Đã thanh toán <b>{f.paid.toLocaleString('vi-VN')}đ</b>
                   </div>
                 </div>
-                <button className="btn btn-primary btn-sm" onClick={() => approveFeatured(f.id)}>
-                  ⭐ Gắn nhãn Featured
+                <button className="btn btn-primary btn-sm" onClick={() => approveFeatured(f.id)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="star" style={{ width: 13, height: 13, color: '#f59e0b' }} />
+                  <span>Gắn nhãn Featured</span>
                 </button>
               </div>
             ))
@@ -186,11 +195,14 @@ export default function AdminContent() {
       {viewJob && (
         <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setViewJob(null); }}>
           <div className="modal-box" style={{ maxWidth: 640, maxHeight: '90vh', overflowY: 'auto' }}>
-            <button className="modal-close" onClick={() => setViewJob(null)}>✕</button>
+            <button className="modal-close" onClick={() => setViewJob(null)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" style={{ width: 16, height: 16 }} />
+            </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span className="chip" style={{ ...RISK_STYLE[viewJob.risk], fontSize: 11 }}>
-                {RISK_LABEL[viewJob.risk]}
+              <span className="chip" style={{ ...RISK_STYLE[viewJob.risk], fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'currentColor' }} />
+                <span>{RISK_LABEL[viewJob.risk]}</span>
               </span>
               <span className="chip chip-lime" style={{ fontSize: 11 }}>{viewJob.cat}</span>
             </div>
@@ -204,9 +216,12 @@ export default function AdminContent() {
             </div>
 
             {viewJob.riskReason && (
-              <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: 12, borderRadius: 8, marginBottom: 14 }}>
-                <b style={{ color: '#dc2626', fontSize: 13 }}>⚠️ Phân tích rủi ro hệ thống:</b>
-                <p style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5, color: 'var(--ink)' }}>{viewJob.riskReason}</p>
+              <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: 12, borderRadius: 8, marginBottom: 14, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <Icon name="alert-triangle" style={{ width: 16, height: 16, color: '#dc2626', flexShrink: 0, marginTop: 2 }} />
+                <div>
+                  <b style={{ color: '#dc2626', fontSize: 13 }}>Phân tích rủi ro hệ thống:</b>
+                  <p style={{ fontSize: 12.5, marginTop: 4, lineHeight: 1.5, color: 'var(--ink)', margin: 0 }}>{viewJob.riskReason}</p>
+                </div>
               </div>
             )}
 
@@ -232,9 +247,13 @@ export default function AdminContent() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {viewJob.attachments.map((f, idx) => (
                     <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                      <span>📄 <b>{f.name}</b></span>
-                      <button className="btn btn-outline btn-sm" onClick={() => downloadJobAttachment(f, viewJob.title)}>
-                        ⬇ Tải file brief
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Icon name="file-text" style={{ width: 14, height: 14, color: 'var(--primary)' }} />
+                        <b>{f.name}</b>
+                      </span>
+                      <button className="btn btn-outline btn-sm" onClick={() => downloadJobAttachment(f, viewJob.title)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Icon name="download" style={{ width: 13, height: 13 }} />
+                        <span>Tải file brief</span>
                       </button>
                     </div>
                   ))}
@@ -243,14 +262,16 @@ export default function AdminContent() {
             )}
 
             <div className="modal-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 18 }}>
-              <button className="btn btn-primary" onClick={() => handleApprove(viewJob)}>
-                ✓ Duyệt tin lên sàn
+              <button className="btn btn-primary" onClick={() => handleApprove(viewJob)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Icon name="check" style={{ width: 14, height: 14 }} />
+                <span>Duyệt tin lên sàn</span>
               </button>
               <button className="btn btn-outline" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} onClick={() => handleReject(viewJob)}>
                 Từ chối tin
               </button>
-              <button className="btn btn-outline" onClick={() => handleWarn(viewJob)}>
-                ⚠️ Gửi cảnh báo
+              <button className="btn btn-outline" onClick={() => handleWarn(viewJob)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Icon name="alert-triangle" style={{ width: 14, height: 14 }} />
+                <span>Gửi cảnh báo</span>
               </button>
               <button className="btn btn-outline" onClick={() => setViewJob(null)}>
                 Đóng

@@ -8,14 +8,14 @@ import { adsPool } from '../../data/ads';
 import { slugify } from '../../data/companies';
 
 const CAT_ICON = {
-  'Video Editing': '🎥',
-  'Graphic Design': '🎨',
-  'Content Marketing': '📣',
-  'Data Entry': '🗎',
-  'Programming': '💻',
-  'Translation': '🌐',
-  'Tutoring': '📚',
-  'Photography': '📸',
+  'Video Editing': 'film',
+  'Graphic Design': 'brush',
+  'Content Marketing': 'megaphone',
+  'Data Entry': 'database',
+  'Programming': 'file-text',
+  'Translation': 'file-text',
+  'Tutoring': 'graduation',
+  'Photography': 'camera',
 };
 
 function formatDurationBadge(deadlineAt, postedAt) {
@@ -61,9 +61,9 @@ export default function Jobs() {
     const seen = new Set();
     allJobs.forEach((j) => { if (j.cat) seen.add(j.cat); });
     return [
-      { cat: 'Tất cả', label: 'Tất cả' },
-      { cat: 'saved', label: `❤️ Đã lưu (${savedCount})` },
-      ...[...seen].sort().map((cat) => ({ cat, label: (CAT_ICON[cat] || '📌') + ' ' + cat })),
+      { cat: 'Tất cả', label: 'Tất cả', icon: null },
+      { cat: 'saved', label: `Đã lưu (${savedCount})`, icon: 'heart' },
+      ...[...seen].sort().map((cat) => ({ cat, label: cat, icon: CAT_ICON[cat] || null })),
     ];
   }, [allJobs, savedCount]);
 
@@ -138,11 +138,14 @@ export default function Jobs() {
                 justifyContent: 'center',
                 cursor: 'pointer',
                 fontSize: 14,
-                transition: 'all 0.15s ease'
+                transition: 'all 0.15s ease',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
               title={isJobSaved ? 'Bỏ lưu khỏi danh sách yêu thích' : 'Lưu công việc vào yêu thích'}
             >
-              {isJobSaved ? '❤️' : '🤍'}
+              <Icon name="heart" width="16" height="16" fill={isJobSaved ? '#ef4444' : 'none'} style={{ color: isJobSaved ? '#ef4444' : 'var(--ink-soft)' }} />
             </button>
           </div>
         </div>
@@ -153,8 +156,8 @@ export default function Jobs() {
             const dur = formatDurationBadge(j.deadlineAt, j.postedAt);
             if (!dur) return null;
             return (
-              <span className="chip" style={{ background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', fontWeight: 600, fontSize: 11.5 }}>
-                ⏱️ {dur}
+              <span className="chip" style={{ background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', fontWeight: 600, fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Icon name="clock" width="12" height="12" /> {dur}
               </span>
             );
           })()}
@@ -167,7 +170,7 @@ export default function Jobs() {
                 style={{ fontSize: 11.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                 title={`Công việc có kèm ${count} tệp tài liệu/đề bài`}
               >
-                📎 {count} tệp đính kèm
+                <Icon name="paperclip" width="12" height="12" /> {count} tệp đính kèm
               </span>
             );
           })()}
@@ -180,11 +183,15 @@ export default function Jobs() {
       adCounter++;
       items.push(
         <div className="ad-card" key={'ad' + i} onClick={() => handleOpenAd(ad)}>
-          <span className="ad-badge">📢 Được tài trợ · {ad.sponsor || 'Quảng cáo Affiliate'}</span>
+          <span className="ad-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icon name="megaphone" width="12" height="12" /> Được tài trợ · {ad.sponsor || 'Quảng cáo Affiliate'}
+          </span>
           <h3>{ad.title}</h3>
           <p>{ad.desc}</p>
           <div className="ad-cta">
-            <span>⚡ One-Touch Portfolio Generator</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Icon name="bolt" width="12" height="12" /> One-Touch Portfolio Generator
+            </span>
             <span className="chip chip-lime" style={{ fontSize: 11 }}>Ứng tuyển 1 chạm →</span>
           </div>
         </div>
@@ -206,7 +213,15 @@ export default function Jobs() {
           <div className="filter-row">
             <div className="filter-chips">
               {cats.map((c) => (
-                <button key={c.cat} className={'chip' + (filter === c.cat ? ' is-active' : '')} onClick={() => setFilter(c.cat)}>{c.label}</button>
+                <button
+                  key={c.cat}
+                  className={'chip' + (filter === c.cat ? ' is-active' : '')}
+                  onClick={() => setFilter(c.cat)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                >
+                  {c.icon && <Icon name={c.icon} width="13" height="13" fill={c.icon === 'heart' ? 'currentColor' : 'none'} />}
+                  <span>{c.label}</span>
+                </button>
               ))}
             </div>
             <select className="sort-select" value={sort} onChange={(e) => setSort(e.target.value)}>
@@ -266,24 +281,32 @@ export default function Jobs() {
           >
             {submittedAd ? (
               <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                <div style={{ fontSize: 54, marginBottom: 12 }}>🎉</div>
+                <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(34, 197, 94, 0.1)', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                  <Icon name="check" width="28" height="28" />
+                </div>
                 <h3 style={{ fontSize: 20, margin: '0 0 8px' }}>Đã gửi hồ sơ One-Touch thành công!</h3>
                 <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6 }}>
                   Hồ sơ xác thực trường của bạn đã được chuyển thẳng tới hòm thư của <b>{adModal.sponsor}</b>.<br />
                   Nhà tuyển dụng sẽ liên hệ và trao đổi chi tiết với bạn qua tin nhắn.
                 </p>
-                <span className="chip chip-lime" style={{ marginTop: 12, display: 'inline-block' }}>✓ Đã cập nhật vào hệ thống</span>
+                <span className="chip chip-lime" style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="check" width="12" height="12" /> Đã cập nhật vào hệ thống
+                </span>
               </div>
             ) : (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border)', paddingBottom: 14, marginBottom: 16 }}>
                   <div>
-                    <span className="chip chip-coral" style={{ fontSize: 11, marginBottom: 4, display: 'inline-block' }}>
-                      📢 Quảng cáo Tuyển dụng · {adModal.sponsor}
+                    <span className="chip chip-coral" style={{ fontSize: 11, marginBottom: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="megaphone" width="12" height="12" /> Quảng cáo Tuyển dụng · {adModal.sponsor}
                     </span>
-                    <h3 style={{ margin: '4px 0 0', fontSize: 18 }}>⚡ Ứng tuyển 1 chạm (One-Touch)</h3>
+                    <h3 style={{ margin: '4px 0 0', fontSize: 18, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Icon name="bolt" width="16" height="16" /> Ứng tuyển 1 chạm (One-Touch)
+                    </h3>
                   </div>
-                  <button onClick={() => setAdModal(null)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer', color: 'var(--ink-soft)' }}>✕</button>
+                  <button onClick={() => setAdModal(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--ink-soft)', display: 'flex', alignItems: 'center' }}>
+                    <Icon name="x" width="16" height="16" />
+                  </button>
                 </div>
 
                 <div style={{ background: 'rgba(108, 76, 255, 0.05)', border: '1px solid rgba(108, 76, 255, 0.2)', borderRadius: 12, padding: 14, marginBottom: 16 }}>
@@ -293,18 +316,19 @@ export default function Jobs() {
 
                 {/* Authenticated Dossier Summary */}
                 <div style={{ border: '1px solid var(--border)', borderRadius: 12, padding: 14, marginBottom: 16 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 10 }}>
-                    📄 Hồ sơ xác thực được trích xuất tự động:
+                  <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="file-text" width="14" height="14" /> Hồ sơ xác thực được trích xuất tự động:
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, fontSize: 13 }}>
                     <span>Ứng viên: <b>{state.currentUser?.fullName || 'Minh Anh'}</b></span>
                     <span className="chip chip-lime" style={{ fontSize: 11 }}>Reliability: {state.myReliability || 96}/100</span>
                   </div>
-                  <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 6 }}>
-                    🎓 Email trường: <code>{state.currentUser?.email || 'student.edu.vn'} (✓ Đã xác thực)</code>
+                  <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="graduation" width="13" height="13" />
+                    <span>Email trường: <code>{state.currentUser?.email || 'student.edu.vn'} (Đã xác thực)</code></span>
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
-                    🛠️ Kỹ năng sẵn sàng: <span style={{ color: 'var(--ink)', fontWeight: 600 }}>Canva, Video Editing, Content Marketing, English</span>
+                    Kỹ năng sẵn sàng: <span style={{ color: 'var(--ink)', fontWeight: 600 }}>Canva, Video Editing, Content Marketing, English</span>
                   </div>
                 </div>
 
@@ -322,8 +346,8 @@ export default function Jobs() {
 
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                   <button className="btn btn-outline btn-sm" onClick={() => setAdModal(null)}>Hủy</button>
-                  <button className="btn btn-primary btn-sm" onClick={handleConfirmOneTouch} style={{ background: 'linear-gradient(135deg, #6366f1, #a855f7)' }}>
-                    ⚡ Xác nhận gửi hồ sơ 1 chạm
+                  <button className="btn btn-primary btn-sm" onClick={handleConfirmOneTouch} style={{ background: 'linear-gradient(135deg, #6366f1, #a855f7)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="bolt" width="14" height="14" /> Xác nhận gửi hồ sơ 1 chạm
                   </button>
                 </div>
               </>

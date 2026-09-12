@@ -58,7 +58,9 @@ export default function Auth({ forcedTab }) {
               <div className="auth-live-card c2">
                 <Avatar name="Minh Anh" className="alc-av" fontSize={13} />
                 <div className="alc-main"><b>Minh Anh</b><span>vừa được thuê · Video Editing</span></div>
-                <div className="alc-price">🎉</div>
+                <div className="alc-price" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="sparkles" width="16" height="16" style={{ color: '#eab308' }} />
+                </div>
               </div>
             </div>
           </div>
@@ -79,8 +81,9 @@ export default function Auth({ forcedTab }) {
             <a href="#" className="back-home" onClick={(e) => { e.preventDefault(); navigate('/'); }}>
               <Icon name="chevleft" style={{ width: 14, height: 14 }} /> Về trang chủ
             </a>
-            <div className="auth-mobile-trust">
-              🎓 <span><b>Xác thực qua email trường</b> · Ghép việc dưới 15 phút · Bảo vệ bởi Quỹ Bảo hiểm Tương hỗ</span>
+            <div className="auth-mobile-trust" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icon name="graduation" width="16" height="16" style={{ flexShrink: 0 }} />
+              <span><b>Xác thực qua email trường</b> · Ghép việc dưới 15 phút · Bảo vệ bởi Quỹ Bảo hiểm Tương hỗ</span>
             </div>
 
             {tab !== 'forgot' && (

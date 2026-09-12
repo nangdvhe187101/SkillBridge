@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAdmin } from '../../context/AdminContext';
 import { useToast } from '../../context/ToastContext';
+import Icon from '../Icon';
 
 export default function AdminMessages() {
   const { adminChats, warnChatThread, lockChatThread, sendAdminBroadcast } = useAdmin();
@@ -32,7 +33,7 @@ export default function AdminMessages() {
   const handleBroadcast = (e) => {
     e.preventDefault();
     if (!bcTitle.trim() || !bcContent.trim()) {
-      showToast('Vui lòng nhập đầy đủ tiêu đề và nội dung thông báo.', '⚠️');
+      showToast('Vui lòng nhập đầy đủ tiêu đề và nội dung thông báo.', 'warning');
       return;
     }
     sendAdminBroadcast(bcTitle.trim(), bcContent.trim(), bcRole);
@@ -48,8 +49,8 @@ export default function AdminMessages() {
           <h2>Quản lý Tin nhắn & Giám sát Giao tiếp</h2>
           <p>Giám sát hội thoại giữa Sinh viên & Doanh nghiệp, phát hiện từ khóa lừa đảo (Zalo/Telegram), can thiệp cảnh báo và phát thông báo hệ thống.</p>
         </div>
-        <button className="btn btn-primary btn-sm" onClick={() => setBroadcastModal(true)}>
-          📢 Phát thông báo toàn sàn
+        <button className="btn btn-primary btn-sm" onClick={() => setBroadcastModal(true)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="bell" width="15" height="15" /> Phát thông báo toàn sàn
         </button>
       </div>
 
@@ -69,7 +70,7 @@ export default function AdminMessages() {
         </div>
         <div className="adm-kpi">
           <div className="k-lbl">Trạng thái Bot quét từ khóa</div>
-          <div className="k-val" style={{ fontSize: 13.5, fontWeight: 700, color: '#16a34a', marginTop: 4 }}>🟢 Đang hoạt động 24/7</div>
+          <div className="k-val" style={{ fontSize: 13.5, fontWeight: 700, color: '#16a34a', marginTop: 4 }}>Đang hoạt động 24/7</div>
         </div>
       </div>
 
@@ -90,9 +91,9 @@ export default function AdminMessages() {
           />
           <select value={statusF} onChange={(e) => setStatusF(e.target.value)}>
             <option value="all">Tất cả trạng thái</option>
-            <option value="active">🟢 Đang hoạt động</option>
-            <option value="warned">⚠️ Có cảnh báo vi phạm</option>
-            <option value="locked">🔒 Đã bị khoá chat</option>
+            <option value="active">Đang hoạt động</option>
+            <option value="warned">Có cảnh báo vi phạm</option>
+            <option value="locked">Đã bị khoá chat</option>
           </select>
         </div>
 
@@ -121,22 +122,22 @@ export default function AdminMessages() {
                     <b style={{ fontSize: 14 }}>{chat.jobTitle}</b>
                     {chat.status === 'warned' && (
                       <span className="chip" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#dc2626', fontSize: 11 }}>
-                        ⚠️ Nghi vấn gian lận
+                        Nghi vấn gian lận
                       </span>
                     )}
                     {chat.status === 'locked' && (
                       <span className="chip" style={{ background: 'rgba(0, 0, 0, 0.2)', color: '#fff', fontSize: 11 }}>
-                        🔒 Đã khoá chat
+                        Đã khoá chat
                       </span>
                     )}
                   </div>
 
                   <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 4 }}>
-                    🎓 SV: <b>{chat.student}</b> ({chat.studentEmail}) ⟷ 🏢 NTD: <b>{chat.employer}</b> ({chat.employerEmail})
+                    SV: <b>{chat.student}</b> ({chat.studentEmail}) ⟷ NTD: <b>{chat.employer}</b> ({chat.employerEmail})
                   </div>
 
                   <div style={{ fontSize: 13, color: 'var(--ink)', marginTop: 6, fontStyle: 'italic', background: 'rgba(0,0,0,0.1)', padding: '6px 10px', borderRadius: 6 }}>
-                    💬 "{chat.lastMessage}" <span style={{ fontSize: 11, color: 'var(--ink-soft)', fontStyle: 'normal', marginLeft: 6 }}>({chat.lastTime})</span>
+                    "{chat.lastMessage}" <span style={{ fontSize: 11, color: 'var(--ink-soft)', fontStyle: 'normal', marginLeft: 6 }}>({chat.lastTime})</span>
                   </div>
 
                   {chat.riskFlag && (
@@ -148,16 +149,16 @@ export default function AdminMessages() {
 
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <button className="btn btn-outline btn-sm" onClick={() => setSelectedChat(chat)}>
-                    🔍 Xem lịch sử tin nhắn
+                    Xem lịch sử tin nhắn
                   </button>
 
                   {chat.status !== 'locked' && (
                     <>
                       <button className="btn btn-outline btn-sm" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} onClick={() => warnChatThread(chat.id)}>
-                        ⚠️ Cảnh báo
+                        Cảnh báo
                       </button>
                       <button className="btn btn-outline btn-sm" onClick={() => lockChatThread(chat.id)}>
-                        🔒 Khoá chat
+                        Khoá chat
                       </button>
                     </>
                   )}
@@ -174,13 +175,13 @@ export default function AdminMessages() {
       {selectedChat && (
         <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setSelectedChat(null); }}>
           <div className="modal-box" style={{ maxWidth: 640, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <button className="modal-close" onClick={() => setSelectedChat(null)}>✕</button>
+            <button className="modal-close" onClick={() => setSelectedChat(null)} aria-label="Đóng"><Icon name="x" width="18" height="18" /></button>
 
             <div style={{ marginBottom: 10 }}>
               <span className="chip chip-lime" style={{ fontSize: 11 }}>Nhật ký tin nhắn đối soát</span>
               <h3 style={{ margin: '6px 0 2px', fontSize: 17 }}>{selectedChat.jobTitle}</h3>
               <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: 0 }}>
-                🎓 <b>{selectedChat.student}</b> ({selectedChat.studentEmail}) ⟷ 🏢 <b>{selectedChat.employer}</b> ({selectedChat.employerEmail})
+                <b>{selectedChat.student}</b> ({selectedChat.studentEmail}) ⟷ <b>{selectedChat.employer}</b> ({selectedChat.employerEmail})
               </p>
             </div>
 
@@ -215,10 +216,10 @@ export default function AdminMessages() {
               {selectedChat.status !== 'locked' && (
                 <>
                   <button className="btn btn-outline" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} onClick={() => warnChatThread(selectedChat.id)}>
-                    ⚠️ Gửi cảnh báo gian lận
+                    Gửi cảnh báo gian lận
                   </button>
                   <button className="btn btn-outline" onClick={() => { lockChatThread(selectedChat.id); setSelectedChat(null); }}>
-                    🔒 Khoá phòng chat
+                    Khoá phòng chat
                   </button>
                 </>
               )}
@@ -236,8 +237,8 @@ export default function AdminMessages() {
       {broadcastModal && (
         <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setBroadcastModal(false); }}>
           <div className="modal-box" style={{ maxWidth: 540 }}>
-            <button className="modal-close" onClick={() => setBroadcastModal(false)}>✕</button>
-            <h3>📢 Phát thông báo hệ thống</h3>
+            <button className="modal-close" onClick={() => setBroadcastModal(false)} aria-label="Đóng"><Icon name="x" width="18" height="18" /></button>
+            <h3>Phát thông báo hệ thống</h3>
             <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>
               Gửi thông báo broadcast tức thì tới toàn bộ người dùng hoặc theo nhóm vai trò cụ thể.
             </p>
@@ -246,9 +247,9 @@ export default function AdminMessages() {
               <div className="field">
                 <label>Nhóm đối tượng nhận tin</label>
                 <select value={bcRole} onChange={(e) => setBcRole(e.target.value)}>
-                  <option value="all">🌐 Tất cả người dùng (Sinh viên & Doanh nghiệp)</option>
-                  <option value="student">🎓 Chỉ Sinh viên</option>
-                  <option value="employer">🏢 Chỉ Nhà tuyển dụng</option>
+                  <option value="all">Tất cả người dùng (Sinh viên & Doanh nghiệp)</option>
+                  <option value="student">Chỉ Sinh viên</option>
+                  <option value="employer">Chỉ Nhà tuyển dụng</option>
                 </select>
               </div>
 
@@ -274,7 +275,7 @@ export default function AdminMessages() {
 
               <div className="modal-actions" style={{ marginTop: 16 }}>
                 <button type="submit" className="btn btn-primary">
-                  📢 Phát thông báo ngay
+                  Phát thông báo ngay
                 </button>
                 <button type="button" className="btn btn-outline" onClick={() => setBroadcastModal(false)}>
                   Hủy

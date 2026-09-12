@@ -15,18 +15,18 @@ function tierFromScore(score) {
 }
 const TIER_LABEL = { gold: 'Gold Tier', silver: 'Silver Tier', bronze: 'Bronze Tier' };
 
-const SKILL_BADGES = ['✓ Verified Canva Operator', '✓ CapCut Speed Editor', '✓ Content Writing', '✓ Photoshop Advanced'];
+const SKILL_BADGES = ['Verified Canva Operator', 'CapCut Speed Editor', 'Content Writing', 'Photoshop Advanced'];
 const SAMPLE_REVIEWS = [
   { name: 'Trà Sữa Mộc', stars: 5, comment: 'Bạn Minh Anh làm việc rất nhanh và đúng brief, chắc chắn sẽ thuê lại.' },
   { name: 'Cỏ May Agency', stars: 5, comment: 'Sản phẩm chỉn chu, giao trước deadline 1 ngày.' },
 ];
 const SAMPLE_PORTFOLIO = [
-  { title: 'TikTok Ads · Trà Sữa Mộc', desc: 'Video ngắn 30s với hiệu ứng bắt trend, đạt 45.000 lượt xem.', icon: '🎬', tag: 'CapCut / Premiere' },
-  { title: 'Poster sự kiện trường ĐH FPT', desc: 'Thiết kế khổ A1 phong cách Cyberpunk cho cuộc thi TechDay.', icon: '🎨', tag: 'Photoshop / Illustrator' },
-  { title: 'Reels sản phẩm mỹ phẩm GlowUp', desc: 'Video review mỹ phẩm serum kết hợp voice over truyền cảm hứng.', icon: '💄', tag: 'Video Editing' },
-  { title: 'Bộ slide pitch startup AI', desc: 'Slide 15 trang gọi vốn vòng Seed với biểu đồ tài chính trực quan.', icon: '📊', tag: 'Figma / Pitch' },
-  { title: 'Banner social Shopee Super Sale', desc: 'Bộ 6 banner kích thước chuẩn cho gian hàng thương mại điện tử.', icon: '🛍️', tag: 'Canva / Design' },
-  { title: 'Video review ẩm thực Đà Nẵng', desc: 'Review chuỗi quán cà phê vintage với gam màu film cổ điển.', icon: '☕', tag: 'Color Grading' },
+  { title: 'TikTok Ads · Trà Sữa Mộc', desc: 'Video ngắn 30s với hiệu ứng bắt trend, đạt 45.000 lượt xem.', icon: 'video', tag: 'CapCut / Premiere' },
+  { title: 'Poster sự kiện trường ĐH FPT', desc: 'Thiết kế khổ A1 phong cách Cyberpunk cho cuộc thi TechDay.', icon: 'image', tag: 'Photoshop / Illustrator' },
+  { title: 'Reels sản phẩm mỹ phẩm GlowUp', desc: 'Video review mỹ phẩm serum kết hợp voice over truyền cảm hứng.', icon: 'video', tag: 'Video Editing' },
+  { title: 'Bộ slide pitch startup AI', desc: 'Slide 15 trang gọi vốn vòng Seed với biểu đồ tài chính trực quan.', icon: 'chart-bar', tag: 'Figma / Pitch' },
+  { title: 'Banner social Shopee Super Sale', desc: 'Bộ 6 banner kích thước chuẩn cho gian hàng thương mại điện tử.', icon: 'image', tag: 'Canva / Design' },
+  { title: 'Video review ẩm thực Đà Nẵng', desc: 'Review chuỗi quán cà phê vintage với gam màu film cổ điển.', icon: 'video', tag: 'Color Grading' },
 ];
 
 export default function Profile() {
@@ -70,7 +70,7 @@ export default function Profile() {
     const f = e.target.files?.[0];
     if (!f) return;
     try {
-      showToast('Đang tải lên ảnh đại diện...', '⏳');
+      showToast('Đang tải lên ảnh đại diện...', 'hourglass');
       const res = await uploadAvatar(f);
       setAvatarError(false);
       if (dispatch) {
@@ -78,9 +78,9 @@ export default function Profile() {
       } else if (updateProfile) {
         await updateProfile({ avatarUrl: res.avatarUrl });
       }
-      showToast('Đã cập nhật ảnh đại diện mới!', '📸');
+      showToast('Đã cập nhật ảnh đại diện mới!', 'check');
     } catch (err) {
-      showToast(err?.message || 'Không thể tải lên ảnh đại diện.', '⚠️');
+      showToast(err?.message || 'Không thể tải lên ảnh đại diện.', 'error');
     } finally {
       if (e.target) e.target.value = '';
     }
@@ -103,7 +103,7 @@ export default function Profile() {
     const files = Array.from(e.target.files).map((f) => ({ name: f.name, size: f.size }));
     if (files.length) {
       addEmployerDocs(files);
-      showToast(`Đã thêm ${files.length} tài liệu doanh nghiệp.`, '🏢');
+      showToast(`Đã thêm ${files.length} tài liệu doanh nghiệp.`, 'check');
     }
     e.target.value = '';
   };
@@ -114,7 +114,7 @@ export default function Profile() {
     const reader = new FileReader();
     reader.onload = () => {
       addPortfolio({ name: f.name, dataUrl: reader.result, desc: 'Dự án tự tải lên từ thiết bị cá nhân.' });
-      showToast(`Đã thêm dự án "${f.name}" vào Portfolio!`, '🎨');
+      showToast(`Đã thêm dự án "${f.name}" vào Portfolio!`, 'check');
     };
     reader.readAsDataURL(f);
     e.target.value = '';
@@ -181,12 +181,11 @@ export default function Profile() {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 12,
                   border: '2px solid #fff',
                   boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
                 }}
               >
-                📷
+                <Icon name="camera" style={{ width: 13, height: 13, color: '#fff' }} />
               </div>
               <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onAvatarChange} />
             </div>
@@ -197,25 +196,39 @@ export default function Profile() {
                 <div className={'stamp stamp-sm stamp-' + tier} title={`Xếp hạng: ${tier.toUpperCase()}`}><Icon name="check" /></div>
               </div>
               <div className="ph-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span>{state.role === 'employer' ? '🏢 Nhà tuyển dụng · SkillBridge' : '🎓 Sinh viên ĐH FPT TP.HCM'}</span>
-                <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px' }}>
-                  ✓ Đã xác thực eKYC
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Icon name={state.role === 'employer' ? 'building' : 'graduation'} style={{ width: 14, height: 14 }} />
+                  <span>{state.role === 'employer' ? 'Nhà tuyển dụng · SkillBridge' : 'Sinh viên ĐH FPT TP.HCM'}</span>
+                </span>
+                <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="check" style={{ width: 11, height: 11 }} />
+                  <span>Đã xác thực eKYC</span>
                 </span>
               </div>
               <div className="ph-meta" style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <span className="chip" style={{ background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.2)' }}>🎬 Video Editing</span>
-                <span className="chip" style={{ background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.2)' }}>🎨 Graphic Design</span>
+                <span className="chip" style={{ background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.2)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="video" style={{ width: 12, height: 12 }} />
+                  <span>Video Editing</span>
+                </span>
+                <span className="chip" style={{ background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.2)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="brush" style={{ width: 12, height: 12 }} />
+                  <span>Graphic Design</span>
+                </span>
                 <span className="chip chip-lime">{TIER_LABEL[tier]}</span>
                 {state.subscriptionPro && (
-                  <span className="chip" style={{ background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.2)' }}>⭐ Freelance Pro</span>
+                  <span className="chip" style={{ background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.2)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="zap" style={{ width: 12, height: 12, color: '#f59e0b' }} />
+                    <span>Freelance Pro</span>
+                  </span>
                 )}
               </div>
             </div>
 
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, position: 'relative', zIndex: 1 }}>
-              <button className="btn btn-outline btn-sm" style={{ background: 'rgba(255,255,255,.1)', color: '#fff', borderColor: 'rgba(255,255,255,.3)' }}
+              <button className="btn btn-outline btn-sm" style={{ background: 'rgba(255,255,255,.1)', color: '#fff', borderColor: 'rgba(255,255,255,.3)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 onClick={() => navigate('/settings')}>
-                ⚙️ Cài đặt hồ sơ
+                <Icon name="settings" style={{ width: 14, height: 14 }} />
+                <span>Cài đặt hồ sơ</span>
               </button>
             </div>
           </div>
@@ -229,8 +242,9 @@ export default function Profile() {
             <div className="pcard">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <h4 style={{ margin: 0 }}>Điểm Reliability & Lộ trình Thăng Hạng</h4>
-                <span className="chip chip-lime" style={{ fontSize: 11 }}>
-                  {tier === 'gold' ? '🥇 Đang đạt Hạng Vàng' : (tier === 'silver' ? '🥈 Đang đạt Hạng Bạc' : '🥉 Hạng Đồng')}
+                <span className="chip chip-lime" style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="award" style={{ width: 12, height: 12 }} />
+                  <span>{tier === 'gold' ? 'Đang đạt Hạng Vàng' : (tier === 'silver' ? 'Đang đạt Hạng Bạc' : 'Hạng Đồng')}</span>
                 </span>
               </div>
 
@@ -244,15 +258,17 @@ export default function Profile() {
 
               {/* 3-Tier Milestone Stepper */}
               <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'var(--surface-2, rgba(0,0,0,0.02))', marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 10 }}>
-                  🏆 3 Mốc Hạng Uy tín Nền tảng:
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 10, display: 'flex', alignItems: 'center' }}>
+                  <Icon name="award" style={{ width: 14, height: 14, color: 'var(--primary)', marginRight: 6 }} />
+                  <span>3 Mốc Hạng Uy tín Nền tảng:</span>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
                   {/* Bronze */}
                   <div style={{ padding: 10, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#b45309' }}>
-                      🥉 Đồng (Bronze)
+                      <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#b45309' }} />
+                      <span>Đồng (Bronze)</span>
                     </div>
                     <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>
                       • Dưới 85 điểm<br />
@@ -263,7 +279,8 @@ export default function Profile() {
                   {/* Silver */}
                   <div style={{ padding: 10, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#64748b' }}>
-                      🥈 Bạc (Silver)
+                      <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#64748b' }} />
+                      <span>Bạc (Silver)</span>
                     </div>
                     <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>
                       • 85 – 94 điểm + ≥ 3 việc<br />
@@ -274,7 +291,9 @@ export default function Profile() {
                   {/* Gold */}
                   <div style={{ padding: 10, borderRadius: 10, border: '1px solid #16a34a', background: 'rgba(34, 197, 94, 0.08)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, fontSize: 13, color: '#16a34a' }}>
-                      🥇 Vàng (Gold) ✓
+                      <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: '#16a34a' }} />
+                      <span>Vàng (Gold)</span>
+                      <Icon name="check" style={{ width: 13, height: 13, marginLeft: 'auto' }} />
                     </div>
                     <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>
                       • 95 – 100 điểm + ≥ 10 việc<br />
@@ -286,14 +305,27 @@ export default function Profile() {
 
               {/* Scoring Rules Table */}
               <div style={{ border: '1px solid var(--border)', borderRadius: 14, padding: 14, background: 'var(--surface)' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8 }}>
-                  ⚖️ Quy tắc Tự động Cộng / Trừ Điểm:
+                <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ink-soft)', marginBottom: 8, display: 'flex', alignItems: 'center' }}>
+                  <Icon name="scale" style={{ width: 14, height: 14, color: 'var(--primary)', marginRight: 6 }} />
+                  <span>Quy tắc Tự động Cộng / Trừ Điểm:</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 12 }}>
-                  <div style={{ color: '#16a34a' }}>🟢 <b>+5 điểm:</b> Giao việc đúng hạn & 5★</div>
-                  <div style={{ color: '#16a34a' }}>🟢 <b>+3 điểm:</b> Phản hồi & giải ngân nhanh</div>
-                  <div style={{ color: '#e11d48' }}>🔴 <b>-10 điểm:</b> Trễ hạn không báo trước</div>
-                  <div style={{ color: '#e11d48' }}>🔴 <b>-15 điểm:</b> Tự ý hủy / bỏ việc</div>
+                  <div style={{ color: '#16a34a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#16a34a', flexShrink: 0 }} />
+                    <span><b>+5 điểm:</b> Giao đúng hạn & 5 sao</span>
+                  </div>
+                  <div style={{ color: '#16a34a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#16a34a', flexShrink: 0 }} />
+                    <span><b>+3 điểm:</b> Phản hồi & giải ngân nhanh</span>
+                  </div>
+                  <div style={{ color: '#e11d48', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#e11d48', flexShrink: 0 }} />
+                    <span><b>-10 điểm:</b> Trễ hạn không báo trước</span>
+                  </div>
+                  <div style={{ color: '#e11d48', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#e11d48', flexShrink: 0 }} />
+                    <span><b>-15 điểm:</b> Tự ý hủy / bỏ việc</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -302,7 +334,13 @@ export default function Profile() {
               <h4>Chỉ số năng lực chuyên sâu</h4>
               <div className="stat-list">
                 <div className="si"><b>{completedJobs || 32}</b><span>Công việc hoàn thành</span></div>
-                <div className="si"><b>{avgStars}★</b><span>Đánh giá trung bình</span></div>
+                <div className="si">
+                  <b style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {avgStars}
+                    <Icon name="star" style={{ width: 14, height: 14, color: '#eab308' }} />
+                  </b>
+                  <span>Đánh giá trung bình</span>
+                </div>
                 <div className="si"><b>98.5%</b><span>Giao đúng hạn (On-time)</span></div>
                 <div className="si"><b>&lt; 15p</b><span>Thời gian phản hồi</span></div>
               </div>
@@ -329,7 +367,9 @@ export default function Profile() {
                     }}
                   >
                     <span>{b}</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 11, color: '#16a34a', fontWeight: 700 }}>✓</span>
+                    <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center' }}>
+                      <Icon name="check" style={{ width: 12, height: 12, color: '#16a34a' }} />
+                    </span>
                   </div>
                 ))}
               </div>
@@ -347,9 +387,13 @@ export default function Profile() {
               <h4>Đánh giá từ đối tác ({receivedReviews.length})</h4>
               {receivedReviews.map((r, i) => (
                 <div className="review" key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                  <div className="rv-top" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <div className="rv-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <b>{r.name}</b>
-                    <span className="stars" style={{ color: '#eab308' }}>{'★'.repeat(r.stars || 5)}</span>
+                    <span className="stars" style={{ display: 'inline-flex', gap: 2 }}>
+                      {Array.from({ length: r.stars || 5 }).map((_, idx) => (
+                        <Icon key={idx} name="star" style={{ width: 12, height: 12, color: '#eab308' }} />
+                      ))}
+                    </span>
                   </div>
                   <p style={{ fontSize: 13, marginTop: 4, color: 'var(--ink)' }}>{r.comment}</p>
                 </div>
@@ -361,7 +405,10 @@ export default function Profile() {
             {state.role !== 'employer' && (
               <div className="pcard">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <h4 style={{ margin: 0 }}>📁 Danh sách CV Chuyên môn ({(state.cvFiles || []).length})</h4>
+                  <h4 style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Icon name="folder" style={{ width: 16, height: 16, color: 'var(--primary)' }} />
+                    <span>Danh sách CV Chuyên môn ({(state.cvFiles || []).length})</span>
+                  </h4>
                   <span className="chip chip-lime" style={{ fontSize: 10.5 }}>Đa lĩnh vực</span>
                 </div>
                 <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 12, lineHeight: 1.5 }}>
@@ -385,7 +432,9 @@ export default function Profile() {
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ fontSize: 18 }}>📄</div>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)' }}>
+                          <Icon name="file-text" style={{ width: 18, height: 18 }} />
+                        </div>
                         <div>
                           <b style={{ display: 'block', fontSize: 13 }}>{cv.label || cv.name}</b>
                           <div style={{ fontSize: 11, color: 'var(--ink-soft)', display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
@@ -410,10 +459,10 @@ export default function Profile() {
                               removeCvFile(cv.id);
                             }
                           }}
-                          style={{ border: 'none', background: 'none', color: 'var(--coral)', cursor: 'pointer', padding: '4px 6px', fontSize: 13 }}
+                          style={{ border: 'none', background: 'none', color: 'var(--coral)', cursor: 'pointer', padding: '4px 6px', display: 'inline-flex', alignItems: 'center' }}
                           title="Xóa CV"
                         >
-                          ✕
+                          <Icon name="x" style={{ width: 13, height: 13 }} />
                         </button>
                       </div>
                     </div>
@@ -422,7 +471,9 @@ export default function Profile() {
 
                 <div className="upload-zone" onClick={() => cvInputRef.current.click()}>
                   <input ref={cvInputRef} type="file" accept=".pdf,.doc,.docx,image/*" onChange={onCvChange} />
-                  <div className="uz-ic">📄</div>
+                  <div className="uz-ic" style={{ color: 'var(--primary)' }}>
+                    <Icon name="file-text" style={{ width: 26, height: 26 }} />
+                  </div>
                   <b>+ Tải thêm bản CV chuyên môn mới</b>
                   <span>Hỗ trợ PDF, DOCX (Gắn theo từng ngành nghề)</span>
                 </div>
@@ -437,15 +488,21 @@ export default function Profile() {
                 </p>
                 <div className="upload-zone" onClick={() => docInputRef.current.click()}>
                   <input ref={docInputRef} type="file" multiple accept=".pdf,.doc,.docx,image/*" onChange={onDocsChange} />
-                  <div className="uz-ic">🏢</div>
+                  <div className="uz-ic" style={{ color: 'var(--primary)' }}>
+                    <Icon name="building" style={{ width: 26, height: 26 }} />
+                  </div>
                   <b>Tải giấy phép KD / Logo công ty</b>
                   <span>PDF hoặc Ảnh chụp rõ nét</span>
                 </div>
                 {state.employerDocs.length > 0 && (
                   <div className="file-chip-row" style={{ marginTop: 10 }}>
                     {state.employerDocs.map((f, i) => (
-                      <span className="chip" key={i}>📎 {f.name}
-                        <button onClick={(e) => { e.stopPropagation(); removeEmployerDoc(i); }} style={{ marginLeft: 6, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--coral)' }}>✕</button>
+                      <span className="chip" key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Icon name="paperclip" style={{ width: 12, height: 12 }} />
+                        <span>{f.name}</span>
+                        <button onClick={(e) => { e.stopPropagation(); removeEmployerDoc(i); }} style={{ marginLeft: 6, border: 'none', background: 'none', cursor: 'pointer', color: 'var(--coral)', display: 'inline-flex', alignItems: 'center' }}>
+                          <Icon name="x" style={{ width: 12, height: 12 }} />
+                        </button>
                       </span>
                     ))}
                   </div>
@@ -464,7 +521,9 @@ export default function Profile() {
 
               <div className="upload-zone" style={{ marginBottom: 14 }} onClick={() => portfolioInputRef.current.click()}>
                 <input ref={portfolioInputRef} type="file" accept="image/*,.pdf" onChange={onPortfolioChange} />
-                <div className="uz-ic">🖼️</div>
+                <div className="uz-ic" style={{ color: 'var(--primary)' }}>
+                  <Icon name="image" style={{ width: 26, height: 26 }} />
+                </div>
                 <b>Thêm dự án mới vào Portfolio</b>
                 <span>Ảnh chụp màn hình, mockup, file thiết kế...</span>
               </div>
@@ -488,10 +547,11 @@ export default function Profile() {
                       title="Xoá khỏi portfolio"
                       style={{
                         position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.65)',
-                        color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer'
+                        color: '#fff', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
                       }}
                     >
-                      ✕
+                      <Icon name="x" style={{ width: 12, height: 12 }} />
                     </button>
                   </div>
                 ))}
@@ -511,10 +571,9 @@ export default function Profile() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         background: 'linear-gradient(135deg, rgba(108,76,255,0.18), rgba(87,199,255,0.18))',
-                        fontSize: 28,
                       }}
                     >
-                      {p.icon}
+                      <Icon name={p.icon || 'image'} style={{ width: 32, height: 32, color: 'var(--primary)' }} />
                     </div>
                     <div className="pf-cap">{p.title}</div>
                   </div>
@@ -532,8 +591,8 @@ export default function Profile() {
             {selectedPf.dataUrl ? (
               <img src={selectedPf.dataUrl} alt={selectedPf.title} style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 10, objectFit: 'contain' }} />
             ) : (
-              <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, rgba(108,76,255,0.2), rgba(87,199,255,0.2))', borderRadius: 10, fontSize: 56 }}>
-                {selectedPf.icon || '🎨'}
+              <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, rgba(108,76,255,0.2), rgba(87,199,255,0.2))', borderRadius: 10 }}>
+                <Icon name={selectedPf.icon || 'image'} style={{ width: 48, height: 48, color: 'var(--primary)' }} />
               </div>
             )}
           </div>

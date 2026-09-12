@@ -18,6 +18,11 @@ import Wallet from './pages/customer/Wallet';
 import Admin from './pages/admin/Admin';
 import Messages from './pages/customer/Messages';
 import AccountSettings from './pages/customer/AccountSettings';
+import PaymentResult from './pages/customer/PaymentResult';
+import TermsOfService from './pages/legal/TermsOfService';
+import PrivacyPolicy from './pages/legal/PrivacyPolicy';
+import PaymentRefundPolicy from './pages/legal/PaymentRefundPolicy';
+import Contact from './pages/customer/Contact';
 
 export default function App() {
   return (
@@ -40,6 +45,11 @@ export default function App() {
           <Route path="/company/:slug" element={<CompanyProfile />} />
           <Route path="/u/:slug" element={<StudentProfile />} />
           <Route path="/pricing" element={<Pricing />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/payment-policy" element={<PaymentRefundPolicy />} />
+          <Route path="/dispute-policy" element={<PaymentRefundPolicy />} />
+          <Route path="/contact" element={<Contact />} />
 
           {/* Student Role Routes */}
           <Route path="/mywork" element={
@@ -94,6 +104,7 @@ export default function App() {
           <Route path="/wallet" element={
             <ProtectedRoute><Wallet /></ProtectedRoute>
           } />
+          <Route path="/payment/result" element={<PaymentResult />} />
           <Route path="/messages" element={
             <ProtectedRoute><Messages /></ProtectedRoute>
           } />

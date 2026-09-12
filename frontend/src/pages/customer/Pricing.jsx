@@ -38,7 +38,13 @@ export default function Pricing() {
               className="btn btn-outline btn-block"
               onClick={() => navigate(state.currentUser ? '/jobs' : '/auth?tab=register')}
             >
-              {state.currentUser ? (state.subscriptionPro ? 'Chuyển về Free' : '✓ Gói hiện tại') : 'Bắt đầu miễn phí'}
+              {state.currentUser ? (
+                state.subscriptionPro ? 'Chuyển về Free' : (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                    <Icon name="check" width="13" height="13" /> Gói hiện tại
+                  </span>
+                )
+              ) : 'Bắt đầu miễn phí'}
             </button>
           </div>
 
@@ -56,7 +62,11 @@ export default function Pricing() {
               <li><Icon name="check" /> Báo cáo hiệu suất ứng tuyển</li>
             </ul>
             <button className="btn btn-primary btn-block" disabled={state.subscriptionPro} onClick={() => openModal('subscribe')}>
-              {state.subscriptionPro ? '✓ Đã là thành viên Pro' : 'Nâng cấp Pro'}
+              {state.subscriptionPro ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                  <Icon name="check" width="13" height="13" /> Đã là thành viên Pro
+                </span>
+              ) : 'Nâng cấp Pro'}
             </button>
           </div>
 
@@ -101,7 +111,11 @@ export default function Pricing() {
               <li><Icon name="check" /> Quản lý nhóm sub-contracting</li>
             </ul>
             <button className="btn btn-primary btn-block" disabled={state.vipBusiness} onClick={() => openModal('upgradeVip')}>
-              {state.vipBusiness ? '✓ Đã là VIP Business' : 'Nâng cấp ngay'}
+              {state.vipBusiness ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, justifyContent: 'center' }}>
+                  <Icon name="check" width="13" height="13" /> Đã là VIP Business
+                </span>
+              ) : 'Nâng cấp ngay'}
             </button>
           </div>
 

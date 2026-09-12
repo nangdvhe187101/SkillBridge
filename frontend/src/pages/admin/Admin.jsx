@@ -10,6 +10,7 @@ import AdminAnalytics from '../../components/admin/AdminAnalytics';
 import AdminOps from '../../components/admin/AdminOps';
 import AdminRoles from '../../components/admin/AdminRoles';
 import AdminMessages from '../../components/admin/AdminMessages';
+import Icon from '../../components/Icon';
 
 const ROLE_MODULES = {
   super: ['users', 'content', 'disputes', 'finance', 'partners', 'messages', 'analytics', 'ops', 'roles'],
@@ -22,15 +23,15 @@ const ROLE_WHOAMI = {
 };
 
 const TABS = [
-  { id: 'users', path: '/admin/users', ic: '👥', label: 'Người dùng' },
-  { id: 'content', path: '/admin/content', ic: '🛡️', label: 'Kiểm duyệt nội dung' },
-  { id: 'disputes', path: '/admin/disputes', ic: '⚖️', label: 'Tranh chấp' },
-  { id: 'finance', path: '/admin/finance', ic: '💰', label: 'Tài chính' },
-  { id: 'partners', path: '/admin/partners', ic: '🤝', label: 'Đối tác & Quảng cáo' },
-  { id: 'messages', path: '/admin/messages', ic: '💬', label: 'Tin nhắn & Giám sát' },
-  { id: 'analytics', path: '/admin/analytics', ic: '📊', label: 'Báo cáo & Phân tích' },
-  { id: 'ops', path: '/admin/ops', ic: '🎧', label: 'Vận hành & CS' },
-  { id: 'roles', path: '/admin/roles', ic: '🔑', label: 'Phân quyền & URL Matrix' },
+  { id: 'users', path: '/admin/users', icon: 'users', label: 'Người dùng' },
+  { id: 'content', path: '/admin/content', icon: 'shield-check', label: 'Kiểm duyệt nội dung' },
+  { id: 'disputes', path: '/admin/disputes', icon: 'scale', label: 'Tranh chấp' },
+  { id: 'finance', path: '/admin/finance', icon: 'bank', label: 'Tài chính' },
+  { id: 'partners', path: '/admin/partners', icon: 'handshake', label: 'Đối tác & Quảng cáo' },
+  { id: 'messages', path: '/admin/messages', icon: 'chat', label: 'Tin nhắn & Giám sát' },
+  { id: 'analytics', path: '/admin/analytics', icon: 'chart-bar', label: 'Báo cáo & Phân tích' },
+  { id: 'ops', path: '/admin/ops', icon: 'headset', label: 'Vận hành & CS' },
+  { id: 'roles', path: '/admin/roles', icon: 'key', label: 'Phân quyền & URL Matrix' },
 ];
 
 function AdminInner({ forcedTab }) {
@@ -100,7 +101,10 @@ function AdminInner({ forcedTab }) {
               className={'admin-tab' + (activeTab === t.id ? ' is-active' : '')}
               onClick={() => handleTabClick(t)}
             >
-              <span className="adm-ic">{t.ic}</span> {t.label}
+              <span className="adm-ic" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name={t.icon} width="16" height="16" />
+              </span>
+              <span>{t.label}</span>
               {counts[t.id] > 0 && <span className="adm-count">{counts[t.id]}</span>}
             </button>
           ))}
