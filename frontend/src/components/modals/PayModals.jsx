@@ -685,7 +685,7 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
 
   const rate = commissionRate(state);
   const commission = Math.round((job?.budget || 0) * rate);
-  const total = (job?.budget || 0) + commission;
+  const total = job?.budget || 0;
 
   // Pre-fill số ngày từ cam kết lúc đăng job (giữa deadlineAt và postedAt)
   const committedDays = useMemo(() => {
@@ -755,9 +755,12 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
       <h3>Thuê & thanh toán ký quỹ</h3>
       <p>Bạn sắp thuê <b>{a.name}</b> cho công việc "<b>{job.title}</b>". Tiền sẽ được giữ an toàn (escrow) tại SkillBridge và chỉ giải ngân khi công việc hoàn thành.</p>
       <div className="checkout-summary">
-        <div className="cs-row"><span>Ngân sách công việc</span><span>{fmtVND(job.budget)}</span></div>
-        <div className="cs-row"><span>Phí nền tảng ({Math.round(rate * 100)}%){state.vipBusiness ? ' · VIP Business Suite' : ''}</span><span>{fmtVND(commission)}</span></div>
-        <div className="cs-row total"><span>Tổng cần thanh toán</span><span>{fmtVND(total)}</span></div>
+        <div className="cs-row"><span>Ngân sách công việc (Ký quỹ)</span><span>{fmtVND(job.budget)}</span></div>
+        <div className="cs-row" style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+          <span>Phí sàn ({Math.round(rate * 100)}%){state.vipBusiness ? ' · VIP Business' : ''}</span>
+          <span style={{ color: '#16a34a', fontWeight: 500 }}>Khấu trừ từ thù lao SV ({fmtVND(commission)})</span>
+        </div>
+        <div className="cs-row total"><span>Tổng tiền ký quỹ cần thanh toán</span><span>{fmtVND(total)}</span></div>
       </div>
       <div className="field">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>

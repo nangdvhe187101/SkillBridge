@@ -362,6 +362,19 @@ public class JobRepository : IJobRepository
 
     public async Task CancelJobAsync(Job job)
     {
+        if (_context.Database.CurrentTransaction != null)
+        {
+            job.Status = "cancelled";
+            job.HiredApplicantId = null;
+            job.EscrowAmount = null;
+            job.DeadlineAt = null;
+            job.RevisionCount = 0;
+            job.UpdatedAt = DateTime.UtcNow;
+            _context.Jobs.Update(job);
+            await _context.SaveChangesAsync();
+            return;
+        }
+
         await using var tx = await _context.Database.BeginTransactionAsync();
         try
         {
@@ -385,6 +398,19 @@ public class JobRepository : IJobRepository
 
     public async Task ReopenJobAsync(Job job)
     {
+        if (_context.Database.CurrentTransaction != null)
+        {
+            job.Status = "open";
+            job.HiredApplicantId = null;
+            job.EscrowAmount = null;
+            job.DeadlineAt = null;
+            job.RevisionCount = 0;
+            job.UpdatedAt = DateTime.UtcNow;
+            _context.Jobs.Update(job);
+            await _context.SaveChangesAsync();
+            return;
+        }
+
         await using var tx = await _context.Database.BeginTransactionAsync();
         try
         {

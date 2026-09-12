@@ -387,7 +387,7 @@ function reducer(state, action) {
       const selectedName = applicantName || applicant?.name || (job.applicants && job.applicants[applicantIdx]?.name) || 'Sinh viên';
       const rate = commissionRate(state);
       const commission = Math.round((job.budget || 150000) * rate);
-      const hireAmount = escrowAmount || ((job.budget || 150000) + commission);
+      const hireAmount = escrowAmount || (job.budget || 150000);
       if (method === 'wallet' && state.balance < hireAmount) return state;
 
       const updatedApplicants = (job.applicants || []).map((app) =>
@@ -457,7 +457,7 @@ function reducer(state, action) {
       }
       const receipt = {
         id: 'rc' + Date.now(), dashJobId: job.id, jobTitle: job.title, budget: job.budget, commission,
-        total: commission + job.budget, student: job.hiredApplicant, date: fmtNow(),
+        total: job.budget, student: job.hiredApplicant, date: fmtNow(),
       };
       const notifications = addNotifTo(state.notifications, 'check', `Công việc "${job.title}" đã hoàn thành và tiền đã giải ngân cho ${job.hiredApplicant}.`, '/wallet');
       return { ...state, myJobs, transactions, myReliability, myApplications, receipts: [receipt, ...state.receipts], notifications, lastReceiptId: receipt.id };
