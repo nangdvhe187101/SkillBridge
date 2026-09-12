@@ -29,14 +29,4 @@ public class WalletController : ControllerBase
         var wallet = await _walletService.GetMyWalletAsync(userId, cancellationToken);
         return Ok(wallet);
     }
-
-    [Authorize]
-    [HttpPost("topup")]
-    [EnableRateLimiting("ResourceCreationPolicy")]
-    public async Task<IActionResult> Topup([FromBody] TopupRequest request, CancellationToken cancellationToken)
-    {
-        var userId = User.GetRequiredUserId();
-        var wallet = await _walletService.TopupAsync(userId, request, cancellationToken);
-        return Ok(wallet);
-    }
 }

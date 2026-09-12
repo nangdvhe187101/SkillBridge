@@ -564,14 +564,10 @@ function reducer(state, action) {
         balance: action.balance !== undefined ? action.balance : state.balance,
         escrowLocked: action.escrowLocked !== undefined ? action.escrowLocked : state.escrowLocked,
         transactions: action.transactions || state.transactions,
-        receipts: action.receipts !== undefined ? action.receipts : state.receipts
+        receipts: action.receipts !== undefined ? action.receipts : state.receipts,
+        vipBusiness: action.vipBusiness !== undefined ? action.vipBusiness : state.vipBusiness,
+        subscriptionPro: action.subscriptionPro !== undefined ? action.subscriptionPro : state.subscriptionPro,
       };
-    }
-    case 'TOPUP': {
-      const balance = state.balance + action.amount;
-      const transactions = addTxTo(state.transactions, 'topup', 'Nạp tiền qua ' + action.methodLabel, action.amount, 1);
-      const notifications = addNotifTo(state.notifications, 'wallet', `Nạp tiền thành công ${action.amount.toLocaleString('vi-VN')}đ vào ví.`, '/wallet');
-      return { ...state, balance, transactions, notifications };
     }
     case 'WITHDRAW': {
       if (action.amount > state.balance) return state;
@@ -579,27 +575,6 @@ function reducer(state, action) {
       const transactions = addTxTo(state.transactions, 'withdraw', 'Rút tiền về Vietcombank ****4821', action.amount, -1);
       const notifications = addNotifTo(state.notifications, 'card', `Yêu cầu rút ${action.amount.toLocaleString('vi-VN')}đ đã được xử lý.`, '/wallet');
       return { ...state, balance, transactions, notifications };
-    }
-    case 'SUBSCRIBE_PRO': {
-      if (action.method === 'wallet' && state.balance < action.amount) return state;
-      const balance = action.method === 'wallet' ? state.balance - action.amount : state.balance;
-      let transactions = addTxTo(state.transactions, 'subscription', 'Đăng ký gói Freelance Pro (1 tháng)', action.amount, -1);
-      const fundAlloc = Math.round(action.amount * 0.1);
-      const insuranceFund = state.insuranceFund + fundAlloc;
-      let notifications = addNotifTo(state.notifications, 'star', 'Chúc mừng! Bạn đã nâng cấp lên Freelance Pro.', '/pricing');
-      notifications = addNotifTo(notifications, 'shield-check', `${fundAlloc.toLocaleString('vi-VN')}đ (10% doanh thu Premium) vừa được trích vào Quỹ Bảo hiểm.`, '/wallet');
-      return { ...state, balance, transactions, subscriptionPro: true, insuranceFund, notifications };
-    }
-    case 'UPGRADE_VIP': {
-      const amount = action.amount || 199000;
-      if (action.method === 'wallet' && state.balance < amount) return state;
-      const balance = action.method === 'wallet' ? state.balance - amount : state.balance;
-      let transactions = addTxTo(state.transactions, 'subscription', 'Đăng ký gói VIP Business Suite (1 tháng)', amount, -1);
-      const fundAlloc = Math.round(amount * 0.1);
-      const insuranceFund = state.insuranceFund + fundAlloc;
-      let notifications = addNotifTo(state.notifications, 'crown', 'Chúc mừng! Tài khoản của bạn đã là VIP Business Suite — hoa hồng giảm còn 5%.', '/pricing');
-      notifications = addNotifTo(notifications, 'shield-check', `${fundAlloc.toLocaleString('vi-VN')}đ (10% gói VIP) vừa được trích vào Quỹ Bảo hiểm.`, '/wallet');
-      return { ...state, balance, transactions, vipBusiness: true, insuranceFund, notifications };
     }
     case 'SUBMIT_CLAIM': {
       const { jobTitle, jobBudget, desc } = action.payload;
@@ -857,7 +832,9 @@ export function StoreProvider({ children }) {
                 sign: t.sign,
                 date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
               })),
-              receipts: mappedReceipts || undefined
+              receipts: mappedReceipts || undefined,
+              vipBusiness: Boolean(wallet.hasVipSubscription),
+              subscriptionPro: Boolean(wallet.hasProSubscription)
             });
           }
         } catch (e) {
@@ -931,7 +908,9 @@ export function StoreProvider({ children }) {
             sign: t.sign,
             date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
           })),
-          receipts: mappedReceipts || undefined
+          receipts: mappedReceipts || undefined,
+          vipBusiness: Boolean(res.hasVipSubscription),
+          subscriptionPro: Boolean(res.hasProSubscription)
         });
       }
     } catch {
@@ -1154,36 +1133,29 @@ export function StoreProvider({ children }) {
         showToast('Đã thuê ứng viên và ký quỹ thành công!', 'award');
       },
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),
-      topup: async (amount, methodLabel) => {
-        try {
-          const res = await walletApi.topupWallet(amount, methodLabel);
-          if (res) {
-            dispatch({
-              type: 'SET_WALLET',
-              balance: res.balance,
-              transactions: (res.transactions || []).map(t => ({
-                id: t.id,
-                type: t.type,
-                label: t.label,
-                amount: t.amount,
-                sign: t.sign,
-                date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
-              }))
-            });
-          } else {
-            dispatch({ type: 'TOPUP', amount, methodLabel });
-          }
-          showToast(`Nạp ${amount.toLocaleString('vi-VN')}đ thành công!`, 'check');
-        } catch (err) {
-          showToast(err?.message || 'Không thể nạp tiền vào ví.', 'warning');
-          throw err;
-        }
-      },
       refreshWallet,
       withdraw: (amount) => { dispatch({ type: 'WITHDRAW', amount }); showToast(`Đã gửi yêu cầu rút ${amount.toLocaleString('vi-VN')}đ.`, 'check'); },
       updateBankAccount: (payload) => { dispatch({ type: 'UPDATE_BANK_ACCOUNT', payload }); showToast('Cập nhật tài khoản ngân hàng thành công!', 'check'); },
-      subscribePro: (amount, method) => dispatch({ type: 'SUBSCRIBE_PRO', amount, method }),
-      upgradeVip: (amount, method) => { dispatch({ type: 'UPGRADE_VIP', amount, method }); showToast('Đã nâng cấp VIP Business Suite!', 'crown'); },
+      subscribePro: async () => {
+        try {
+          await walletApi.purchaseSubscription('PRO');
+          await refreshWallet();
+          showToast('Chúc mừng! Bạn đã đăng ký thành công gói Freelance Pro.', 'star');
+        } catch (err) {
+          showToast(err?.message || 'Không thể đăng ký gói Freelance Pro.', 'warning');
+          throw err;
+        }
+      },
+      upgradeVip: async () => {
+        try {
+          await walletApi.purchaseSubscription('VIP');
+          await refreshWallet();
+          showToast('Chúc mừng! Bạn đã nâng cấp VIP Business Suite thành công!', 'crown');
+        } catch (err) {
+          showToast(err?.message || 'Không thể nâng cấp VIP Business Suite.', 'warning');
+          throw err;
+        }
+      },
       submitClaim: (payload) => { dispatch({ type: 'SUBMIT_CLAIM', payload }); showToast('Đội ngũ Dispute Resolution đã xử lý khiếu nại của bạn!', 'shield-check'); },
       submitOneTouchLead: (payload) => { dispatch({ type: 'SUBMIT_ONE_TOUCH_LEAD', payload }); showToast('Đã gửi hồ sơ One-Touch Portfolio thành công!', 'check'); },
       setCv: (file) => { dispatch({ type: 'SET_CV', file }); showToast('Đã tải CV lên hồ sơ.', 'check'); },

@@ -221,28 +221,6 @@ public class PaymentService : IPaymentService
         return true;
     }
 
-    public async Task<PaymentOrderStatusDto> GetOrderStatusPublicAsync(string orderCode, CancellationToken ct = default)
-    {
-        var order = await _dbContext.PaymentOrders
-            .AsNoTracking()
-            .FirstOrDefaultAsync(o => o.OrderCode == orderCode, ct);
-
-        if (order == null)
-        {
-            throw new BusinessException("Không tìm thấy đơn nạp tiền.");
-        }
-
-        return new PaymentOrderStatusDto
-        {
-            OrderCode = order.OrderCode,
-            Provider = order.Provider,
-            Amount = order.Amount,
-            Status = order.Status,
-            PaidAt = order.PaidAt,
-            ExpiresAt = order.ExpiresAt
-        };
-    }
-
     public async Task<ConfirmPaymentResult> ConfirmPaymentAsync(
         string orderCode,
         string gatewayTxnId,

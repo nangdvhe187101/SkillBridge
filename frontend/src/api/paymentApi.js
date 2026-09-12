@@ -15,17 +15,6 @@ export async function getPaymentOrderStatus(orderCode) {
   });
 }
 
-export async function getPaymentOrderStatusPublic(orderCode) {
-  const res = await fetch(`${API_URL}/payments/orders/${encodeURIComponent(orderCode)}/status-public`, {
-    method: 'GET',
-    headers: { 'Content-Type': 'application/json' },
-  });
-  if (!res.ok) {
-    throw new Error('Không tìm thấy thông tin đơn thanh toán.');
-  }
-  return res.json();
-}
-
 export async function getActivePendingOrder() {
   return apiFetch('/payments/orders/pending', {
     method: 'GET',

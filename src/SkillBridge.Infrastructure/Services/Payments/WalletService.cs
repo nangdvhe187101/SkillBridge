@@ -78,64 +78,22 @@ public class WalletService : IWalletService
             })
             .ToListAsync(cancellationToken);
 
+        var activeSubscriptions = await _dbContext.Subscriptions
+            .AsNoTracking()
+            .Where(s => s.UserId == userId && s.Status == "active")
+            .Select(s => s.PlanName)
+            .ToListAsync(cancellationToken);
+
         return new WalletResponseDto
         {
             UserId = userId,
             Balance = balance,
             EscrowLocked = escrowLocked,
             Transactions = txs,
-            Receipts = receipts
+            Receipts = receipts,
+            HasVipSubscription = activeSubscriptions.Any(p => p.Contains("VIP")),
+            HasProSubscription = activeSubscriptions.Any(p => p.Contains("Pro"))
         };
-    }
-
-    public async Task<WalletResponseDto> TopupAsync(int userId, TopupRequest request, CancellationToken cancellationToken = default)
-    {
-        if (request.Amount < 10000 || request.Amount > 100000000 || request.Amount % 1 != 0)
-        {
-            throw new BusinessException("Số tiền nạp không hợp lệ. Số tiền phải là số nguyên dương từ 10.000đ đến 100.000.000đ.");
-        }
-
-        var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
-        return await executionStrategy.ExecuteAsync(async () =>
-        {
-            await using var tx = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
-
-            // Row-level lock trên Wallet để chống lost update khi có nhiều giao dịch đồng thời
-            var wallet = await GetWalletWithLockAsync(userId, cancellationToken);
-
-            if (wallet == null)
-            {
-                wallet = new Wallet
-                {
-                    UserId = userId,
-                    Balance = request.Amount
-                };
-                await _dbContext.Wallets.AddAsync(wallet, cancellationToken);
-            }
-            else
-            {
-                wallet.Balance += request.Amount;
-            }
-
-            var methodLabel = string.IsNullOrWhiteSpace(request.PaymentMethod) ? "Chuyển khoản QR" : request.PaymentMethod.Trim();
-            var transaction = new Transaction
-            {
-                UserId = userId,
-                Type = "topup",
-                Label = $"Nạp tiền vào ví qua {methodLabel}",
-                Amount = request.Amount,
-                Sign = 1,
-                CreatedAt = DateTime.UtcNow
-            };
-            await _dbContext.Transactions.AddAsync(transaction, cancellationToken);
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
-            await tx.CommitAsync(cancellationToken);
-
-            _logger.LogInformation("Người dùng {UserId} đã nạp thành công {Amount:N0}đ vào ví qua {Method}.", userId, request.Amount, methodLabel);
-
-            return await GetMyWalletAsync(userId, cancellationToken);
-        });
     }
 
     private async Task<Wallet?> GetWalletWithLockAsync(int userId, CancellationToken ct)

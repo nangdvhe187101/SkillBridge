@@ -10,6 +10,8 @@ public class WalletResponseDto
     public decimal EscrowLocked { get; set; }
     public List<WalletTransactionDto> Transactions { get; set; } = new();
     public List<ReceiptDto> Receipts { get; set; } = new();
+    public bool HasVipSubscription { get; set; }
+    public bool HasProSubscription { get; set; }
 }
 
 public class ReceiptDto
@@ -38,8 +40,17 @@ public class WalletTransactionDto
     public DateTime CreatedAt { get; set; }
 }
 
-public class TopupRequest
+public class PurchaseSubscriptionRequest
 {
-    public decimal Amount { get; set; }
-    public string? PaymentMethod { get; set; }
+    public string PlanType { get; set; } = string.Empty; // "VIP" or "PRO"
+}
+
+public class SubscriptionResponseDto
+{
+    public int Id { get; set; }
+    public string PlanName { get; set; } = string.Empty;
+    public decimal AmountPaid { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public DateTime StartedAt { get; set; }
+    public DateOnly? RenewalDate { get; set; }
 }

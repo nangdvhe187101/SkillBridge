@@ -86,14 +86,6 @@ public class PaymentsController : ControllerBase
         return Ok(status);
     }
 
-    [HttpGet("orders/{orderCode}/status-public")]
-    [AllowAnonymous]
-    public async Task<IActionResult> GetOrderStatusPublic([FromRoute] string orderCode, CancellationToken ct)
-    {
-        var status = await _paymentService.GetOrderStatusPublicAsync(orderCode, ct);
-        return Ok(status);
-    }
-
     [HttpGet("vnpay-ipn")]
     [AllowAnonymous]
     public async Task<IActionResult> VnPayIpn(CancellationToken ct)
