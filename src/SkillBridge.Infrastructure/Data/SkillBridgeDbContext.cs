@@ -518,7 +518,7 @@ public partial class SkillBridgeDbContext : DbContext
                 .HasConstraintName("fk_receipts_employer");
 
             entity.HasOne(d => d.Job).WithMany(p => p.Receipts)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+                .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_receipts_job");
 
             entity.HasOne(d => d.Student).WithMany(p => p.ReceiptStudents)

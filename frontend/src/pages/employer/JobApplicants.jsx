@@ -257,7 +257,7 @@ export default function JobApplicants() {
 
   const wasEscrowed = ['in_progress', 'submitted', 'revision_requested'].includes(job.status);
   const isWorking = ['in_progress', 'submitted', 'revision_requested', 'disputed'].includes(job.status);
-  const canDelete = ['open', 'completed', 'cancelled'].includes(job.status);
+  const canDelete = ['open', 'cancelled'].includes(job.status);
   const hasHired = !!job.hiredApplicant || isWorking;
 
   const handleCancel = async () => {
@@ -287,7 +287,7 @@ export default function JobApplicants() {
 
   const handleDelete = async () => {
     if (!canDelete) {
-      alert('Công việc đang trong quá trình thực hiện bởi sinh viên nên không thể xóa. Bạn chỉ có thể xóa sau khi hai bên đã hoàn tất giao dịch thành công (hoặc công việc đã đóng/hủy).');
+      alert('Không thể xóa công việc đã hoàn thành hoặc đang thực hiện để bảo vệ chứng từ tài chính và lịch sử giao dịch của cả hai bên.');
       return;
     }
     if (await confirm(`Bạn có chắc chắn muốn xóa vĩnh viễn tin tuyển dụng "${job.title}" khỏi hệ thống? Hành động này không thể hoàn tác.`, { danger: true, confirmLabel: 'Xóa tin vĩnh viễn' })) {

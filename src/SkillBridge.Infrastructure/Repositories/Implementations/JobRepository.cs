@@ -484,11 +484,11 @@ public class JobRepository : IJobRepository
                     _context.InsuranceFundClaims.RemoveRange(claims);
                 }
 
-                // 6. Dọn dẹp Receipts (Biên nhận điện tử)
-                var receipts = await _context.Receipts.Where(r => r.JobId == job.Id).ToListAsync();
-                if (receipts.Count > 0)
+                // 6. Kiểm tra an toàn bảo vệ chứng từ kế toán: Tuyệt đối không xóa Receipt
+                var hasReceipts = await _context.Receipts.AnyAsync(r => r.JobId == job.Id);
+                if (hasReceipts)
                 {
-                    _context.Receipts.RemoveRange(receipts);
+                    throw new InvalidOperationException($"Không thể xóa Job #{job.Id} vì có chứng từ biên nhận (Receipt) liên kết.");
                 }
 
                 // 7. Dọn dẹp Reviews (Đánh giá hoàn thành công việc)
