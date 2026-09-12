@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Icon from '../Icon';
 import { useAdmin } from '../../context/AdminContext';
 import { downloadJobAttachment } from '../../utils/fileDownloader';
 import { fmtVND } from '../../context/StoreContext';
@@ -10,11 +11,11 @@ function formatFileSize(bytes) {
 }
 
 function getFileIcon(type, name) {
-  if (type === 'video' || name?.endsWith('.mp4')) return '🎬';
-  if (type === 'image' || name?.endsWith('.png') || name?.endsWith('.jpg')) return '🖼️';
-  if (name?.endsWith('.xlsx') || name?.endsWith('.xls')) return '📊';
-  if (name?.endsWith('.pdf')) return '📕';
-  return '📄';
+  if (type === 'video' || name?.endsWith('.mp4')) return 'video';
+  if (type === 'image' || name?.endsWith('.png') || name?.endsWith('.jpg')) return 'image';
+  if (name?.endsWith('.xlsx') || name?.endsWith('.xls')) return 'chart-bar';
+  if (name?.endsWith('.pdf')) return 'file-text';
+  return 'file-text';
 }
 
 export default function AdminDisputes() {
@@ -102,15 +103,19 @@ export default function AdminDisputes() {
                   Ngày nộp khiếu nại: <b>{d.filedAt || '28/07/2026'}</b> · Giá trị ký quỹ: <b style={{ color: 'var(--primary)' }}>{fmtVND(d.amount)}</b>
                 </span>
               </div>
-              <span className={'djr-status ' + (d.status === 'open' ? 'in_progress' : 'completed')}>
-                {d.status === 'open' ? '⏳ Đang chờ phán quyết' : '✓ Đã đóng case'}
+              <span className={'djr-status ' + (d.status === 'open' ? 'in_progress' : 'completed')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Icon name={d.status === 'open' ? 'hourglass' : 'check'} style={{ width: 12, height: 12 }} />
+                <span>{d.status === 'open' ? 'Đang chờ phán quyết' : 'Đã đóng case'}</span>
               </span>
             </div>
 
             {/* Parties Bar */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, background: 'var(--surface)', padding: 12, borderRadius: 10, margin: '12px 0' }}>
               <div>
-                <span style={{ fontSize: 11.5, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>🎓 Bên khiếu nại (Sinh viên):</span>
+                <span style={{ fontSize: 11.5, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="graduation" style={{ width: 13, height: 13 }} />
+                  <span>Bên khiếu nại (Sinh viên):</span>
+                </span>
                 <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>
                   {d.student} <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-soft)' }}>({d.studentEmail || 'sv@edu.vn'})</span>
                 </div>
@@ -120,7 +125,10 @@ export default function AdminDisputes() {
               </div>
 
               <div>
-                <span style={{ fontSize: 11.5, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>🏢 Bên bị khiếu nại (NTD):</span>
+                <span style={{ fontSize: 11.5, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="building" style={{ width: 13, height: 13 }} />
+                  <span>Bên bị khiếu nại (NTD):</span>
+                </span>
                 <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>
                   {d.employer} <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-soft)' }}>({d.employerEmail || 'contact@dn.vn'})</span>
                 </div>
@@ -142,11 +150,13 @@ export default function AdminDisputes() {
                   <span
                     key={idx}
                     className="chip"
-                    style={{ fontSize: 11.5, cursor: 'pointer', background: 'var(--surface)' }}
+                    style={{ fontSize: 11.5, cursor: 'pointer', background: 'var(--surface)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                     onClick={() => downloadJobAttachment(f, d.jobTitle)}
                     title="Bấm để tải về đối soát"
                   >
-                    {getFileIcon(f.type, f.name)} {f.name} ⬇
+                    <Icon name={getFileIcon(f.type, f.name)} style={{ width: 13, height: 13 }} />
+                    <span>{f.name}</span>
+                    <Icon name="download" style={{ width: 11, height: 11 }} />
                   </span>
                 ))}
               </div>
@@ -154,17 +164,20 @@ export default function AdminDisputes() {
 
             {/* Actions Bar */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 6 }}>
-              <button className="btn btn-outline btn-sm" onClick={() => setViewDossier(d)}>
-                🔍 Xem toàn bộ hồ sơ & bằng chứng
+              <button className="btn btn-outline btn-sm" onClick={() => setViewDossier(d)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Icon name="search" style={{ width: 13, height: 13 }} />
+                <span>Xem toàn bộ hồ sơ & bằng chứng</span>
               </button>
 
               {d.status === 'open' ? (
                 <>
-                  <button className="btn btn-primary btn-sm" onClick={() => openDecision(d, 'accept')}>
-                    ✓ Phán quyết bồi thường cho SV
+                  <button className="btn btn-primary btn-sm" onClick={() => openDecision(d, 'accept')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="check" style={{ width: 13, height: 13 }} />
+                    <span>Phán quyết bồi thường cho SV</span>
                   </button>
-                  <button className="btn btn-outline btn-sm" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} onClick={() => openDecision(d, 'reject')}>
-                    ↩ Hoàn tiền lại cho NTD
+                  <button className="btn btn-outline btn-sm" style={{ color: 'var(--coral)', borderColor: 'var(--coral)', display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => openDecision(d, 'reject')}>
+                    <Icon name="refresh" style={{ width: 13, height: 13 }} />
+                    <span>Hoàn tiền lại cho NTD</span>
                   </button>
                 </>
               ) : (
@@ -183,7 +196,9 @@ export default function AdminDisputes() {
       {viewDossier && (
         <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setViewDossier(null); }}>
           <div className="modal-box" style={{ maxWidth: 720, maxHeight: '90vh', overflowY: 'auto' }}>
-            <button className="modal-close" onClick={() => setViewDossier(null)}>✕</button>
+            <button className="modal-close" onClick={() => setViewDossier(null)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" style={{ width: 16, height: 16 }} />
+            </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <span className="chip chip-lime" style={{ fontSize: 11 }}>Hồ sơ trọng tài</span>
@@ -195,7 +210,13 @@ export default function AdminDisputes() {
               <div className="cs-row"><span>Ngân sách hợp đồng</span><b>{fmtVND(viewDossier.amount)}</b></div>
               <div className="cs-row"><span>Hạn hoàn thành ban đầu</span><span>{viewDossier.deadlineAt || '28/07/2026'}</span></div>
               <div className="cs-row"><span>Thời điểm mở khiếu nại</span><span>{viewDossier.filedAt || '28/07/2026 22:15'}</span></div>
-              <div className="cs-row total"><span>Trạng thái hồ sơ</span><b>{viewDossier.status === 'open' ? '⏳ Đang thụ lý' : '✓ Đã đóng'}</b></div>
+              <div className="cs-row total">
+                <span>Trạng thái hồ sơ</span>
+                <b style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name={viewDossier.status === 'open' ? 'hourglass' : 'check'} style={{ width: 13, height: 13 }} />
+                  <span>{viewDossier.status === 'open' ? 'Đang thụ lý' : 'Đã đóng'}</span>
+                </b>
+              </div>
             </div>
 
             {/* Dual Statements */}
@@ -204,7 +225,10 @@ export default function AdminDisputes() {
               {/* Student */}
               <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: 10, padding: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <b style={{ color: '#3b82f6', fontSize: 13 }}>🎓 Sinh viên: {viewDossier.student}</b>
+                  <b style={{ color: '#3b82f6', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <Icon name="graduation" style={{ width: 14, height: 14 }} />
+                    <span>Sinh viên: {viewDossier.student}</span>
+                  </b>
                   <span className="chip" style={{ fontSize: 11 }}>Reliability: {viewDossier.studentReliability || 80}/100</span>
                 </div>
                 <p style={{ fontSize: 13, lineHeight: 1.6, margin: 0, color: 'var(--ink)' }}>
@@ -215,7 +239,10 @@ export default function AdminDisputes() {
               {/* Employer */}
               <div style={{ background: 'rgba(99, 102, 241, 0.08)', border: '1px solid rgba(99, 102, 241, 0.25)', borderRadius: 10, padding: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <b style={{ color: '#6366f1', fontSize: 13 }}>🏢 Nhà tuyển dụng: {viewDossier.employer}</b>
+                  <b style={{ color: '#6366f1', fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <Icon name="building" style={{ width: 14, height: 14 }} />
+                    <span>Nhà tuyển dụng: {viewDossier.employer}</span>
+                  </b>
                   <span className="chip" style={{ fontSize: 11 }}>Reliability: {viewDossier.employerReliability || 75}/100</span>
                 </div>
                 <p style={{ fontSize: 13, lineHeight: 1.6, margin: 0, color: 'var(--ink)' }}>
@@ -230,14 +257,17 @@ export default function AdminDisputes() {
               {viewDossier.files?.map((f, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontSize: 22 }}>{getFileIcon(f.type, f.name)}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 34, height: 34, borderRadius: 8, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)' }}>
+                      <Icon name={getFileIcon(f.type, f.name)} style={{ width: 18, height: 18 }} />
+                    </span>
                     <div>
                       <b style={{ fontSize: 13, display: 'block' }}>{f.name}</b>
                       <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Dung lượng: {formatFileSize(f.size)}</span>
                     </div>
                   </div>
-                  <button className="btn btn-outline btn-sm" onClick={() => downloadJobAttachment(f, viewDossier.jobTitle)}>
-                    ⬇ Tải về đối soát
+                  <button className="btn btn-outline btn-sm" onClick={() => downloadJobAttachment(f, viewDossier.jobTitle)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="download" style={{ width: 13, height: 13 }} />
+                    <span>Tải về đối soát</span>
                   </button>
                 </div>
               ))}
@@ -262,11 +292,13 @@ export default function AdminDisputes() {
             <div className="modal-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {viewDossier.status === 'open' && (
                 <>
-                  <button className="btn btn-primary" onClick={() => openDecision(viewDossier, 'accept')}>
-                    ✓ Phán quyết bồi thường cho SV
+                  <button className="btn btn-primary" onClick={() => openDecision(viewDossier, 'accept')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="check" style={{ width: 14, height: 14 }} />
+                    <span>Phán quyết bồi thường cho SV</span>
                   </button>
-                  <button className="btn btn-outline" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} onClick={() => openDecision(viewDossier, 'reject')}>
-                    ↩ Hoàn tiền lại cho NTD
+                  <button className="btn btn-outline" style={{ color: 'var(--coral)', borderColor: 'var(--coral)', display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => openDecision(viewDossier, 'reject')}>
+                    <Icon name="refresh" style={{ width: 14, height: 14 }} />
+                    <span>Hoàn tiền lại cho NTD</span>
                   </button>
                 </>
               )}
@@ -284,9 +316,12 @@ export default function AdminDisputes() {
       {decisionModal && (
         <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setDecisionModal(null); }}>
           <div className="modal-box" style={{ maxWidth: 540 }}>
-            <button className="modal-close" onClick={() => setDecisionModal(null)}>✕</button>
-            <h3>
-              {decisionModal.decision === 'accept' ? '✓ Phán quyết bồi thường cho Sinh viên' : '↩ Phán quyết hoàn tiền cho Nhà tuyển dụng'}
+            <button className="modal-close" onClick={() => setDecisionModal(null)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" style={{ width: 16, height: 16 }} />
+            </button>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name={decisionModal.decision === 'accept' ? 'check' : 'refresh'} style={{ width: 18, height: 18, color: decisionModal.decision === 'accept' ? 'var(--primary)' : 'var(--coral)' }} />
+              <span>{decisionModal.decision === 'accept' ? 'Phán quyết bồi thường cho Sinh viên' : 'Phán quyết hoàn tiền cho Nhà tuyển dụng'}</span>
             </h3>
             <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
               Vụ việc: <b>{decisionModal.dispute.jobTitle}</b> · Hợp đồng: {fmtVND(decisionModal.dispute.amount)}
@@ -322,10 +357,13 @@ export default function AdminDisputes() {
               {error && <div style={{ color: 'var(--coral)', fontSize: 12, marginTop: 4 }}>{error}</div>}
             </div>
 
-            <div style={{ background: 'var(--surface)', padding: 10, borderRadius: 8, fontSize: 12, color: 'var(--ink-soft)', marginBottom: 16 }}>
-              {decisionModal.decision === 'accept'
-                ? `⚡ Sau phán quyết: Sinh viên được bồi thường tiền, Reliability NTD bị trừ 15 điểm.`
-                : `⚡ Sau phán quyết: Tiền ký quỹ hoàn trả về ví NTD, Reliability Sinh viên bị trừ 10 điểm do vi phạm deadline/brief.`}
+            <div style={{ background: 'var(--surface)', padding: 10, borderRadius: 8, fontSize: 12, color: 'var(--ink-soft)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="zap" style={{ width: 14, height: 14, color: '#f59e0b', flexShrink: 0 }} />
+              <span>
+                {decisionModal.decision === 'accept'
+                  ? 'Sau phán quyết: Sinh viên được bồi thường tiền, Reliability NTD bị trừ 15 điểm.'
+                  : 'Sau phán quyết: Tiền ký quỹ hoàn trả về ví NTD, Reliability Sinh viên bị trừ 10 điểm do vi phạm deadline/brief.'}
+              </span>
             </div>
 
             <div className="modal-actions">

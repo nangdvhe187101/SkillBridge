@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Icon from '../Icon';
 import ModalShell from './ModalShell';
 import { useStore } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
@@ -31,7 +32,9 @@ export default function ReviewModal({ onClose, jobTitle, withName, direction, da
       </p>
       <div className="star-pick">
         {[1, 2, 3, 4, 5].map((v) => (
-          <button key={v} className={v <= stars ? 'on' : ''} onClick={() => setStars(v)}>★</button>
+          <button key={v} className={v <= stars ? 'on' : ''} onClick={() => setStars(v)} type="button">
+            <Icon name="star" style={{ width: 18, height: 18, display: 'inline-block' }} />
+          </button>
         ))}
       </div>
       <textarea value={comment} onChange={(e) => setComment(e.target.value)} placeholder="Nhận xét về quá trình hợp tác..." />

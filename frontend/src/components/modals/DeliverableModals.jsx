@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import ModalShell from './ModalShell';
+import Icon from '../Icon';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import { submitJobDeliverable, getJobDeliverables } from '../../api/deliverableApi';
@@ -175,7 +176,9 @@ function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
   if (loading) {
     return (
       <div style={{ padding: '28px 16px', textAlign: 'center', background: 'var(--surface)', borderRadius: 10, border: '1px dashed var(--border)' }}>
-        <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>⏳ Đang tải video xem trước (vui lòng chờ trong giây lát)...</span>
+        <span style={{ fontSize: 13, color: 'var(--ink-soft)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="hourglass" width="15" height="15" /> Đang tải video xem trước (vui lòng chờ trong giây lát)...
+        </span>
       </div>
     );
   }
@@ -183,7 +186,9 @@ function DeliverableVideo({ jobId, deliverableId, fallbackSrc, alt, isFinal }) {
   if (error || !videoSrc) {
     return (
       <div className="empty-state" style={{ padding: '20px 16px', textAlign: 'center', background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)' }}>
-        <div style={{ fontSize: 28, marginBottom: 4 }}>🎬</div>
+        <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', margin: '0 auto 8px' }}>
+          <Icon name="video" width="22" height="22" />
+        </div>
         <b style={{ fontSize: 13, color: 'var(--ink)' }}>{alt || 'Video sản phẩm bàn giao'}</b>
         <p style={{ fontSize: 12, color: 'var(--coral, #e11d48)', margin: '6px 0 0' }}>{errorMessage || 'Không thể hiển thị video xem trước.'}</p>
       </div>

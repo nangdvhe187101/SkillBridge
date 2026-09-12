@@ -81,15 +81,8 @@ export default function TopNav() {
   return (
     <nav className="topnav">
       <div className="wrap">
-        <NavLink to="/" className="logo" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none' }}>
-          <img
-            src="/logo.png"
-            alt="SkillBridge Logo"
-            style={{ height: 36, width: 'auto', borderRadius: 8, objectFit: 'contain' }}
-          />
-          <span style={{ fontWeight: 800, fontSize: 19, letterSpacing: -0.4, color: 'var(--ink)' }}>
-            SkillBridge
-          </span>
+        <NavLink to="/" className="logo" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
+          <img src="/logo.png" alt="SkillBridge" style={{ height: 40, width: 'auto', objectFit: 'contain' }} />
         </NavLink>
 
         <div className={'navlinks' + (navOpen ? ' open' : '')} id="navlinks">
@@ -118,11 +111,12 @@ export default function TopNav() {
                 />
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                   <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--ink)' }}>{state.currentUser.fullName}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
-                    {isStudent ? '🎓 Sinh viên Freelancer' : (isEmployer ? '🏢 Nhà tuyển dụng' : '🛡️ Quản trị viên')}
+                  <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name={isStudent ? 'graduation' : (isEmployer ? 'building' : 'shield-check')} width="12" height="12" />
+                    <span>{isStudent ? 'Sinh viên Freelancer' : (isEmployer ? 'Nhà tuyển dụng' : 'Quản trị viên')}</span>
                   </div>
                 </div>
-                <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 700 }}>Hồ sơ ➔</span>
+                <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 700 }}>Hồ sơ →</span>
               </div>
             </div>
           )}
@@ -140,20 +134,30 @@ export default function TopNav() {
           {isLoggedIn && (
             <div className="nav-mobile-only">
               <div style={{ height: 1, background: 'var(--border)', margin: '6px 0' }} />
-              <NavLink to="/profile" className={linkClass} onClick={() => setNavOpen(false)}>👤 Hồ sơ của tôi</NavLink>
-              <NavLink to="/wallet" className={linkClass} onClick={() => setNavOpen(false)}>👛 Ví của tôi ({fmtVND(state.balance)})</NavLink>
-              <NavLink to="/messages" className={linkClass} onClick={() => setNavOpen(false)}>💬 Tin nhắn {unreadMsgCount > 0 ? `(${unreadMsgCount})` : ''}</NavLink>
+              <NavLink to="/profile" className={linkClass} onClick={() => setNavOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="users" width="15" height="15" /> Hồ sơ của tôi
+              </NavLink>
+              <NavLink to="/wallet" className={linkClass} onClick={() => setNavOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="wallet" width="15" height="15" /> Ví của tôi ({fmtVND(state.balance)})
+              </NavLink>
+              <NavLink to="/messages" className={linkClass} onClick={() => setNavOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="chat" width="15" height="15" /> Tin nhắn {unreadMsgCount > 0 ? `(${unreadMsgCount})` : ''}
+              </NavLink>
               {state.currentUser?.roleCode === 'admin' && (
-                <NavLink to="/admin" className={linkClass} onClick={() => setNavOpen(false)}>⚙️ Bảng điều khiển Admin</NavLink>
+                <NavLink to="/admin" className={linkClass} onClick={() => setNavOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="shield-check" width="15" height="15" /> Bảng điều khiển Admin
+                </NavLink>
               )}
-              <NavLink to="/account-settings" className={linkClass} onClick={() => setNavOpen(false)}>⚙️ Cài đặt tài khoản</NavLink>
+              <NavLink to="/account-settings" className={linkClass} onClick={() => setNavOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="key" width="15" height="15" /> Cài đặt tài khoản
+              </NavLink>
             </div>
           )}
 
           <div className="nav-drop-actions">
             {isLoggedIn ? (
-              <button className="btn btn-outline btn-sm" style={{ width: '100%', color: 'var(--danger, #e5484d)', borderColor: 'var(--danger, #e5484d)', marginTop: 8 }} onClick={handleLogout}>
-                🚪 Đăng xuất
+              <button className="btn btn-outline btn-sm" style={{ width: '100%', color: 'var(--danger, #e5484d)', borderColor: 'var(--danger, #e5484d)', marginTop: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={handleLogout}>
+                <Icon name="arrow-up-right" width="14" height="14" /> Đăng xuất
               </button>
             ) : (
               <>
@@ -180,7 +184,7 @@ export default function TopNav() {
 
           {isLoggedIn && (
             <button className="nav-icon-btn" onClick={() => navigate('/messages')} aria-label="Tin nhắn" title="Tin nhắn">
-              💬
+              <Icon name="chat" />
               {unreadMsgCount > 0 && <span className="notif-dot">{unreadMsgCount}</span>}
             </button>
           )}
@@ -207,7 +211,9 @@ export default function TopNav() {
                         role="button" tabIndex={0}
                         onClick={() => handleNotifClick(n)}
                         onKeyDown={(e) => { if (e.key === 'Enter') handleNotifClick(n); }}>
-                        <div className="notif-ic">{n.icon}</div>
+                        <div className="notif-ic">
+                          <Icon name={n.icon || 'bell'} style={{ width: 16, height: 16, color: 'var(--primary)' }} />
+                        </div>
                         <div className="notif-txt"><p>{n.text}</p><span>{n.time}</span></div>
                         {n.link && <Icon name="chevright" className="notif-chev" />}
                       </div>
@@ -265,17 +271,29 @@ export default function TopNav() {
                       <div style={{ fontSize: 12, color: 'var(--muted, #888)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{state.currentUser.email}</div>
                     </div>
                   </div>
-                  <NavLink to="/profile" className="nav-more-link" onClick={() => goFromUserMenu('/profile')}>👤 Hồ sơ của tôi</NavLink>
-                  <NavLink to="/wallet" className="nav-more-link" onClick={() => goFromUserMenu('/wallet')}>👛 Ví của tôi</NavLink>
+                  <NavLink to="/profile" className="nav-more-link" onClick={() => goFromUserMenu('/profile')} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Icon name="users" width="14" height="14" /> Hồ sơ của tôi
+                  </NavLink>
+                  <NavLink to="/wallet" className="nav-more-link" onClick={() => goFromUserMenu('/wallet')} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Icon name="wallet" width="14" height="14" /> Ví của tôi
+                  </NavLink>
                   {isStudent && (
-                    <NavLink to="/mywork" className="nav-more-link" onClick={() => goFromUserMenu('/mywork')}>💼 Việc của tôi</NavLink>
+                    <NavLink to="/mywork" className="nav-more-link" onClick={() => goFromUserMenu('/mywork')} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Icon name="briefcase" width="14" height="14" /> Việc của tôi
+                    </NavLink>
                   )}
                   {state.currentUser?.roleCode === 'admin' && (
-                    <NavLink to="/admin" className="nav-more-link" onClick={() => goFromUserMenu('/admin')}>⚙️ Bảng điều khiển Admin</NavLink>
+                    <NavLink to="/admin" className="nav-more-link" onClick={() => goFromUserMenu('/admin')} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Icon name="shield-check" width="14" height="14" /> Bảng điều khiển Admin
+                    </NavLink>
                   )}
-                  <NavLink to="/account-settings" className="nav-more-link" onClick={() => goFromUserMenu('/account-settings')}>⚙️ Cài đặt tài khoản</NavLink>
+                  <NavLink to="/account-settings" className="nav-more-link" onClick={() => goFromUserMenu('/account-settings')} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Icon name="key" width="14" height="14" /> Cài đặt tài khoản
+                  </NavLink>
                   <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
-                  <button type="button" className="nav-more-link" style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger, #e5484d)' }} onClick={handleLogout}>🚪 Đăng xuất</button>
+                  <button type="button" className="nav-more-link" style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger, #e5484d)', display: 'flex', alignItems: 'center', gap: 8 }} onClick={handleLogout}>
+                    <Icon name="arrow-up-right" width="14" height="14" /> Đăng xuất
+                  </button>
                 </div>
               </div>
             </>

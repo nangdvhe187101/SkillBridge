@@ -5,6 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { uploadAvatar } from '../../api/userApi';
 import { getMyCvFiles, uploadCvFile, deleteCv } from '../../api/cvApi';
 import { downloadCandidateCv } from '../../utils/fileDownloader';
+import Icon from '../../components/Icon';
 import '../../styles/account-settings.css';
 
 const PHONE_REGEX = /^0\d{9}$/;
@@ -85,7 +86,10 @@ function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
                     <div className="acct-avatar-placeholder">{initial}</div>
                 )}
                 <div className="acct-avatar-overlay">
-                    <span>{uploading ? '⏳ Đang tải...' : '📷 Đổi ảnh'}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Icon name={uploading ? 'hourglass' : 'camera'} width="14" height="14" />
+                        <span>{uploading ? 'Đang tải...' : 'Đổi ảnh'}</span>
+                    </span>
                 </div>
             </div>
 
@@ -489,9 +493,11 @@ function CvManagerTab() {
                     className="cv-dropzone"
                     onClick={() => !uploading && fileInputRef.current?.click()}
                 >
-                    <div style={{ fontSize: 36, marginBottom: 8 }}>📄</div>
+                    <div style={{ marginBottom: 10, color: 'var(--primary)' }}>
+                        <Icon name="file-text" width="40" height="40" />
+                    </div>
                     <h3 style={{ fontSize: 16, margin: '0 0 6px' }}>
-                        {uploading ? '⏳ Đang tải file lên...' : 'Nhấn để chọn file CV tải lên'}
+                        {uploading ? 'Đang tải file lên...' : 'Nhấn để chọn file CV tải lên'}
                     </h3>
                     <p style={{ fontSize: 12.5, color: 'var(--muted, #666)', margin: 0 }}>
                         Định dạng hỗ trợ: PDF, DOC, DOCX (Tối đa 10MB)
@@ -513,7 +519,9 @@ function CvManagerTab() {
                         {cvList.map((cv) => (
                             <div className="cv-item-card" key={cv.id}>
                                 <div className="cv-item-left">
-                                    <div className="cv-item-icon">📄</div>
+                                    <div className="cv-item-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+                                        <Icon name="file-text" width="20" height="20" />
+                                    </div>
                                     <div className="cv-item-meta">
                                         <b>{cv.label || cv.fileName}</b>
                                         <div className="cv-item-sub">
@@ -534,18 +542,18 @@ function CvManagerTab() {
                                     <button
                                         type="button"
                                         className="btn btn-outline btn-sm"
-                                        style={{ fontSize: 12 }}
+                                        style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}
                                         onClick={() => downloadCandidateCv(cv.id, cv.fileName)}
                                     >
-                                        👁️ Xem / Tải
+                                        <Icon name="eye" width="13" height="13" /> Xem / Tải
                                     </button>
                                     <button
                                         type="button"
                                         className="btn btn-outline btn-sm"
-                                        style={{ color: 'var(--coral, #f43f5e)', borderColor: 'var(--coral, #f43f5e)', fontSize: 12 }}
+                                        style={{ color: 'var(--coral, #f43f5e)', borderColor: 'var(--coral, #f43f5e)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}
                                         onClick={() => handleDelete(cv.id, cv.fileName)}
                                     >
-                                        🗑️ Xóa
+                                        <Icon name="trash" width="13" height="13" /> Xóa
                                     </button>
                                 </div>
                             </div>
@@ -660,13 +668,13 @@ export default function AccountSettings({ forcedTab }) {
 
     const tabs = isEmployer
         ? [
-            { id: 'profile', path: '/settings/profile', label: 'Thông tin Doanh nghiệp', icon: '🏢' },
-            { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: '🔑' },
+            { id: 'profile', path: '/settings/profile', label: 'Thông tin Doanh nghiệp', icon: 'building' },
+            { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: 'key' },
         ]
         : [
-            { id: 'profile', path: '/settings/profile', label: 'Thông tin Sinh viên', icon: '🎓' },
-            { id: 'cv_manager', path: '/settings/cv', label: 'Quản lý CV & Hồ sơ', icon: '📄' },
-            { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: '🔑' },
+            { id: 'profile', path: '/settings/profile', label: 'Thông tin Sinh viên', icon: 'graduation' },
+            { id: 'cv_manager', path: '/settings/cv', label: 'Quản lý CV & Hồ sơ', icon: 'file-text' },
+            { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: 'key' },
         ];
 
     const tab = useMemo(() => {
@@ -696,8 +704,9 @@ export default function AccountSettings({ forcedTab }) {
                 <div className="acct-sidebar">
                     <div className="acct-sidebar-head">
                         <h2>Cài đặt</h2>
-                        <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px', marginTop: 6, display: 'inline-block' }}>
-                            {isEmployer ? '🏢 Nhà tuyển dụng' : '🎓 Sinh viên'}
+                        <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px', marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Icon name={isEmployer ? 'building' : 'graduation'} width="12" height="12" />
+                            {isEmployer ? 'Nhà tuyển dụng' : 'Sinh viên'}
                         </span>
                     </div>
 
@@ -709,7 +718,7 @@ export default function AccountSettings({ forcedTab }) {
                                 onClick={() => navigate(t.path)}
                                 style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                             >
-                                <span>{t.icon}</span>
+                                <Icon name={t.icon} width="16" height="16" />
                                 <span>{t.label}</span>
                             </button>
                         ))}

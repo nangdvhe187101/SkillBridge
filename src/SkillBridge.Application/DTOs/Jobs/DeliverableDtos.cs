@@ -21,6 +21,9 @@ public class DeliverableDto
     public bool CanDownloadPreview { get; set; }
     public DateTime SubmittedAt { get; set; }
     public DateTime? ReviewedAt { get; set; }
+    public decimal? Budget { get; set; }
+    public decimal? Commission { get; set; }
+    public decimal? NetPayout { get; set; }
     public List<DeliverableFeedbackDto> Feedbacks { get; set; } = new();
 }
 

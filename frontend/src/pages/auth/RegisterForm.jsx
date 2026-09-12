@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../../context/StoreContext';
+import Icon from '../../components/Icon';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -25,6 +26,12 @@ export default function RegisterForm({ onSwitchTab }) {
         setEmailError(EMAIL_REGEX.test(email) ? '' : 'Email không đúng định dạng');
     };
 
+    const validatePhone = (value) => {
+        const phone = (value || '').trim();
+        if (!phone) return true;
+        return PHONE_REGEX.test(phone);
+    };
+
     const updateField = (patch) => {
         setRegForm((prev) => ({ ...prev, ...patch }));
         if (formError) setFormError('');
@@ -38,36 +45,49 @@ export default function RegisterForm({ onSwitchTab }) {
         const password2 = regForm.password2 || '';
         const phone = (regForm.phone || '').trim();
 
-        if (!name || !email || !password) {
-            setFormError('Vui lòng điền đầy đủ thông tin bắt buộc.');
+        if (!name) {
+            setFormError(role === 'student' ? 'Vui lòng nhập họ và tên.' : 'Vui lòng nhập tên công ty/doanh nghiệp.');
+            return;
+        }
+
+        if (!email) {
+            setFormError('Vui lòng nhập email.');
             return;
         }
         if (!EMAIL_REGEX.test(email)) {
-            setEmailError('Email không đúng định dạng');
+            setFormError('Email không đúng định dạng.');
             return;
         }
+
+        if (phone && !validatePhone(phone)) {
+            setFormError('Số điện thoại không hợp lệ (cần 10 chữ số, bắt đầu bằng 0).');
+            return;
+        }
+
+        if (!password) {
+            setFormError('Vui lòng nhập mật khẩu.');
+            return;
+        }
+        if (!PASSWORD_REGEX.test(password)) {
+            setFormError('Mật khẩu tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.');
+            return;
+        }
+
         if (password !== password2) {
             setFormError('Mật khẩu xác nhận không khớp.');
             return;
         }
-        if (!PASSWORD_REGEX.test(password)) {
-            setFormError('Mật khẩu phải có ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt.');
-            return;
-        }
-        if (phone && !PHONE_REGEX.test(phone)) {
-            setFormError('Số điện thoại phải gồm 10 chữ số và bắt đầu bằng số 0.');
-            return;
-        }
+
         setLoading(true);
         try {
-            const result = await doRegister(
-                name,
+            const res = await doRegister({
+                fullName: name,
                 email,
                 password,
-                phone || null,
+                phone: phone || undefined,
                 role
-            );
-            setRegisterMessage(result.message);
+            });
+            setRegisterMessage(res?.message || 'Đăng ký thành công! Vui lòng kiểm tra email để kích hoạt tài khoản.');
         } catch (err) {
             setFormError(err.message);
         } finally {
@@ -97,14 +117,18 @@ export default function RegisterForm({ onSwitchTab }) {
                     className={'role-opt' + (role === 'student' ? ' is-active' : '')}
                     onClick={() => setRole('student')}
                 >
-                    🎓 Sinh viên
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Icon name="graduation" width="16" height="16" /> Sinh viên
+                    </span>
                 </button>
                 <button
                     type="button"
                     className={'role-opt' + (role === 'employer' ? ' is-active' : '')}
                     onClick={() => setRole('employer')}
                 >
-                    🏢 Nhà tuyển dụng
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Icon name="building" width="16" height="16" /> Nhà tuyển dụng
+                    </span>
                 </button>
             </div>
 
@@ -159,7 +183,7 @@ export default function RegisterForm({ onSwitchTab }) {
                         aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                         tabIndex={-1}
                     >
-                        {showPassword ? '🙈' : '🐵'}
+                        <Icon name={showPassword ? 'eye-off' : 'eye'} width="18" height="18" />
                     </button>
                 </div>
                 <div className="hint">Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.</div>
@@ -181,7 +205,7 @@ export default function RegisterForm({ onSwitchTab }) {
                         aria-label={showPassword2 ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                         tabIndex={-1}
                     >
-                        {showPassword2 ? '🙈' : '🐵'}
+                        <Icon name={showPassword2 ? 'eye-off' : 'eye'} width="18" height="18" />
                     </button>
                 </div>
             </div>

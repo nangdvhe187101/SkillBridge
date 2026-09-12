@@ -29,7 +29,7 @@ const STATUS_COLOR = {
   cancelled: '#A9A4CC',
 };
 
-const TIER_LABEL = { gold: '🥇 Gold', silver: '🥈 Silver', bronze: '🥉 Bronze' };
+const TIER_LABEL = { gold: 'Gold', silver: 'Silver', bronze: 'Bronze' };
 const TIER_COLOR = { gold: '#CBFF4D', silver: '#57C7FF', bronze: '#FF5C7A' };
 
 function formatDeadline(ts) {
@@ -117,17 +117,17 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
         <div style={{ position: 'relative', zIndex: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20 }}>
           <div style={{ maxWidth: 580 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 13, background: 'rgba(255,255,255,0.15)', padding: '3px 10px', borderRadius: 99, fontWeight: 600, letterSpacing: 0.5 }}>
-                🏢 DOANH NGHIỆP TUYỂN DỤNG
+              <span style={{ fontSize: 13, background: 'rgba(255,255,255,0.15)', padding: '3px 10px', borderRadius: 99, fontWeight: 600, letterSpacing: 0.5, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Icon name="building" width="13" height="13" /> DOANH NGHIỆP TUYỂN DỤNG
               </span>
               {state.vipBusiness && (
-                <span style={{ fontSize: 12, background: 'rgba(203, 255, 77, 0.25)', color: '#CBFF4D', padding: '3px 10px', borderRadius: 99, fontWeight: 700 }}>
-                  👑 VIP Business Suite
+                <span style={{ fontSize: 12, background: 'rgba(203, 255, 77, 0.25)', color: '#CBFF4D', padding: '3px 10px', borderRadius: 99, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Icon name="crown" width="12" height="12" /> VIP Business Suite
                 </span>
               )}
             </div>
             <h1 style={{ fontSize: 24, margin: '0 0 8px', color: '#fff', fontWeight: 800 }}>
-              Xin chào, {companyName} 👋
+              Xin chào, {companyName}
             </h1>
             <p style={{ margin: 0, fontSize: 14, color: 'rgba(255,255,255,0.85)', lineHeight: 1.6 }}>
               Hôm nay bạn đang có <b style={{ color: '#CBFF4D' }}>{openCount} tin đang mở nhận CV</b>,{' '}
@@ -140,18 +140,18 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
             <button
               type="button"
               className="btn btn-lime"
-              style={{ fontWeight: 700, padding: '10px 20px', fontSize: 14, boxShadow: '0 4px 14px rgba(203, 255, 77, 0.4)' }}
+              style={{ fontWeight: 700, padding: '10px 20px', fontSize: 14, boxShadow: '0 4px 14px rgba(203, 255, 77, 0.4)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
               onClick={goToPostTab}
             >
-              ⚡ Đăng tin mới
+              <Icon name="plus" width="16" height="16" /> Đăng tin mới
             </button>
             <button
               type="button"
               className="btn"
-              style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', padding: '10px 18px', fontSize: 13.5 }}
+              style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', padding: '10px 18px', fontSize: 13.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}
               onClick={() => navigate('/wallet')}
             >
-              💳 Ví ký quỹ: <b>{fmtVND(state.balance || 0)}</b>
+              <Icon name="wallet" width="14" height="14" /> Ví ký quỹ: <b>{fmtVND(state.balance || 0)}</b>
             </button>
           </div>
         </div>
@@ -174,7 +174,9 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
           onClick={goToJobsTab}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <span style={{ fontSize: 28, background: 'rgba(108, 76, 255, 0.1)', padding: '8px 12px', borderRadius: 10 }}>📋</span>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+              <Icon name="file-text" width="22" height="22" />
+            </div>
             <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(108, 76, 255, 0.1)', color: 'var(--primary)', padding: '3px 8px', borderRadius: 6 }}>
               {openCount} ACTIVE
             </span>
@@ -201,7 +203,9 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
           onClick={goToJobsTab}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <span style={{ fontSize: 28, background: 'rgba(2, 132, 199, 0.1)', padding: '8px 12px', borderRadius: 10 }}>⚙️</span>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(2, 132, 199, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7' }}>
+              <Icon name="clock" width="22" height="22" />
+            </div>
             <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(2, 132, 199, 0.1)', color: '#0284c7', padding: '3px 8px', borderRadius: 6 }}>
               {inProgressCount} RUNNING
             </span>
@@ -228,7 +232,9 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
           onClick={goToJobsTab}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <span style={{ fontSize: 28, background: 'rgba(16, 185, 129, 0.1)', padding: '8px 12px', borderRadius: 10 }}>👥</span>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(16, 185, 129, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10b981' }}>
+              <Icon name="users" width="22" height="22" />
+            </div>
             <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '3px 8px', borderRadius: 6 }}>
               {totalApps} ỨNG VIÊN
             </span>
@@ -255,7 +261,9 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
           onClick={() => navigate('/wallet')}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-            <span style={{ fontSize: 28, background: 'rgba(245, 158, 11, 0.1)', padding: '8px 12px', borderRadius: 10 }}>🛡️</span>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(245, 158, 11, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#d97706' }}>
+              <Icon name="shield-check" width="22" height="22" />
+            </div>
             <span style={{ fontSize: 11, fontWeight: 700, background: 'rgba(245, 158, 11, 0.1)', color: '#d97706', padding: '3px 8px', borderRadius: 6 }}>
               ESCROW
             </span>
@@ -311,7 +319,9 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
           style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10, background: 'var(--surface)' }}
           onClick={goToJobsTab}
         >
-          <span style={{ fontSize: 20 }}>📋</span>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon name="file-text" width={18} height={18} />
+          </div>
           <div style={{ textAlign: 'left' }}>
             <b style={{ display: 'block', fontSize: 13.5 }}>Quản lý tin đăng</b>
             <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Xem và duyệt ứng viên</span>
@@ -324,7 +334,9 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
           style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10, background: 'var(--surface)' }}
           onClick={goToPostTab}
         >
-          <span style={{ fontSize: 20 }}>➕</span>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(203, 255, 77, 0.2)', color: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon name="plus" width={18} height={18} />
+          </div>
           <div style={{ textAlign: 'left' }}>
             <b style={{ display: 'block', fontSize: 13.5 }}>Tạo tin tuyển dụng</b>
             <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Đăng đề bài & ngân sách</span>
@@ -337,7 +349,9 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
           style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10, background: 'var(--surface)' }}
           onClick={goToAdsTab}
         >
-          <span style={{ fontSize: 20 }}>📢</span>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(87, 199, 255, 0.15)', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon name="megaphone" width={18} height={18} />
+          </div>
           <div style={{ textAlign: 'left' }}>
             <b style={{ display: 'block', fontSize: 13.5 }}>Chiến dịch Affiliate</b>
             <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Mở rộng mạng lưới tuyển dụng</span>
@@ -350,7 +364,9 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
           style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10, background: 'var(--surface)' }}
           onClick={() => navigate('/wallet')}
         >
-          <span style={{ fontSize: 20 }}>💳</span>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255, 92, 122, 0.12)', color: 'var(--coral)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Icon name="card" width={18} height={18} />
+          </div>
           <div style={{ textAlign: 'left' }}>
             <b style={{ display: 'block', fontSize: 13.5 }}>Ví & Ký quỹ an toàn</b>
             <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Nạp / Rút & Lịch sử Escrow</span>
@@ -362,7 +378,7 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
       <div className="dash-panel" style={{ marginBottom: 24 }}>
         <div className="dash-panel-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>⚡</span> Ứng viên mới nộp hồ sơ gần đây
+            <Icon name="bolt" width={17} height={17} style={{ color: 'var(--primary)' }} /> Ứng viên mới nộp hồ sơ gần đây
           </h4>
           <button type="button" className="btn btn-outline btn-sm" onClick={goToJobsTab}>
             Xem tất cả ({totalApps})
@@ -371,7 +387,11 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
 
         {recentApplicants.length === 0 ? (
           <div className="empty-state" style={{ padding: '36px 20px' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>👥</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
+              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="users" width={28} height={28} />
+              </div>
+            </div>
             <b>Chưa có ứng viên mới nộp hồ sơ</b>
             <p style={{ color: 'var(--ink-soft)', marginTop: 4, maxWidth: 440, margin: '6px auto 0' }}>
               Tin tuyển dụng của bạn đang hoạt động. Bạn có thể chia sẻ link tin hoặc bật chế độ <b>Tuyển gấp (Featured)</b> để thu hút thêm nhiều hồ sơ chất lượng!
@@ -398,7 +418,9 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <b style={{ fontSize: 14.5, color: 'var(--ink)' }}>{app.name}</b>
                       <span className="chip" style={{ fontSize: 11, padding: '1px 6px' }}>{app.school || 'Sinh viên'}</span>
-                      <span style={{ fontSize: 12, color: '#eab308', fontWeight: 600 }}>⭐ {app.score || 95}/100</span>
+                      <span style={{ fontSize: 12, color: '#eab308', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Icon name="star" width={12} height={12} /> {app.score || 95}/100
+                      </span>
                     </div>
                     <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 3 }}>
                       Ứng tuyển vị trí: <b style={{ color: 'var(--primary)' }}>{app.jobTitle}</b> · {app.appliedAt || 'Gần đây'}
@@ -411,8 +433,9 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
                     type="button"
                     className="btn btn-outline btn-sm"
                     onClick={() => openChatWithPerson(app.name)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   >
-                    💬 Nhắn tin
+                    <Icon name="chat" width={13} height={13} /> Nhắn tin
                   </button>
                   <button
                     type="button"
@@ -431,7 +454,7 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
       {/* Triple-Zero Benefit Banner */}
       <div className="triple-zero" style={{ marginBottom: 24 }}>
         <div className="tz-info">
-          <h4>🎁 Ưu đãi "Triple-Zero" — Miễn phí 100% hoa hồng 3 tin đăng đầu tiên</h4>
+          <h4><Icon name="sparkles" width={18} height={18} style={{ marginRight: 6, verticalAlign: 'middle', color: 'var(--primary)' }} /> Ưu đãi "Triple-Zero" — Miễn phí 100% hoa hồng 3 tin đăng đầu tiên</h4>
           <p>
             {state.vipBusiness ? (
               <>Bạn đang là đối tác <b>VIP Business Suite</b> — phí nền tảng cố định <b>5%</b>/công việc cho mọi tin đăng trọn đời.</>
@@ -547,7 +570,7 @@ function JobsTab({ state, navigate, goToPostTab }) {
     e.stopPropagation();
     const url = `${window.location.origin}/jobs/${jobId}`;
     navigator.clipboard.writeText(url);
-    showToast('Đã sao chép đường link tin tuyển dụng vào Clipboard!', '🔗');
+    showToast('Đã sao chép đường link tin tuyển dụng vào Clipboard!', 'copy');
   };
 
   const handleCloseJob = async (e, job) => {
@@ -599,45 +622,50 @@ function JobsTab({ state, navigate, goToPostTab }) {
         <button
           type="button"
           className={'btn btn-sm ' + (statusFilter === 'open' ? 'btn-primary' : 'btn-outline')}
-          style={{ fontSize: 12.5, padding: '5px 12px' }}
+          style={{ fontSize: 12.5, padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           onClick={() => setStatusFilter('open')}
         >
-          🟢 Đang tuyển ({counts.open})
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }}></span>
+          Đang tuyển ({counts.open})
         </button>
         <button
           type="button"
           className={'btn btn-sm ' + (statusFilter === 'in_progress' ? 'btn-primary' : 'btn-outline')}
-          style={{ fontSize: 12.5, padding: '5px 12px' }}
+          style={{ fontSize: 12.5, padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           onClick={() => setStatusFilter('in_progress')}
         >
-          ⚙️ Đang làm ({counts.in_progress})
+          <Icon name="clock" width={13} height={13} />
+          Đang làm ({counts.in_progress})
         </button>
         {counts.submitted > 0 && (
           <button
             type="button"
             className={'btn btn-sm ' + (statusFilter === 'submitted' ? 'btn-primary' : 'btn-outline')}
-            style={{ fontSize: 12.5, padding: '5px 12px', color: statusFilter === 'submitted' ? '#fff' : 'var(--coral)', borderColor: 'var(--coral)' }}
+            style={{ fontSize: 12.5, padding: '5px 12px', color: statusFilter === 'submitted' ? '#fff' : 'var(--coral)', borderColor: 'var(--coral)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
             onClick={() => setStatusFilter('submitted')}
           >
-            ⏳ Chờ nghiệm thu ({counts.submitted})
+            <Icon name="hourglass" width={13} height={13} />
+            Chờ nghiệm thu ({counts.submitted})
           </button>
         )}
         <button
           type="button"
           className={'btn btn-sm ' + (statusFilter === 'completed' ? 'btn-primary' : 'btn-outline')}
-          style={{ fontSize: 12.5, padding: '5px 12px' }}
+          style={{ fontSize: 12.5, padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           onClick={() => setStatusFilter('completed')}
         >
-          ✅ Hoàn thành ({counts.completed})
+          <Icon name="check" width={13} height={13} />
+          Hoàn thành ({counts.completed})
         </button>
         {counts.cancelled > 0 && (
           <button
             type="button"
             className={'btn btn-sm ' + (statusFilter === 'cancelled' ? 'btn-primary' : 'btn-outline')}
-            style={{ fontSize: 12.5, padding: '5px 12px' }}
+            style={{ fontSize: 12.5, padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
             onClick={() => setStatusFilter('cancelled')}
           >
-            ✕ Đã đóng ({counts.cancelled})
+            <Icon name="x" width={12} height={12} />
+            Đã đóng ({counts.cancelled})
           </button>
         )}
       </div>
@@ -647,7 +675,7 @@ function JobsTab({ state, navigate, goToPostTab }) {
         {/* Search & Filter Toolbar */}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', padding: '14px 18px', borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
           <div style={{ position: 'relative', flex: '1 1 240px', minWidth: 200 }}>
-            <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, opacity: 0.6 }}>🔍</span>
+            <Icon name="search" width={14} height={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-soft)' }} />
             <input
               type="text"
               placeholder="Tìm theo tiêu đề tin tuyển dụng, ngành nghề..."
@@ -659,9 +687,9 @@ function JobsTab({ state, navigate, goToPostTab }) {
               <button
                 type="button"
                 onClick={() => setQ('')}
-                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--ink-soft)' }}
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', cursor: 'pointer', fontSize: 12, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center' }}
               >
-                ✕
+                <Icon name="x" width={12} height={12} />
               </button>
             )}
           </div>
@@ -682,16 +710,20 @@ function JobsTab({ state, navigate, goToPostTab }) {
             onChange={(e) => setSortBy(e.target.value)}
             style={{ padding: '6px 12px', fontSize: 13, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', cursor: 'pointer' }}
           >
-            <option value="newest">📅 Mới đăng nhất</option>
-            <option value="applicants">👥 Nhiều ứng viên nhất</option>
-            <option value="budget">💰 Ngân sách cao nhất</option>
+            <option value="newest">Mới đăng nhất</option>
+            <option value="applicants">Nhiều ứng viên nhất</option>
+            <option value="budget">Ngân sách cao nhất</option>
           </select>
         </div>
 
         {/* Job Cards List */}
         {state.myJobs.length === 0 ? (
           <div className="empty-state" style={{ padding: '48px 20px' }}>
-            <div style={{ fontSize: 36, marginBottom: 10 }}>📝</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="file-text" width={28} height={28} />
+              </div>
+            </div>
             <b style={{ fontSize: 16 }}>Bạn chưa đăng tin tuyển dụng nào</b>
             <p style={{ color: 'var(--ink-soft)', marginTop: 6, maxWidth: 420, margin: '6px auto 16px' }}>
               Hãy tạo tin đăng đầu tiên để tiếp cận hàng ngàn sinh viên tài năng từ các trường đại học hàng đầu!
@@ -732,25 +764,25 @@ function JobsTab({ state, navigate, goToPostTab }) {
                       <span className={'djr-status ' + j.status} style={{ padding: '2px 9px', fontSize: 11.5 }}>
                         {STATUS_LABEL[j.status] || j.status}
                       </span>
-                      <span className="chip" style={{ fontSize: 11.5 }}>
-                        📂 {j.cat}
+                      <span className="chip" style={{ fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Icon name="folder" width={12} height={12} /> {j.cat}
                       </span>
                       <span className="chip chip-lime" style={{ fontSize: 12, fontWeight: 700 }}>
-                        💰 {fmtVND(j.budget)}
+                        {fmtVND(j.budget)}
                       </span>
                       {j.urgent && (
-                        <span className="chip chip-coral" style={{ fontSize: 11.5, fontWeight: 600 }}>
-                          ⚡ Tuyển gấp
+                        <span className="chip chip-coral" style={{ fontSize: 11.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Icon name="bolt" width={12} height={12} /> Tuyển gấp
                         </span>
                       )}
                       {j.deadlineAt && (
-                        <span className="chip" style={{ background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', fontSize: 11.5, fontWeight: 600 }}>
-                          ⏱️ {formatDeadline(j.deadlineAt)}
+                        <span className="chip" style={{ background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', fontSize: 11.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Icon name="clock" width={12} height={12} /> {formatDeadline(j.deadlineAt)}
                         </span>
                       )}
                       {hasAttachments && (
-                        <span className="chip chip-lime" style={{ fontSize: 11.5, fontWeight: 600 }}>
-                          📎 {attCount} tệp đính kèm
+                        <span className="chip chip-lime" style={{ fontSize: 11.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Icon name="paperclip" width={12} height={12} /> {attCount} tệp đính kèm
                         </span>
                       )}
                     </div>
@@ -776,15 +808,15 @@ function JobsTab({ state, navigate, goToPostTab }) {
                         {j.title}
                       </h3>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--ink-soft)' }}>
-                        <span>📅 Đăng ngày: <b style={{ color: 'var(--ink)' }}>{j.posted || 'gần đây'}</b></span>
+                        <span>Đăng ngày: <b style={{ color: 'var(--ink)' }}>{j.posted || 'gần đây'}</b></span>
                         {j.hiredApplicant && (
-                          <span style={{ color: 'var(--primary)', fontWeight: 600, background: 'rgba(108, 76, 255, 0.08)', padding: '2px 8px', borderRadius: 6 }}>
-                            👤 Đang làm: {j.hiredApplicant}
+                          <span style={{ color: 'var(--primary)', fontWeight: 600, background: 'rgba(108, 76, 255, 0.08)', padding: '2px 8px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Icon name="user" width={12} height={12} /> Đang làm: {j.hiredApplicant}
                           </span>
                         )}
                         {j.status === 'submitted' && (
-                          <span style={{ color: 'var(--coral)', fontWeight: 700 }}>
-                            ⚠️ Sinh viên đã gửi sản phẩm bàn giao!
+                          <span style={{ color: 'var(--coral)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <Icon name="alert-circle" width={14} height={14} /> Sinh viên đã gửi sản phẩm bàn giao!
                           </span>
                         )}
                       </div>
@@ -806,7 +838,7 @@ function JobsTab({ state, navigate, goToPostTab }) {
                     {/* Left: Applicant Preview */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <span style={{ fontSize: 13, color: 'var(--ink)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        👥 <b>{appsCount}</b> ứng viên đã nộp
+                        <Icon name="users" width={15} height={15} /> <b>{appsCount}</b> ứng viên đã nộp
                       </span>
                       {j.applicants && j.applicants.length > 0 && (
                         <div style={{ display: 'flex', alignItems: 'center', marginLeft: 4 }}>
@@ -828,63 +860,63 @@ function JobsTab({ state, navigate, goToPostTab }) {
                       <button
                         type="button"
                         className="btn btn-primary btn-sm"
-                        style={{ fontSize: 12.5, padding: '5px 14px', fontWeight: 600 }}
+                        style={{ fontSize: 12.5, padding: '5px 14px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                         onClick={() => navigate(`/employer/jobs/${j.id}`)}
                       >
-                        👥 Quản lý ứng viên ({appsCount}) →
+                        <Icon name="users" width={14} height={14} /> Quản lý ứng viên ({appsCount}) →
                       </button>
 
                       {j.status === 'open' && (
                         <button
                           type="button"
                           className="btn btn-outline btn-sm"
-                          style={{ fontSize: 12, padding: '5px 10px' }}
+                          style={{ fontSize: 12, padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                           onClick={() => navigate(`/employer/jobs/${j.id}/edit`)}
                           title="Chỉnh sửa nội dung tin"
                         >
-                          ✏️ Sửa tin
+                          <Icon name="edit" width={13} height={13} /> Sửa tin
                         </button>
                       )}
 
                       <button
                         type="button"
                         className="btn btn-outline btn-sm"
-                        style={{ fontSize: 12, padding: '5px 10px' }}
+                        style={{ fontSize: 12, padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                         onClick={(e) => handleCopyLink(e, j.id)}
                         title="Sao chép link tin công khai"
                       >
-                        🔗 Copy link
+                        <Icon name="link" width={13} height={13} /> Copy link
                       </button>
 
                       <button
                         type="button"
                         className="btn btn-outline btn-sm"
-                        style={{ fontSize: 12, padding: '5px 10px' }}
+                        style={{ fontSize: 12, padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                         onClick={() => navigate(`/jobs/${j.id}`)}
                         title="Xem trang hiển thị công khai cho sinh viên"
                       >
-                        🌐 Xem tin
+                        <Icon name="eye" width={13} height={13} /> Xem tin
                       </button>
 
                       {j.status === 'open' ? (
                         <button
                           type="button"
                           className="btn btn-outline btn-sm"
-                          style={{ fontSize: 12, padding: '5px 10px', color: 'var(--coral)', borderColor: 'var(--coral)' }}
+                          style={{ fontSize: 12, padding: '5px 10px', color: 'var(--coral)', borderColor: 'var(--coral)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                           onClick={(e) => handleCloseJob(e, j)}
                           title="Đóng tin tuyển dụng"
                         >
-                          ✕ Đóng
+                          <Icon name="ban" width={12} height={12} /> Đóng
                         </button>
                       ) : j.status === 'cancelled' ? (
                         <button
                           type="button"
                           className="btn btn-lime btn-sm"
-                          style={{ fontSize: 12, padding: '5px 10px' }}
+                          style={{ fontSize: 12, padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                           onClick={(e) => handleReopenJob(e, j)}
                           title="Mở lại tin tuyển dụng"
                         >
-                          🔄 Mở lại
+                          <Icon name="refresh" width={12} height={12} /> Mở lại
                         </button>
                       ) : null}
                     </div>
@@ -997,7 +1029,7 @@ function AdsTab({ state, updateAdsSettings, openChatWithPerson }) {
         {/* Left Column: Creative Studio & Targeting */}
         <div>
           <div className="ads-panel" style={{ marginTop: 0 }}>
-            <h4>🎨 Tùy biến Mẫu Banner Quảng cáo (Ad Creative Studio)</h4>
+            <h4><Icon name="brush" width={17} height={17} style={{ marginRight: 6, verticalAlign: 'middle' }} /> Tùy biến Mẫu Banner Quảng cáo (Ad Creative Studio)</h4>
             <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
               Banner này sẽ được hệ thống chèn xen kẽ tự nhiên vào danh sách tìm việc của sinh viên.
             </p>
@@ -1083,7 +1115,9 @@ function AdsTab({ state, updateAdsSettings, openChatWithPerson }) {
               </p>
               <div className="ad-cta" style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 8 }}>
                 <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>Nhà tuyển dụng trả phí / click</span>
-                <span className="chip chip-lime" style={{ fontSize: 11 }}>⚡ Ứng tuyển 1 chạm →</span>
+                <span className="chip chip-lime" style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="bolt" width={12} height={12} /> Ứng tuyển 1 chạm →
+                </span>
               </div>
             </div>
           </div>
@@ -1091,7 +1125,7 @@ function AdsTab({ state, updateAdsSettings, openChatWithPerson }) {
           {/* One-Touch Portfolio Leads Inbox */}
           <div className="pcard" style={{ marginTop: 16 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <h4 style={{ margin: 0 }}>📥 Hồ sơ tự động thu về ({leads.length})</h4>
+              <h4 style={{ margin: 0 }}><Icon name="inbox" width={17} height={17} style={{ marginRight: 6, verticalAlign: 'middle' }} /> Hồ sơ tự động thu về ({leads.length})</h4>
               <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>One-Touch Leads</span>
             </div>
 
@@ -1131,7 +1165,7 @@ function AdsTab({ state, updateAdsSettings, openChatWithPerson }) {
                         {lead.avatar}
                       </div>
                       <div>
-                        <b>{lead.name}</b> <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>⭐ {lead.reliability}/100</span>
+                        <b>{lead.name}</b> <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon name="star" width={11} height={11} /> {lead.reliability}/100</span>
                         <div style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{lead.school} · {lead.time}</div>
                       </div>
                     </div>
@@ -1146,10 +1180,10 @@ function AdsTab({ state, updateAdsSettings, openChatWithPerson }) {
                       </button>
                       <button
                         className="btn btn-primary btn-sm"
-                        style={{ fontSize: 11, padding: '2px 8px' }}
+                        style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                         onClick={() => openChatWithPerson && openChatWithPerson(lead.name, lead.school)}
                       >
-                        💬 Chat
+                        <Icon name="chat" width={11} height={11} /> Chat
                       </button>
                     </div>
                   </div>
@@ -1196,7 +1230,9 @@ function AdsTab({ state, updateAdsSettings, openChatWithPerson }) {
                   <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{selectedLead.school}</span>
                 </div>
               </div>
-              <button onClick={() => setSelectedLead(null)} style={{ border: 'none', background: 'none', fontSize: 18, cursor: 'pointer' }}>✕</button>
+              <button onClick={() => setSelectedLead(null)} style={{ border: 'none', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 4 }}>
+                <Icon name="x" width={16} height={16} />
+              </button>
             </div>
 
             <div style={{ fontSize: 13, lineHeight: 1.6, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1211,7 +1247,10 @@ function AdsTab({ state, updateAdsSettings, openChatWithPerson }) {
                 </div>
               </div>
               <div style={{ marginTop: 6, padding: 12, background: 'rgba(108, 76, 255, 0.06)', borderRadius: 10, border: '1px solid rgba(108, 76, 255, 0.15)' }}>
-                💡 <b>Hồ sơ trích xuất tự động qua One-Touch:</b> Sinh viên này đã chủ động bấm vào banner quảng cáo của bạn và cho phép chia sẻ CV/Portfolio đã xác thực.
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="sparkles" width={14} height={14} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                  <b>Hồ sơ trích xuất tự động qua One-Touch:</b>
+                </span> Sinh viên này đã chủ động bấm vào banner quảng cáo của bạn và cho phép chia sẻ CV/Portfolio đã xác thực.
               </div>
             </div>
 
@@ -1219,12 +1258,13 @@ function AdsTab({ state, updateAdsSettings, openChatWithPerson }) {
               <button className="btn btn-outline btn-sm" onClick={() => setSelectedLead(null)}>Đóng</button>
               <button
                 className="btn btn-primary btn-sm"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 onClick={() => {
                   setSelectedLead(null);
                   if (openChatWithPerson) openChatWithPerson(selectedLead.name, selectedLead.school);
                 }}
               >
-                💬 Mở phòng chat tuyển dụng
+                <Icon name="chat" width={13} height={13} /> Mở phòng chat tuyển dụng
               </button>
             </div>
           </div>

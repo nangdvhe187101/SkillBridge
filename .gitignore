@@ -1,5 +1,3 @@
-cd ~/Projects/SkillBridge
-cat > .gitignore << 'EOF'
 # macOS
 .DS_Store
 .DS_Store?
@@ -8,6 +6,8 @@ cat > .gitignore << 'EOF'
 .Trashes
 
 # .NET
+**/bin/
+**/obj/
 bin/
 obj/
 *.user
@@ -24,4 +24,3 @@ frontend/.vite/
 # IDE
 .idea/
 .vscode/
-EOF

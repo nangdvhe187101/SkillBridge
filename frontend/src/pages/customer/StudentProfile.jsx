@@ -32,7 +32,7 @@ export default function StudentProfile() {
     reliability: 95,
     completedJobs: 6,
     avgRating: 4.9,
-    skills: ['✓ Verified Canva Operator', '✓ CapCut Speed Editor', '✓ Content Writing'],
+    skills: ['Verified Canva Operator', 'CapCut Speed Editor', 'Content Writing'],
     bio: 'Sinh viên năng động, cam kết hoàn thành công việc đúng tiến độ với tinh thần trách nhiệm cao nhất trên nền tảng SkillBridge.',
     portfolio: ['Video ngắn TikTok & Reels', 'Bộ ấn phẩm Banner & Poster sự kiện', 'Thiết kế nhận diện thương hiệu'],
     reviews: [
@@ -62,9 +62,13 @@ export default function StudentProfile() {
                 <div className={'stamp stamp-sm stamp-' + tier} title={`Xếp hạng: ${tier.toUpperCase()}`}><Icon name="check" /></div>
               </div>
               <div className="ph-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span>🎓 Sinh viên {student.school} · SkillBridge</span>
-                <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px' }}>
-                  ✓ Đã xác thực eKYC Sinh viên
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="graduation" width="15" height="15" />
+                  <span>Sinh viên {student.school} · SkillBridge</span>
+                </span>
+                <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="check" width="11" height="11" />
+                  <span>Đã xác thực eKYC Sinh viên</span>
                 </span>
               </div>
               <div className="ph-meta" style={{ marginTop: 8 }}>
@@ -106,7 +110,12 @@ export default function StudentProfile() {
               <h4>Chỉ số năng lực</h4>
               <div className="stat-list">
                 <div className="si"><b>{student.completedJobs}</b><span>Công việc hoàn thành</span></div>
-                <div className="si"><b>{student.avgRating.toFixed(1)}★</b><span>Đánh giá trung bình</span></div>
+                <div className="si">
+                  <b style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    {student.avgRating.toFixed(1)} <Icon name="star" width="12" height="12" style={{ color: '#eab308' }} />
+                  </b>
+                  <span>Đánh giá trung bình</span>
+                </div>
                 <div className="si"><b>99%</b><span>Giao đúng hạn</span></div>
                 <div className="si"><b>&lt; 10p</b><span>Phản hồi tin nhắn</span></div>
               </div>
@@ -128,8 +137,14 @@ export default function StudentProfile() {
             {/* Employer View: Submitted CV Card */}
             <div className="pcard" style={{ border: '1px solid rgba(108, 76, 255, 0.25)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <h4 style={{ margin: 0 }}>📄 CV Ứng tuyển chuyên môn</h4>
-                <span className="chip chip-lime" style={{ fontSize: 10.5 }}>✓ Đã kiểm định</span>
+                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="file-text" width="17" height="17" style={{ color: 'var(--primary)' }} />
+                  <span>CV Ứng tuyển chuyên môn</span>
+                </h4>
+                <span className="chip chip-lime" style={{ fontSize: 10.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="check" width="10" height="10" />
+                  <span>Đã kiểm định</span>
+                </span>
               </div>
               <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 12, lineHeight: 1.5 }}>
                 Bản CV phù hợp nhất do sinh viên chia sẻ trực tiếp với Nhà tuyển dụng.
@@ -148,7 +163,9 @@ export default function StudentProfile() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ fontSize: 24 }}>📄</div>
+                  <div className="tx-ic" style={{ background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Icon name="file-text" width="20" height="20" />
+                  </div>
                   <div>
                     <b style={{ display: 'block', fontSize: 13.5 }}>CV_{student.name.replace(/\s+/g, '')}_ChuyenMon.pdf</b>
                     <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
@@ -159,7 +176,7 @@ export default function StudentProfile() {
 
                 <button
                   className="btn btn-primary btn-sm"
-                  style={{ fontSize: 12, padding: '4px 10px' }}
+                  style={{ fontSize: 12, padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                   onClick={() => {
                     const blob = new Blob([`HỒ SƠ NĂNG LỰC / CV ỨNG TUYỂN\nSinh viên: ${student.name}\nTrường: ${student.school}\nKỹ năng: ${skillsList.join(', ')}\nReliability Score: ${student.reliability}/100\nĐược xác thực qua SkillBridge`], { type: 'text/plain;charset=utf-8' });
                     const url = URL.createObjectURL(blob);
@@ -172,12 +189,14 @@ export default function StudentProfile() {
                     URL.revokeObjectURL(url);
                   }}
                 >
-                  📥 Tải CV
+                  <Icon name="download" width="13" height="13" />
+                  <span>Tải CV</span>
                 </button>
               </div>
 
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', background: 'var(--surface)', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}>
-                🔒 <b>Bảo vệ quyền riêng tư:</b> Các bản CV chuyên ngành khác của sinh viên được bảo mật và ẩn tự động đối với nhà tuyển dụng.
+              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', background: 'var(--surface)', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="lock" width="13" height="13" style={{ flexShrink: 0, color: 'var(--primary)' }} />
+                <span><b>Bảo vệ quyền riêng tư:</b> Các bản CV chuyên ngành khác của sinh viên được bảo mật và ẩn tự động đối với nhà tuyển dụng.</span>
               </div>
             </div>
 
@@ -193,7 +212,7 @@ export default function StudentProfile() {
                       className="pf-item"
                       key={i}
                       style={{ cursor: 'pointer' }}
-                      onClick={() => setSelectedPf({ title: cap, desc: `Dự án thực tế do ${student.name} thực hiện và hoàn thành xuất sắc trên SkillBridge.`, icon: '🎨' })}
+                      onClick={() => setSelectedPf({ title: cap, desc: `Dự án thực tế do ${student.name} thực hiện và hoàn thành xuất sắc trên SkillBridge.` })}
                     >
                       <div
                         className="pf-thumb"
@@ -202,11 +221,10 @@ export default function StudentProfile() {
                           alignItems: 'center',
                           justifyContent: 'center',
                           background: 'linear-gradient(135deg, rgba(108,76,255,0.18), rgba(87,199,255,0.18))',
-                          fontSize: 26,
                           borderRadius: 8
                         }}
                       >
-                        🎨
+                        <Icon name="brush" width="24" height="24" style={{ color: 'var(--primary)' }} />
                       </div>
                       <div className="pf-cap">{cap}</div>
                     </div>
@@ -221,12 +239,25 @@ export default function StudentProfile() {
                 <div className="empty-state">Chưa có đánh giá nào.</div>
               ) : (
                 reviewsList.map((r, i) => (
-                  <div className="review" key={i} style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                    <div className="rv-top" style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <b>{r.name}</b>
-                      <span className="stars" style={{ color: '#eab308' }}>{'★'.repeat(r.stars)}{'☆'.repeat(5 - r.stars)}</span>
+                  <div className="review-item" key={i}>
+                    <div className="ri-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <b>{r.author || r.name}</b>
+                      <span className="stars" style={{ display: 'inline-flex', gap: 2 }}>
+                        {Array.from({ length: 5 }).map((_, idx) => (
+                          <Icon
+                            key={idx}
+                            name="star"
+                            style={{
+                              width: 13,
+                              height: 13,
+                              color: idx < r.stars ? '#eab308' : 'var(--border)'
+                            }}
+                          />
+                        ))}
+                      </span>
                     </div>
-                    <p style={{ fontSize: 13, marginTop: 4, color: 'var(--ink)' }}>{r.comment}</p>
+                    {r.job && <div className="ri-sub">{r.job}{r.time ? ` · ${r.time}` : ''}</div>}
+                    <p>{r.comment}</p>
                   </div>
                 ))
               )}
@@ -238,8 +269,8 @@ export default function StudentProfile() {
       {/* Portfolio Lightbox Modal */}
       {selectedPf && (
         <ModalShell onClose={() => setSelectedPf(null)}>
-          <div style={{ height: 180, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, rgba(108,76,255,0.2), rgba(87,199,255,0.2))', borderRadius: 10, fontSize: 56, marginBottom: 14 }}>
-            {selectedPf.icon || '🎨'}
+          <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, rgba(108,76,255,0.15), rgba(87,199,255,0.15))', borderRadius: 12, marginBottom: 14 }}>
+            <Icon name="brush" width="48" height="48" style={{ color: 'var(--primary)' }} />
           </div>
           <h3 style={{ fontSize: 18, marginBottom: 6 }}>{selectedPf.title}</h3>
           <span className="chip chip-lime" style={{ marginBottom: 10, display: 'inline-block' }}>Dự án đã kiểm định</span>

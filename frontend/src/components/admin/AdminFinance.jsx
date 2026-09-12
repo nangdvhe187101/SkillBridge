@@ -4,6 +4,7 @@ import { revenueBarsSeed } from '../../data/adminSeed';
 import { useToast } from '../../context/ToastContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import { exportTransactionsToCSV } from '../../utils/fileDownloader';
+import Icon from '../Icon';
 
 export default function AdminFinance() {
   const { subscriptions, renewSubscription, cancelSubscription } = useAdmin();
@@ -13,16 +14,16 @@ export default function AdminFinance() {
   const totalRevenue = revenueBarsSeed.reduce((s, b) => s + b.value, 0);
 
   const kpis = [
-    { label: 'Tổng doanh thu tháng', value: fmtVND(totalRevenue) },
-    { label: 'Quỹ Bảo hiểm hiện có', value: fmtVND(state.insuranceFund) },
-    { label: 'Gói đang hoạt động', value: subscriptions.filter((s) => s.status === 'active').length },
-    { label: 'Hoa hồng trung bình', value: '9.2%' },
+    { label: 'Tổng doanh thu', value: fmtVND(totalRevenue) },
+    { label: 'Doanh thu tháng này', value: fmtVND(36500000) },
+    { label: 'Tăng trưởng MoM', value: '+18.4%' },
+    { label: 'ARPU', value: '420.000đ' },
   ];
 
   const exportReport = (period) => {
     const labels = { week: 'tuan', month: 'thang', quarter: 'quy' };
     exportTransactionsToCSV(state.transactions, `Bao_cao_tai_chinh_SkillBridge_${labels[period]}.csv`);
-    showToast(`Đã xuất báo cáo tài chính theo ${period} thành công!`, '📊');
+    showToast(`Đã xuất báo cáo tài chính theo ${period} thành công!`, 'check');
   };
 
   return (
@@ -49,7 +50,11 @@ export default function AdminFinance() {
       </div>
 
       <div className="adm-card">
-        <div className="adm-card-head"><h4>🛡️ Quỹ bảo hiểm cộng đồng</h4></div>
+        <div className="adm-card-head">
+          <h4 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="shield-check" width="16" height="16" /> Quỹ bảo hiểm cộng đồng
+          </h4>
+        </div>
         <div className="adm-kpis" style={{ marginBottom: 6 }}>
           <div className="adm-kpi"><div className="k-lbl">Số dư quỹ</div><div className="k-val">{fmtVND(state.insuranceFund)}</div></div>
           <div className="adm-kpi"><div className="k-lbl">Đã chi trả (tổng)</div><div className="k-val">{fmtVND(state.claims.reduce((s, c) => s + c.payout, 0))}</div></div>

@@ -222,4 +222,7 @@ public partial class User
 
     [InverseProperty("Student")]
     public virtual ICollection<SavedJob> SavedJobs { get; set; } = new List<SavedJob>();
+
+    [InverseProperty("User")]
+    public virtual ICollection<PaymentOrder> PaymentOrders { get; set; } = new List<PaymentOrder>();
 }

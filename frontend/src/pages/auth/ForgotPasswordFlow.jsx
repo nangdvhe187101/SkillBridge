@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { requestPasswordResetOtp, verifyPasswordResetOtp, resetPassword as resetPasswordApi } from '../../api/authApi';
+import Icon from '../../components/Icon';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -234,7 +235,7 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                                 aria-label={showNewPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                                 tabIndex={-1}
                             >
-                                {showNewPassword ? '🙈' : '🐵'}
+                                <Icon name={showNewPassword ? 'eye-off' : 'eye'} width="18" height="18" />
                             </button>
                         </div>
                         <div className="hint">Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt (vd: !@#$%).</div>
@@ -259,7 +260,7 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                                 aria-label={showNewPassword2 ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                                 tabIndex={-1}
                             >
-                                {showNewPassword2 ? '🙈' : '🐵'}
+                                <Icon name={showNewPassword2 ? 'eye-off' : 'eye'} width="18" height="18" />
                             </button>
                         </div>
                     </div>

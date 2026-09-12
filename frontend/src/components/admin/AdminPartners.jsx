@@ -16,7 +16,9 @@ export default function AdminPartners() {
         {partners.map((p) => (
           <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: '1px solid var(--border)', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 200 }}><b>{p.name}</b><br /><span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{p.category}</span></div>
-            <span className="chip">{p.status === 'approved' ? '✓ Đã duyệt' : '⏳ Chờ duyệt'}</span>
+            <span className={'chip ' + (p.status === 'approved' ? 'chip-lime' : '')}>
+              {p.status === 'approved' ? 'Đã duyệt' : 'Chờ duyệt'}
+            </span>
             {p.status !== 'approved' && <button className="btn btn-primary btn-sm" onClick={() => approvePartner(p.id)}>Duyệt đối tác</button>}
           </div>
         ))}

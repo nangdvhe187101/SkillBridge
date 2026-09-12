@@ -64,7 +64,7 @@ export default function CompanyProfile() {
   const shareUrl = `https://skillbridge.vn/company/${slug}`;
   const copyLink = () => {
     if (navigator.clipboard) navigator.clipboard.writeText(shareUrl).catch(() => { });
-    showToast('Đã sao chép đường dẫn hồ sơ doanh nghiệp!', '🔗');
+    showToast('Đã sao chép đường dẫn hồ sơ doanh nghiệp!', 'copy');
   };
 
   return (
@@ -93,7 +93,7 @@ export default function CompanyProfile() {
               )}
               <span><Icon name="users" style={{ width: 13, height: 13 }} /> {company.followers + (following ? 1 : 0)} người theo dõi</span>
               <span><Icon name="pin" style={{ width: 13, height: 13 }} /> {company.industry}</span>
-              <span>⭐ 4.9/5.0 ({SAMPLE_COMPANY_REVIEWS.length} đánh giá)</span>
+              <span><Icon name="star" style={{ width: 13, height: 13, color: '#eab308' }} /> 4.9/5.0 ({SAMPLE_COMPANY_REVIEWS.length} đánh giá)</span>
             </div>
           </div>
 
@@ -102,26 +102,40 @@ export default function CompanyProfile() {
               <Icon name="chat" style={{ width: 14, height: 14 }} /> Nhắn tin
             </button>
             <button className={'btn btn-sm ' + (following ? 'btn-outline' : 'btn-primary')} onClick={() => setFollowing((f) => !f)}>
-              {following ? '✓ Đang theo dõi' : '+ Theo dõi'}
+              {following ? (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="check" width="12" height="12" />
+                  <span>Đang theo dõi</span>
+                </span>
+              ) : (
+                '+ Theo dõi'
+              )}
             </button>
           </div>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="cprofile-tabs">
-          <button className={tab === 'overview' ? 'is-active' : ''} onClick={() => setTab('overview')}>Tổng quan</button>
-          <button className={tab === 'jobs' ? 'is-active' : ''} onClick={() => setTab('jobs')}>Tin tuyển dụng ({jobs.length})</button>
-          <button className={tab === 'reviews' ? 'is-active' : ''} onClick={() => setTab('reviews')}>Đánh giá từ Sinh viên ({SAMPLE_COMPANY_REVIEWS.length})</button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 24, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
+          <button className={'chip ' + (tab === 'about' ? 'is-active' : '')} onClick={() => setTab('about')}>
+            Giới thiệu chung
+          </button>
+          <button className={'chip ' + (tab === 'jobs' ? 'is-active' : '')} onClick={() => setTab('jobs')}>
+            Tin tuyển dụng ({jobs.length})
+          </button>
+          <button className={'chip ' + (tab === 'reviews' ? 'is-active' : '')} onClick={() => setTab('reviews')}>
+            Đánh giá ({SAMPLE_COMPANY_REVIEWS.length})
+          </button>
         </div>
 
-        <div className="cprofile-grid">
+        {/* Tab Content */}
+        <div className="profile-grid" style={{ marginTop: 24 }}>
           <div>
-            {tab === 'overview' && (
+            {tab === 'about' && (
               <>
-                <div className="pcard">
-                  <h4>Giới thiệu công ty</h4>
-                  <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.7, marginBottom: 10 }}>{company.description}</p>
-                  {company.longDescription && <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.7 }}>{company.longDescription}</p>}
+                <div className="pcard" style={{ marginBottom: 18 }}>
+                  <h4>Giới thiệu doanh nghiệp</h4>
+                  <p style={{ lineHeight: 1.6, color: 'var(--ink)' }}>{company.about}</p>
+                  {company.longDescription && <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.7, marginTop: 10 }}>{company.longDescription}</p>}
                 </div>
 
                 <div className="pcard">
@@ -133,7 +147,9 @@ export default function CompanyProfile() {
                   ) : (
                     openJobs.slice(0, 5).map((j) => (
                       <div className="tx-row" style={{ cursor: 'pointer' }} key={j.id} onClick={() => navigate(`/jobs/${j.id}`)}>
-                        <div className="tx-ic">💼</div>
+                        <div className="tx-ic" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)' }}>
+                          <Icon name="briefcase" width="16" height="16" />
+                        </div>
                         <div className="tx-main" style={{ flex: 1 }}>
                           <b>{j.title}</b>
                           <span>{j.cat} · {j.time}</span>
@@ -159,12 +175,19 @@ export default function CompanyProfile() {
                 ) : (
                   jobs.map((j) => (
                     <div className="tx-row" style={{ cursor: 'pointer' }} key={j.id} onClick={() => navigate(`/jobs/${j.id}`)}>
-                      <div className="tx-ic">💼</div>
+                      <div className="tx-ic" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)' }}>
+                        <Icon name="briefcase" width="16" height="16" />
+                      </div>
                       <div className="tx-main" style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <b>{j.title}</b>
                           {j.urgent && <span className="chip chip-coral" style={{ padding: '2px 8px', fontSize: 10 }}>Gấp</span>}
-                          {j.attachments?.length > 0 && <span className="chip chip-lime" style={{ fontSize: 10, padding: '1px 6px' }}>📎 Có brief</span>}
+                          {j.attachments?.length > 0 && (
+                            <span className="chip chip-lime" style={{ fontSize: 10, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <Icon name="paperclip" width="10" height="10" />
+                              <span>Có brief</span>
+                            </span>
+                          )}
                         </div>
                         <span>{j.cat} · {j.time}</span>
                       </div>
@@ -188,7 +211,9 @@ export default function CompanyProfile() {
                     <div key={i} style={{ paddingBottom: 14, borderBottom: '1px solid var(--border)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <b>{r.student}</b>
-                        <span style={{ color: '#eab308', fontWeight: 600 }}>{'★'.repeat(Math.floor(r.rating))} {r.rating}</span>
+                        <span style={{ color: '#eab308', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Icon name="star" width="13" height="13" /> {r.rating}
+                        </span>
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '2px 0 6px' }}>
                         Dự án: <b>{r.job}</b> · {r.time}
@@ -205,14 +230,18 @@ export default function CompanyProfile() {
             <div className="pcard">
               <h4>Chỉ số bảo chứng uy tín</h4>
               <div className="info-row">
-                <div className="info-ic" style={{ color: '#16a34a' }}>💰</div>
+                <div className="info-ic" style={{ color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="shield-check" width="16" height="16" />
+                </div>
                 <div>
                   <div className="info-lbl">Tỷ lệ giải ngân Escrow</div>
                   <div className="info-val" style={{ color: '#16a34a', fontWeight: 700 }}>100% (An toàn tuyệt đối)</div>
                 </div>
               </div>
               <div className="info-row">
-                <div className="info-ic">⚡</div>
+                <div className="info-ic" style={{ color: '#eab308', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="bolt" width="16" height="16" />
+                </div>
                 <div>
                   <div className="info-lbl">Thời gian phản hồi SV</div>
                   <div className="info-val">&lt; 15 phút</div>

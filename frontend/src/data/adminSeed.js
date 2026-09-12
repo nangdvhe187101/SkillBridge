@@ -330,11 +330,11 @@ export const adminChatsSeed = [
     lastMessage: 'Bạn add Zalo 0987xxxx hoặc Telegram @tuyendungxyz để nhận tiền cọc nhé.',
     lastTime: '08:20 Hôm nay',
     status: 'warned',
-    riskFlag: '⚠️ Nghi vấn gian lận: Yêu cầu chuyển sang Zalo/Telegram đặt cọc ngoài sàn.',
+    riskFlag: 'Nghi vấn gian lận: Yêu cầu chuyển sang Zalo/Telegram đặt cọc ngoài sàn.',
     messages: [
       { id: 'm1', sender: 'Ẩn danh (0987xxxx)', text: 'Chào em, công việc này bên anh trả 500k/ngày nhé.', time: '08:15' },
       { id: 'm2', sender: 'Ẩn danh (0987xxxx)', text: 'Bạn add Zalo 0987xxxx hoặc Telegram @tuyendungxyz để nhận tiền cọc nhé.', time: '08:20', isViolation: true },
-      { id: 'm3', sender: 'Hệ thống SkillBridge', text: '⚠️ CẢNH BÁO: SkillBridge nghiêm cấm giao dịch hoặc đặt cọc ngoài sàn. Mọi trao đổi ngoài nền tảng sẽ không được Quỹ Bảo hiểm bảo vệ.', time: '08:21', isSystem: true },
+      { id: 'm3', sender: 'Hệ thống SkillBridge', text: 'CẢNH BÁO: SkillBridge nghiêm cấm giao dịch hoặc đặt cọc ngoài sàn. Mọi trao đổi ngoài nền tảng sẽ không được Quỹ Bảo hiểm bảo vệ.', time: '08:21', isSystem: true },
     ]
   },
   {

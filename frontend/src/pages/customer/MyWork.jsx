@@ -9,6 +9,7 @@ import { getJobDeliverables } from '../../api/deliverableApi';
 import { getJobById } from '../../api/jobApi';
 import { downloadJobAttachment, downloadDeliverableFile } from '../../utils/fileDownloader';
 import { DeliverablePreview } from '../../components/modals/DeliverableModals';
+import Icon from '../../components/Icon';
 
 function formatDateTime(ts) {
   if (!ts) return '—';
@@ -33,36 +34,33 @@ function getDeliverableFileMeta(fileName, fileType) {
   const ext = (fileType || fileName || '').split('.').pop()?.toLowerCase();
   switch (ext) {
     case 'zip': case 'rar': case '7z': case 'tar': case 'gz':
-      return { icon: '📦', label: 'Tệp nén lưu trữ (Archive)', color: '#d97706', bg: '#fef3c7' };
+      return { icon: 'archive', label: 'Tệp nén lưu trữ (Archive)', color: '#d97706', bg: '#fef3c7' };
     case 'doc': case 'docx':
-      return { icon: '📝', label: 'Tài liệu Word', color: '#2563eb', bg: '#eff6ff' };
+      return { icon: 'file-text', label: 'Tài liệu Word', color: '#2563eb', bg: '#eff6ff' };
     case 'xls': case 'xlsx': case 'csv':
-      return { icon: '📊', label: 'Bảng tính Excel', color: '#16a34a', bg: '#f0fdf4' };
+      return { icon: 'chart-bar', label: 'Bảng tính Excel', color: '#16a34a', bg: '#f0fdf4' };
     case 'pdf':
-      return { icon: '📑', label: 'Tài liệu PDF', color: '#dc2626', bg: '#fef2f2' };
+      return { icon: 'file-text', label: 'Tài liệu PDF', color: '#dc2626', bg: '#fef2f2' };
     case 'ppt': case 'pptx':
-      return { icon: '📊', label: 'Bài trình chiếu PowerPoint', color: '#ea580c', bg: '#fff7ed' };
+      return { icon: 'chart-bar', label: 'Bài trình chiếu PowerPoint', color: '#ea580c', bg: '#fff7ed' };
     case 'png': case 'jpg': case 'jpeg': case 'webp': case 'gif': case 'svg': case 'image':
-      return { icon: '🖼️', label: 'Hình ảnh thiết kế', color: '#7c3aed', bg: '#f5f3ff' };
+      return { icon: 'image', label: 'Hình ảnh thiết kế', color: '#7c3aed', bg: '#f5f3ff' };
     case 'mp4': case 'mov': case 'm4v': case 'webm': case 'avi': case 'mkv': case 'video':
-      return { icon: '🎬', label: 'Video sản phẩm', color: '#0284c7', bg: '#e0f2fe' };
+      return { icon: 'video', label: 'Video sản phẩm', color: '#0284c7', bg: '#e0f2fe' };
     case 'mp3': case 'wav': case 'm4a': case 'aac': case 'flac':
-      return { icon: '🎵', label: 'Tệp âm thanh', color: '#db2777', bg: '#fdf2f8' };
+      return { icon: 'video', label: 'Tệp âm thanh', color: '#db2777', bg: '#fdf2f8' };
     case 'url':
-      return { icon: '🔗', label: 'Liên kết ngoài', color: '#4f46e5', bg: '#eef2ff' };
+      return { icon: 'link', label: 'Liên kết ngoài', color: '#4f46e5', bg: '#eef2ff' };
     default:
-      return { icon: '📁', label: 'Tệp sản phẩm', color: '#475569', bg: '#f1f5f9' };
+      return { icon: 'folder', label: 'Tệp sản phẩm', color: '#475569', bg: '#f1f5f9' };
   }
 }
 
 function formatDeliverableDisplayName(fileName, jobId, version = 1, isExternal = false) {
   if (isExternal || !fileName) return fileName || 'Liên kết sản phẩm';
   const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
-  const cleanExt = ext ? `.${ext}` : '';
-  if (fileName.toLowerCase().startsWith('skillbridge_job')) {
-    return fileName;
-  }
-  return `SkillBridge_Job${jobId}_v${version || 1}${cleanExt}`;
+  const cleanName = fileName.replace(/\.[^/.]+$/, '');
+  return `${cleanName}_v${version}${ext ? '.' + ext : ''}`;
 }
 
 function formatDeadline(ts) {
@@ -90,11 +88,11 @@ function getDeadlineUrgency(ts) {
 // Map trạng thái ứng tuyển hiển thị cho SV
 const APP_STATUS_LABEL = {
   pending: 'Đang chờ duyệt',
-  hired: '🎉 Đã được chọn',
+  hired: 'Đã được chọn',
   rejected: 'Chưa phù hợp',
   submitted: 'Đã nộp bàn giao',
   revision_requested: 'Cần sửa đổi',
-  completed: '✅ Hoàn thành',
+  completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
 };
 
@@ -374,18 +372,10 @@ export default function MyWork() {
           <div style={{ display: 'flex', gap: 12 }}>
             <button
               className="btn btn-primary"
-              style={{
-                background: '#ffffff',
-                color: '#4338ca',
-                fontWeight: 700,
-                padding: '10px 22px',
-                borderRadius: 10,
-                boxShadow: '0 4px 14px rgba(0,0,0,0.15)',
-                border: 'none'
-              }}
               onClick={() => navigate('/jobs')}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              🔍 Tìm việc mới
+              <Icon name="search" width={14} height={14} /> Tìm việc mới
             </button>
           </div>
         </div>
@@ -418,9 +408,9 @@ export default function MyWork() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 22
+              flexShrink: 0
             }}>
-              ⚡
+              <Icon name="bolt" width={22} height={22} />
             </div>
             <div>
               <div style={{ fontSize: 12.5, color: '#64748b', fontWeight: 600 }}>Đang thực hiện</div>
@@ -454,9 +444,9 @@ export default function MyWork() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 22
+              flexShrink: 0
             }}>
-              📤
+              <Icon name="download" width={22} height={22} style={{ transform: 'rotate(180deg)' }} />
             </div>
             <div>
               <div style={{ fontSize: 12.5, color: '#64748b', fontWeight: 600 }}>Chờ nghiệm thu</div>
@@ -486,9 +476,9 @@ export default function MyWork() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 22
+              flexShrink: 0
             }}>
-              ✏️
+              <Icon name="edit" width={22} height={22} />
             </div>
             <div>
               <div style={{ fontSize: 12.5, color: stats.revisionCount > 0 ? '#be123c' : '#64748b', fontWeight: 600 }}>Yêu cầu sửa lại</div>
@@ -520,9 +510,9 @@ export default function MyWork() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              fontSize: 22
+              flexShrink: 0
             }}>
-              📨
+              <Icon name="mail" width={22} height={22} />
             </div>
             <div>
               <div style={{ fontSize: 12.5, color: '#64748b', fontWeight: 600 }}>Đơn ứng tuyển</div>
@@ -562,7 +552,7 @@ export default function MyWork() {
             }}
             onClick={() => setActiveTab('active')}
           >
-            🎯 Việc đang làm & Bàn giao
+            <Icon name="briefcase" width={16} height={16} /> Việc đang làm & Bàn giao
             <span style={{
               background: activeTab === 'active' ? '#4338ca' : '#e2e8f0',
               color: activeTab === 'active' ? '#ffffff' : '#475569',
@@ -594,7 +584,7 @@ export default function MyWork() {
             }}
             onClick={() => setActiveTab('applications')}
           >
-            📨 Đơn ứng tuyển của bạn
+            <Icon name="mail" width={16} height={16} /> Đơn ứng tuyển của bạn
             <span style={{
               background: activeTab === 'applications' ? '#4338ca' : '#e2e8f0',
               color: activeTab === 'applications' ? '#ffffff' : '#475569',
@@ -611,16 +601,18 @@ export default function MyWork() {
         {/* TAB 1: VIỆC ĐANG LÀM */}
         {activeTab === 'active' && (
           <div>
-            {loadingDeliverables ? (
+            {isLoadingDeliverables ? (
               <div style={{
                 background: '#ffffff',
                 border: '1px solid #e2e8f0',
                 borderRadius: 16,
-                padding: '60px 20px',
+                padding: '48px 20px',
                 textAlign: 'center',
                 margin: '10px 0 20px'
               }}>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>⏳</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                  <Icon name="hourglass" width={36} height={36} style={{ color: 'var(--primary)' }} />
+                </div>
                 <h3 style={{ fontSize: 16, fontWeight: 700, color: '#1e293b', margin: '0 0 6px' }}>
                   Đang đồng bộ tiến độ & sản phẩm bàn giao...
                 </h3>
@@ -637,15 +629,17 @@ export default function MyWork() {
                 textAlign: 'center',
                 margin: '10px 0 20px'
               }}>
-                <div style={{ fontSize: 44, marginBottom: 12 }}>🚀</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                  <Icon name="sparkles" width={40} height={40} style={{ color: 'var(--primary)' }} />
+                </div>
                 <h3 style={{ fontSize: 18, fontWeight: 700, color: '#1e293b', margin: '0 0 6px' }}>
                   Chưa có công việc nào đang thực hiện
                 </h3>
                 <p style={{ color: '#64748b', fontSize: 14, maxWidth: 460, margin: '0 auto 20px' }}>
                   Khi được nhà tuyển dụng lựa chọn và ký quỹ, dự án sẽ xuất hiện ở đây để bạn nộp bài và nhận thù lao.
                 </p>
-                <button className="btn btn-primary" onClick={() => navigate('/jobs')}>
-                  🔍 Khám phá việc làm ngay
+                <button className="btn btn-primary" onClick={() => navigate('/jobs')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name="search" width={14} height={14} /> Khám phá việc làm ngay
                 </button>
               </div>
             ) : (
@@ -762,7 +756,7 @@ export default function MyWork() {
                                 padding: '4px 10px',
                                 borderRadius: 8
                               }}>
-                                💰 Thù lao: {fmtVND(j.budget)}
+                                Thù lao: {fmtVND(j.budget)}
                               </div>
                               {j.deadlineAt && (
                                 <>
@@ -778,7 +772,7 @@ export default function MyWork() {
                                     alignItems: 'center',
                                     gap: 6
                                   }}>
-                                    ⏰ Hạn bàn giao: {formatDeadline(j.deadlineAt)}
+                                    <Icon name="clock" width={13} height={13} /> Hạn bàn giao: {formatDeadline(j.deadlineAt)}
                                   </div>
                                 </>
                               )}
@@ -824,11 +818,9 @@ export default function MyWork() {
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'center',
-                                fontSize: 13,
-                                fontWeight: 700,
                                 margin: '0 auto 4px'
                               }}>
-                                ✓
+                                <Icon name="check" width={14} height={14} />
                               </div>
                               <span style={{ fontSize: 11.5, fontWeight: 600, color: '#10b981' }}>Nhận việc & Ký quỹ</span>
                             </div>
@@ -849,7 +841,7 @@ export default function MyWork() {
                                 margin: '0 auto 4px',
                                 boxShadow: '0 0 0 3px #fff'
                               }}>
-                                {isSubmitted ? '✓' : (isRevision ? '✏️' : '2')}
+                                {isSubmitted ? <Icon name="check" width={14} height={14} /> : (isRevision ? <Icon name="edit" width={13} height={13} /> : '2')}
                               </div>
                               <span style={{
                                 fontSize: 11.5,
@@ -897,7 +889,7 @@ export default function MyWork() {
                             {j.desc && (
                               <div style={{ marginBottom: j.req?.length ? 10 : 0 }}>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>
-                                  📝 Mô tả công việc:
+                                  Mô tả công việc:
                                 </div>
                                 <p style={{ margin: 0, fontSize: 13.5, color: '#334155', lineHeight: 1.5, whiteSpace: 'pre-line' }}>
                                   {j.desc}
@@ -908,12 +900,12 @@ export default function MyWork() {
                             {j.req && j.req.length > 0 && (
                               <div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 6 }}>
-                                  🎯 Yêu cầu bàn giao:
+                                  Yêu cầu bàn giao:
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                   {j.req.map((r, idx) => (
                                     <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#334155' }}>
-                                      <span style={{ color: '#10b981', fontWeight: 700 }}>✓</span> {r}
+                                      <Icon name="check" width={12} height={12} style={{ color: '#10b981' }} /> {r}
                                     </div>
                                   ))}
                                 </div>
@@ -938,7 +930,7 @@ export default function MyWork() {
                               marginBottom: 10
                             }}>
                               <span style={{ fontSize: 13, fontWeight: 700, color: '#0369a1', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                📎 Tài liệu & Đề bài từ NTD ({j.attachments.length} file)
+                                <Icon name="paperclip" width={14} height={14} /> Tài liệu & Đề bài từ NTD ({j.attachments.length} file)
                               </span>
                             </div>
 
@@ -959,7 +951,7 @@ export default function MyWork() {
                                   }}
                                 >
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 200, flex: 1 }}>
-                                    <span style={{ fontSize: 18 }}>📁</span>
+                                    <Icon name="folder" width={18} height={18} style={{ color: '#0284c7', flexShrink: 0 }} />
                                     <div style={{ overflow: 'hidden' }}>
                                       <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                                         {f.fileName || f.name}
@@ -1010,7 +1002,7 @@ export default function MyWork() {
                             gap: 10
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 }}>
-                              <span style={{ fontSize: 22 }}>⏰</span>
+                              <Icon name="clock" width={22} height={22} style={{ color: '#be123c', flexShrink: 0 }} />
                               <div>
                                 <div style={{ fontSize: 13.5, fontWeight: 700, color: '#be123c' }}>
                                   Đã quá hạn bàn giao ({formatDeadline(j.deadlineAt)})
@@ -1039,7 +1031,7 @@ export default function MyWork() {
                               }}
                               onClick={() => openChatWithPerson(empName, `Chào ${empName}, dự án "${j.title}" hiện đã hết hạn nộp sản phẩm. Em xin phép trao đổi để anh/chị hỗ trợ gia hạn deadline giúp em nhé!`)}
                             >
-                              💬 Nhắn tin xin gia hạn
+                              <Icon name="chat" width={13} height={13} /> Nhắn tin xin gia hạn
                             </button>
                           </div>
                         )}
@@ -1055,7 +1047,7 @@ export default function MyWork() {
                             fontSize: 13
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e11d48', fontWeight: 700, marginBottom: 4 }}>
-                              <span>✏️ Góp ý từ Nhà tuyển dụng (Lần {j.deliverableFeedback[j.deliverableFeedback.length - 1].version || 1}):</span>
+                              <Icon name="edit" width={14} height={14} /> <span>Góp ý từ Nhà tuyển dụng (Lần {j.deliverableFeedback[j.deliverableFeedback.length - 1].version || 1}):</span>
                             </div>
                             <p style={{ margin: 0, color: '#9f1239', lineHeight: 1.5, fontWeight: 500 }}>
                               "{j.deliverableFeedback[j.deliverableFeedback.length - 1].text}"
@@ -1087,14 +1079,14 @@ export default function MyWork() {
                               gap: 10
                             }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                <span style={{ fontSize: 20 }}>📦</span>
+                                <Icon name="archive" width={20} height={20} style={{ color: 'var(--primary)' }} />
                                 <div>
                                   <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
                                     Sản phẩm bàn giao (Phiên bản v{j.deliverable.version || 1})
                                   </div>
                                   {j.deliverable.submittedAt && (
-                                    <div style={{ fontSize: 11.5, color: '#64748b' }}>
-                                      🕒 Đã nộp lúc: {formatDateTime(j.deliverable.submittedAt)}
+                                    <div style={{ fontSize: 11.5, color: '#64748b', display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                      <Icon name="clock" width={11} height={11} /> Đã nộp lúc: {formatDateTime(j.deliverable.submittedAt)}
                                     </div>
                                   )}
                                 </div>
@@ -1125,9 +1117,12 @@ export default function MyWork() {
                                     fontSize: 12,
                                     fontWeight: 700,
                                     padding: '4px 12px',
-                                    borderRadius: 20
+                                    borderRadius: 20,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 4
                                   }}>
-                                    ✏️ Cần nộp lại bản sửa
+                                    <Icon name="edit" width={12} height={12} /> Cần nộp lại bản sửa
                                   </span>
                                 )}
                                 {isCompleted && (
@@ -1176,10 +1171,9 @@ export default function MyWork() {
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
-                                        fontSize: 22,
                                         flexShrink: 0
                                       }}>
-                                        {fileMeta.icon}
+                                        <Icon name={fileMeta.icon} width={22} height={22} />
                                       </div>
                                       <div style={{ overflow: 'hidden' }}>
                                         <div style={{
@@ -1399,7 +1393,9 @@ export default function MyWork() {
                                 disabled={true}
                                 title="Đã quá hạn bàn giao, vui lòng xin gia hạn deadline từ NTD"
                               >
-                                🔒 Đã quá hạn — Khóa nộp bài sửa
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  <Icon name="lock" width={13} height={13} /> Đã quá hạn — Khóa nộp bài sửa
+                                </span>
                               </button>
                             ) : (
                               <button
@@ -1407,7 +1403,7 @@ export default function MyWork() {
                                 style={{ background: 'linear-gradient(135deg, #f43f5e, #e11d48)', fontWeight: 700 }}
                                 onClick={() => handleOpenDeliverableModal(targetJobId, j)}
                               >
-                                📤 Nộp lại bài sửa (Lượt {(j.revisionCount || 0) + 1}/{j.revisionLimit || 2})
+                                Nộp lại bài sửa (Lượt {(j.revisionCount || 0) + 1}/{j.revisionLimit || 2})
                               </button>
                             )
                           )}
@@ -1419,7 +1415,9 @@ export default function MyWork() {
                                 disabled={true}
                                 title="Đã quá hạn bàn giao, không thể cập nhật thêm"
                               >
-                                🔒 Đã quá hạn — Khóa cập nhật
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  <Icon name="lock" width={13} height={13} /> Đã quá hạn — Khóa cập nhật
+                                </span>
                               </button>
                             ) : (
                               <button
@@ -1427,7 +1425,9 @@ export default function MyWork() {
                                 style={{ borderColor: '#4338ca', color: '#4338ca', fontWeight: 600 }}
                                 onClick={() => handleOpenDeliverableModal(targetJobId, j)}
                               >
-                                ✏️ Cập nhật file / link bàn giao
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  <Icon name="edit" width={13} height={13} /> Cập nhật file / link bàn giao
+                                </span>
                               </button>
                             )
                           )}
@@ -1439,7 +1439,9 @@ export default function MyWork() {
                                 disabled={true}
                                 title="Đã quá hạn bàn giao, vui lòng xin gia hạn deadline từ NTD"
                               >
-                                🔒 Đã quá hạn — Khóa nộp sản phẩm
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                  <Icon name="lock" width={13} height={13} /> Đã quá hạn — Khóa nộp sản phẩm
+                                </span>
                               </button>
                             ) : (
                               <button
@@ -1447,25 +1449,25 @@ export default function MyWork() {
                                 style={{ background: 'linear-gradient(135deg, #4f46e5, #4338ca)', fontWeight: 700 }}
                                 onClick={() => handleOpenDeliverableModal(targetJobId, j)}
                               >
-                                📤 Nộp bàn giao / sản phẩm
+                                Nộp bàn giao / sản phẩm
                               </button>
                             )
                           )}
 
                           <button
                             className="btn btn-outline"
-                            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
                             onClick={() => openChatWithPerson(empName, `Chào ${empName}, em đã gửi sản phẩm bàn giao cho dự án "${j.title}". Anh/chị kiểm tra và nghiệm thu giúp em nhé!`)}
                           >
-                            💬 Chat với NTD
+                            <Icon name="chat" width={13} height={13} /> Chat với NTD
                           </button>
 
                           <button
                             className="btn btn-outline"
-                            style={{ color: '#64748b' }}
+                            style={{ color: '#64748b', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                             onClick={() => targetJobId && navigate(`/jobs/${targetJobId}`)}
                           >
-                            👁️ Xem chi tiết tin
+                            <Icon name="eye" width={13} height={13} /> Xem chi tiết tin
                           </button>
 
                           <button
@@ -1473,7 +1475,7 @@ export default function MyWork() {
                             style={{ color: '#ef4444', borderColor: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                             onClick={() => setCancelModalJob(j)}
                           >
-                            🚫 Hủy nhận việc
+                            <Icon name="ban" width={12} height={12} /> Hủy nhận việc
                           </button>
                         </div>
                       </div>
@@ -1503,14 +1505,14 @@ export default function MyWork() {
                   className={`btn btn-sm ${appFilter === 'pending' ? 'btn-primary' : 'btn-outline'}`}
                   onClick={() => { setAppFilter('pending'); setAppsPage(1); }}
                 >
-                  ⏳ Đang chờ duyệt ({state.myApplications.filter(a => a.status === 'pending').length})
+                  Đang chờ duyệt ({state.myApplications.filter(a => a.status === 'pending').length})
                 </button>
                 <button
                   type="button"
                   className={`btn btn-sm ${appFilter === 'hired' ? 'btn-primary' : 'btn-outline'}`}
                   onClick={() => { setAppFilter('hired'); setAppsPage(1); }}
                 >
-                  🎉 Đã được chọn ({state.myApplications.filter(a => ['hired', 'submitted', 'revision_requested', 'completed'].includes(a.status)).length})
+                  Đã được chọn ({state.myApplications.filter(a => ['hired', 'submitted', 'revision_requested', 'completed'].includes(a.status)).length})
                 </button>
                 <button
                   type="button"
@@ -1541,7 +1543,9 @@ export default function MyWork() {
             {/* List */}
             {filteredApplications.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b' }}>
-                <div style={{ fontSize: 36, marginBottom: 8 }}>📭</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 8 }}>
+                  <Icon name="mail" width={32} height={32} style={{ color: '#94a3b8' }} />
+                </div>
                 <b>Không tìm thấy đơn ứng tuyển nào</b>
                 <p style={{ fontSize: 13, marginTop: 4 }}>Thử thay đổi bộ lọc tìm kiếm hoặc khám phá các công việc mới.</p>
               </div>
@@ -1572,9 +1576,9 @@ export default function MyWork() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: 20
+                        flexShrink: 0
                       }}>
-                        📨
+                        <Icon name="mail" width={18} height={18} style={{ color: 'var(--primary)' }} />
                       </div>
                       <div>
                         <div
@@ -1583,12 +1587,12 @@ export default function MyWork() {
                         >
                           {a.jobTitle || a.title || 'Công việc'}
                         </div>
-                        <div style={{ fontSize: 12.5, color: '#64748b', marginTop: 3, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span>🏢 {a.employerName || a.emp || 'Nhà tuyển dụng'}</span>
+                        <div style={{ fontSize: 12.5, color: '#64748b', marginTop: 3, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="building" width={12} height={12} /> {a.employerName || a.emp || 'Nhà tuyển dụng'}</span>
                           <span>•</span>
-                          <span style={{ color: '#16a34a', fontWeight: 600 }}>💰 {fmtVND(a.budget)}</span>
+                          <span style={{ color: '#16a34a', fontWeight: 600 }}>Thù lao: {fmtVND(a.budget)}</span>
                           <span>•</span>
-                          <span>🗓️ {a.appliedAt || 'Gần đây'}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="clock" width={12} height={12} /> {a.appliedAt || 'Gần đây'}</span>
                         </div>
                       </div>
                     </div>
@@ -1619,10 +1623,10 @@ export default function MyWork() {
                       {a.status === 'pending' && (
                         <button
                           className="btn btn-outline btn-sm"
-                          style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+                          style={{ color: '#ef4444', borderColor: '#fca5a5', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                           onClick={() => handleWithdrawApp(a.jobId || a.id)}
                         >
-                          🚫 Rút đơn
+                          <Icon name="ban" width={12} height={12} /> Rút đơn
                         </button>
                       )}
                     </div>
@@ -1673,7 +1677,7 @@ export default function MyWork() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#e11d48', marginBottom: 14 }}>
-              <span style={{ fontSize: 24 }}>⚠️</span>
+              <Icon name="alert-triangle" width={22} height={22} />
               <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Xác nhận hủy nhận việc</h3>
             </div>
 

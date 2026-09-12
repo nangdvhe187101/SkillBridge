@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon';
-import Footer from '../../components/Footer';
 import useReveal from '../../hooks/useReveal';
 import useCounter from '../../hooks/useCounter';
 import HomeAdCarousel from '../../components/HomeAdCarousel';
@@ -85,7 +84,10 @@ export default function Home() {
                 <Avatar name="Minh Anh" className="avatar" fontSize={13} />
                 <div><div className="name">Minh Anh · Sinh viên</div><div className="sub">Reliability 96 điểm</div></div>
               </div>
-              <div className="title">Đã hoàn thành 32 công việc · 5.0★</div>
+              <div className="title" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span>Đã hoàn thành 32 công việc · 5.0</span>
+                <Icon name="star" style={{ width: 12, height: 12, color: '#eab308' }} />
+              </div>
               <div className="foot">
                 <span className="chip" style={{ background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.2)' }}>
                   Gold Tier
@@ -256,7 +258,11 @@ export default function Home() {
         </div>
         <div className="test-grid">
           <div className="test-card reveal">
-            <div className="test-stars">★★★★★</div>
+            <div className="test-stars" style={{ display: 'flex', gap: 3, color: '#eab308', marginBottom: 12 }}>
+              {[...Array(5)].map((_, idx) => (
+                <Icon key={idx} name="star" width="15" height="15" />
+              ))}
+            </div>
             <p className="test-quote">Chỉ sau 3 ngày đăng ký mình đã nhận việc dựng video đầu tiên, có thêm portfolio thật để xin thực tập.</p>
             <div className="test-person">
               <Avatar name="Thu Hà" className="test-av" fontSize={16} />
@@ -264,7 +270,11 @@ export default function Home() {
             </div>
           </div>
           <div className="test-card reveal reveal-d1">
-            <div className="test-stars">★★★★★</div>
+            <div className="test-stars" style={{ display: 'flex', gap: 3, color: '#eab308', marginBottom: 12 }}>
+              {[...Array(5)].map((_, idx) => (
+                <Icon key={idx} name="star" width="15" height="15" />
+              ))}
+            </div>
             <p className="test-quote">Đăng tin buổi sáng, đầu giờ chiều đã có ứng viên phù hợp. Tiết kiệm rất nhiều thời gian so với đăng Facebook Group.</p>
             <div className="test-person">
               <Avatar name="Chị Lan" className="test-av" fontSize={16} />
@@ -272,7 +282,11 @@ export default function Home() {
             </div>
           </div>
           <div className="test-card reveal reveal-d2">
-            <div className="test-stars">★★★★★</div>
+            <div className="test-stars" style={{ display: 'flex', gap: 3, color: '#eab308', marginBottom: 12 }}>
+              {[...Array(5)].map((_, idx) => (
+                <Icon key={idx} name="star" width="15" height="15" />
+              ))}
+            </div>
             <p className="test-quote">Điểm Reliability giúp mình yên tâm giao việc cho sinh viên mới, không còn lo bị bùng deadline như trước.</p>
             <div className="test-person">
               <Avatar name="Cỏ May Agency" className="test-av" fontSize={16} />
@@ -305,8 +319,6 @@ export default function Home() {
           </button>
         </div>
       </section>
-
-      <Footer />
     </div>
   );
 }

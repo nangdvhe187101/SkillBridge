@@ -25,8 +25,8 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (amount <= 0) return;
 
-        var employerWallet = await _dbContext.Wallets
-            .FirstOrDefaultAsync(w => w.UserId == employerId, cancellationToken);
+        // Khóa hàng ví employer để chống lost-update khi có giao dịch nạp tiền/ký quỹ đồng thời
+        var employerWallet = await GetWalletWithLockAsync(employerId, cancellationToken);
 
         if (employerWallet == null || employerWallet.Balance < amount)
         {
@@ -56,52 +56,109 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (amount <= 0) return;
 
-        var escrowReleaseTx = new Transaction
+        // Idempotency Guard: Đảm bảo công việc này chưa từng được giải ngân trước đó
+        var alreadyReleased = await _dbContext.Receipts.AnyAsync(r => r.JobId == jobId, cancellationToken)
+            || await _dbContext.Transactions.AnyAsync(t => t.Type == "escrow_release" && t.ReferenceId == jobId, cancellationToken);
+        if (alreadyReleased)
         {
-            UserId = studentId,
-            Type = "escrow_release",
-            Label = $"Nhận thù lao giải ngân công việc #{jobId} · {jobTitle}",
-            Amount = amount,
-            Sign = 1,
-            ReferenceId = jobId,
-            CreatedAt = DateTime.UtcNow
-        };
-        await _dbContext.Transactions.AddAsync(escrowReleaseTx, cancellationToken);
+            _logger.LogWarning("⚠️ PHÁT HIỆN YÊU CẦU GIẢI NGÂN TRÙNG LẶP cho Job #{JobId}, StudentId={StudentId}. Thao tác bị chặn lại.", jobId, studentId);
+            throw new BusinessException($"Công việc #{jobId} đã được giải ngân thù lao trước đó.");
+        }
 
-        var studentWallet = await _dbContext.Wallets
-            .FirstOrDefaultAsync(w => w.UserId == studentId, cancellationToken);
+        // Xác định tỷ lệ hoa hồng nền tảng (VIP Business: 5%, Tài khoản thông thường: 10%)
+        decimal commissionRate = 0.10m;
+        var hasVipSubscription = await _dbContext.Subscriptions
+            .AnyAsync(s => s.UserId == employerId && s.Status == "active" && s.PlanName.Contains("VIP"), cancellationToken);
+        if (hasVipSubscription)
+        {
+            commissionRate = 0.05m;
+        }
+
+        var commissionAmount = Math.Round(amount * commissionRate);
+        var studentPayout = amount - commissionAmount;
+
+        // Khóa hàng ví sinh viên để chống lost-update
+        var studentWallet = await GetWalletWithLockAsync(studentId, cancellationToken);
 
         if (studentWallet != null)
         {
-            studentWallet.Balance += amount;
+            studentWallet.Balance += studentPayout;
         }
         else
         {
             await _dbContext.Wallets.AddAsync(new Wallet
             {
                 UserId = studentId,
-                Balance = amount
+                Balance = studentPayout
             }, cancellationToken);
         }
 
+        // Ghi nhận thù lao giải ngân cho sinh viên
+        var escrowReleaseTx = new Transaction
+        {
+            UserId = studentId,
+            Type = "escrow_release",
+            Label = commissionAmount > 0
+                ? $"Nhận thù lao giải ngân công việc #{jobId} · {jobTitle} (Phí sàn {commissionRate * 100:0.#}%)"
+                : $"Nhận thù lao giải ngân công việc #{jobId} · {jobTitle}",
+            Amount = studentPayout,
+            Sign = 1,
+            ReferenceId = jobId,
+            CreatedAt = DateTime.UtcNow
+        };
+        await _dbContext.Transactions.AddAsync(escrowReleaseTx, cancellationToken);
+
+        // Ghi nhận giao dịch phí hoa hồng nền tảng nếu có
+        if (commissionAmount > 0)
+        {
+            var commissionTx = new Transaction
+            {
+                UserId = studentId,
+                Type = "commission",
+                Label = $"Phí nền tảng ({commissionRate * 100:0.#}%) · {jobTitle}",
+                Amount = commissionAmount,
+                Sign = -1,
+                ReferenceId = jobId,
+                CreatedAt = DateTime.UtcNow
+            };
+            await _dbContext.Transactions.AddAsync(commissionTx, cancellationToken);
+        }
+
+        // Giữ Total = amount (giá trị hợp đồng gộp/Budget) theo đúng chuẩn nghiệp vụ kế toán & hiển thị UI
         var receipt = new Receipt
         {
             JobId = jobId,
             StudentId = studentId,
             EmployerId = employerId,
             Budget = amount,
-            Commission = 0,
+            Commission = commissionAmount,
             Total = amount,
             CreatedAt = DateTime.UtcNow
         };
         await _dbContext.Receipts.AddAsync(receipt, cancellationToken);
 
-        _logger.LogInformation("Đã giải ngân thù lao {Amount:N0}đ cho sinh viên {StudentId} từ Job #{JobId}.", amount, studentId, jobId);
+        _logger.LogInformation("Đã giải ngân thù lao {Payout:N0}đ (phí sàn {Commission:N0}đ từ tổng {Budget:N0}đ) cho sinh viên {StudentId} từ Job #{JobId}.",
+            studentPayout, commissionAmount, amount, studentId, jobId);
     }
 
     public async Task RefundEscrowAsync(int employerId, int jobId, string jobTitle, decimal amount, string reason, CancellationToken cancellationToken = default)
     {
         if (amount <= 0) return;
+
+        // Idempotency Guard: Không hoàn tiền nếu công việc đã được giải ngân hoặc đã hoàn tiền
+        var alreadyReleased = await _dbContext.Receipts.AnyAsync(r => r.JobId == jobId, cancellationToken);
+        if (alreadyReleased)
+        {
+            _logger.LogWarning("⚠️ KHÔNG THỂ HOÀN TIỀN vì Job #{JobId} đã được giải ngân thành công trước đó.", jobId);
+            throw new BusinessException($"Công việc #{jobId} đã được giải ngân thù lao, không thể hoàn tiền.");
+        }
+
+        var alreadyRefunded = await _dbContext.Transactions.AnyAsync(t => t.Type == "escrow_refund" && t.ReferenceId == jobId && t.UserId == employerId, cancellationToken);
+        if (alreadyRefunded)
+        {
+            _logger.LogWarning("⚠️ PHÁT HIỆN YÊU CẦU HOÀN TIỀN TRÙNG LẶP cho Job #{JobId}, EmployerId={EmployerId}.", jobId, employerId);
+            throw new BusinessException($"Công việc #{jobId} đã được hoàn tiền ký quỹ trước đó.");
+        }
 
         var refundTx = new Transaction
         {
@@ -115,8 +172,8 @@ public class EscrowPaymentService : IEscrowPaymentService
         };
         await _dbContext.Transactions.AddAsync(refundTx, cancellationToken);
 
-        var employerWallet = await _dbContext.Wallets
-            .FirstOrDefaultAsync(w => w.UserId == employerId, cancellationToken);
+        // Khóa hàng ví employer để chống lost-update
+        var employerWallet = await GetWalletWithLockAsync(employerId, cancellationToken);
 
         if (employerWallet != null)
         {
@@ -133,5 +190,16 @@ public class EscrowPaymentService : IEscrowPaymentService
 
         _logger.LogInformation("Đã hoàn tiền ký quỹ {Amount:N0}đ cho Nhà tuyển dụng {EmployerId} tại Job #{JobId}. Lý do: {Reason}",
             amount, employerId, jobId, reason);
+    }
+
+    private async Task<Wallet?> GetWalletWithLockAsync(int userId, CancellationToken ct)
+    {
+        if (_dbContext.Database.IsRelational())
+        {
+            return await _dbContext.Wallets
+                .FromSqlRaw("SELECT * FROM wallets WHERE user_id = {0} FOR UPDATE", userId)
+                .SingleOrDefaultAsync(ct);
+        }
+        return await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
     }
 }

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import Icon from '../Icon';
 import { useAdmin } from '../../context/AdminContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
@@ -36,7 +37,7 @@ export default function AdminRoles() {
   const [newFeatModal, setNewFeatModal] = useState(false);
   const [featName, setFeatName] = useState('');
   const [featUrl, setFeatUrl] = useState('');
-  const [featGroup, setFeatGroup] = useState('Tuyển dụng');
+  const [featGroup, setfeatGroup] = useState('Tuyển dụng');
   const [featRoles, setFeatRoles] = useState(['employer', 'admin']);
 
   // Add Team Member Form
@@ -78,7 +79,7 @@ export default function AdminRoles() {
   const handleSaveNewFeature = (e) => {
     e.preventDefault();
     if (!featName.trim() || !featUrl.trim()) {
-      showToast('Vui lòng nhập đầy đủ tên tính năng và URL route.', '⚠️');
+      showToast('Vui lòng nhập đầy đủ tên tính năng và URL route.', 'error');
       return;
     }
     addFeature({
@@ -97,7 +98,7 @@ export default function AdminRoles() {
   };
 
   const handleSaveMatrix = () => {
-    showToast('Đã lưu cấu hình Ma trận Phân quyền URL & Tính năng thành công!', '💾');
+    showToast('Đã lưu cấu hình Ma trận Phân quyền URL & Tính năng thành công!', 'check');
   };
 
   return (
@@ -112,19 +113,22 @@ export default function AdminRoles() {
             <button className="btn btn-primary btn-sm" onClick={() => setNewFeatModal(true)}>
               + Thêm URL / Tính năng mới
             </button>
-            <button className="btn btn-lime btn-sm" onClick={handleSaveMatrix}>
-              💾 Lưu ma trận phân quyền
+            <button className="btn btn-lime btn-sm" onClick={handleSaveMatrix} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="check" style={{ width: 13, height: 13 }} />
+              <span>Lưu ma trận phân quyền</span>
             </button>
           </div>
         )}
       </div>
 
       <div className="adm-tabs-mini" style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <button className={activeSubTab === 'rbac' ? 'is-active' : ''} onClick={() => setActiveSubTab('rbac')}>
-          🔑 Ma trận Phân quyền URL & Tính năng ({features.length})
+        <button className={activeSubTab === 'rbac' ? 'is-active' : ''} onClick={() => setActiveSubTab('rbac')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="key" style={{ width: 14, height: 14 }} />
+          <span>Ma trận Phân quyền URL & Tính năng ({features.length})</span>
         </button>
-        <button className={activeSubTab === 'team' ? 'is-active' : ''} onClick={() => setActiveSubTab('team')}>
-          👥 Đội ngũ Quản trị & Vai trò Nội bộ ({team.length})
+        <button className={activeSubTab === 'team' ? 'is-active' : ''} onClick={() => setActiveSubTab('team')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Icon name="users" style={{ width: 14, height: 14 }} />
+          <span>Đội ngũ Quản trị & Vai trò Nội bộ ({team.length})</span>
         </button>
       </div>
 
@@ -157,10 +161,30 @@ export default function AdminRoles() {
                 <tr>
                   <th style={{ minWidth: 230 }}>Chức năng / Tính năng</th>
                   <th style={{ minWidth: 160 }}>URL Route</th>
-                  <th style={{ minWidth: 100, textAlign: 'center' }}>🌐 Khách</th>
-                  <th style={{ minWidth: 120, textAlign: 'center' }}>🎓 Sinh viên</th>
-                  <th style={{ minWidth: 130, textAlign: 'center' }}>🏢 Doanh nghiệp</th>
-                  <th style={{ minWidth: 90, textAlign: 'center' }}>⚡ Admin</th>
+                  <th style={{ minWidth: 100, textAlign: 'center' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                      <Icon name="users" style={{ width: 13, height: 13 }} />
+                      <span>Khách</span>
+                    </span>
+                  </th>
+                  <th style={{ minWidth: 120, textAlign: 'center' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                      <Icon name="graduation" style={{ width: 13, height: 13 }} />
+                      <span>Sinh viên</span>
+                    </span>
+                  </th>
+                  <th style={{ minWidth: 130, textAlign: 'center' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                      <Icon name="building" style={{ width: 13, height: 13 }} />
+                      <span>Doanh nghiệp</span>
+                    </span>
+                  </th>
+                  <th style={{ minWidth: 90, textAlign: 'center' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                      <Icon name="shield-check" style={{ width: 13, height: 13 }} />
+                      <span>Admin</span>
+                    </span>
+                  </th>
                   <th style={{ minWidth: 80, textAlign: 'center' }}>Xoá</th>
                 </tr>
               </thead>
@@ -169,17 +193,15 @@ export default function AdminRoles() {
                   <tr key={f.id}>
                     {/* Feature Name & Group */}
                     <td>
-                      <b>{f.name}</b>
-                      <div style={{ marginTop: 2 }}>
-                        <span className="chip" style={{ fontSize: 10.5, padding: '1px 6px', background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)' }}>
-                          {f.group}
-                        </span>
+                      <b style={{ fontSize: 13, color: 'var(--ink)' }}>{f.name}</b>
+                      <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+                        Nhóm: <span className="chip" style={{ fontSize: 10, padding: '1px 6px' }}>{f.group}</span>
                       </div>
                     </td>
 
-                    {/* URL Path */}
+                    {/* URL Route */}
                     <td>
-                      <code style={{ background: 'rgba(108, 76, 255, 0.08)', border: '1px solid rgba(108, 76, 255, 0.2)', padding: '3px 8px', borderRadius: 6, color: 'var(--primary)', fontWeight: 600, fontSize: 12.5 }}>
+                      <code style={{ fontSize: 12, background: 'rgba(0,0,0,0.04)', padding: '2px 6px', borderRadius: 4, color: 'var(--primary)', wordBreak: 'break-all' }}>
                         {f.url}
                       </code>
                     </td>
@@ -213,7 +235,7 @@ export default function AdminRoles() {
                         checked={f.roles.includes('employer')}
                         onChange={() => toggleFeatureRole(f.id, 'employer')}
                         style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
-                        title="Cho phép Nhà tuyển dụng truy cập"
+                        title="Cho phép Doanh nghiệp truy cập"
                       />
                     </td>
 
@@ -232,10 +254,10 @@ export default function AdminRoles() {
                     <td style={{ textAlign: 'center' }}>
                       <button
                         onClick={() => removeFeature(f.id)}
-                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--coral)', fontSize: 14 }}
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--coral)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                         title="Xoá tính năng"
                       >
-                        🗑️
+                        <Icon name="trash" style={{ width: 14, height: 14 }} />
                       </button>
                     </td>
                   </tr>
@@ -338,7 +360,9 @@ export default function AdminRoles() {
       {newFeatModal && (
         <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setNewFeatModal(false); }}>
           <div className="modal-box" style={{ maxWidth: 540 }}>
-            <button className="modal-close" onClick={() => setNewFeatModal(false)}>✕</button>
+            <button className="modal-close" onClick={() => setNewFeatModal(false)} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" style={{ width: 16, height: 16 }} />
+            </button>
             <h3>+ Thêm Tính năng / URL Route vào Ma trận RBAC</h3>
             <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>
               Khai báo chức năng hoặc đường dẫn URL mới để phân quyền truy cập cho từng Role.
@@ -377,26 +401,31 @@ export default function AdminRoles() {
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 6 }}>
                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
                     <input type="checkbox" checked={featRoles.includes('guest')} onChange={() => toggleModalRole('guest')} />
-                    🌐 Khách
+                    <Icon name="users" style={{ width: 13, height: 13 }} />
+                    <span>Khách</span>
                   </label>
                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
                     <input type="checkbox" checked={featRoles.includes('student')} onChange={() => toggleModalRole('student')} />
-                    🎓 Sinh viên
+                    <Icon name="graduation" style={{ width: 13, height: 13 }} />
+                    <span>Sinh viên</span>
                   </label>
                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
                     <input type="checkbox" checked={featRoles.includes('employer')} onChange={() => toggleModalRole('employer')} />
-                    🏢 Doanh nghiệp
+                    <Icon name="building" style={{ width: 13, height: 13 }} />
+                    <span>Doanh nghiệp</span>
                   </label>
                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
                     <input type="checkbox" checked={featRoles.includes('admin')} onChange={() => toggleModalRole('admin')} />
-                    ⚡ Admin
+                    <Icon name="shield-check" style={{ width: 13, height: 13 }} />
+                    <span>Admin</span>
                   </label>
                 </div>
               </div>
 
               <div className="modal-actions" style={{ marginTop: 18 }}>
-                <button type="submit" className="btn btn-primary">
-                  ✓ Thêm vào Ma trận
+                <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Icon name="check" style={{ width: 13, height: 13 }} />
+                  <span>Thêm vào Ma trận</span>
                 </button>
                 <button type="button" className="btn btn-outline" onClick={() => setNewFeatModal(false)}>
                   Hủy

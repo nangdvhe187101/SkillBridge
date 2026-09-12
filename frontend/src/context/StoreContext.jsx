@@ -103,9 +103,33 @@ export function commissionRate(state) {
   return state.vipBusiness ? 0.05 : 0.1;
 }
 
+export function mapReceiptsFromApi(apiReceipts) {
+  if (!Array.isArray(apiReceipts) || apiReceipts.length === 0) return null;
+  return apiReceipts.map((r) => ({
+    id: 'rc-' + r.id,
+    code: r.code || `SB-REC-${r.jobId}-${r.id}`,
+    dashJobId: r.jobId,
+    jobId: r.jobId,
+    jobTitle: r.jobTitle,
+    budget: r.budget,
+    commission: r.commission,
+    total: r.total || r.budget,
+    net: r.netPayout !== undefined && r.netPayout !== null ? r.netPayout : (r.budget - (r.commission || 0)),
+    student: r.studentName || 'Sinh viên',
+    employer: r.employerName || 'Nhà tuyển dụng',
+    date: r.createdAt ? new Date(r.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
+  }));
+}
+
 const TX_ICON = {
-  topup: '💰', withdraw: '🏦', subscription: '⭐', escrow_hold: '🔒',
-  escrow_refund: '↩️', escrow_release: '✅', commission: '🏷️', insurance_payout: '🛡️',
+  topup: 'arrow-down-left',
+  withdraw: 'arrow-up-right',
+  subscription: 'crown',
+  escrow_hold: 'lock',
+  escrow_refund: 'arrow-down-left',
+  escrow_release: 'check',
+  commission: 'receipt',
+  insurance_payout: 'shield-check',
 };
 export { TX_ICON };
 
@@ -130,13 +154,13 @@ const initialReceiptsSeed = [
 ];
 
 const initialClaimsSeed = [
-  { id: 'CLM-101', jobTitle: 'Biên tập 5 bài viết SEO Website', desc: 'Nhà tuyển dụng không phản hồi sau khi nhận bài 7 ngày', payout: 150000, status: 'resolved', statusLabel: '✅ Đã bồi thường 40%', date: '19/08/2026' },
-  { id: 'CLM-102', jobTitle: 'Dựng motion graphic intro 10s', desc: 'Đang gửi bằng chứng đối soát video demo', payout: 0, status: 'pending', statusLabel: '⏳ Đang chờ HĐ Bảo hiểm duyệt', date: '21/08/2026' },
+  { id: 'CLM-101', jobTitle: 'Biên tập 5 bài viết SEO Website', desc: 'Nhà tuyển dụng không phản hồi sau khi nhận bài 7 ngày', payout: 150000, status: 'resolved', statusLabel: 'Đã bồi thường 40%', date: '19/08/2026' },
+  { id: 'CLM-102', jobTitle: 'Dựng motion graphic intro 10s', desc: 'Đang gửi bằng chứng đối soát video demo', payout: 0, status: 'pending', statusLabel: 'Đang chờ HĐ Bảo hiểm duyệt', date: '21/08/2026' },
 ];
 
 const initialState = {
   balance: 350000,
-  escrowLocked: 250000,
+  escrowLocked: 0,
   transactions: initialTransactionsSeed,
   receipts: initialReceiptsSeed,
   insuranceFund: 8200000,
@@ -152,8 +176,8 @@ const initialState = {
   myReliability: 96,
   myApplications: [],
   notifications: [
-    { id: 1, icon: '👋', text: 'Chào mừng bạn đến với SkillBridge!', read: false, time: 'Vừa xong', link: '/' },
-    { id: 2, icon: '✓', text: 'Hồ sơ của bạn đã được xác thực qua email trường.', read: false, time: '1 giờ trước', link: '/profile' },
+    { id: 1, icon: 'bell', text: 'Chào mừng bạn đến với SkillBridge!', read: false, time: 'Vừa xong', link: '/' },
+    { id: 2, icon: 'check', text: 'Hồ sơ của bạn đã được xác thực qua email trường.', read: false, time: '1 giờ trước', link: '/profile' },
   ],
   reviews: [],
   employerReviews: [],
@@ -329,7 +353,7 @@ function reducer(state, action) {
         id: 'ap' + Date.now(), jobId: j.id, dashJobId: j.dashJobId || null,
         title: j.title, emp: j.emp, budget: j.budget, status: 'pending', appliedAt: 'Vừa xong',
       };
-      const notifications = addNotifTo(state.notifications, '📨', `Bạn đã ứng tuyển "${j.title}". Nhà tuyển dụng sẽ phản hồi sớm.`, '/mywork');
+      const notifications = addNotifTo(state.notifications, 'bell', `Bạn đã ứng tuyển "${j.title}". Nhà tuyển dụng sẽ phản hồi sớm.`, '/mywork');
       return {
         ...state,
         appliedJobIds: [...state.appliedJobIds, action.id],
@@ -346,7 +370,7 @@ function reducer(state, action) {
       localStorage.setItem('savedJobIds', JSON.stringify(savedJobIds));
       const job = state.jobs.find((j) => j.id === action.jobId);
       const notifications = !isSaved
-        ? addNotifTo(state.notifications, '❤️', `Đã lưu công việc "${job?.title || '#' + action.jobId}" vào danh sách yêu thích.`, `/jobs/${action.jobId}`)
+        ? addNotifTo(state.notifications, 'heart', `Đã lưu công việc "${job?.title || '#' + action.jobId}" vào danh sách yêu thích.`, `/jobs/${action.jobId}`)
         : state.notifications;
       return { ...state, savedJobIds, notifications };
     }
@@ -412,8 +436,8 @@ function reducer(state, action) {
         ];
       }
 
-      let notifications = addNotifTo(state.notifications, '🔒', `Đã thuê ${selectedName} và giữ ${hireAmount.toLocaleString('vi-VN')}đ trong ví ký quỹ. Hạn: ${days || 3} ngày.`, '/dashboard');
-      notifications = addNotifTo(notifications, '🎉', `Ứng viên "${selectedName}" đã trúng tuyển "${job.title}".`, '/mywork');
+      let notifications = addNotifTo(state.notifications, 'lock', `Đã thuê ${selectedName} và giữ ${hireAmount.toLocaleString('vi-VN')}đ trong ví ký quỹ. Hạn: ${days || 3} ngày.`, '/dashboard');
+      notifications = addNotifTo(notifications, 'check', `Ứng viên "${selectedName}" đã trúng tuyển "${job.title}".`, '/mywork');
 
       return { ...state, myJobs, jobs, balance, transactions, myApplications, notifications };
     }
@@ -435,7 +459,7 @@ function reducer(state, action) {
         id: 'rc' + Date.now(), dashJobId: job.id, jobTitle: job.title, budget: job.budget, commission,
         total: commission + job.budget, student: job.hiredApplicant, date: fmtNow(),
       };
-      const notifications = addNotifTo(state.notifications, '✅', `Công việc "${job.title}" đã hoàn thành và tiền đã giải ngân cho ${job.hiredApplicant}.`, '/wallet');
+      const notifications = addNotifTo(state.notifications, 'check', `Công việc "${job.title}" đã hoàn thành và tiền đã giải ngân cho ${job.hiredApplicant}.`, '/wallet');
       return { ...state, myJobs, transactions, myReliability, myApplications, receipts: [receipt, ...state.receipts], notifications, lastReceiptId: receipt.id };
     }
 
@@ -446,7 +470,10 @@ function reducer(state, action) {
       if (!job) return state;
 
       const studentName = job.hiredApplicant || job.hiredStudentName || deliverableResult?.studentName || 'Sinh viên';
-      const budget = job.budget || deliverableResult?.budget || 0;
+      const budget = deliverableResult?.budget ?? job.budget ?? 0;
+      const commission = deliverableResult?.commission ?? 0;
+      const net = deliverableResult?.netPayout ?? (budget - commission);
+      const total = deliverableResult?.total ?? budget;
       const receiptCode = `SB-REC-${job.id}-${Date.now().toString().slice(-4)}`;
       const receipt = {
         id: 'rc-' + job.id + '-' + Date.now(),
@@ -455,9 +482,9 @@ function reducer(state, action) {
         jobId: job.id,
         jobTitle: job.title,
         budget: budget,
-        commission: 0,
-        total: budget,
-        net: budget,
+        commission: commission,
+        total: total,
+        net: net,
         student: studentName,
         employer: job.employerName || 'Nhà tuyển dụng',
         date: fmtNow()
@@ -468,17 +495,22 @@ function reducer(state, action) {
       const myApplications = state.myApplications.map((a) => (a.jobId === job.id || a.dashJobId === job.id ? { ...a, status: 'completed', jobStatus: 'completed' } : a));
 
       let transactions = state.transactions;
-      const txLabel = `Giải ngân cho ${studentName} · ${job.title}`;
+      const txLabel = commission > 0
+        ? `Nhận thù lao giải ngân công việc #${job.id} · ${job.title}`
+        : `Giải ngân cho ${studentName} · ${job.title}`;
       const alreadyReleased = transactions.some(
-        (t) => t.type === 'escrow_release' && (t.referenceId === job.id || t.dashJobId === job.id || t.label === txLabel)
+        (t) => (t.type === 'escrow_release' || t.type === 'commission') && (t.referenceId === job.id || t.dashJobId === job.id || t.label === txLabel)
       );
       if (!alreadyReleased) {
-        transactions = addTxTo(transactions, 'escrow_release', txLabel, budget, 1, job.id);
+        transactions = addTxTo(transactions, 'escrow_release', txLabel, net, 1, job.id);
+        if (commission > 0) {
+          transactions = addTxTo(transactions, 'commission', `Phí nền tảng · ${job.title}`, commission, -1, job.id);
+        }
       }
 
       const notifications = addNotifTo(
         state.notifications,
-        '✅',
+        'check',
         `Công việc "${job.title}" đã hoàn thành và giải ngân ${budget.toLocaleString('vi-VN')}đ cho ${studentName}.`,
         '/wallet'
       );
@@ -505,7 +537,7 @@ function reducer(state, action) {
       const myJobs = state.myJobs.map((j) => (j.id === jobId ? { ...j, deliverable, status: 'submitted', hiredApplicantIsMe: true } : j));
       let myApplications = state.myApplications.map((a) => (a.jobId === jobId || a.dashJobId === jobId ? { ...a, status: 'submitted', jobStatus: 'submitted' } : a));
       const notifications = addNotifTo(
-        state.notifications, '📤',
+        state.notifications, 'download',
         wasRevision ? `Bạn đã nộp lại bàn giao (phiên bản ${version}).` : (wasUpdate ? `Bạn đã cập nhật bàn giao.` : `Bạn đã nộp bàn giao — đang chờ xác nhận.`),
         '/mywork'
       );
@@ -521,7 +553,7 @@ function reducer(state, action) {
       const myJobs = state.myJobs.map((j) =>
         j.id === jobId ? { ...j, deliverableFeedback: feedback, revisionCount, status: 'revision_requested', deliverable: { ...j.deliverable, status: 'revision_requested' } } : j
       );
-      const notifications = addNotifTo(state.notifications, '✏️', `Bạn đã yêu cầu ${job.hiredApplicant} sửa lại bàn giao (lượt ${revisionCount}/${job.revisionLimit}).`, '/dashboard');
+      const notifications = addNotifTo(state.notifications, 'edit', `Bạn đã yêu cầu ${job.hiredApplicant} sửa lại bàn giao (lượt ${revisionCount}/${job.revisionLimit}).`, '/dashboard');
       return { ...state, myJobs, notifications };
     }
 
@@ -530,20 +562,22 @@ function reducer(state, action) {
       return {
         ...state,
         balance: action.balance !== undefined ? action.balance : state.balance,
-        transactions: action.transactions || state.transactions
+        escrowLocked: action.escrowLocked !== undefined ? action.escrowLocked : state.escrowLocked,
+        transactions: action.transactions || state.transactions,
+        receipts: action.receipts !== undefined ? action.receipts : state.receipts
       };
     }
     case 'TOPUP': {
       const balance = state.balance + action.amount;
       const transactions = addTxTo(state.transactions, 'topup', 'Nạp tiền qua ' + action.methodLabel, action.amount, 1);
-      const notifications = addNotifTo(state.notifications, '💰', `Nạp tiền thành công ${action.amount.toLocaleString('vi-VN')}đ vào ví.`, '/wallet');
+      const notifications = addNotifTo(state.notifications, 'wallet', `Nạp tiền thành công ${action.amount.toLocaleString('vi-VN')}đ vào ví.`, '/wallet');
       return { ...state, balance, transactions, notifications };
     }
     case 'WITHDRAW': {
       if (action.amount > state.balance) return state;
       const balance = state.balance - action.amount;
       const transactions = addTxTo(state.transactions, 'withdraw', 'Rút tiền về Vietcombank ****4821', action.amount, -1);
-      const notifications = addNotifTo(state.notifications, '🏦', `Yêu cầu rút ${action.amount.toLocaleString('vi-VN')}đ đã được xử lý.`, '/wallet');
+      const notifications = addNotifTo(state.notifications, 'card', `Yêu cầu rút ${action.amount.toLocaleString('vi-VN')}đ đã được xử lý.`, '/wallet');
       return { ...state, balance, transactions, notifications };
     }
     case 'SUBSCRIBE_PRO': {
@@ -552,8 +586,8 @@ function reducer(state, action) {
       let transactions = addTxTo(state.transactions, 'subscription', 'Đăng ký gói Freelance Pro (1 tháng)', action.amount, -1);
       const fundAlloc = Math.round(action.amount * 0.1);
       const insuranceFund = state.insuranceFund + fundAlloc;
-      let notifications = addNotifTo(state.notifications, '⭐', 'Chúc mừng! Bạn đã nâng cấp lên Freelance Pro.', '/pricing');
-      notifications = addNotifTo(notifications, '🛡️', `${fundAlloc.toLocaleString('vi-VN')}đ (10% doanh thu Premium) vừa được trích vào Quỹ Bảo hiểm.`, '/wallet');
+      let notifications = addNotifTo(state.notifications, 'star', 'Chúc mừng! Bạn đã nâng cấp lên Freelance Pro.', '/pricing');
+      notifications = addNotifTo(notifications, 'shield-check', `${fundAlloc.toLocaleString('vi-VN')}đ (10% doanh thu Premium) vừa được trích vào Quỹ Bảo hiểm.`, '/wallet');
       return { ...state, balance, transactions, subscriptionPro: true, insuranceFund, notifications };
     }
     case 'UPGRADE_VIP': {
@@ -563,8 +597,8 @@ function reducer(state, action) {
       let transactions = addTxTo(state.transactions, 'subscription', 'Đăng ký gói VIP Business Suite (1 tháng)', amount, -1);
       const fundAlloc = Math.round(amount * 0.1);
       const insuranceFund = state.insuranceFund + fundAlloc;
-      let notifications = addNotifTo(state.notifications, '👑', 'Chúc mừng! Tài khoản của bạn đã là VIP Business Suite — hoa hồng giảm còn 5%.', '/pricing');
-      notifications = addNotifTo(notifications, '🛡️', `${fundAlloc.toLocaleString('vi-VN')}đ (10% gói VIP) vừa được trích vào Quỹ Bảo hiểm.`, '/wallet');
+      let notifications = addNotifTo(state.notifications, 'crown', 'Chúc mừng! Tài khoản của bạn đã là VIP Business Suite — hoa hồng giảm còn 5%.', '/pricing');
+      notifications = addNotifTo(notifications, 'shield-check', `${fundAlloc.toLocaleString('vi-VN')}đ (10% gói VIP) vừa được trích vào Quỹ Bảo hiểm.`, '/wallet');
       return { ...state, balance, transactions, vipBusiness: true, insuranceFund, notifications };
     }
     case 'SUBMIT_CLAIM': {
@@ -584,12 +618,12 @@ function reducer(state, action) {
         msg = `Khiếu nại "${jobTitle}" đã ghi nhận, quỹ tạm thời không đủ — sẽ xử lý ở kỳ đối soát tiếp theo.`;
       }
       const claims = [{ id: 'c' + Date.now(), jobTitle, desc, payout, status: 'approved', date: 'Vừa xong' }, ...state.claims];
-      const notifications = addNotifTo(state.notifications, '🛡️', msg, '/wallet');
+      const notifications = addNotifTo(state.notifications, 'shield-check', msg, '/wallet');
       return { ...state, insuranceFund, balance, transactions, claims, notifications };
     }
 
     case 'UPDATE_BANK_ACCOUNT': {
-      const notifications = addNotifTo(state.notifications, '🏦', 'Đã cập nhật thông tin tài khoản ngân hàng nhận tiền.', '/wallet');
+      const notifications = addNotifTo(state.notifications, 'card', 'Đã cập nhật thông tin tài khoản ngân hàng nhận tiền.', '/wallet');
       return { ...state, bankAccount: action.payload, notifications };
     }
 
@@ -607,12 +641,12 @@ function reducer(state, action) {
         sponsor: action.payload.sponsor || 'Doanh nghiệp'
       };
       const affiliateLeads = [newLead, ...(state.affiliateLeads || [])];
-      const notifications = addNotifTo(state.notifications, '⚡', `Đã gửi hồ sơ One-Touch Portfolio tới ${action.payload.sponsor || 'Doanh nghiệp'}!`, '/mywork');
+      const notifications = addNotifTo(state.notifications, 'zap', `Đã gửi hồ sơ One-Touch Portfolio tới ${action.payload.sponsor || 'Doanh nghiệp'}!`, '/mywork');
       return { ...state, affiliateLeads, notifications };
     }
 
     case 'SET_CV':
-      return { ...state, cvFile: action.file, notifications: addNotifTo(state.notifications, '📄', `Đã cập nhật CV: ${action.file.name}`, '/profile') };
+      return { ...state, cvFile: action.file, notifications: addNotifTo(state.notifications, 'file-text', `Đã cập nhật CV: ${action.file.name}`, '/profile') };
     case 'REMOVE_CV':
       return { ...state, cvFile: null };
     case 'ADD_CV_FILE': {
@@ -624,16 +658,16 @@ function reducer(state, action) {
         size: action.payload.size ? (action.payload.size > 1024 * 1024 ? (action.payload.size / (1024 * 1024)).toFixed(1) + ' MB' : (action.payload.size / 1024).toFixed(0) + ' KB') : '250 KB',
         date: fmtNow()
       };
-      return { ...state, cvFiles: [newCv, ...(state.cvFiles || [])], notifications: addNotifTo(state.notifications, '📄', `Đã thêm CV mới: ${newCv.label}`, '/profile') };
+      return { ...state, cvFiles: [newCv, ...(state.cvFiles || [])], notifications: addNotifTo(state.notifications, 'file-text', `Đã thêm CV mới: ${newCv.label}`, '/profile') };
     }
     case 'REMOVE_CV_FILE':
       return { ...state, cvFiles: (state.cvFiles || []).filter((c) => c.id !== action.id) };
     case 'ADD_EMPLOYER_DOCS':
-      return { ...state, employerDocs: [...action.files, ...state.employerDocs], notifications: addNotifTo(state.notifications, '🏢', `Đã tải ${action.files.length} file hồ sơ nhà tuyển dụng.`, '/profile') };
+      return { ...state, employerDocs: [...action.files, ...state.employerDocs], notifications: addNotifTo(state.notifications, 'building', `Đã tải ${action.files.length} file hồ sơ nhà tuyển dụng.`, '/profile') };
     case 'REMOVE_EMPLOYER_DOC':
       return { ...state, employerDocs: state.employerDocs.filter((_, i) => i !== action.idx) };
     case 'ADD_PORTFOLIO':
-      return { ...state, portfolioUploads: [action.item, ...state.portfolioUploads], notifications: addNotifTo(state.notifications, '🖼️', `Đã thêm portfolio: ${action.item.name}`, '/profile') };
+      return { ...state, portfolioUploads: [action.item, ...state.portfolioUploads], notifications: addNotifTo(state.notifications, 'image', `Đã thêm portfolio: ${action.item.name}`, '/profile') };
     case 'REMOVE_PORTFOLIO':
       return { ...state, portfolioUploads: state.portfolioUploads.filter((_, i) => i !== action.idx) };
 
@@ -644,7 +678,7 @@ function reducer(state, action) {
         return {
           ...state,
           employerReviews: [{ name: withName, stars, comment, jobTitle }, ...state.employerReviews],
-          notifications: addNotifTo(state.notifications, '⭐', `Bạn đã đánh giá nhà tuyển dụng ${withName} ${stars} sao.`, '/profile'),
+          notifications: addNotifTo(state.notifications, 'star', `Bạn đã đánh giá nhà tuyển dụng ${withName} ${stars} sao.`, '/profile'),
         };
       }
       const delta = (stars - 3) * 5;
@@ -653,7 +687,7 @@ function reducer(state, action) {
         ...state,
         reviews: [{ name: withName, stars, comment }, ...state.reviews],
         myReliability,
-        notifications: addNotifTo(state.notifications, '⭐', `Bạn đã đánh giá ${withName} ${stars} sao.`, '/profile'),
+        notifications: addNotifTo(state.notifications, 'star', `Bạn đã đánh giá ${withName} ${stars} sao.`, '/profile'),
       };
     }
 
@@ -666,12 +700,12 @@ function reducer(state, action) {
           if (isNaN(deadlineTs)) return job;
           const remain = deadlineTs - Date.now();
           if (remain <= 0) {
-            notifications = addNotifTo(notifications, '⏰', `Công việc "${job.title}" đã quá hạn hoàn thành. Vui lòng liên hệ ${job.hiredApplicant || 'sinh viên'} hoặc gửi khiếu nại nếu cần.`, '/dashboard');
+            notifications = addNotifTo(notifications, 'clock', `Công việc "${job.title}" đã quá hạn hoàn thành. Vui lòng liên hệ ${job.hiredApplicant || 'sinh viên'} hoặc gửi khiếu nại nếu cần.`, '/dashboard');
             changed = true;
             return { ...job, deadlineReminderSent: true };
           }
           if (remain > 0 && remain < 12 * 3600000) {
-            notifications = addNotifTo(notifications, '⏰', `Công việc "${job.title}" sắp tới hạn (còn dưới 12 giờ). Nhắc ${job.hiredApplicant || 'sinh viên'} nộp bàn giao sớm.`, '/dashboard');
+            notifications = addNotifTo(notifications, 'clock', `Công việc "${job.title}" sắp tới hạn (còn dưới 12 giờ). Nhắc ${job.hiredApplicant || 'sinh viên'} nộp bàn giao sớm.`, '/dashboard');
             changed = true;
             return { ...job, deadlineReminderSent: true };
           }
@@ -810,9 +844,11 @@ export function StoreProvider({ children }) {
           }
           const wallet = await walletApi.getMyWallet();
           if (wallet && isMounted) {
+            const mappedReceipts = mapReceiptsFromApi(wallet.receipts);
             dispatch({
               type: 'SET_WALLET',
               balance: wallet.balance,
+              escrowLocked: wallet.escrowLocked ?? 0,
               transactions: (wallet.transactions || []).map(t => ({
                 id: t.id,
                 type: t.type,
@@ -820,7 +856,8 @@ export function StoreProvider({ children }) {
                 amount: t.amount,
                 sign: t.sign,
                 date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
-              }))
+              })),
+              receipts: mappedReceipts || undefined
             });
           }
         } catch (e) {
@@ -881,9 +918,11 @@ export function StoreProvider({ children }) {
     try {
       const res = await walletApi.getMyWallet();
       if (res) {
+        const mappedReceipts = mapReceiptsFromApi(res.receipts);
         dispatch({
           type: 'SET_WALLET',
           balance: res.balance,
+          escrowLocked: res.escrowLocked ?? 0,
           transactions: (res.transactions || []).map(t => ({
             id: t.id,
             type: t.type,
@@ -891,7 +930,8 @@ export function StoreProvider({ children }) {
             amount: t.amount,
             sign: t.sign,
             date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
-          }))
+          })),
+          receipts: mappedReceipts || undefined
         });
       }
     } catch {
@@ -989,13 +1029,13 @@ export function StoreProvider({ children }) {
       createJobPost: async (jobData) => {
         const result = await jobApi.createJob(jobData);
         await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
-        showToast('Đăng tin tuyển dụng thành công!', '🚀');
+        showToast('Đăng tin tuyển dụng thành công!', 'check');
         return result;
       },
       updateJobPost: async (id, jobData) => {
         const result = await jobApi.updateJob(id, jobData);
         await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
-        showToast('Cập nhật tin tuyển dụng thành công!', '✓');
+        showToast('Cập nhật tin tuyển dụng thành công!', 'check');
         return result;
       },
       cancelJob: async (id) => {
@@ -1003,10 +1043,10 @@ export function StoreProvider({ children }) {
           const result = await jobApi.cancelJob(id);
           dispatch({ type: 'CANCEL_JOB', id });
           await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
-          showToast('Đã đóng tin tuyển dụng thành công.', '🚫');
+          showToast('Đã đóng tin tuyển dụng thành công.', 'ban');
           return result;
         } catch (err) {
-          showToast(err?.message || 'Không thể đóng tin tuyển dụng.', '⚠️');
+          showToast(err?.message || 'Không thể đóng tin tuyển dụng.', 'warning');
           throw err;
         }
       },
@@ -1015,10 +1055,10 @@ export function StoreProvider({ children }) {
           const result = await jobApi.deleteJob(id);
           dispatch({ type: 'DELETE_JOB', id });
           await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
-          showToast('Đã xóa vĩnh viễn tin tuyển dụng.', '🗑');
+          showToast('Đã xóa vĩnh viễn tin tuyển dụng.', 'trash');
           return result;
         } catch (err) {
-          showToast(err?.message || 'Không thể xóa tin tuyển dụng.', '⚠️');
+          showToast(err?.message || 'Không thể xóa tin tuyển dụng.', 'warning');
           throw err;
         }
       },
@@ -1027,10 +1067,10 @@ export function StoreProvider({ children }) {
           const result = await jobApi.reopenJob(id);
           dispatch({ type: 'REOPEN_JOB', id });
           await Promise.allSettled([refreshJobs(), refreshMyJobs()]);
-          showToast('Đã mở lại tin tuyển dụng thành công!', '🎉');
+          showToast('Đã mở lại tin tuyển dụng thành công!', 'check');
           return result;
         } catch (err) {
-          showToast(err?.message || 'Không thể mở lại tin tuyển dụng.', '⚠️');
+          showToast(err?.message || 'Không thể mở lại tin tuyển dụng.', 'warning');
           throw err;
         }
       },
@@ -1041,11 +1081,11 @@ export function StoreProvider({ children }) {
         if (isSaved) {
           await jobApi.unsaveJob(jobId);
           dispatch({ type: 'SET_SAVED_JOB_IDS', ids: (state.savedJobIds || []).filter((id) => id !== jobId) });
-          showToast('Đã bỏ lưu công việc.', '💔');
+          showToast('Đã bỏ lưu công việc.', 'info');
         } else {
           await jobApi.saveJob(jobId);
           dispatch({ type: 'SET_SAVED_JOB_IDS', ids: [...(state.savedJobIds || []), jobId] });
-          showToast('Đã lưu công việc vào mục yêu thích!', '❤️');
+          showToast('Đã lưu công việc vào mục yêu thích!', 'heart');
         }
       },
       applyJobAsync: async (jobId, cvFileId, coverLetter = '') => {
@@ -1057,7 +1097,7 @@ export function StoreProvider({ children }) {
         } else {
           dispatch({ type: 'APPLY_JOB', id: jobId });
         }
-        showToast('Nộp đơn ứng tuyển thành công!', '🚀');
+        showToast('Nộp đơn ứng tuyển thành công!', 'check');
         return result;
       },
       uploadCvAsync: async (payload) => {
@@ -1086,13 +1126,13 @@ export function StoreProvider({ children }) {
           uploadedAt: created.uploadedAt
         };
         dispatch({ type: 'SET_CV_FILES', files: [formatted, ...(state.cvFiles || [])] });
-        showToast('Tải lên CV chuyên môn thành công!', '📄');
+        showToast('Tải lên CV chuyên môn thành công!', 'file-text');
         return formatted;
       },
       deleteCvAsync: async (id) => {
         await cvApi.deleteCv(id);
         dispatch({ type: 'SET_CV_FILES', files: (state.cvFiles || []).filter(c => c.id !== id) });
-        showToast('Đã xóa CV.', '🗑️');
+        showToast('Đã xóa CV.', 'trash');
       },
       hire: async (payload) => {
         const { jobId, applicationId, applicant, days } = payload;
@@ -1111,7 +1151,7 @@ export function StoreProvider({ children }) {
           }
         });
         await Promise.allSettled([refreshJobs(), refreshMyJobs(), refreshWallet()]);
-        showToast('Đã thuê ứng viên và ký quỹ thành công!', '🤝');
+        showToast('Đã thuê ứng viên và ký quỹ thành công!', 'award');
       },
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),
       topup: async (amount, methodLabel) => {
@@ -1133,30 +1173,30 @@ export function StoreProvider({ children }) {
           } else {
             dispatch({ type: 'TOPUP', amount, methodLabel });
           }
-          showToast(`Nạp ${amount.toLocaleString('vi-VN')}đ thành công!`, '✓');
+          showToast(`Nạp ${amount.toLocaleString('vi-VN')}đ thành công!`, 'check');
         } catch (err) {
-          showToast(err?.message || 'Không thể nạp tiền vào ví.', '⚠️');
+          showToast(err?.message || 'Không thể nạp tiền vào ví.', 'warning');
           throw err;
         }
       },
       refreshWallet,
-      withdraw: (amount) => { dispatch({ type: 'WITHDRAW', amount }); showToast(`Đã gửi yêu cầu rút ${amount.toLocaleString('vi-VN')}đ.`, '✓'); },
-      updateBankAccount: (payload) => { dispatch({ type: 'UPDATE_BANK_ACCOUNT', payload }); showToast('Cập nhật tài khoản ngân hàng thành công!', '✓'); },
+      withdraw: (amount) => { dispatch({ type: 'WITHDRAW', amount }); showToast(`Đã gửi yêu cầu rút ${amount.toLocaleString('vi-VN')}đ.`, 'check'); },
+      updateBankAccount: (payload) => { dispatch({ type: 'UPDATE_BANK_ACCOUNT', payload }); showToast('Cập nhật tài khoản ngân hàng thành công!', 'check'); },
       subscribePro: (amount, method) => dispatch({ type: 'SUBSCRIBE_PRO', amount, method }),
-      upgradeVip: (amount, method) => { dispatch({ type: 'UPGRADE_VIP', amount, method }); showToast('Đã nâng cấp VIP Business Suite!', '👑'); },
-      submitClaim: (payload) => { dispatch({ type: 'SUBMIT_CLAIM', payload }); showToast('Đội ngũ Dispute Resolution đã xử lý khiếu nại của bạn!', '🛡️'); },
-      submitOneTouchLead: (payload) => { dispatch({ type: 'SUBMIT_ONE_TOUCH_LEAD', payload }); showToast('⚡ Đã gửi hồ sơ One-Touch Portfolio thành công!', '🚀'); },
-      setCv: (file) => { dispatch({ type: 'SET_CV', file }); showToast('Đã tải CV lên hồ sơ.', '✓'); },
-      removeCv: () => { dispatch({ type: 'REMOVE_CV' }); showToast('Đã xoá CV khỏi hồ sơ.', '🗑️'); },
-      addCvFile: (payload) => { dispatch({ type: 'ADD_CV_FILE', payload }); showToast('Đã thêm CV chuyên môn mới!', '📄'); },
-      removeCvFile: (id) => { dispatch({ type: 'REMOVE_CV_FILE', id }); showToast('Đã xóa CV.', '🗑️'); },
+      upgradeVip: (amount, method) => { dispatch({ type: 'UPGRADE_VIP', amount, method }); showToast('Đã nâng cấp VIP Business Suite!', 'crown'); },
+      submitClaim: (payload) => { dispatch({ type: 'SUBMIT_CLAIM', payload }); showToast('Đội ngũ Dispute Resolution đã xử lý khiếu nại của bạn!', 'shield-check'); },
+      submitOneTouchLead: (payload) => { dispatch({ type: 'SUBMIT_ONE_TOUCH_LEAD', payload }); showToast('Đã gửi hồ sơ One-Touch Portfolio thành công!', 'check'); },
+      setCv: (file) => { dispatch({ type: 'SET_CV', file }); showToast('Đã tải CV lên hồ sơ.', 'check'); },
+      removeCv: () => { dispatch({ type: 'REMOVE_CV' }); showToast('Đã xoá CV khỏi hồ sơ.', 'trash'); },
+      addCvFile: (payload) => { dispatch({ type: 'ADD_CV_FILE', payload }); showToast('Đã thêm CV chuyên môn mới!', 'file-text'); },
+      removeCvFile: (id) => { dispatch({ type: 'REMOVE_CV_FILE', id }); showToast('Đã xóa CV.', 'trash'); },
       cancelStudentWorkAsync: async (jobId, reason = '') => {
         try {
           await applicationApi.cancelOrWithdrawApplication(jobId, reason);
           await refreshMyApplications();
-          showToast('Đã hủy việc thành công.', 'ℹ️');
+          showToast('Đã hủy việc thành công.', 'info');
         } catch (err) {
-          showToast(err?.message || 'Không thể hủy việc.', '⚠️');
+          showToast(err?.message || 'Không thể hủy việc.', 'warning');
           throw err;
         }
       },
@@ -1164,17 +1204,17 @@ export function StoreProvider({ children }) {
         try {
           await applicationApi.cancelOrWithdrawApplication(jobId, 'Rút đơn');
           await refreshMyApplications();
-          showToast('Đã rút đơn ứng tuyển.', 'ℹ️');
+          showToast('Đã rút đơn ứng tuyển.', 'info');
         } catch (err) {
-          showToast(err?.message || 'Không thể rút đơn ứng tuyển.', '⚠️');
+          showToast(err?.message || 'Không thể rút đơn ứng tuyển.', 'warning');
           throw err;
         }
       },
-      addEmployerDocs: (files) => { dispatch({ type: 'ADD_EMPLOYER_DOCS', files }); showToast('Đã cập nhật hồ sơ công ty.', '✓'); },
+      addEmployerDocs: (files) => { dispatch({ type: 'ADD_EMPLOYER_DOCS', files }); showToast('Đã cập nhật hồ sơ công ty.', 'check'); },
       removeEmployerDoc: (idx) => dispatch({ type: 'REMOVE_EMPLOYER_DOC', idx }),
-      addPortfolio: (item) => { dispatch({ type: 'ADD_PORTFOLIO', item }); showToast('Đã thêm vào portfolio.', '✓'); },
+      addPortfolio: (item) => { dispatch({ type: 'ADD_PORTFOLIO', item }); showToast('Đã thêm vào portfolio.', 'check'); },
       removePortfolio: (idx) => dispatch({ type: 'REMOVE_PORTFOLIO', idx }),
-      submitReview: (payload) => { dispatch({ type: 'SUBMIT_REVIEW', payload }); showToast('Cảm ơn bạn đã gửi đánh giá!', '✓'); },
+      submitReview: (payload) => { dispatch({ type: 'SUBMIT_REVIEW', payload }); showToast('Cảm ơn bạn đã gửi đánh giá!', 'check'); },
       markAllNotifRead: () => dispatch({ type: 'MARK_ALL_NOTIF_READ' }),
       markNotifRead: (id) => dispatch({ type: 'MARK_NOTIF_READ', id }),
       toggleMessengerPanel: (open) => dispatch({ type: 'TOGGLE_MESSENGER_PANEL', open }),
@@ -1204,7 +1244,7 @@ export function StoreProvider({ children }) {
           console.warn('Không thể tải hồ sơ chi tiết khi đăng nhập:', e);
         }
         await refreshWallet();
-        showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, '👋');
+        showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, 'user');
         return result;
       },
       logout: async () => {
@@ -1216,16 +1256,16 @@ export function StoreProvider({ children }) {
         clearAccessToken();
         dispatch({ type: 'AUTH_LOGOUT' });
         authBroadcast?.postMessage({ type: 'AUTH_LOGOUT' });
-        showToast(`Đã đăng xuất`, '👋');
+        showToast(`Đã đăng xuất`, 'user');
       },
       reviewDeliverableAsync: async (jobId, deliverableId, reviewData) => {
         const res = await deliverableApi.reviewJobDeliverable(jobId, deliverableId, reviewData);
         await Promise.allSettled([refreshJobs(), refreshMyJobs(), refreshWallet()]);
         if (reviewData?.status === 'accepted') {
           dispatch({ type: 'RECORD_REAL_RECEIPT', payload: { jobId, deliverableResult: res } });
-          showToast('Nghiệm thu sản phẩm & giải ngân thành công!', '🎉');
+          showToast('Nghiệm thu sản phẩm & giải ngân thành công!', 'check');
         } else if (reviewData?.status === 'revision_requested') {
-          showToast('Đã gửi yêu cầu chỉnh sửa sản phẩm.', '✏️');
+          showToast('Đã gửi yêu cầu chỉnh sửa sản phẩm.', 'edit');
         }
         return res;
       },
@@ -1241,17 +1281,17 @@ export function StoreProvider({ children }) {
             website: patch.website || null
           });
           dispatch({ type: 'UPDATE_PROFILE', patch: { ...patch, ...res } });
-          showToast('Đã cập nhật thông tin tài khoản.', '✓');
+          showToast('Đã cập nhật thông tin tài khoản.', 'check');
           return res;
         } catch (err) {
           console.warn('Backend update profile fallback:', err);
           dispatch({ type: 'UPDATE_PROFILE', patch });
-          showToast('Đã lưu thông tin tài khoản.', '✓');
+          showToast('Đã lưu thông tin tài khoản.', 'check');
         }
       },
       changePassword: async (currentPassword, newPassword) => {
         const result = await changePasswordApi(currentPassword, newPassword);
-        showToast(result?.message || 'Đã đổi mật khẩu thành công.', '✓');
+        showToast(result?.message || 'Đã đổi mật khẩu thành công.', 'check');
         return result;
       },
       register: async (fullName, email, password, phoneNumber, roleCode) => {
@@ -1259,7 +1299,7 @@ export function StoreProvider({ children }) {
       },
       updateAdsSettings: (patch) => {
         dispatch({ type: 'UPDATE_ADS_SETTINGS', payload: patch });
-        showToast('Đã lưu cài đặt chiến dịch quảng cáo.', '📢');
+        showToast('Đã lưu cài đặt chiến dịch quảng cáo.', 'info');
       }
     };
     act.cancelJobPost = act.cancelJob;

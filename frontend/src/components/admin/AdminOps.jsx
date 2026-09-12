@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useAdmin } from '../../context/AdminContext';
 import { useToast } from '../../context/ToastContext';
+import Icon from '../Icon';
 
-const PRIORITY_LABEL = { high: '🔴 Cao', medium: '🟡 Vừa', low: '🟢 Thấp' };
+const PRIORITY_LABEL = { high: 'Cao', medium: 'Vừa', low: 'Thấp' };
 const PRIORITY_STYLE = {
   high: { background: 'rgba(239, 68, 68, 0.1)', color: '#dc2626' },
   medium: { background: 'rgba(234, 179, 8, 0.1)', color: '#d97706' },
@@ -33,9 +34,9 @@ export default function AdminOps() {
       if (closeTicket) {
         resolveTicket(viewTicket.id);
         viewTicket.status = 'closed';
-        showToast('Đã gửi phản hồi và đóng ticket hỗ trợ thành công!', '✅');
+        showToast('Đã gửi phản hồi và đóng ticket hỗ trợ thành công!', 'check');
       } else {
-        showToast('Đã gửi phản hồi tới người dùng.', '💬');
+        showToast('Đã gửi phản hồi tới người dùng.', 'check');
       }
       setReplyText('');
       setViewTicket(null);
@@ -51,7 +52,9 @@ export default function AdminOps() {
 
       <div className="adm-card">
         <div className="adm-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h4 style={{ margin: 0 }}>🎫 Hộp Ticket hỗ trợ người dùng</h4>
+          <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="ticket" width="16" height="16" /> Hộp Ticket hỗ trợ người dùng
+          </h4>
           <span className="sub">{openTickets.length} yêu cầu đang chờ giải quyết</span>
         </div>
 
@@ -85,10 +88,10 @@ export default function AdminOps() {
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span className={'chip ' + (t.status === 'open' ? 'chip-lime' : '')} style={{ fontSize: 11.5 }}>
-                  {t.status === 'open' ? '⏳ Đang mở' : '✓ Đã đóng'}
+                  {t.status === 'open' ? 'Đang mở' : 'Đã đóng'}
                 </span>
-                <button className="btn btn-primary btn-sm" onClick={() => setViewTicket(t)}>
-                  ✉️ Xem & Phản hồi
+                <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => setViewTicket(t)}>
+                  <Icon name="mail" width="13" height="13" /> Xem & Phản hồi
                 </button>
                 {t.status === 'open' && (
                   <button className="btn btn-outline btn-sm" onClick={() => resolveTicket(t.id)}>
@@ -103,7 +106,7 @@ export default function AdminOps() {
 
       <div className="adm-card" style={{ marginTop: 24 }}>
         <div className="adm-card-head">
-          <h4>⚙️ Cấu hình tham số hệ thống</h4>
+          <h4>Cấu hình tham số hệ thống</h4>
           <span className="sub">Điều chỉnh chính sách tự động không cần can thiệp code</span>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 12 }}>
@@ -129,15 +132,17 @@ export default function AdminOps() {
           </div>
         </div>
         <div style={{ marginTop: 16 }}>
-          <button className="btn btn-primary" onClick={() => saveConfig(form)}>
-            💾 Lưu cấu hình tham số
+          <button className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => saveConfig(form)}>
+            <Icon name="check" width="14" height="14" /> Lưu cấu hình tham số
           </button>
         </div>
       </div>
 
       <div className="adm-card" style={{ marginTop: 24 }}>
         <div className="adm-card-head">
-          <h4>📜 Nhật ký hoạt động toàn hệ thống (Audit Trail)</h4>
+          <h4 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="file-text" width="16" height="16" /> Nhật ký hoạt động toàn hệ thống (Audit Trail)
+          </h4>
         </div>
         <div className="adm-audit-log" style={{ marginTop: 10 }}>
           {auditLog.map((l, i) => (
@@ -155,7 +160,9 @@ export default function AdminOps() {
       {viewTicket && (
         <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setViewTicket(null); }}>
           <div className="modal-box" style={{ maxWidth: 620, maxHeight: '90vh', overflowY: 'auto' }}>
-            <button className="modal-close" onClick={() => setViewTicket(null)}>✕</button>
+            <button className="modal-close" onClick={() => setViewTicket(null)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" width="16" height="16" />
+            </button>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <span className="chip" style={{ ...PRIORITY_STYLE[viewTicket.priority], fontSize: 11 }}>
@@ -169,7 +176,7 @@ export default function AdminOps() {
             <div className="checkout-summary" style={{ marginBottom: 14 }}>
               <div className="cs-row"><span>Người gửi yêu cầu</span><b>{viewTicket.user} ({viewTicket.userEmail || 'user@edu.vn'})</b></div>
               <div className="cs-row"><span>Thời điểm tạo ticket</span><span>{viewTicket.createdAt || 'Hôm nay'}</span></div>
-              <div className="cs-row total"><span>Trạng thái</span><b>{viewTicket.status === 'open' ? '⏳ Đang chờ giải quyết' : '✓ Đã đóng'}</b></div>
+              <div className="cs-row total"><span>Trạng thái</span><b>{viewTicket.status === 'open' ? 'Đang chờ giải quyết' : 'Đã đóng'}</b></div>
             </div>
 
             {/* User Message */}
@@ -214,8 +221,8 @@ export default function AdminOps() {
             <div className="modal-actions" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {viewTicket.status === 'open' ? (
                 <>
-                  <button className="btn btn-primary" onClick={() => handleSendReply(true)}>
-                    ✓ Gửi phản hồi & Đóng ticket
+                  <button className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => handleSendReply(true)}>
+                    <Icon name="check" width="14" height="14" /> Gửi phản hồi & Đóng ticket
                   </button>
                   <button className="btn btn-outline" onClick={() => handleSendReply(false)}>
                     Gửi phản hồi (Giữ mở)

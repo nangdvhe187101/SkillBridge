@@ -3,6 +3,7 @@ import IconDefs from './IconDefs';
 import TopNav from './TopNav';
 import ModalRoot from './ModalRoot';
 import MessengerWidget from './messenger/MessengerWidget';
+import Footer from './Footer';
 import { useStore } from '../context/StoreContext';
 
 export default function Layout() {
@@ -18,6 +19,7 @@ export default function Layout() {
       <Outlet />
       <ModalRoot />
       {isLoggedIn && !onMessagesPage && <MessengerWidget />}
+      {!onMessagesPage && <Footer />}
     </>
   );
 }
