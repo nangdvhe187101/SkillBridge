@@ -434,4 +434,75 @@ public class BugFixesRegressionTests
         Assert.NotNull(updatedApp);
         Assert.Equal("cancelled", updatedApp.Status);
     }
+
+    [Fact]
+    public async Task CancelOrWithdrawApplication_WhenJobCancelledAndApplicantPending_ShouldAllowWithdrawal()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var appRepoMock = new Mock<IApplicationRepository>();
+        var jobRepoMock = new Mock<IJobRepository>();
+        var cvRepoMock = new Mock<ICvFileRepository>();
+        var storageMock = new Mock<IStorageService>();
+        var escrowMock = new Mock<IEscrowPaymentService>();
+        var reliabilityMock = new Mock<IUserReliabilityService>();
+        var notifMock = new Mock<INotificationService>();
+        var loggerMock = new Mock<ILogger<ApplicationService>>();
+
+        var studentId = 7;
+        var employerId = 12;
+        var jobId = 105;
+
+        var student = new User { Id = studentId, RoleId = 1, Email = "student7@test.com", FullName = "Student 7", AccountStatus = "active", KycStatus = "verified", PasswordHash = "hash" };
+        await dbContext.Users.AddAsync(student);
+
+        var job = new Job
+        {
+            Id = jobId,
+            EmployerId = employerId,
+            Title = "Job đã bị hủy",
+            Description = "Mô tả",
+            Status = "cancelled",
+            HiredApplicantId = null,
+            Budget = 300000m
+        };
+
+        var application = new JobApplication
+        {
+            Id = 701,
+            JobId = jobId,
+            StudentId = studentId,
+            Status = "pending",
+            CoverLetter = "Đơn chờ duyệt",
+            AppliedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await dbContext.Jobs.AddAsync(job);
+        await dbContext.Applications.AddAsync(application);
+        await dbContext.SaveChangesAsync();
+
+        var service = new ApplicationService(
+            appRepoMock.Object,
+            jobRepoMock.Object,
+            cvRepoMock.Object,
+            dbContext,
+            storageMock.Object,
+            escrowMock.Object,
+            reliabilityMock.Object,
+            notifMock.Object,
+            loggerMock.Object);
+
+        // Act - sinh viên rút đơn pending trên job đã hủy bởi NTD
+        await service.CancelOrWithdrawApplicationAsync(studentId, jobId, "Rút đơn khỏi job đã bị hủy");
+
+        // Assert
+        var updatedApp = await dbContext.Applications.FindAsync(701);
+        Assert.NotNull(updatedApp);
+        Assert.Equal("cancelled", updatedApp.Status);
+
+        // Không trừ điểm uy tín hay refund
+        reliabilityMock.Verify(r => r.PenalizeScoreAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        escrowMock.Verify(e => e.RefundEscrowAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<decimal>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
 }

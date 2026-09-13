@@ -73,23 +73,29 @@ export default function PaymentResult() {
     };
   }, [fetchStatus]);
 
-  // Realtime SignalR connection fallback
+  const fetchStatusRef = useRef(fetchStatus);
+  fetchStatusRef.current = fetchStatus;
+
+  const handlePaymentSuccessRef = useRef(handlePaymentSuccess);
+  handlePaymentSuccessRef.current = handlePaymentSuccess;
+
+  // Realtime SignalR connection fallback (giữ kết nối liên tục, không tạo lại handshake khi retryCount thay đổi)
   useEffect(() => {
     if (!orderCode || order?.status === 'paid') return;
 
     const signalR = connectPaymentRealtime(orderCode, {
       onPaymentSuccess: (payload) => {
-        handlePaymentSuccess(payload);
+        handlePaymentSuccessRef.current?.(payload);
       },
       onReconnected: () => {
-        fetchStatus();
+        fetchStatusRef.current?.();
       },
     });
 
     return () => {
       signalR.stop();
     };
-  }, [orderCode, order?.status, handlePaymentSuccess, fetchStatus]);
+  }, [orderCode, order?.status]);
 
   return (
     <div className="page wrap" style={{ maxWidth: 560, margin: '40px auto', padding: '0 16px' }}>

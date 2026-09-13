@@ -375,11 +375,6 @@ public class ApplicationService : IApplicationService
                     throw new BusinessException("Công việc không tồn tại.");
                 }
 
-                if (job.Status == "cancelled")
-                {
-                    throw new BusinessException("Công việc này đã bị hủy trước đó.");
-                }
-
                 var application = await _dbContext.Applications
                     .Include(a => a.Student)
                     .FirstOrDefaultAsync(a => a.StudentId == studentId && a.JobId == jobId);
@@ -406,6 +401,13 @@ public class ApplicationService : IApplicationService
 
                 // Đánh giá trạng thái dựa trên bản ghi Job đã được khóa độc quyền
                 var isHiredForThisJob = application.Status == "hired" || job.HiredApplicantId == studentId;
+
+                // Chỉ chặn hủy công việc đã hủy nếu sinh viên là người đã được thuê (để bảo vệ luồng hoàn tiền/phạt điểm)
+                if (isHiredForThisJob && job.Status == "cancelled")
+                {
+                    throw new BusinessException("Công việc này đã bị hủy trước đó.");
+                }
+
                 var isJobInProgress = new[] { "in_progress", "submitted", "revision_requested" }.Contains(job.Status);
                 var isHiredOrInProgress = isHiredForThisJob && isJobInProgress;
                 var filesToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
