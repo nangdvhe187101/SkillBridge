@@ -11,6 +11,7 @@ import * as applicationApi from '../api/applicationApi';
 import * as userApi from '../api/userApi';
 import * as deliverableApi from '../api/deliverableApi';
 import * as walletApi from '../api/walletApi';
+import * as notificationApi from '../api/notificationApi';
 import { setAccessToken, clearAccessToken } from '../api/tokenStore';
 
 const StoreContext = createContext(null);
@@ -175,10 +176,7 @@ const initialState = {
   vipBusiness: false,
   myReliability: 96,
   myApplications: [],
-  notifications: [
-    { id: 1, icon: 'bell', text: 'Chào mừng bạn đến với SkillBridge!', read: false, time: 'Vừa xong', link: '/' },
-    { id: 2, icon: 'check', text: 'Hồ sơ của bạn đã được xác thực qua email trường.', read: false, time: '1 giờ trước', link: '/profile' },
-  ],
+  notifications: [],
   reviews: [],
   employerReviews: [],
   token: null, // token chỉ lưu trong memory (tokenStore.js), không còn persist localStorage
@@ -691,6 +689,9 @@ function reducer(state, action) {
       return { ...state, myJobs, notifications };
     }
 
+    case 'SET_NOTIFICATIONS':
+      return { ...state, notifications: action.notifications };
+
     case 'MARK_ALL_NOTIF_READ':
       return { ...state, notifications: state.notifications.map((n) => ({ ...n, read: true })) };
     case 'MARK_NOTIF_READ':
@@ -931,6 +932,42 @@ export function StoreProvider({ children }) {
     }
   }, []);
 
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const res = await notificationApi.getNotifications(1, 30);
+      if (res?.items) {
+        const formatted = res.items.map((n) => {
+          const createdAt = new Date(n.createdAt);
+          const diffMs = Date.now() - createdAt.getTime();
+          const diffMins = Math.floor(diffMs / 60000);
+          let time = 'Vừa xong';
+          if (diffMins >= 1440) {
+            time = `${Math.floor(diffMins / 1440)} ngày trước`;
+          } else if (diffMins >= 60) {
+            time = `${Math.floor(diffMins / 60)} giờ trước`;
+          } else if (diffMins > 1) {
+            time = `${diffMins} phút trước`;
+          }
+
+          return {
+            id: n.id,
+            icon: n.icon || 'bell',
+            text: n.messageText,
+            link: n.link || null,
+            read: n.isRead,
+            time,
+            createdAt: n.createdAt,
+          };
+        });
+        dispatch({ type: 'SET_NOTIFICATIONS', notifications: formatted });
+        return formatted;
+      }
+    } catch {
+      // Bỏ qua khi chưa đăng nhập hoặc lỗi mạng tạm thời
+    }
+    return [];
+  }, []);
+
   // Tải danh mục và danh sách công việc công khai (không cần đăng nhập)
   useEffect(() => {
     jobApi.getCategories()
@@ -950,6 +987,9 @@ export function StoreProvider({ children }) {
     if (state.isInitializing || !state.currentUser) {
       return;
     }
+
+    // Tải thông báo thực tế của người dùng từ backend
+    refreshNotifications();
 
     // Nếu là employer, tải danh sách myJobs từ backend
     if (state.currentUser.roleCode === 'employer') {
@@ -983,10 +1023,15 @@ export function StoreProvider({ children }) {
 
       refreshMyApplications();
     }
-  }, [state.currentUser, state.isInitializing, refreshMyJobs, refreshMyApplications]);
+  }, [state.currentUser, state.isInitializing, refreshMyJobs, refreshMyApplications, refreshNotifications]);
 
   useEffect(() => {
-    const id = setInterval(() => dispatch({ type: 'CHECK_DEADLINES' }), 30000);
+    const id = setInterval(() => {
+      dispatch({ type: 'CHECK_DEADLINES' });
+      if (state.currentUser) {
+        refreshNotifications();
+      }
+    }, 30000);
     const onTokenRefreshed = (e) => {
       if (e.detail?.token) {
         dispatch({ type: 'SET_ACCESS_TOKEN', token: e.detail.token });
@@ -998,7 +1043,7 @@ export function StoreProvider({ children }) {
       clearInterval(id);
       window.removeEventListener('auth:token_refreshed', onTokenRefreshed);
     };
-  }, []);
+  }, [state.currentUser, refreshNotifications]);
 
   const actions = useMemo(() => {
     const act = {
@@ -1189,8 +1234,23 @@ export function StoreProvider({ children }) {
       addPortfolio: (item) => { dispatch({ type: 'ADD_PORTFOLIO', item }); showToast('Đã thêm vào portfolio.', 'check'); },
       removePortfolio: (idx) => dispatch({ type: 'REMOVE_PORTFOLIO', idx }),
       submitReview: (payload) => { dispatch({ type: 'SUBMIT_REVIEW', payload }); showToast('Cảm ơn bạn đã gửi đánh giá!', 'check'); },
-      markAllNotifRead: () => dispatch({ type: 'MARK_ALL_NOTIF_READ' }),
-      markNotifRead: (id) => dispatch({ type: 'MARK_NOTIF_READ', id }),
+      markAllNotifRead: async () => {
+        dispatch({ type: 'MARK_ALL_NOTIF_READ' });
+        try {
+          await notificationApi.markAllNotificationsAsRead();
+        } catch (err) {
+          console.error('Không thể đánh dấu đã đọc tất cả thông báo:', err);
+        }
+      },
+      markNotifRead: async (id) => {
+        dispatch({ type: 'MARK_NOTIF_READ', id });
+        try {
+          await notificationApi.markNotificationAsRead(id);
+        } catch (err) {
+          console.error(`Không thể đánh dấu đã đọc thông báo ${id}:`, err);
+        }
+      },
+      refreshNotifications,
       toggleMessengerPanel: (open) => dispatch({ type: 'TOGGLE_MESSENGER_PANEL', open }),
       openChat: (id) => dispatch({ type: 'OPEN_CHAT_WINDOW', id }),
       openChatWithPerson: (name, subtitle) => dispatch({ type: 'OPEN_CHAT_WITH_PERSON', payload: { name, subtitle } }),
@@ -1283,7 +1343,7 @@ export function StoreProvider({ children }) {
     act.toggleSaveJob = act.toggleSaveJobAsync;
     return act;
   },
-  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, refreshWallet, state.cvFiles, state.myApplications]
+  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, refreshWallet, state.cvFiles, state.myApplications, refreshNotifications]
 );
 
   const value = useMemo(() => ({ state, dispatch, ...actions }), [state, actions]);

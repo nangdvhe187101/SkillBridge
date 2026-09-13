@@ -10,7 +10,7 @@ export default function TopNav() {
   const [navOpen, setNavOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { theme, toggleTheme } = useTheme();
-  const { state, markAllNotifRead, markNotifRead, logout } = useStore();
+  const { state, markAllNotifRead, markNotifRead, refreshNotifications, logout } = useStore();
   const unreadCount = state.notifications.filter((n) => !n.read).length;
   const unreadMsgCount = (state.conversations || []).reduce((sum, c) => sum + c.unread, 0);
   const navigate = useNavigate();
@@ -23,6 +23,7 @@ export default function TopNav() {
 
   useEffect(() => {
     if (!notifOpen) return;
+    refreshNotifications?.();
     const onClickOutside = (e) => {
       if (notifWrapRef.current && !notifWrapRef.current.contains(e.target)) setNotifOpen(false);
     };
@@ -33,7 +34,7 @@ export default function TopNav() {
       document.removeEventListener('mousedown', onClickOutside);
       document.removeEventListener('keydown', onEsc);
     };
-  }, [notifOpen]);
+  }, [notifOpen, refreshNotifications]);
 
   useEffect(() => {
     if (!userMenuOpen) return;
@@ -212,7 +213,11 @@ export default function TopNav() {
                         onClick={() => handleNotifClick(n)}
                         onKeyDown={(e) => { if (e.key === 'Enter') handleNotifClick(n); }}>
                         <div className="notif-ic">
-                          <Icon name={n.icon || 'bell'} style={{ width: 16, height: 16, color: 'var(--primary)' }} />
+                          {n.icon && /\p{Extended_Pictographic}/u.test(n.icon) ? (
+                            <span style={{ fontSize: 16, lineHeight: 1 }}>{n.icon}</span>
+                          ) : (
+                            <Icon name={n.icon || 'bell'} style={{ width: 16, height: 16, color: 'var(--primary)' }} />
+                          )}
                         </div>
                         <div className="notif-txt"><p>{n.text}</p><span>{n.time}</span></div>
                         {n.link && <Icon name="chevright" className="notif-chev" />}
