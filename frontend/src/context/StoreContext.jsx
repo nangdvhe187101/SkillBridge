@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useCallback } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer, useCallback, useRef } from 'react';
 import { jobsSeed } from '../data/jobs';
 import { myJobsSeed } from '../data/myJobs';
 import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
@@ -296,6 +296,7 @@ function reducer(state, action) {
         return {
           ...oldJ,
           ...newJ,
+          deadlineReminderSent: oldJ.deadlineReminderSent,
           hiredApplicant: newJ.hiredApplicant || oldJ.hiredApplicant || null,
           hiredApplicantId: newJ.hiredApplicantId || oldJ.hiredApplicantId || null,
           hiredStudentName: newJ.hiredStudentName || oldJ.hiredStudentName || null,
@@ -628,15 +629,28 @@ function reducer(state, action) {
     }
 
     case 'CHECK_DEADLINES': {
+      if (action.reminders && action.reminders.length > 0) {
+        const reminderMap = new Map(action.reminders.map((r) => [r.jobId, r.level]));
+        const myJobs = state.myJobs.map((job) => {
+          const level = reminderMap.get(job.id);
+          return level ? { ...job, deadlineReminderSent: level } : job;
+        });
+        return { ...state, myJobs };
+      }
+
       let changed = false;
       const myJobs = state.myJobs.map((job) => {
-        if (['in_progress', 'submitted', 'revision_requested'].includes(job.status) && job.deadlineAt && !job.deadlineReminderSent) {
+        if (['in_progress', 'submitted', 'revision_requested'].includes(job.status) && job.deadlineAt) {
           const deadlineTs = typeof job.deadlineAt === 'number' ? job.deadlineAt : new Date(job.deadlineAt).getTime();
           if (isNaN(deadlineTs)) return job;
           const remain = deadlineTs - Date.now();
-          if (remain <= 0 || remain < 12 * 3600000) {
+          if (remain <= 0 && job.deadlineReminderSent !== 'overdue') {
             changed = true;
-            return { ...job, deadlineReminderSent: true };
+            return { ...job, deadlineReminderSent: 'overdue' };
+          }
+          if (remain > 0 && remain < 12 * 3600000 && !job.deadlineReminderSent) {
+            changed = true;
+            return { ...job, deadlineReminderSent: 'warning' };
           }
         }
         return job;
@@ -734,6 +748,16 @@ const authBroadcast = typeof window !== 'undefined' && 'BroadcastChannel' in win
 export function StoreProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { showToast } = useToast();
+  const showToastRef = useRef(showToast);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    showToastRef.current = showToast;
+  }, [showToast]);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // Lắng nghe sự kiện đăng nhập/đăng xuất từ các tab khác
   useEffect(() => {
@@ -982,12 +1006,48 @@ export function StoreProvider({ children }) {
   }, [state.currentUser, state.isInitializing, refreshMyJobs, refreshMyApplications, refreshNotifications]);
 
   useEffect(() => {
+    const checkDeadlines = () => {
+      const currentJobs = stateRef.current?.myJobs || [];
+      const now = Date.now();
+      const reminders = [];
+
+      currentJobs.forEach((job) => {
+        if (!['in_progress', 'submitted', 'revision_requested'].includes(job.status)) return;
+        if (!job.deadlineAt) return;
+
+        const deadlineTs = typeof job.deadlineAt === 'number' ? job.deadlineAt : new Date(job.deadlineAt).getTime();
+        if (isNaN(deadlineTs)) return;
+        const remain = deadlineTs - now;
+
+        if (remain <= 0 && job.deadlineReminderSent !== 'overdue') {
+          showToastRef.current?.(
+            `Công việc "${job.title}" đã quá hạn hoàn thành. Vui lòng liên hệ ${job.hiredApplicant || 'sinh viên'} hoặc gửi khiếu nại nếu cần.`,
+            'warning'
+          );
+          reminders.push({ jobId: job.id, level: 'overdue' });
+        } else if (remain > 0 && remain < 12 * 3600000 && !job.deadlineReminderSent) {
+          showToastRef.current?.(
+            `Công việc "${job.title}" sắp tới hạn (còn dưới 12 giờ). Nhắc ${job.hiredApplicant || 'sinh viên'} nộp bàn giao sớm.`,
+            'clock'
+          );
+          reminders.push({ jobId: job.id, level: 'warning' });
+        }
+      });
+
+      if (reminders.length > 0) {
+        dispatch({ type: 'CHECK_DEADLINES', reminders });
+      }
+    };
+
+    checkDeadlines();
+
     const id = setInterval(() => {
-      dispatch({ type: 'CHECK_DEADLINES' });
-      if (state.currentUser) {
+      checkDeadlines();
+      if (stateRef.current?.currentUser) {
         refreshNotifications();
       }
     }, 30000);
+
     const onTokenRefreshed = (e) => {
       if (e.detail?.token) {
         dispatch({ type: 'SET_ACCESS_TOKEN', token: e.detail.token });
@@ -999,7 +1059,7 @@ export function StoreProvider({ children }) {
       clearInterval(id);
       window.removeEventListener('auth:token_refreshed', onTokenRefreshed);
     };
-  }, [state.currentUser, refreshNotifications]);
+  }, [refreshNotifications]);
 
   const actions = useMemo(() => {
     const act = {
