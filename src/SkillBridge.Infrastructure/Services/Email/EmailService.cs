@@ -76,6 +76,42 @@ namespace SkillBridge.Infrastructure.Services.Email
             await SendAsync(message);
         }
 
+        public async Task SendDeadlineWarningEmailAsync(string toEmail, string fullName, string jobTitle, DateTime deadlineAt)
+        {
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"]
+                ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:From")));
+            message.To.Add(new MailboxAddress(fullName, toEmail));
+            message.Subject = $"Nhắc nhở: Công việc \"{jobTitle}\" sắp đến hạn bàn giao - SkillBridge";
+            message.Body = new TextPart("plain")
+            {
+                Text = $"Chào {fullName},\n\n" +
+                       $"Công việc \"{jobTitle}\" trên SkillBridge sắp đến hạn bàn giao (trước {deadlineAt:HH:mm dd/MM/yyyy}).\n" +
+                       $"Vui lòng kiểm tra tiến độ và nộp sản phẩm bàn giao đúng hạn để đảm bảo quyền lợi của bạn.\n\n" +
+                       $"Trân trọng,\nĐội ngũ SkillBridge"
+            };
+
+            await SendAsync(message);
+        }
+
+        public async Task SendDeadlineOverdueEmailAsync(string toEmail, string fullName, string jobTitle, DateTime deadlineAt)
+        {
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"]
+                ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:From")));
+            message.To.Add(new MailboxAddress(fullName, toEmail));
+            message.Subject = $"Cảnh báo: Công việc \"{jobTitle}\" đã quá hạn bàn giao - SkillBridge";
+            message.Body = new TextPart("plain")
+            {
+                Text = $"Chào {fullName},\n\n" +
+                       $"Công việc \"{jobTitle}\" trên SkillBridge đã quá hạn hoàn thành (hạn chót: {deadlineAt:HH:mm dd/MM/yyyy}).\n" +
+                       $"Vui lòng truy cập hệ thống để kiểm tra trạng thái, liên hệ với đối tác hoặc gửi khiếu nại nếu cần thiết.\n\n" +
+                       $"Trân trọng,\nĐội ngũ SkillBridge"
+            };
+
+            await SendAsync(message);
+        }
+
         private async Task SendAsync(MimeMessage message)
         {
             using var client = new SmtpClient();

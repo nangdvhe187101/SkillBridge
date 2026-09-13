@@ -137,6 +137,7 @@ builder.Services.Scan(scan => scan
     .WithScopedLifetime());
 
 builder.Services.AddHostedService<SkillBridge.Infrastructure.Services.Payments.PaymentReconciliationJob>();
+builder.Services.AddHostedService<SkillBridge.Infrastructure.Services.Jobs.JobDeadlineReminderJob>();
 
 var signalR = builder.Services.AddSignalR();
 if (!string.IsNullOrWhiteSpace(redisConnection))

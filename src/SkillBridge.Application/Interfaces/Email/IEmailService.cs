@@ -12,5 +12,9 @@ namespace SkillBridge.Application.Interfaces
         Task SendPasswordResetOtpAsync(string toEmail, string fullName, string otp);
 
         Task SendPasswordChangedNotificationAsync(string toEmail, string fullName);
+
+        Task SendDeadlineWarningEmailAsync(string toEmail, string fullName, string jobTitle, DateTime deadlineAt);
+
+        Task SendDeadlineOverdueEmailAsync(string toEmail, string fullName, string jobTitle, DateTime deadlineAt);
     }
 }
