@@ -92,6 +92,7 @@ public class PaymentService : IPaymentService
                     reusedResponse.AccountNumber = bInfo.AccountNumber;
                     reusedResponse.BankCode = bInfo.BankCode;
                     reusedResponse.BankName = bInfo.BankName;
+                    reusedResponse.AccountName = bInfo.AccountName;
                     reusedResponse.TransferContent = existingPendingOrder.OrderCode;
                 }
                 return reusedResponse;
@@ -141,6 +142,7 @@ public class PaymentService : IPaymentService
             response.AccountNumber = bankInfo.AccountNumber;
             response.BankCode = bankInfo.BankCode;
             response.BankName = bankInfo.BankName;
+            response.AccountName = bankInfo.AccountName;
             response.TransferContent = orderCode;
         }
 
@@ -202,6 +204,7 @@ public class PaymentService : IPaymentService
             response.AccountNumber = bankInfo.AccountNumber;
             response.BankCode = bankInfo.BankCode;
             response.BankName = bankInfo.BankName;
+            response.AccountName = bankInfo.AccountName;
             response.TransferContent = order.OrderCode;
         }
 

@@ -468,9 +468,11 @@ public class DeliverableService : IDeliverableService
                 // Tăng số việc đã xong và điểm uy tín cho sinh viên (qua IUserReliabilityService)
                 await _reliabilityService.RewardCompletionAsync(currentDeliverable.StudentId, 3, cancellationToken);
 
-                // Tính toán hoa hồng nền tảng (VIP Business: 5%, Thường: 10%)
-                decimal commissionRate = 0.10m;
+                // Tính toán hoa hồng nền tảng: min(studentRate, employerRate)
                 var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+                // 1. Tỷ lệ phí theo NTD: VIP Business Suite được ưu đãi 5% cho SV, ngược lại mặc định 10%
+                decimal employerRate = PaymentConstants.DefaultCommissionRate; // 10%
                 var hasVipSubscription = await _dbContext.Subscriptions
                     .AnyAsync(s => s.UserId == currentJob.EmployerId 
                                 && s.Status == PaymentConstants.ActiveSubscriptionStatus 
@@ -478,8 +480,33 @@ public class DeliverableService : IDeliverableService
                                 && (s.RenewalDate == null || s.RenewalDate >= today), cancellationToken);
                 if (hasVipSubscription)
                 {
-                    commissionRate = 0.05m;
+                    employerRate = PaymentConstants.ProOrVipCommissionRate; // 5%
                 }
+
+                // 2. Tỷ lệ phí theo Sinh viên: Master Talent (3%), Freelance Pro (5%), Student Starter (8%), Thường (10%)
+                decimal studentRate = PaymentConstants.DefaultCommissionRate; // 10%
+                var activeStudentSubs = await _dbContext.Subscriptions
+                    .Where(s => s.UserId == currentDeliverable.StudentId
+                             && s.Status == PaymentConstants.ActiveSubscriptionStatus
+                             && (s.RenewalDate == null || s.RenewalDate >= today))
+                    .Select(s => s.PlanName)
+                    .ToListAsync(cancellationToken);
+
+                if (activeStudentSubs.Any(p => p.Contains(PaymentConstants.MasterPlanKeyword, StringComparison.OrdinalIgnoreCase)))
+                {
+                    studentRate = PaymentConstants.MasterCommissionRate; // 3%
+                }
+                else if (activeStudentSubs.Any(p => p.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase)))
+                {
+                    studentRate = PaymentConstants.ProOrVipCommissionRate; // 5%
+                }
+                else if (activeStudentSubs.Any(p => p.Contains(PaymentConstants.StarterPlanKeyword, StringComparison.OrdinalIgnoreCase)))
+                {
+                    studentRate = PaymentConstants.StarterCommissionRate; // 8%
+                }
+
+                // 3. Tỷ lệ áp dụng là mức có lợi nhất cho sinh viên: min(studentRate, employerRate)
+                decimal commissionRate = Math.Min(studentRate, employerRate);
 
                 computedBudget = currentJob.Budget;
                 computedCommission = Math.Round(currentJob.Budget * commissionRate);

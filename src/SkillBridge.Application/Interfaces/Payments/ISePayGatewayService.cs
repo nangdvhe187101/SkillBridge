@@ -16,7 +16,7 @@ public interface ISePayGatewayService
 {
     string ProviderCode { get; }
     string GenerateVietQrUrl(string orderCode, decimal amount);
-    (string AccountNumber, string BankCode, string BankName) GetBankInfo();
+    (string AccountNumber, string BankCode, string BankName, string AccountName) GetBankInfo();
     string? ExtractOrderCode(string? content);
     SePayProcessResult ProcessWebhook(string? authHeader, string rawPayload);
 }

@@ -436,4 +436,67 @@ public class JobDeadlineReminderJobTests
         var updatedJob = await db.Jobs.FindAsync(job.Id);
         Assert.NotNull(updatedJob!.DeadlineWarningSentAt);
     }
+
+    [Fact]
+    public async Task ProcessDeadlineRemindersAsync_OverdueJobWithoutPriorWarning_ShouldSetBothFlagsAndNotBeScannedAgain()
+    {
+        // Arrange
+        using var db = CreateInMemoryDbContext();
+
+        var employer = CreateTestUser(1, "Employer One", "employer@test.com", 2);
+        var student = CreateTestUser(2, "Student One", "student@test.com", 3);
+        db.Users.AddRange(employer, student);
+
+        // Job quá hạn ngay mà chưa từng nhận warning (ví dụ deadline quá ngắn lúc tạo)
+        var job = new Job
+        {
+            Id = 108,
+            EmployerId = employer.Id,
+            Employer = employer,
+            HiredApplicantId = student.Id,
+            HiredApplicant = student,
+            Title = "Job Quá Hạn Không Có Warning",
+            Description = "Mô tả",
+            Status = "in_progress",
+            DeadlineAt = DateTime.UtcNow.AddHours(-1),
+            DeadlineWarningSentAt = null,
+            DeadlineOverdueSentAt = null,
+            PostedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        db.Jobs.Add(job);
+        await db.SaveChangesAsync();
+
+        var scopeFactory = CreateMockScopeFactory(db, _notificationMock.Object, _emailMock.Object);
+        var jobService = new JobDeadlineReminderJob(scopeFactory, _loggerMock.Object);
+
+        // Act 1: Xử lý lần 1
+        await jobService.ProcessDeadlineRemindersAsync(CancellationToken.None);
+
+        // Assert 1: Cả hai cờ DeadlineOverdueSentAt và DeadlineWarningSentAt đều được set non-null
+        var updatedJob = await db.Jobs.FindAsync(job.Id);
+        Assert.NotNull(updatedJob!.DeadlineOverdueSentAt);
+        Assert.NotNull(updatedJob.DeadlineWarningSentAt);
+
+        // Reset mock invocations để kiểm tra lần quét tiếp theo
+        _notificationMock.Invocations.Clear();
+        _emailMock.Invocations.Clear();
+
+        // Act 2: Xử lý lần 2
+        await jobService.ProcessDeadlineRemindersAsync(CancellationToken.None);
+
+        // Assert 2: Không bị quét hay gửi lại bất kỳ thông báo/email nào nữa
+        _notificationMock.Verify(n => n.SendAsync(
+            It.IsAny<int>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<CancellationToken>()), Times.Never);
+
+        _emailMock.Verify(e => e.SendDeadlineOverdueEmailAsync(
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<string>(),
+            It.IsAny<DateTime>()), Times.Never);
+    }
 }

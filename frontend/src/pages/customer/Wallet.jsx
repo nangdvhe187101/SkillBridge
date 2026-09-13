@@ -18,15 +18,6 @@ const TX_CONFIG = {
   default: { icon: 'card', label: 'Giao dịch', color: 'var(--primary)', bg: 'rgba(99, 102, 241, 0.12)' },
 };
 
-const TX_FILTER_LIST = [
-  { key: 'all', label: 'Tất cả', icon: null },
-  { key: 'topup', label: 'Nạp tiền', icon: 'arrow-down-left' },
-  { key: 'withdraw', label: 'Rút tiền', icon: 'arrow-up-right' },
-  { key: 'escrow_release', label: 'Giải ngân', icon: 'check' },
-  { key: 'escrow_hold', label: 'Ký quỹ Escrow', icon: 'lock' },
-  { key: 'insurance_payout', label: 'Bồi thường BH', icon: 'shield-check' },
-];
-
 const VN_BANKS = [
   'MB Bank (Ngân hàng Quân Đội)',
   'Vietcombank (Ngân hàng Ngoại Thương)',
@@ -94,14 +85,40 @@ export default function Wallet() {
     branch: 'Chi nhánh Hà Nội'
   });
 
-  useEffect(() => {
-    setTxPage(1);
-  }, [txFilter]);
+  const isEmployer = state.role === 'employer' || state.currentUser?.roleCode === 'employer';
+
+  const txFilterList = useMemo(() => {
+    if (isEmployer) {
+      return [
+        { key: 'all', label: 'Tất cả', icon: null },
+        { key: 'topup', label: 'Nạp tiền', icon: 'arrow-down-left' },
+        { key: 'withdraw', label: 'Rút tiền', icon: 'arrow-up-right' },
+        { key: 'escrow_hold', label: 'Ký quỹ Escrow', icon: 'lock' },
+        { key: 'escrow_refund', label: 'Hoàn tiền ký quỹ', icon: 'arrow-down-left' },
+        { key: 'subscription', label: 'Gói VIP / Thuê bao', icon: 'crown' },
+        { key: 'insurance_payout', label: 'Bồi thường BH', icon: 'shield-check' },
+      ];
+    }
+    return [
+      { key: 'all', label: 'Tất cả', icon: null },
+      { key: 'escrow_release', label: 'Nhận thù lao', icon: 'check' },
+      { key: 'commission', label: 'Phí bảo trợ sàn', icon: 'receipt' },
+      { key: 'withdraw', label: 'Rút tiền', icon: 'arrow-up-right' },
+      { key: 'topup', label: 'Nạp tiền', icon: 'arrow-down-left' },
+      { key: 'subscription', label: 'Gói Pro / Master', icon: 'crown' },
+      { key: 'insurance_payout', label: 'Bồi thường BH', icon: 'shield-check' },
+    ];
+  }, [isEmployer]);
 
   const filteredTransactions = useMemo(() => {
-    if (txFilter === 'all') return state.transactions;
-    return state.transactions.filter((t) => t.type === txFilter);
-  }, [state.transactions, txFilter]);
+    let list = state.transactions || [];
+    // Với Nhà tuyển dụng: Nghiệm thu không bao giờ có phí sàn, lọc sạch dòng commission nếu có tàn dư
+    if (isEmployer) {
+      list = list.filter((t) => t.type !== 'commission');
+    }
+    if (txFilter === 'all') return list;
+    return list.filter((t) => t.type === txFilter);
+  }, [state.transactions, txFilter, isEmployer]);
 
   const totalTxPages = Math.ceil(filteredTransactions.length / txPageSize) || 1;
   const pagedTransactions = useMemo(() => {
@@ -348,7 +365,7 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
 
               {/* Transaction Filter Chips */}
               <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 10, marginBottom: 12, borderBottom: '1px solid var(--border)', scrollbarWidth: 'none' }}>
-                {TX_FILTER_LIST.map((item) => (
+                {txFilterList.map((item) => (
                   <button
                     key={item.key}
                     className={'chip ' + (txFilter === item.key ? 'is-active' : '')}
@@ -548,28 +565,44 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
 
             {/* Subscriptions Card */}
             <div className="pcard" style={{ marginTop: 22 }}>
-              <h4 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Icon name="crown" width="18" height="18" style={{ color: '#eab308' }} />
-                <span>Gói đặc quyền & Đăng ký</span>
-              </h4>
-              <div style={{ marginBottom: 14 }}>
-                {state.subscriptionPro && (
-                  <div className="chip chip-lime" style={{ marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Icon name="star" width="13" height="13" />
-                    <span>Freelance Pro — đang hoạt động</span>
-                  </div>
-                )}
-                {state.vipBusiness && (
-                  <div className="chip chip-lime" style={{ marginBottom: 8, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Icon name="crown" width="13" height="13" />
-                    <span>VIP Business Suite — đang hoạt động</span>
-                  </div>
-                )}
-                {!state.subscriptionPro && !state.vipBusiness && (
-                  <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Bạn đang dùng gói Miễn phí. Nâng cấp để mở khoá huy hiệu uy tín và giảm phí giao dịch.</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="crown" width="18" height="18" style={{ color: '#eab308' }} />
+                  <span>Gói dịch vụ đang hoạt động</span>
+                </h4>
+                {state.badge && (
+                  <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px', textTransform: 'uppercase', fontWeight: 700 }}>
+                    {state.badge}
+                  </span>
                 )}
               </div>
-              <button className="btn btn-outline btn-block" onClick={() => navigate('/pricing')}>Xem các gói đặc quyền →</button>
+
+              <div style={{ padding: '14px 16px', background: 'var(--surface-soft, rgba(0,0,0,0.03))', borderRadius: 12, border: '1px solid var(--border)', marginBottom: 14 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--ink)', marginBottom: 6 }}>
+                  {state.activePlanName || (state.vipBusiness ? 'VIP Business Suite' : (state.subscriptionPro ? 'Freelance Pro' : 'Tài khoản Cơ bản (Miễn phí)'))}
+                </div>
+
+                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Phí hoa hồng sàn:</span>
+                    <strong style={{ color: '#16a34a' }}>
+                      {((state.effectiveCommissionRate ?? (state.vipBusiness ? 0.05 : (state.subscriptionPro ? 0.05 : 0.10))) * 100).toFixed(0)}%
+                    </strong>
+                  </div>
+                  {state.subscriptionExpiresAt && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Hạn sử dụng gói:</span>
+                      <strong style={{ color: 'var(--ink)' }}>
+                        {new Date(state.subscriptionExpiresAt).toLocaleDateString('vi-VN')}
+                      </strong>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <button className="btn btn-outline btn-block" onClick={() => navigate('/pricing')}>
+                {state.activePlanCode && state.activePlanCode !== 'FREE' ? 'Nâng cấp / Gia hạn gói →' : 'Xem các gói đặc quyền →'}
+              </button>
             </div>
           </div>
         </div>

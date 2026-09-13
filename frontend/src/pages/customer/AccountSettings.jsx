@@ -684,7 +684,7 @@ export default function AccountSettings({ forcedTab }) {
 
     const handleAvatarUpdated = (newAvatarUrl) => {
         if (updateProfile) {
-            updateProfile({ avatarUrl: newAvatarUrl });
+            updateProfile({ avatarUrl: newAvatarUrl }).catch(() => {});
         }
     };
 

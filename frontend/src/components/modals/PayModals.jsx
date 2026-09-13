@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import ModalShell from './ModalShell';
-import PaymentMethods, { payMethodLabel } from './PaymentMethods';
+import PaymentMethods from './PaymentMethods';
 import { useStore, commissionRate, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import Icon from '../Icon';
@@ -8,6 +8,26 @@ import Icon from '../Icon';
 import { useEffect, useRef } from 'react';
 import { createPaymentOrder, getPaymentOrderStatus, getActivePendingOrder, cancelPendingOrder } from '../../api/paymentApi';
 import { connectPaymentRealtime } from '../../services/paymentSignalR';
+
+function getDisplayBankName(order) {
+  if (!order) return 'TPBank';
+  const name = (order.bankName || '').trim();
+  const code = (order.bankCode || '').trim();
+  const accName = (order.accountName || '').trim();
+  // Nếu bankName hoặc bankCode bị nhầm thành tên người hoặc rỗng, luôn trả về TPBank
+  if (name && name !== accName && !name.toUpperCase().includes('NANG') && !name.toUpperCase().includes('DAO')) {
+    return name;
+  }
+  if (code && !code.toUpperCase().includes('NANG') && !code.toUpperCase().includes('DAO')) {
+    return code;
+  }
+  return 'TPBank';
+}
+
+function getDisplayAccountName(order) {
+  if (!order) return 'DAO VAN NANG';
+  return order.accountName || 'DAO VAN NANG';
+}
 
 export function TopupModal({ onClose, initialOrder }) {
   const { state, refreshWallet, showToast } = useStore();
@@ -286,7 +306,22 @@ export function TopupModal({ onClose, initialOrder }) {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <span style={{ color: 'var(--ink-soft)' }}>Ngân hàng:</span>
-                <b>{orderData.bankName || orderData.bankCode || 'MB Bank'}</b>
+                <b>{getDisplayBankName(orderData)}</b>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ color: 'var(--ink-soft)' }}>Chủ tài khoản:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <b style={{ color: 'var(--ink)', textTransform: 'uppercase' }}>{getDisplayAccountName(orderData)}</b>
+                  <button
+                    type="button"
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', color: copiedField === 'Chủ tài khoản' ? '#16a34a' : 'var(--ink-soft)', display: 'inline-flex', alignItems: 'center' }}
+                    onClick={() => copyToClipboard(getDisplayAccountName(orderData), 'Chủ tài khoản')}
+                    title="Sao chép tên chủ tài khoản"
+                  >
+                    <Icon name={copiedField === 'Chủ tài khoản' ? 'check' : 'copy'} width="14" height="14" />
+                  </button>
+                </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -503,70 +538,535 @@ export function WithdrawModal({ onClose }) {
   );
 }
 
-export function SubscribeModal({ onClose }) {
-  const { subscribePro, state } = useStore();
+export function PlanPurchaseModal({
+  planCode = 'STU_PRO',
+  planName = 'Freelance Pro',
+  price = 49000,
+  badge = 'PRO Freelancer',
+  features = [],
+  role = 'student',
+  onClose
+}) {
+  const { purchaseSubscription, state, refreshWallet, showToast } = useStore();
   const { openModal } = useModal();
-  const amount = 49000;
+  const amount = Number(price);
   const isInsufficient = state.balance < amount;
   const shortfall = amount - state.balance;
+
+  const [payMethod, setPayMethod] = useState(isInsufficient ? 'bank' : 'wallet');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const confirm = async () => {
-    if (isInsufficient) return;
+  // QR Screen state (for online VietQR payment)
+  const [orderData, setOrderData] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(900);
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [copiedField, setCopiedField] = useState('');
+
+  const pollIntervalRef = useRef(null);
+  const timerIntervalRef = useRef(null);
+  const signalRRef = useRef(null);
+
+  // Clear timers and SignalR on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (signalRRef.current) signalRRef.current.stop();
+    };
+  }, []);
+
+  // Timer countdown when orderData is set
+  useEffect(() => {
+    if (!orderData || paymentSuccess) return;
+
+    timerIntervalRef.current = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(timerIntervalRef.current);
+          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+          if (signalRRef.current) {
+            signalRRef.current.stop();
+            signalRRef.current = null;
+          }
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+    };
+  }, [orderData, paymentSuccess]);
+
+  // Realtime SignalR notification + Fallback Short-polling for Online VietQR
+  useEffect(() => {
+    if (!orderData || paymentSuccess) return;
+
+    let isSubscribed = true;
+
+    const handleSuccess = async () => {
+      if (!isSubscribed) return;
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
+      if (signalRRef.current) {
+        signalRRef.current.stop();
+        signalRRef.current = null;
+      }
+      try {
+        setSubmitting(true);
+        await purchaseSubscription(planCode);
+        if (typeof refreshWallet === 'function') {
+          await refreshWallet();
+        }
+        setPaymentSuccess(true);
+        showToast(`Kích hoạt thành công gói ${planName}!`, 'check');
+      } catch (err) {
+        setErrorMsg(err?.message || 'Đã nhận thanh toán nhưng xảy ra lỗi khi kích hoạt gói. Vui lòng liên hệ hỗ trợ.');
+      } finally {
+        setSubmitting(false);
+      }
+    };
+
+    const checkStatus = async () => {
+      try {
+        const res = await getPaymentOrderStatus(orderData.orderCode);
+        if (res && res.status === 'paid') {
+          await handleSuccess();
+        }
+      } catch {
+        // Silent
+      }
+    };
+
+    signalRRef.current = connectPaymentRealtime(orderData.orderCode, {
+      onPaymentSuccess: () => {
+        handleSuccess();
+      },
+      onReconnected: () => {
+        checkStatus();
+      }
+    });
+
+    checkStatus();
+    pollIntervalRef.current = setInterval(checkStatus, 3500);
+
+    return () => {
+      isSubscribed = false;
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (signalRRef.current) {
+        signalRRef.current.stop();
+        signalRRef.current = null;
+      }
+    };
+  }, [orderData, paymentSuccess, planCode, planName, purchaseSubscription, refreshWallet, showToast]);
+
+  const handleStartOnlinePayment = async () => {
     try {
       setSubmitting(true);
       setErrorMsg('');
-      await subscribePro();
-      onClose();
+      const res = await createPaymentOrder('SEPAY', amount);
+      setOrderData(res);
+      const remainingSecs = res.expiresAt
+        ? Math.max(10, Math.floor((new Date(res.expiresAt).getTime() - Date.now()) / 1000))
+        : 900;
+      setTimeLeft(remainingSecs);
     } catch (err) {
-      setErrorMsg(err?.message || 'Có lỗi xảy ra khi đăng ký gói Freelance Pro.');
+      setErrorMsg(err?.message || 'Có lỗi xảy ra khi khởi tạo đơn thanh toán trực tuyến.');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const confirmWalletPurchase = async () => {
+    if (isInsufficient) return;
+    try {
+      setSubmitting(true);
+      setErrorMsg('');
+      await purchaseSubscription(planCode);
+      if (typeof refreshWallet === 'function') {
+        await refreshWallet();
+      }
+      setPaymentSuccess(true);
+      showToast(`Kích hoạt thành công gói ${planName}!`, 'check');
+    } catch (err) {
+      setErrorMsg(err?.message || `Có lỗi xảy ra khi đăng ký gói ${planName}.`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const copyToClipboard = (text, fieldName) => {
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(text);
+      setCopiedField(fieldName);
+      showToast(`Đã sao chép ${fieldName}!`, 'copy');
+      setTimeout(() => setCopiedField(''), 2000);
+    }
+  };
+
+  const formatTimer = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  // MÀN HÌNH 3: KÍCH HOẠT THÀNH CÔNG
+  if (paymentSuccess) {
+    return (
+      <ModalShell onClose={onClose}>
+        <div style={{ textAlign: 'center', padding: '24px 8px' }}>
+          <div style={{
+            width: 64,
+            height: 64,
+            borderRadius: '50%',
+            background: 'rgba(22, 163, 74, 0.12)',
+            color: '#16a34a',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 16px auto',
+            boxShadow: '0 0 0 8px rgba(22, 163, 74, 0.05)'
+          }}>
+            <Icon name="check" width="34" height="34" />
+          </div>
+          <h3 style={{ color: '#16a34a', margin: '0 0 8px 0', fontSize: 20 }}>Kích hoạt thành công gói {planName}!</h3>
+          <p style={{ color: 'var(--ink-soft)', marginBottom: 20, fontSize: 14 }}>
+            Đặc quyền gói <b>{planName}</b> đã sẵn sàng để bạn sử dụng trong 30 ngày.
+          </p>
+          <div style={{ background: 'var(--bg-subtle, rgba(0,0,0,0.03))', borderRadius: 12, padding: 16, marginBottom: 24, textAlign: 'left' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 13 }}>
+              <span style={{ color: 'var(--ink-soft)' }}>Gói dịch vụ:</span>
+              <b>{planName}</b>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: 13 }}>
+              <span style={{ color: 'var(--ink-soft)' }}>Số tiền:</span>
+              <b style={{ color: 'var(--primary)' }}>{fmtVND(amount)}</b>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+              <span style={{ color: 'var(--ink-soft)' }}>Trạng thái:</span>
+              <span style={{ color: '#16a34a', fontWeight: 700 }}>Đã kích hoạt</span>
+            </div>
+          </div>
+          <button className="btn btn-primary" style={{ width: '100%' }} onClick={onClose}>
+            Bắt đầu trải nghiệm
+          </button>
+        </div>
+      </ModalShell>
+    );
+  }
+
+  // MÀN HÌNH 2: QUÉT MÃ VIETQR ONLINE
+  if (orderData) {
+    return (
+      <ModalShell onClose={onClose}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, paddingRight: 40, gap: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 17 }}>Quét mã VietQR mua gói {planName}</h3>
+          <span style={{
+            fontSize: 13,
+            fontWeight: 700,
+            color: timeLeft < 120 ? '#dc2626' : 'var(--primary)',
+            background: 'var(--bg-subtle, rgba(0,0,0,0.05))',
+            padding: '4px 10px',
+            borderRadius: 6,
+            whiteSpace: 'nowrap',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6
+          }}>
+            <Icon name="timer" width="15" height="15" />
+            <span>{formatTimer(timeLeft)}</span>
+          </span>
+        </div>
+
+        {timeLeft === 0 ? (
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <p style={{ color: '#dc2626', fontWeight: 600 }}>Mã thanh toán này đã hết hạn.</p>
+            <button className="btn btn-outline" onClick={() => setOrderData(null)}>Tạo mã mới</button>
+          </div>
+        ) : (
+          <>
+            <div style={{ textAlign: 'center', marginBottom: 16 }}>
+              {orderData.qrCodeUrl && (
+                <div style={{
+                  display: 'inline-block',
+                  background: '#fff',
+                  padding: 12,
+                  borderRadius: 12,
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.08)'
+                }}>
+                  <img
+                    src={orderData.qrCodeUrl}
+                    alt={`VietQR thanh toán gói ${planName}`}
+                    style={{ width: 220, height: 220, display: 'block', borderRadius: 8 }}
+                  />
+                </div>
+              )}
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 8 }}>
+                Mở app ngân hàng quét mã QR — Gói sẽ được kích hoạt tự động ngay lập tức
+              </div>
+            </div>
+
+            <div style={{
+              background: 'var(--bg-subtle, rgba(0,0,0,0.02))',
+              border: '1px solid var(--border-subtle, rgba(0,0,0,0.08))',
+              borderRadius: 12,
+              padding: '12px 14px',
+              fontSize: 13,
+              marginBottom: 16
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ color: 'var(--ink-soft)' }}>Ngân hàng:</span>
+                <b>{getDisplayBankName(orderData)}</b>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ color: 'var(--ink-soft)' }}>Chủ tài khoản:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <b style={{ color: 'var(--ink)', textTransform: 'uppercase' }}>{getDisplayAccountName(orderData)}</b>
+                  <button
+                    type="button"
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', color: copiedField === 'Chủ tài khoản' ? '#16a34a' : 'var(--ink-soft)', display: 'inline-flex', alignItems: 'center' }}
+                    onClick={() => copyToClipboard(getDisplayAccountName(orderData), 'Chủ tài khoản')}
+                    title="Sao chép tên chủ tài khoản"
+                  >
+                    <Icon name={copiedField === 'Chủ tài khoản' ? 'check' : 'copy'} width="14" height="14" />
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ color: 'var(--ink-soft)' }}>Số tài khoản:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <b>{orderData.accountNumber}</b>
+                  <button
+                    type="button"
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', color: copiedField === 'Số tài khoản' ? '#16a34a' : 'var(--ink-soft)', display: 'inline-flex', alignItems: 'center' }}
+                    onClick={() => copyToClipboard(orderData.accountNumber, 'Số tài khoản')}
+                    title="Sao chép số tài khoản"
+                  >
+                    <Icon name={copiedField === 'Số tài khoản' ? 'check' : 'copy'} width="14" height="14" />
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <span style={{ color: 'var(--ink-soft)' }}>Số tiền:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <b style={{ color: 'var(--primary)', fontSize: 14 }}>{fmtVND(orderData.amount)}</b>
+                  <button
+                    type="button"
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', color: copiedField === 'Số tiền' ? '#16a34a' : 'var(--ink-soft)', display: 'inline-flex', alignItems: 'center' }}
+                    onClick={() => copyToClipboard(orderData.amount.toString(), 'Số tiền')}
+                    title="Sao chép số tiền"
+                  >
+                    <Icon name={copiedField === 'Số tiền' ? 'check' : 'copy'} width="14" height="14" />
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ color: 'var(--ink-soft)' }}>Nội dung CK:</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <b style={{ color: 'var(--coral)', letterSpacing: 0.5 }}>{orderData.transferContent}</b>
+                  <button
+                    type="button"
+                    style={{ border: 'none', background: 'none', cursor: 'pointer', padding: '2px 4px', color: copiedField === 'Nội dung CK' ? '#16a34a' : 'var(--ink-soft)', display: 'inline-flex', alignItems: 'center' }}
+                    onClick={() => copyToClipboard(orderData.transferContent, 'Nội dung CK')}
+                    title="Sao chép nội dung chuyển khoản"
+                  >
+                    <Icon name={copiedField === 'Nội dung CK' ? 'check' : 'copy'} width="14" height="14" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {submitting && (
+              <div style={{ textAlign: 'center', color: '#16a34a', fontWeight: 600, fontSize: 13, marginBottom: 12 }}>
+                Đã nhận thanh toán! Đang kích hoạt gói {planName}...
+              </div>
+            )}
+
+            {errorMsg && (
+              <div className="field-error" style={{ margin: '10px 0' }}>{errorMsg}</div>
+            )}
+
+            <div className="modal-actions">
+              <button
+                className="btn btn-outline"
+                disabled={submitting}
+                onClick={() => {
+                  if (signalRRef.current) signalRRef.current.stop();
+                  if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                  setOrderData(null);
+                }}
+              >
+                Quay lại
+              </button>
+              <button className="btn btn-outline" disabled={submitting} onClick={onClose}>
+                Đóng
+              </button>
+            </div>
+          </>
+        )}
+      </ModalShell>
+    );
+  }
+
+  // MÀN HÌNH 1: XÁC NHẬN VÀ CHỌN PHƯƠNG THỨC THANH TOÁN
   return (
     <ModalShell onClose={onClose}>
-      <h3>Thanh toán gói Freelance Pro</h3>
+      {/* Tiêu đề Modal: Đảm bảo có paddingRight: 42 để không bị nút X che khuất */}
+      <div style={{ marginBottom: 14, paddingRight: 42 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0, fontSize: 18 }}>Đăng ký gói {planName}</h3>
+          {badge && <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px' }}>{badge}</span>}
+        </div>
+        <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+          {role === 'employer' ? 'Dành cho Nhà tuyển dụng & Doanh nghiệp' : 'Dành cho Sinh viên & Freelancer'}
+        </span>
+      </div>
+
       <div className="checkout-summary">
-        <div className="cs-row"><span>Gói Freelance Pro (1 tháng)</span><span>{fmtVND(amount)}</span></div>
-        <div className="cs-row"><span>Thuế / phí xử lý</span><span>0đ</span></div>
+        <div className="cs-row"><span>Gói thuê bao (30 ngày)</span><span>{fmtVND(amount)}</span></div>
+        <div className="cs-row"><span>Thuế / Phí kích hoạt</span><span style={{ color: '#16a34a', fontWeight: 600 }}>0đ (Miễn phí)</span></div>
         <div className="cs-row total"><span>Tổng thanh toán</span><span>{fmtVND(amount)}</span></div>
       </div>
 
-      <div style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid var(--primary)', background: 'rgba(22, 163, 74, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '12px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(22, 163, 74, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
-            <Icon name="wallet" width="18" height="18" />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 13.5 }}>Số dư Ví SkillBridge</div>
-            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-              Hiện có: <b>{fmtVND(state.balance)}</b>
+      {Array.isArray(features) && features.length > 0 && (
+        <div style={{ background: 'var(--surface-soft, rgba(0,0,0,0.03))', borderRadius: 10, padding: '10px 14px', margin: '12px 0' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6, color: 'var(--ink-soft)' }}>ĐẶC QUYỀN NỔI BẬT:</div>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.6, color: 'var(--ink)' }}>
+            {features.map((f, idx) => (
+              <li key={idx}>{f}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Chọn phương thức thanh toán */}
+      <div style={{ margin: '14px 0 10px' }}>
+        <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+          Phương thức thanh toán:
+        </div>
+
+        {/* 1. Thanh toán Online VietQR (SePay) */}
+        <div
+          onClick={() => setPayMethod('bank')}
+          style={{
+            padding: '11px 13px',
+            borderRadius: 10,
+            border: `1.5px solid ${payMethod === 'bank' ? 'var(--primary)' : 'var(--border)'}`,
+            background: payMethod === 'bank' ? 'rgba(99, 102, 241, 0.06)' : 'var(--surface)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 8,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 34,
+              height: 34,
+              borderRadius: '50%',
+              background: 'rgba(99, 102, 241, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#4f46e5'
+            }}>
+              <Icon name="bank" width="18" height="18" />
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>Chuyển khoản VietQR (Thanh toán Online)</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                Quét mã QR qua app ngân hàng — Tự động kích hoạt ngay
+              </div>
             </div>
           </div>
+          <span className="badge badge-success" style={{ fontSize: 11, background: 'rgba(34, 197, 94, 0.12)', color: '#16a34a', border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+            Online 24/7
+          </span>
         </div>
-        <span className="badge badge-success" style={{ fontSize: 11 }}>Trừ từ ví</span>
-      </div>
 
-      {isInsufficient && (
-        <div style={{ background: 'rgba(255, 92, 122, 0.12)', border: '1px solid var(--coral)', borderRadius: 10, padding: 12, margin: '12px 0', fontSize: 13 }}>
-          <b style={{ color: 'var(--coral)' }}>Số dư ví không đủ ({fmtVND(state.balance)} / {fmtVND(amount)})</b>
-          <p style={{ marginTop: 4, color: 'var(--ink-soft)' }}>
-            Bạn cần nạp thêm <b>{fmtVND(shortfall)}</b> vào ví để đăng ký gói Pro.
-          </p>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            style={{ marginTop: 8 }}
-            onClick={() => {
-              onClose();
-              openModal('topup', { initialOrder: { amount: shortfall } });
+        {/* 2. Số dư Ví SkillBridge */}
+        <div
+          onClick={() => setPayMethod('wallet')}
+          style={{
+            padding: '11px 13px',
+            borderRadius: 10,
+            border: `1.5px solid ${payMethod === 'wallet' ? 'var(--primary)' : 'var(--border)'}`,
+            background: payMethod === 'wallet' ? 'rgba(99, 102, 241, 0.06)' : 'var(--surface)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{
+              width: 34,
+              height: 34,
+              borderRadius: '50%',
+              background: 'rgba(22, 163, 74, 0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#16a34a'
+            }}>
+              <Icon name="wallet" width="18" height="18" />
+            </div>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13.5 }}>Số dư Ví SkillBridge</div>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                Hiện có: <b>{fmtVND(state.balance)}</b>
+              </div>
+            </div>
+          </div>
+          <span
+            className="badge"
+            style={{
+              fontSize: 11,
+              background: isInsufficient ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)',
+              color: isInsufficient ? '#dc2626' : '#16a34a',
+              border: `1px solid ${isInsufficient ? 'rgba(239, 68, 68, 0.25)' : 'rgba(34, 197, 94, 0.25)'}`
             }}
           >
-            + Nạp thêm {fmtVND(shortfall)} vào ví
-          </button>
+            {isInsufficient ? 'Không đủ số dư' : 'Khả dụng'}
+          </span>
+        </div>
+      </div>
+
+      {/* Thông báo số dư ví không đủ nếu chọn phương thức Ví */}
+      {payMethod === 'wallet' && isInsufficient && (
+        <div style={{ background: 'rgba(255, 92, 122, 0.1)', border: '1px solid var(--coral)', borderRadius: 10, padding: 12, margin: '12px 0', fontSize: 13 }}>
+          <b style={{ color: 'var(--coral)' }}>Số dư ví không đủ ({fmtVND(state.balance)} / {fmtVND(amount)})</b>
+          <p style={{ marginTop: 4, color: 'var(--ink-soft)', marginBottom: 8 }}>
+            Bạn cần thêm <b>{fmtVND(shortfall)}</b> hoặc chọn <b>Chuyển khoản VietQR</b> ở trên để thanh toán online trực tiếp.
+          </p>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              className="btn btn-sm btn-outline"
+              onClick={() => setPayMethod('bank')}
+            >
+              Chuyển sang VietQR Online
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                onClose();
+                openModal('topup', { initialOrder: { amount: shortfall } });
+              }}
+            >
+              + Nạp thêm vào ví
+            </button>
+          </div>
         </div>
       )}
 
@@ -575,107 +1075,69 @@ export function SubscribeModal({ onClose }) {
       )}
 
       <div className="modal-actions">
-        <button
-          className="btn btn-primary"
-          disabled={submitting || isInsufficient}
-          onClick={confirm}
-        >
-          {submitting ? 'Đang xử lý...' : 'Thanh toán & nâng cấp'}
-        </button>
+        {payMethod === 'bank' ? (
+          <button
+            className="btn btn-primary"
+            disabled={submitting}
+            onClick={handleStartOnlinePayment}
+          >
+            {submitting ? 'Đang tạo mã...' : `Thanh toán Online ${fmtVND(amount)} (VietQR)`}
+          </button>
+        ) : (
+          <button
+            className="btn btn-primary"
+            disabled={submitting || isInsufficient}
+            onClick={confirmWalletPurchase}
+          >
+            {submitting ? 'Đang kích hoạt...' : `Thanh toán ${fmtVND(amount)} từ ví`}
+          </button>
+        )}
         <button className="btn btn-outline" disabled={submitting} onClick={onClose}>Hủy</button>
       </div>
     </ModalShell>
   );
 }
 
-export function UpgradeVipModal({ onClose }) {
-  const { upgradeVip, state } = useStore();
-  const { openModal } = useModal();
-  const amount = 199000;
-  const isInsufficient = state.balance < amount;
-  const shortfall = amount - state.balance;
-  const [submitting, setSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-
-  const confirm = async () => {
-    if (isInsufficient) return;
-    try {
-      setSubmitting(true);
-      setErrorMsg('');
-      await upgradeVip();
-      onClose();
-    } catch (err) {
-      setErrorMsg(err?.message || 'Có lỗi xảy ra khi nâng cấp VIP.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
+export function SubscribeModal(props) {
   return (
-    <ModalShell onClose={onClose}>
-      <div style={{ marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 18 }}>Nâng cấp VIP Business Suite</h3>
-        <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>Dành cho Doanh nghiệp & Agency</span>
-      </div>
+    <PlanPurchaseModal
+      {...props}
+      planCode="STU_PRO"
+      planName="Freelance Pro"
+      price={49000}
+      badge="🌟 PRO Freelancer"
+      role="student"
+      features={[
+        'Phí hoa hồng sàn giảm xuống còn 5%',
+        'Không giới hạn số lượt nộp hồ sơ ứng tuyển',
+        'Hồ sơ ưu tiên hiển thị nửa trên danh sách ứng viên',
+        'Huy hiệu PRO Freelancer nổi bật',
+        'Quản lý tối đa 5 bản CV chuyên môn, Portfolio 50MB',
+        'Rút tiền về ngân hàng nhanh trong 1 – 2 giờ'
+      ]}
+    />
+  );
+}
 
-      <div className="checkout-summary">
-        <div className="cs-row"><span>Gói VIP Business Suite (1 tháng)</span><span>{fmtVND(amount)}</span></div>
-        <div className="cs-row"><span>Hoa hồng ký quỹ</span><span style={{ color: '#16a34a', fontWeight: 700 }}>Giảm 50% (còn 5%)</span></div>
-        <div className="cs-row"><span>Ghim tin Featured tặng kèm</span><span style={{ color: '#16a34a', fontWeight: 700 }}>Miễn phí 1 tin/tháng</span></div>
-        <div className="cs-row"><span>Trích Quỹ Bảo hiểm (10%)</span><span>{fmtVND(Math.round(amount * 0.1))}</span></div>
-        <div className="cs-row total"><span>Tổng thanh toán</span><span>{fmtVND(amount)}</span></div>
-      </div>
-
-      <div style={{ padding: '12px 14px', borderRadius: 10, border: '1.5px solid var(--primary)', background: 'rgba(22, 163, 74, 0.06)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '12px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(22, 163, 74, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
-            <Icon name="wallet" width="18" height="18" />
-          </div>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 13.5 }}>Số dư Ví SkillBridge</div>
-            <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
-              Hiện có: <b>{fmtVND(state.balance)}</b>
-            </div>
-          </div>
-        </div>
-        <span className="badge badge-success" style={{ fontSize: 11 }}>Trừ từ ví</span>
-      </div>
-
-      {isInsufficient && (
-        <div style={{ background: 'rgba(255, 92, 122, 0.12)', border: '1px solid var(--coral)', borderRadius: 10, padding: 12, margin: '12px 0', fontSize: 13 }}>
-          <b style={{ color: 'var(--coral)' }}>Số dư ví không đủ ({fmtVND(state.balance)} / {fmtVND(amount)})</b>
-          <p style={{ marginTop: 4, color: 'var(--ink-soft)' }}>
-            Bạn cần nạp thêm <b>{fmtVND(shortfall)}</b> vào ví để kích hoạt gói VIP.
-          </p>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            style={{ marginTop: 8 }}
-            onClick={() => {
-              onClose();
-              openModal('topup', { initialOrder: { amount: shortfall } });
-            }}
-          >
-            + Nạp thêm {fmtVND(shortfall)} vào ví
-          </button>
-        </div>
-      )}
-
-      {errorMsg && (
-        <div className="field-error" style={{ margin: '10px 0' }}>{errorMsg}</div>
-      )}
-
-      <div className="modal-actions">
-        <button
-          className="btn btn-primary"
-          disabled={submitting || isInsufficient}
-          onClick={confirm}
-        >
-          {submitting ? 'Đang kích hoạt...' : 'Thanh toán & Kích hoạt VIP'}
-        </button>
-        <button className="btn btn-outline" disabled={submitting} onClick={onClose}>Hủy</button>
-      </div>
-    </ModalShell>
+export function UpgradeVipModal(props) {
+  return (
+    <PlanPurchaseModal
+      {...props}
+      planCode="EMP_VIP"
+      planName="VIP Business Suite"
+      price={149000}
+      badge="👑 VIP Business"
+      role="employer"
+      features={[
+        'Không giới hạn số tin tuyển dụng hoạt động đồng thời',
+        'Tặng 05 lượt Ghim tin nổi bật + Gắn nhãn Tuyển Gấp',
+        'Huy hiệu VIP Business mạ vàng uy tín',
+        'Tặng 25 lượt mời ứng viên trực tiếp từ kho sinh viên',
+        'Sinh viên làm việc cho NTD VIP chỉ chịu 5% phí sàn',
+        'Giới hạn yêu cầu sửa bài: 5 lần',
+        'Hỗ trợ giải quyết tranh chấp ưu tiên trong 2 – 4 giờ'
+      ]}
+    />
   );
 }
 

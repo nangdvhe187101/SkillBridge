@@ -100,8 +100,26 @@ export function mapMyApplication(a) {
   };
 }
 
-export function commissionRate(state) {
-  return state.vipBusiness ? 0.05 : 0.1;
+export function commissionRate(state, job = null) {
+  let studentRate = 0.10;
+  if (state?.effectiveCommissionRate !== undefined && state?.effectiveCommissionRate !== null) {
+    studentRate = Number(state.effectiveCommissionRate);
+  } else if (state?.activePlanCode === 'STU_MASTER') {
+    studentRate = 0.03;
+  } else if (state?.activePlanCode === 'STU_PRO' || state?.subscriptionPro) {
+    studentRate = 0.05;
+  } else if (state?.activePlanCode === 'STU_STARTER') {
+    studentRate = 0.08;
+  }
+
+  let employerRate = 0.10;
+  if (job?.employerPlanCode === 'EMP_VIP' || job?.employerIsVip || job?.isVip || (state?.role === 'employer' && state?.vipBusiness)) {
+    employerRate = 0.05;
+  } else if (job?.employerRate !== undefined && job?.employerRate !== null) {
+    employerRate = Number(job.employerRate);
+  }
+
+  return Math.min(studentRate, employerRate);
 }
 
 export function mapReceiptsFromApi(apiReceipts) {
@@ -174,6 +192,11 @@ const initialState = {
   },
   subscriptionPro: false,
   vipBusiness: false,
+  activePlanCode: null,
+  activePlanName: null,
+  subscriptionExpiresAt: null,
+  effectiveCommissionRate: null,
+  badge: null,
   myReliability: 96,
   myApplications: [],
   notifications: [],
@@ -329,14 +352,14 @@ function reducer(state, action) {
       return { ...state, myJobs: state.myJobs.filter((j) => j.id !== action.id) };
 
     case 'REOPEN_JOB': {
-      const myJobs = state.myJobs.map((j) => (j.id === action.id ? { ...j, status: 'open' } : j));
-      const jobs = state.jobs.map((j) => (j.dashJobId === action.id ? { ...j, status: 'open' } : j));
+      const myJobs = state.myJobs.map((j) => (String(j.id) === String(action.id) ? { ...j, status: 'open' } : j));
+      const jobs = state.jobs.map((j) => (String(j.id) === String(action.id) ? { ...j, status: 'open' } : j));
       return { ...state, myJobs, jobs };
     }
 
     case 'CANCEL_JOB': {
-      const myJobs = state.myJobs.map((j) => (j.id === action.id ? { ...j, status: 'cancelled' } : j));
-      const jobs = state.jobs.map((j) => (j.dashJobId === action.id ? { ...j, status: 'cancelled' } : j));
+      const myJobs = state.myJobs.map((j) => (String(j.id) === String(action.id) ? { ...j, status: 'cancelled' } : j));
+      const jobs = state.jobs.map((j) => (String(j.id) === String(action.id) ? { ...j, status: 'cancelled' } : j));
       const myApplications = state.myApplications.map((a) => (a.jobId === action.id || a.dashJobId === action.id ? { ...a, status: 'cancelled' } : a));
       return { ...state, myJobs, jobs, myApplications };
     }
@@ -403,7 +426,7 @@ function reducer(state, action) {
       const myJobs = (state.myJobs || []).some((j) => String(j.id) === String(jobId))
         ? state.myJobs.map((j) => (String(j.id) === String(jobId) ? updatedJob : j))
         : [updatedJob, ...(state.myJobs || [])];
-      const jobs = (state.jobs || []).map((pj) => (String(pj.dashJobId) === String(jobId) ? { ...pj, status: 'filled' } : pj));
+      const jobs = (state.jobs || []).map((pj) => (String(pj.id) === String(jobId) ? { ...pj, status: 'filled' } : pj));
 
       let balance = state.balance;
       let transactions = state.transactions;
@@ -419,7 +442,7 @@ function reducer(state, action) {
       if (existingIdx >= 0) {
         myApplications = myApplications.map((x, i) => (i === existingIdx ? { ...x, status: 'hired' } : x));
       } else {
-        const publicJob = jobs.find((pj) => String(pj.dashJobId) === String(jobId));
+        const publicJob = jobs.find((pj) => String(pj.id) === String(jobId));
         myApplications = [
           { id: 'ap' + Date.now(), jobId: publicJob ? publicJob.id : null, dashJobId: job.id, title: job.title, emp: publicJob ? publicJob.emp : 'Bạn', budget: job.budget, status: 'hired', appliedAt: 'Vừa xong' },
           ...myApplications,
@@ -432,9 +455,19 @@ function reducer(state, action) {
     case 'MARK_JOB_COMPLETE': {
       const job = state.myJobs.find((j) => j.id === action.id);
       if (!job) return state;
-      const commission = job.commissionAmount || Math.round(job.budget * commissionRate(state));
-      let transactions = addTxTo(state.transactions, 'escrow_release', 'Giải ngân cho ' + job.hiredApplicant + ' · ' + job.title, job.budget, 1);
-      transactions = addTxTo(transactions, 'commission', `Phí nền tảng · ${job.title}`, commission, -1);
+      const rate = commissionRate(state, job);
+      const commission = job.commissionAmount || Math.round(job.budget * rate);
+      let transactions = state.transactions;
+      const isStudent = job.hiredApplicantIsMe || (state.role === 'student' || state.currentUser?.roleCode === 'student');
+      const isEmployer = state.role === 'employer' || state.currentUser?.roleCode === 'employer';
+
+      // Chỉ thêm giao dịch nhận thù lao và phí sàn vào ví nếu người dùng hiện tại là Sinh viên
+      if (isStudent && !isEmployer) {
+        transactions = addTxTo(state.transactions, 'escrow_release', 'Giải ngân cho ' + job.hiredApplicant + ' · ' + job.title, job.budget - commission, 1);
+        if (commission > 0) {
+          transactions = addTxTo(transactions, 'commission', `Phí nền tảng · ${job.title}`, commission, -1);
+        }
+      }
       const myJobs = state.myJobs.map((j) => (j.id === action.id ? { ...j, status: 'completed' } : j));
       let myReliability = state.myReliability;
       let myApplications = state.myApplications;
@@ -481,16 +514,21 @@ function reducer(state, action) {
       const myApplications = state.myApplications.map((a) => (a.jobId === job.id || a.dashJobId === job.id ? { ...a, status: 'completed', jobStatus: 'completed' } : a));
 
       let transactions = state.transactions;
-      const txLabel = commission > 0
-        ? `Nhận thù lao giải ngân công việc #${job.id} · ${job.title}`
-        : `Giải ngân cho ${studentName} · ${job.title}`;
-      const alreadyReleased = transactions.some(
-        (t) => (t.type === 'escrow_release' || t.type === 'commission') && (t.referenceId === job.id || t.dashJobId === job.id || t.label === txLabel)
-      );
-      if (!alreadyReleased) {
-        transactions = addTxTo(transactions, 'escrow_release', txLabel, net, 1, job.id);
-        if (commission > 0) {
-          transactions = addTxTo(transactions, 'commission', `Phí nền tảng · ${job.title}`, commission, -1, job.id);
+      // QUAN TRỌNG: Nhà tuyển dụng ĐÃ ký quỹ 100% khi duyệt ứng viên, khi nghiệm thu KHÔNG bị trừ phí sàn và KHÔNG có dòng commission.
+      // Chỉ tài khoản Sinh viên thực nhận thù lao mới phát sinh giao dịch nhận tiền và khấu trừ hoa hồng.
+      const isStudent = job.hiredApplicantIsMe || (state.role === 'student' || state.currentUser?.roleCode === 'student');
+      const isEmployer = state.role === 'employer' || state.currentUser?.roleCode === 'employer' || (!job.hiredApplicantIsMe && Boolean(job.employerId || job.isEmployer));
+
+      if (isStudent && !isEmployer) {
+        const txLabel = `Nhận thù lao giải ngân công việc #${job.id} · ${job.title}`;
+        const alreadyReleased = transactions.some(
+          (t) => (t.type === 'escrow_release' || t.type === 'commission') && (t.referenceId === job.id || t.dashJobId === job.id || t.label === txLabel)
+        );
+        if (!alreadyReleased) {
+          transactions = addTxTo(transactions, 'escrow_release', txLabel, net, 1, job.id);
+          if (commission > 0) {
+            transactions = addTxTo(transactions, 'commission', `Phí nền tảng · ${job.title}`, commission, -1, job.id);
+          }
         }
       }
 
@@ -539,6 +577,11 @@ function reducer(state, action) {
         receipts: action.receipts !== undefined ? action.receipts : state.receipts,
         vipBusiness: action.vipBusiness !== undefined ? action.vipBusiness : state.vipBusiness,
         subscriptionPro: action.subscriptionPro !== undefined ? action.subscriptionPro : state.subscriptionPro,
+        activePlanCode: action.activePlanCode !== undefined ? action.activePlanCode : state.activePlanCode,
+        activePlanName: action.activePlanName !== undefined ? action.activePlanName : state.activePlanName,
+        subscriptionExpiresAt: action.subscriptionExpiresAt !== undefined ? action.subscriptionExpiresAt : state.subscriptionExpiresAt,
+        effectiveCommissionRate: action.effectiveCommissionRate !== undefined ? action.effectiveCommissionRate : state.effectiveCommissionRate,
+        badge: action.badge !== undefined ? action.badge : state.badge,
       };
     }
     case 'WITHDRAW': {
@@ -630,12 +673,16 @@ function reducer(state, action) {
 
     case 'CHECK_DEADLINES': {
       if (action.reminders && action.reminders.length > 0) {
-        const reminderMap = new Map(action.reminders.map((r) => [r.jobId, r.level]));
-        const myJobs = state.myJobs.map((job) => {
-          const level = reminderMap.get(job.id);
+        const reminderMap = new Map(action.reminders.map((r) => [String(r.jobId), r.level]));
+        const myJobs = (state.myJobs || []).map((job) => {
+          const level = reminderMap.get(String(job.id));
           return level ? { ...job, deadlineReminderSent: level } : job;
         });
-        return { ...state, myJobs };
+        const myApplications = (state.myApplications || []).map((app) => {
+          const level = reminderMap.get(String(app.jobId || app.id));
+          return level ? { ...app, deadlineReminderSent: level } : app;
+        });
+        return { ...state, myJobs, myApplications };
       }
 
       let changed = false;
@@ -890,8 +937,13 @@ export function StoreProvider({ children }) {
             date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
           })),
           receipts: mappedReceipts || undefined,
-          vipBusiness: Boolean(res.hasVipSubscription),
-          subscriptionPro: Boolean(res.hasProSubscription)
+          vipBusiness: Boolean(res.hasVipSubscription || res.activePlanCode === 'EMP_VIP'),
+          subscriptionPro: Boolean(res.hasProSubscription || res.activePlanCode === 'STU_PRO'),
+          activePlanCode: res.activePlanCode || null,
+          activePlanName: res.activePlanName || null,
+          subscriptionExpiresAt: res.subscriptionExpiresAt || null,
+          effectiveCommissionRate: res.effectiveCommissionRate !== undefined ? res.effectiveCommissionRate : null,
+          badge: res.badge || null
         });
       }
     } catch {
@@ -1007,7 +1059,21 @@ export function StoreProvider({ children }) {
 
   useEffect(() => {
     const checkDeadlines = () => {
-      const currentJobs = stateRef.current?.myJobs || [];
+      const isStudent = stateRef.current?.currentUser?.roleCode === 'student';
+      const currentJobs = isStudent
+        ? (stateRef.current?.myApplications || [])
+            .filter((a) => ['hired', 'submitted', 'revision_requested'].includes(a.status))
+            .map((a) => ({
+              ...a,
+              id: a.jobId || a.id,
+              status: a.jobStatus || a.status,
+              title: a.title || a.jobTitle || 'Công việc',
+              deadlineAt: a.deadlineAt,
+              hiredApplicant: a.emp || 'sinh viên',
+              deadlineReminderSent: a.deadlineReminderSent,
+            }))
+        : (stateRef.current?.myJobs || []);
+
       const now = Date.now();
       const reminders = [];
 
@@ -1020,16 +1086,16 @@ export function StoreProvider({ children }) {
         const remain = deadlineTs - now;
 
         if (remain <= 0 && job.deadlineReminderSent !== 'overdue') {
-          showToastRef.current?.(
-            `Công việc "${job.title}" đã quá hạn hoàn thành. Vui lòng liên hệ ${job.hiredApplicant || 'sinh viên'} hoặc gửi khiếu nại nếu cần.`,
-            'warning'
-          );
+          const message = isStudent
+            ? `Công việc "${job.title}" đã quá hạn hoàn thành. Vui lòng hoàn tất nộp bài hoặc liên hệ nhà tuyển dụng.`
+            : `Công việc "${job.title}" đã quá hạn hoàn thành. Vui lòng liên hệ ${job.hiredApplicant || 'sinh viên'} hoặc gửi khiếu nại nếu cần.`;
+          showToastRef.current?.(message, 'warning');
           reminders.push({ jobId: job.id, level: 'overdue' });
         } else if (remain > 0 && remain < 12 * 3600000 && !job.deadlineReminderSent) {
-          showToastRef.current?.(
-            `Công việc "${job.title}" sắp tới hạn (còn dưới 12 giờ). Nhắc ${job.hiredApplicant || 'sinh viên'} nộp bàn giao sớm.`,
-            'clock'
-          );
+          const message = isStudent
+            ? `Công việc "${job.title}" sắp tới hạn (còn dưới 12 giờ). Hãy hoàn thành và nộp bàn giao sớm.`
+            : `Công việc "${job.title}" sắp tới hạn (còn dưới 12 giờ). Nhắc ${job.hiredApplicant || 'sinh viên'} nộp bàn giao sớm.`;
+          showToastRef.current?.(message, 'clock');
           reminders.push({ jobId: job.id, level: 'warning' });
         }
       });
@@ -1137,7 +1203,6 @@ export function StoreProvider({ children }) {
         } else {
           dispatch({ type: 'APPLY_JOB', id: jobId });
         }
-        showToast('Nộp đơn ứng tuyển thành công!', 'check');
         return result;
       },
       uploadCvAsync: async (payload) => {
@@ -1199,11 +1264,23 @@ export function StoreProvider({ children }) {
       refreshWallet,
       withdraw: (amount) => { dispatch({ type: 'WITHDRAW', amount }); showToast(`Đã gửi yêu cầu rút ${amount.toLocaleString('vi-VN')}đ.`, 'check'); },
       updateBankAccount: (payload) => { dispatch({ type: 'UPDATE_BANK_ACCOUNT', payload }); showToast('Cập nhật tài khoản ngân hàng thành công!', 'check'); },
+      purchaseSubscription: async (planType) => {
+        try {
+          const res = await walletApi.purchaseSubscription(planType);
+          await refreshWallet();
+          showToast(`Chúc mừng! Bạn đã đăng ký thành công gói ${res.planName || ''}!`, 'crown');
+          return res;
+        } catch (err) {
+          showToast(err?.message || 'Không thể đăng ký gói dịch vụ.', 'warning');
+          throw err;
+        }
+      },
       subscribePro: async () => {
         try {
-          await walletApi.purchaseSubscription('PRO');
+          const res = await walletApi.purchaseSubscription('STU_PRO');
           await refreshWallet();
           showToast('Chúc mừng! Bạn đã đăng ký thành công gói Freelance Pro.', 'star');
+          return res;
         } catch (err) {
           showToast(err?.message || 'Không thể đăng ký gói Freelance Pro.', 'warning');
           throw err;
@@ -1211,9 +1288,10 @@ export function StoreProvider({ children }) {
       },
       upgradeVip: async () => {
         try {
-          await walletApi.purchaseSubscription('VIP');
+          const res = await walletApi.purchaseSubscription('EMP_VIP');
           await refreshWallet();
           showToast('Chúc mừng! Bạn đã nâng cấp VIP Business Suite thành công!', 'crown');
+          return res;
         } catch (err) {
           showToast(err?.message || 'Không thể nâng cấp VIP Business Suite.', 'warning');
           throw err;
@@ -1334,9 +1412,8 @@ export function StoreProvider({ children }) {
           showToast('Đã cập nhật thông tin tài khoản.', 'check');
           return res;
         } catch (err) {
-          console.warn('Backend update profile fallback:', err);
-          dispatch({ type: 'UPDATE_PROFILE', patch });
-          showToast('Đã lưu thông tin tài khoản.', 'check');
+          showToast(err.message || 'Không thể lưu thông tin tài khoản. Vui lòng thử lại.', 'x');
+          throw err;
         }
       },
       changePassword: async (currentPassword, newPassword) => {

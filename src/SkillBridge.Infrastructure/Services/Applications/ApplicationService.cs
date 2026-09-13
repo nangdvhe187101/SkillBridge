@@ -308,6 +308,8 @@ public class ApplicationService : IApplicationService
                 currentJob.EscrowAmount = currentJob.Budget;
                 currentJob.Status = "in_progress";
                 currentJob.DeadlineAt = DateTime.UtcNow.AddDays(durationDays);
+                currentJob.DeadlineWarningSentAt = null;
+                currentJob.DeadlineOverdueSentAt = null;
                 currentJob.UpdatedAt = DateTime.UtcNow;
 
                 // Cập nhật trạng thái ứng viên được chọn
@@ -428,6 +430,8 @@ public class ApplicationService : IApplicationService
                     job.Status = "open";
                     job.HiredApplicantId = null;
                     job.DeadlineAt = null;
+                    job.DeadlineWarningSentAt = null;
+                    job.DeadlineOverdueSentAt = null;
                     job.EscrowAmount = null;
                     job.RevisionCount = 0; // Reset số lần chỉnh sửa cho lượt thuê mới
                     job.UpdatedAt = DateTime.UtcNow;

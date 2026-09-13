@@ -12,6 +12,11 @@ public class WalletResponseDto
     public List<ReceiptDto> Receipts { get; set; } = new();
     public bool HasVipSubscription { get; set; }
     public bool HasProSubscription { get; set; }
+    public string? ActivePlanCode { get; set; }
+    public string? ActivePlanName { get; set; }
+    public DateTime? SubscriptionExpiresAt { get; set; }
+    public decimal EffectiveCommissionRate { get; set; } = 0.10m;
+    public string? Badge { get; set; }
 }
 
 public class ReceiptDto

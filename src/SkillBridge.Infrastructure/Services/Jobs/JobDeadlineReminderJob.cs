@@ -156,6 +156,10 @@ public class JobDeadlineReminderJob : BackgroundService
                 }
 
                 job.DeadlineOverdueSentAt = now;
+                if (job.DeadlineWarningSentAt == null)
+                {
+                    job.DeadlineWarningSentAt = now;
+                }
                 try
                 {
                     await db.SaveChangesAsync(ct);

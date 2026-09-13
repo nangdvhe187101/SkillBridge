@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
+using SkillBridge.Application.DTOs.Applications;
 using SkillBridge.Application.Interfaces;
 using SkillBridge.Application.Interfaces.Auth;
 using SkillBridge.Application.Interfaces.Email;
@@ -504,5 +505,134 @@ public class BugFixesRegressionTests
         // Không trừ điểm uy tín hay refund
         reliabilityMock.Verify(r => r.PenalizeScoreAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         escrowMock.Verify(e => e.RefundEscrowAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<decimal>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Bug1_DeadlineReminderFlags_ShouldResetOnCancel_Reopen_AndRehire()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var employer = new User { FullName = "Employer Test", Email = "emp@test.com", RoleId = 2, AccountStatus = "active", KycStatus = "verified", PasswordHash = "hash" };
+        var student1 = new User { FullName = "Student 1", Email = "stu1@test.com", RoleId = 3, AccountStatus = "active", KycStatus = "verified", PasswordHash = "hash" };
+        var student2 = new User { FullName = "Student 2", Email = "stu2@test.com", RoleId = 3, AccountStatus = "active", KycStatus = "verified", PasswordHash = "hash" };
+
+        await dbContext.Users.AddRangeAsync(employer, student1, student2);
+        await dbContext.SaveChangesAsync();
+
+        var job = new Job
+        {
+            EmployerId = employer.Id,
+            Title = "Job Test Deadline Flags",
+            Description = "Mô tả",
+            Budget = 500000m,
+            Status = "open",
+            PostedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        await dbContext.Jobs.AddAsync(job);
+        await dbContext.SaveChangesAsync();
+
+        var app1 = new JobApplication
+        {
+            JobId = job.Id,
+            StudentId = student1.Id,
+            Status = "pending",
+            CoverLetter = "Ứng tuyển 1",
+            AppliedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        var app2 = new JobApplication
+        {
+            JobId = job.Id,
+            StudentId = student2.Id,
+            Status = "pending",
+            CoverLetter = "Ứng tuyển 2",
+            AppliedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await dbContext.Applications.AddRangeAsync(app1, app2);
+        await dbContext.SaveChangesAsync();
+
+        var jobId = job.Id;
+        var app1Id = app1.Id;
+        var app2Id = app2.Id;
+
+        var jobRepoMock = new Mock<IJobRepository>();
+        jobRepoMock.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(() => dbContext.Jobs.Find(jobId));
+        jobRepoMock.Setup(r => r.UpdateJobAsync(It.IsAny<Job>()))
+            .Callback<Job>(j => dbContext.Jobs.Update(j))
+            .Returns(Task.CompletedTask);
+
+        var appRepoMock = new Mock<IApplicationRepository>();
+        appRepoMock.Setup(r => r.GetByIdAsync(app1Id)).ReturnsAsync(() => dbContext.Applications.Find(app1Id));
+        appRepoMock.Setup(r => r.GetByIdAsync(app2Id)).ReturnsAsync(() => dbContext.Applications.Find(app2Id));
+
+        var appService = new ApplicationService(
+            appRepoMock.Object,
+            jobRepoMock.Object,
+            Mock.Of<ICvFileRepository>(),
+            dbContext,
+            Mock.Of<IStorageService>(),
+            Mock.Of<IEscrowPaymentService>(),
+            Mock.Of<IUserReliabilityService>(),
+            Mock.Of<INotificationService>(),
+            Mock.Of<ILogger<ApplicationService>>());
+
+        var jobService = new JobService(
+            jobRepoMock.Object,
+            Mock.Of<ICategoryRepository>(),
+            dbContext,
+            Mock.Of<IStorageService>(),
+            Mock.Of<IEscrowPaymentService>(),
+            Mock.Of<IUserReliabilityService>(),
+            Mock.Of<INotificationService>(),
+            Mock.Of<ILogger<JobService>>());
+
+        // 1. Hire student 1
+        await appService.HireApplicantAsync(employer.Id, jobId, app1Id, new HireApplicantRequest { Days = 3 });
+        var jobAfterHire = await dbContext.Jobs.FindAsync(jobId);
+        Assert.NotNull(jobAfterHire);
+        Assert.Equal("in_progress", jobAfterHire.Status);
+        Assert.Null(jobAfterHire.DeadlineWarningSentAt);
+        Assert.Null(jobAfterHire.DeadlineOverdueSentAt);
+
+        // 2. Giả lập job bị trễ hạn: set cờ overdue và warning
+        jobAfterHire.DeadlineWarningSentAt = DateTime.UtcNow.AddHours(-10);
+        jobAfterHire.DeadlineOverdueSentAt = DateTime.UtcNow.AddHours(-2);
+        await dbContext.SaveChangesAsync();
+
+        // 3. Sinh viên hủy việc giữa chừng -> cờ phải được reset về null
+        await appService.CancelOrWithdrawApplicationAsync(student1.Id, jobId, "Hủy việc giữa chừng");
+        var jobAfterCancel = await dbContext.Jobs.FindAsync(jobId);
+        Assert.NotNull(jobAfterCancel);
+        Assert.Equal("open", jobAfterCancel.Status);
+        Assert.Null(jobAfterCancel.DeadlineWarningSentAt);
+        Assert.Null(jobAfterCancel.DeadlineOverdueSentAt);
+
+        // 4. NTD hủy job rồi mở lại (ReopenJobAsync) -> cờ phải reset về null
+        jobAfterCancel.Status = "cancelled";
+        jobAfterCancel.DeadlineWarningSentAt = DateTime.UtcNow.AddHours(-5);
+        jobAfterCancel.DeadlineOverdueSentAt = DateTime.UtcNow.AddHours(-1);
+        await dbContext.SaveChangesAsync();
+
+        await jobService.ReopenJobAsync(employer.Id, jobId);
+        var jobAfterReopen = await dbContext.Jobs.FindAsync(jobId);
+        Assert.NotNull(jobAfterReopen);
+        Assert.Equal("open", jobAfterReopen.Status);
+        Assert.Null(jobAfterReopen.DeadlineWarningSentAt);
+        Assert.Null(jobAfterReopen.DeadlineOverdueSentAt);
+
+        // 5. Giả lập cờ bị dính trước khi hire lại, sau đó NTD hire student 2 -> cờ phải được reset về null
+        jobAfterReopen.DeadlineOverdueSentAt = DateTime.UtcNow;
+        await dbContext.SaveChangesAsync();
+
+        await appService.HireApplicantAsync(employer.Id, jobId, app2Id, new HireApplicantRequest { Days = 5 });
+        var jobAfterRehire = await dbContext.Jobs.FindAsync(jobId);
+        Assert.NotNull(jobAfterRehire);
+        Assert.Equal("in_progress", jobAfterRehire.Status);
+        Assert.Null(jobAfterRehire.DeadlineWarningSentAt);
+        Assert.Null(jobAfterRehire.DeadlineOverdueSentAt);
     }
 }

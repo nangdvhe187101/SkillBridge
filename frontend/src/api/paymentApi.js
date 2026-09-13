@@ -1,7 +1,5 @@
 import { apiFetch } from './authApi';
 
-const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
-
 export async function createPaymentOrder(provider, amount) {
   return apiFetch('/payments/create-order', {
     method: 'POST',
@@ -26,3 +24,11 @@ export async function cancelPendingOrder(orderCode) {
     method: 'POST',
   });
 }
+
+export async function purchaseSubscription(planType) {
+  return apiFetch('/subscriptions/purchase', {
+    method: 'POST',
+    body: JSON.stringify({ planType }),
+  });
+}
+

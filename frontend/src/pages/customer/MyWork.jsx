@@ -601,7 +601,7 @@ export default function MyWork() {
         {/* TAB 1: VIỆC ĐANG LÀM */}
         {activeTab === 'active' && (
           <div>
-            {isLoadingDeliverables ? (
+            {loadingDeliverables ? (
               <div style={{
                 background: '#ffffff',
                 border: '1px solid #e2e8f0',

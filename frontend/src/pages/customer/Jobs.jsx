@@ -133,15 +133,12 @@ export default function Jobs() {
                 borderRadius: '50%',
                 width: 28,
                 height: 28,
-                display: 'inline-flex',
+                display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
                 fontSize: 14,
-                transition: 'all 0.15s ease',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
+                transition: 'all 0.15s ease'
               }}
               title={isJobSaved ? 'Bỏ lưu khỏi danh sách yêu thích' : 'Lưu công việc vào yêu thích'}
             >

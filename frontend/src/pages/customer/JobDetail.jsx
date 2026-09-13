@@ -3,7 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
 import ModalShell from '../../components/modals/ModalShell';
-import { useStore, fmtVND } from '../../context/StoreContext';
+import { useStore, fmtVND, commissionRate } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import { useToast } from '../../context/ToastContext';
 import { DeliverablePreview } from '../../components/modals/DeliverableModals';
@@ -553,7 +553,26 @@ export default function JobDetail() {
               ) : (
                 <div className="jd-card">
                   <div className="jd-price">{fmtVND(j.budget)}</div>
-                  <div className="jd-price-lbl">Ngân sách công việc</div>
+                  <div className="jd-price-lbl">Ngân sách công việc (Ký quỹ 100%)</div>
+
+                  {(() => {
+                    const rate = commissionRate(state, j);
+                    const netEstimate = Math.round(j.budget * (1 - rate));
+                    const isDiscounted = rate < 0.10;
+                    return (
+                      <div style={{ marginTop: 10, marginBottom: 12, padding: '10px 12px', background: 'rgba(34, 197, 94, 0.08)', borderRadius: 8, border: '1px solid rgba(34, 197, 94, 0.25)', fontSize: 13 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ color: 'var(--ink-soft)' }}>Thực nhận về ví:</span>
+                          <strong style={{ color: '#16a34a', fontSize: 14.5 }}>{fmtVND(netEstimate)}</strong>
+                        </div>
+                        <div style={{ fontSize: 11.5, color: isDiscounted ? '#15803d' : 'var(--ink-soft)', marginTop: 3 }}>
+                          {isDiscounted
+                            ? `✨ Ưu đãi phí sàn ${(rate * 100).toFixed(0)}% (theo gói đặc quyền)`
+                            : `Phí bảo trợ sàn ${(rate * 100).toFixed(0)}%`}
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {(() => {
                     const dur = formatDurationDetail(j.deadlineAt, j.postedAt);

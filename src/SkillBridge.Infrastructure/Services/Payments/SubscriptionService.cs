@@ -31,19 +31,40 @@ public class SubscriptionService : ISubscriptionService
         decimal amount;
 
         var normalizedPlan = request.PlanType?.Trim().ToUpperInvariant() ?? string.Empty;
-        if (normalizedPlan == PaymentConstants.VipPlanKeyword || normalizedPlan.Contains(PaymentConstants.VipPlanKeyword))
+
+        if (normalizedPlan == PaymentConstants.PlanEmpVip || normalizedPlan == "EMPLOYER_VIP" || normalizedPlan == "VIP" || normalizedPlan.Contains("VIP"))
         {
-            planName = "VIP Business Suite";
-            amount = 199000m;
+            planName = PaymentConstants.PlanNameEmpVip;
+            amount = PaymentConstants.PriceEmpVip; // 149.000đ
         }
-        else if (normalizedPlan == "PRO" || normalizedPlan.Contains("PRO"))
+        else if (normalizedPlan == PaymentConstants.PlanEmpGrowth || normalizedPlan == "EMPLOYER_GROWTH" || normalizedPlan.Contains("GROWTH"))
         {
-            planName = "Freelance Pro";
-            amount = 49000m;
+            planName = PaymentConstants.PlanNameEmpGrowth;
+            amount = PaymentConstants.PriceEmpGrowth; // 89.000đ
+        }
+        else if (normalizedPlan == PaymentConstants.PlanEmpStarter || normalizedPlan == "EMPLOYER_STARTER")
+        {
+            planName = PaymentConstants.PlanNameEmpStarter;
+            amount = PaymentConstants.PriceEmpStarter; // 49.000đ
+        }
+        else if (normalizedPlan == PaymentConstants.PlanStuMaster || normalizedPlan == "STUDENT_MASTER" || normalizedPlan == "MASTER" || normalizedPlan.Contains("MASTER"))
+        {
+            planName = PaymentConstants.PlanNameStuMaster;
+            amount = PaymentConstants.PriceStuMaster; // 99.000đ
+        }
+        else if (normalizedPlan == PaymentConstants.PlanStuPro || normalizedPlan == "STUDENT_PRO" || normalizedPlan == "PRO" || normalizedPlan.Contains("PRO"))
+        {
+            planName = PaymentConstants.PlanNameStuPro;
+            amount = PaymentConstants.PriceStuPro; // 49.000đ
+        }
+        else if (normalizedPlan == PaymentConstants.PlanStuStarter || normalizedPlan == "STUDENT_STARTER" || normalizedPlan.Contains("STARTER"))
+        {
+            planName = PaymentConstants.PlanNameStuStarter;
+            amount = PaymentConstants.PriceStuStarter; // 29.000đ
         }
         else
         {
-            throw new BusinessException("Gói đăng ký không hợp lệ. Hỗ trợ gói 'VIP' hoặc 'PRO'.");
+            throw new BusinessException($"Gói đăng ký '{request.PlanType}' không hợp lệ.");
         }
 
         if (_dbContext.Database.IsRelational())
@@ -91,20 +112,33 @@ public class SubscriptionService : ISubscriptionService
         var now = DateTime.UtcNow;
         var today = DateOnly.FromDateTime(now);
 
-        var sub = await _dbContext.Subscriptions
+        var existingSameSub = await _dbContext.Subscriptions
             .FirstOrDefaultAsync(s => s.UserId == userId && s.PlanName == planName && s.Status == "active", cancellationToken);
 
-        if (sub != null)
+        Subscription sub;
+        if (existingSameSub != null)
         {
-            var baseDate = sub.RenewalDate.HasValue && sub.RenewalDate.Value > today
-                ? sub.RenewalDate.Value
+            // Cùng gói: gia hạn thêm 1 tháng
+            var baseDate = existingSameSub.RenewalDate.HasValue && existingSameSub.RenewalDate.Value > today
+                ? existingSameSub.RenewalDate.Value
                 : today;
-            sub.RenewalDate = baseDate.AddMonths(1);
-            sub.AmountPaid += amount;
-            sub.UpdatedAt = now;
+            existingSameSub.RenewalDate = baseDate.AddMonths(1);
+            existingSameSub.AmountPaid += amount;
+            existingSameSub.UpdatedAt = now;
+            sub = existingSameSub;
         }
         else
         {
+            // Nâng cấp gói khác: hủy các gói active cũ để áp dụng gói mới ngay lập tức
+            var otherActiveSubs = await _dbContext.Subscriptions
+                .Where(s => s.UserId == userId && s.Status == "active")
+                .ToListAsync(cancellationToken);
+            foreach (var other in otherActiveSubs)
+            {
+                other.Status = PaymentConstants.CancelledSubscriptionStatus;
+                other.UpdatedAt = now;
+            }
+
             sub = new Subscription
             {
                 UserId = userId,
