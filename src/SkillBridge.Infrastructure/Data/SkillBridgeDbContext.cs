@@ -511,6 +511,8 @@ public partial class SkillBridgeDbContext : DbContext
         {
             entity.HasKey(e => e.Id).HasName("PRIMARY");
 
+            entity.HasIndex(e => e.JobId, "uq_receipts_job").IsUnique();
+
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             entity.HasOne(d => d.Employer).WithMany(p => p.ReceiptEmployers)

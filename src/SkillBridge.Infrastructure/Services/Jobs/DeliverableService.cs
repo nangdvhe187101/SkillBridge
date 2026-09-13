@@ -381,9 +381,8 @@ public class DeliverableService : IDeliverableService
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-            // Re-check công việc và bản nộp bên trong transaction để chống race condition (double click / duplicate request)
-            var currentJob = await _dbContext.Jobs
-                .FirstOrDefaultAsync(j => j.Id == jobId, cancellationToken);
+            // Khóa hàng Job bằng SELECT ... FOR UPDATE bên trong transaction để chống race condition (double click / duplicate review request)
+            var currentJob = await GetJobWithLockAsync(jobId, cancellationToken);
 
             if (currentJob == null || currentJob.EmployerId != employerId)
             {
@@ -845,5 +844,16 @@ public class DeliverableService : IDeliverableService
         }
 
         return $"SkillBridge_Job{jobId}_v{version}_{previewTag}{baseName}{ext}";
+    }
+
+    private async Task<Job?> GetJobWithLockAsync(int jobId, CancellationToken ct = default)
+    {
+        if (_dbContext.Database.IsRelational())
+        {
+            return await _dbContext.Jobs
+                .FromSqlRaw("SELECT * FROM jobs WHERE id = {0} FOR UPDATE", jobId)
+                .SingleOrDefaultAsync(ct);
+        }
+        return await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
     }
 }

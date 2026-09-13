@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -8,7 +8,7 @@ namespace SkillBridge.Infrastructure.Data.Entities;
 
 [Table("receipts")]
 [Index("EmployerId", Name = "fk_receipts_employer")]
-[Index("JobId", Name = "fk_receipts_job")]
+[Index("JobId", Name = "uq_receipts_job", IsUnique = true)]
 [Index("StudentId", Name = "fk_receipts_student")]
 public partial class Receipt
 {

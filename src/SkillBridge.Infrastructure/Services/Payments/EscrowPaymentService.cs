@@ -56,6 +56,9 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (amount <= 0) return;
 
+        // Khóa hàng Job để chống race condition giải ngân kép (double-release)
+        await GetJobWithLockAsync(jobId, cancellationToken);
+
         // Idempotency Guard: Đảm bảo công việc này chưa từng được giải ngân trước đó
         var alreadyReleased = await _dbContext.Receipts.AnyAsync(r => r.JobId == jobId, cancellationToken)
             || await _dbContext.Transactions.AnyAsync(t => t.Type == "escrow_release" && t.ReferenceId == jobId, cancellationToken);
@@ -145,6 +148,9 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (amount <= 0) return;
 
+        // Khóa hàng Job để chống race condition hoàn tiền kép (double-refund)
+        await GetJobWithLockAsync(jobId, cancellationToken);
+
         // Idempotency Guard: Không hoàn tiền nếu công việc đã được giải ngân hoặc đã hoàn tiền
         var alreadyReleased = await _dbContext.Receipts.AnyAsync(r => r.JobId == jobId, cancellationToken);
         if (alreadyReleased)
@@ -201,5 +207,16 @@ public class EscrowPaymentService : IEscrowPaymentService
                 .SingleOrDefaultAsync(ct);
         }
         return await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
+    }
+
+    private async Task<Job?> GetJobWithLockAsync(int jobId, CancellationToken ct)
+    {
+        if (_dbContext.Database.IsRelational())
+        {
+            return await _dbContext.Jobs
+                .FromSqlRaw("SELECT * FROM jobs WHERE id = {0} FOR UPDATE", jobId)
+                .SingleOrDefaultAsync(ct);
+        }
+        return await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
     }
 }
