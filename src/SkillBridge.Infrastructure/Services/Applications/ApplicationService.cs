@@ -368,8 +368,19 @@ public class ApplicationService : IApplicationService
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
             try
             {
+                // Khóa hàng Job bằng SELECT ... FOR UPDATE ngay từ đầu để chống race condition (double cancel / duplicate refund)
+                var job = await GetJobWithLockAsync(jobId);
+                if (job == null)
+                {
+                    throw new BusinessException("Công việc không tồn tại.");
+                }
+
+                if (job.Status == "cancelled")
+                {
+                    throw new BusinessException("Công việc này đã bị hủy trước đó.");
+                }
+
                 var application = await _dbContext.Applications
-                    .Include(a => a.Job)
                     .Include(a => a.Student)
                     .FirstOrDefaultAsync(a => a.StudentId == studentId && a.JobId == jobId);
 
@@ -393,12 +404,9 @@ public class ApplicationService : IApplicationService
                     throw new BusinessException("Hồ sơ ứng tuyển này đã bị từ chối, không thể rút đơn.");
                 }
 
-                var isHiredForThisJob = application.Status == "hired" ||
-                    (application.Job != null && application.Job.HiredApplicantId == studentId);
-
-                var isJobInProgress = application.Job != null &&
-                    new[] { "in_progress", "submitted", "revision_requested" }.Contains(application.Job.Status);
-
+                // Đánh giá trạng thái dựa trên bản ghi Job đã được khóa độc quyền
+                var isHiredForThisJob = application.Status == "hired" || job.HiredApplicantId == studentId;
+                var isJobInProgress = new[] { "in_progress", "submitted", "revision_requested" }.Contains(job.Status);
                 var isHiredOrInProgress = isHiredForThisJob && isJobInProgress;
                 var filesToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 int? notifyEmployerId = null;
@@ -414,43 +422,39 @@ public class ApplicationService : IApplicationService
                         10,
                         $"Sinh viên hủy việc đang làm tại Job #{jobId}. Lý do: {reason ?? "Không có lý do"}");
 
-                    // Khóa hàng Job để cập nhật trạng thái open và hoàn tiền ký quỹ an toàn
-                    var job = await GetJobWithLockAsync(jobId) ?? application.Job;
-                    if (job != null)
+                    // Cập nhật trạng thái open và hoàn tiền ký quỹ an toàn trên row Job đã khóa
+                    job.Status = "open";
+                    job.HiredApplicantId = null;
+                    job.DeadlineAt = null;
+                    job.EscrowAmount = null;
+                    job.RevisionCount = 0; // Reset số lần chỉnh sửa cho lượt thuê mới
+                    job.UpdatedAt = DateTime.UtcNow;
+                    _dbContext.Jobs.Update(job);
+
+                    // Hoàn tiền ký quỹ lại cho Nhà tuyển dụng vì sinh viên đơn phương hủy việc
+                    if (job.Budget > 0)
                     {
-                        job.Status = "open";
-                        job.HiredApplicantId = null;
-                        job.DeadlineAt = null;
-                        job.EscrowAmount = null;
-                        job.RevisionCount = 0; // Reset số lần chỉnh sửa cho lượt thuê mới
-                        job.UpdatedAt = DateTime.UtcNow;
-                        _dbContext.Jobs.Update(job);
+                        await _escrowPaymentService.RefundEscrowAsync(
+                            job.EmployerId,
+                            job.Id,
+                            job.Title,
+                            job.Budget,
+                            $"Hoàn tiền ký quỹ do sinh viên hủy nhận việc Job #{job.Id} · {job.Title}");
+                    }
 
-                        // Hoàn tiền ký quỹ lại cho Nhà tuyển dụng vì sinh viên đơn phương hủy việc
-                        if (job.Budget > 0)
-                        {
-                            await _escrowPaymentService.RefundEscrowAsync(
-                                job.EmployerId,
-                                job.Id,
-                                job.Title,
-                                job.Budget,
-                                $"Hoàn tiền ký quỹ do sinh viên hủy nhận việc Job #{job.Id} · {job.Title}");
-                        }
+                    notifyEmployerId = job.EmployerId;
+                    notifyJobTitle = job.Title;
+                    notifyBudget = job.Budget;
+                    notifyJobId = job.Id;
 
-                        notifyEmployerId = job.EmployerId;
-                        notifyJobTitle = job.Title;
-                        notifyBudget = job.Budget;
-                        notifyJobId = job.Id;
-
-                        // Khôi phục lại các đơn ứng tuyển của các sinh viên khác (từng bị auto-rejected khi thuê) về lại pending để NTD có thể chọn tiếp
-                        var autoRejectedApps = await _dbContext.Applications
-                            .Where(a => a.JobId == jobId && a.Id != application.Id && a.Status == "rejected")
-                            .ToListAsync();
-                        foreach (var other in autoRejectedApps)
-                        {
-                            other.Status = "pending";
-                            other.UpdatedAt = DateTime.UtcNow;
-                        }
+                    // Khôi phục lại các đơn ứng tuyển của các sinh viên khác (từng bị auto-rejected khi thuê) về lại pending để NTD có thể chọn tiếp
+                    var autoRejectedApps = await _dbContext.Applications
+                        .Where(a => a.JobId == jobId && a.Id != application.Id && a.Status == "rejected")
+                        .ToListAsync();
+                    foreach (var other in autoRejectedApps)
+                    {
+                        other.Status = "pending";
+                        other.UpdatedAt = DateTime.UtcNow;
                     }
 
                     // Đánh dấu hủy các bản bàn giao chưa được nghiệm thu của sinh viên này và thu thập file R2

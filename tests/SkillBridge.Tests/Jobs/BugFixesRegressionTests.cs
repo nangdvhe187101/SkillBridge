@@ -12,7 +12,9 @@ using SkillBridge.Application.Interfaces;
 using SkillBridge.Application.Interfaces.Auth;
 using SkillBridge.Application.Interfaces.Email;
 using SkillBridge.Application.Interfaces.Notifications;
+using SkillBridge.Application.Interfaces.Payments;
 using SkillBridge.Application.Interfaces.Storage;
+using SkillBridge.Application.Interfaces.Users;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
@@ -31,6 +33,7 @@ public class BugFixesRegressionTests
     {
         var options = new DbContextOptionsBuilder<SkillBridgeDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.InMemoryEventId.TransactionIgnoredWarning))
             .Options;
 
         return new SkillBridgeDbContext(options);
@@ -254,5 +257,181 @@ public class BugFixesRegressionTests
         Assert.Equal("Kiểm tra tự động lưu thông báo", savedNotif.MessageText);
         Assert.Equal("/test", savedNotif.Link);
         Assert.False(savedNotif.IsRead);
+    }
+
+    [Fact]
+    public async Task CancelOrWithdrawApplication_WhenHiredAndInProgress_ShouldPenalizeScoreRefundAndReopenJob()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var appRepoMock = new Mock<IApplicationRepository>();
+        var jobRepoMock = new Mock<IJobRepository>();
+        var cvRepoMock = new Mock<ICvFileRepository>();
+        var storageMock = new Mock<IStorageService>();
+        var escrowMock = new Mock<IEscrowPaymentService>();
+        var reliabilityMock = new Mock<IUserReliabilityService>();
+        var notifMock = new Mock<INotificationService>();
+        var loggerMock = new Mock<ILogger<ApplicationService>>();
+
+        var studentId = 5;
+        var employerId = 10;
+        var jobId = 100;
+
+        var student = new User { Id = studentId, RoleId = 1, Email = "student5@test.com", FullName = "Student 5", AccountStatus = "active", KycStatus = "verified", PasswordHash = "hash" };
+        var employer = new User { Id = employerId, RoleId = 2, Email = "employer10@test.com", FullName = "Employer 10", AccountStatus = "active", KycStatus = "verified", PasswordHash = "hash" };
+        await dbContext.Users.AddRangeAsync(student, employer);
+
+        var job = new Job
+        {
+            Id = jobId,
+            EmployerId = employerId,
+            Title = "Xây dựng website",
+            Description = "Mô tả công việc",
+            Status = "in_progress",
+            HiredApplicantId = studentId,
+            Budget = 1000000m,
+            EscrowAmount = 1000000m
+        };
+
+        var application = new JobApplication
+        {
+            Id = 501,
+            JobId = jobId,
+            StudentId = studentId,
+            Status = "hired",
+            CoverLetter = "Tôi muốn làm việc này",
+            AppliedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        var otherApp = new JobApplication
+        {
+            Id = 502,
+            JobId = jobId,
+            StudentId = 8,
+            Status = "rejected",
+            CoverLetter = "Đơn khác",
+            AppliedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await dbContext.Jobs.AddAsync(job);
+        await dbContext.Applications.AddRangeAsync(application, otherApp);
+        await dbContext.SaveChangesAsync();
+
+        var service = new ApplicationService(
+            appRepoMock.Object,
+            jobRepoMock.Object,
+            cvRepoMock.Object,
+            dbContext,
+            storageMock.Object,
+            escrowMock.Object,
+            reliabilityMock.Object,
+            notifMock.Object,
+            loggerMock.Object);
+
+        // Act
+        await service.CancelOrWithdrawApplicationAsync(studentId, jobId, "Bận việc đột xuất");
+
+        // Assert
+        // 1. Phạt điểm sinh viên
+        reliabilityMock.Verify(r => r.PenalizeScoreAsync(studentId, 10, It.Is<string>(s => s.Contains("Bận việc đột xuất")), It.IsAny<CancellationToken>()), Times.Once);
+
+        // 2. Hoàn tiền ký quỹ cho NTD
+        escrowMock.Verify(e => e.RefundEscrowAsync(employerId, jobId, job.Title, 1000000m, It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+
+        // 3. Job được mở lại
+        var updatedJob = await dbContext.Jobs.FindAsync(jobId);
+        Assert.NotNull(updatedJob);
+        Assert.Equal("open", updatedJob.Status);
+        Assert.Null(updatedJob.HiredApplicantId);
+        Assert.Null(updatedJob.EscrowAmount);
+
+        // 4. Đơn khác được phục hồi sang pending
+        var restoredApp = await dbContext.Applications.FindAsync(502);
+        Assert.NotNull(restoredApp);
+        Assert.Equal("pending", restoredApp.Status);
+
+        // 5. Đơn hiện tại sang cancelled
+        var updatedApp = await dbContext.Applications.FindAsync(501);
+        Assert.NotNull(updatedApp);
+        Assert.Equal("cancelled", updatedApp.Status);
+    }
+
+    [Fact]
+    public async Task CancelOrWithdrawApplication_WhenPending_ShouldWithdrawSilentlyWithoutPenaltyOrRefund()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var appRepoMock = new Mock<IApplicationRepository>();
+        var jobRepoMock = new Mock<IJobRepository>();
+        var cvRepoMock = new Mock<ICvFileRepository>();
+        var storageMock = new Mock<IStorageService>();
+        var escrowMock = new Mock<IEscrowPaymentService>();
+        var reliabilityMock = new Mock<IUserReliabilityService>();
+        var notifMock = new Mock<INotificationService>();
+        var loggerMock = new Mock<ILogger<ApplicationService>>();
+
+        var studentId = 5;
+        var employerId = 10;
+        var jobId = 101;
+
+        var student = new User { Id = studentId, RoleId = 1, Email = "student5b@test.com", FullName = "Student 5", AccountStatus = "active", KycStatus = "verified", PasswordHash = "hash" };
+        await dbContext.Users.AddAsync(student);
+
+        var job = new Job
+        {
+            Id = jobId,
+            EmployerId = employerId,
+            Title = "Viết bài content",
+            Description = "Mô tả công việc",
+            Status = "open",
+            HiredApplicantId = null,
+            Budget = 500000m
+        };
+
+        var application = new JobApplication
+        {
+            Id = 601,
+            JobId = jobId,
+            StudentId = studentId,
+            Status = "pending",
+            CoverLetter = "Tôi muốn rút đơn",
+            AppliedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await dbContext.Jobs.AddAsync(job);
+        await dbContext.Applications.AddAsync(application);
+        await dbContext.SaveChangesAsync();
+
+        var service = new ApplicationService(
+            appRepoMock.Object,
+            jobRepoMock.Object,
+            cvRepoMock.Object,
+            dbContext,
+            storageMock.Object,
+            escrowMock.Object,
+            reliabilityMock.Object,
+            notifMock.Object,
+            loggerMock.Object);
+
+        // Act
+        await service.CancelOrWithdrawApplicationAsync(studentId, jobId, "Rút đơn sớm");
+
+        // Assert
+        // Không phạt điểm, không refund
+        reliabilityMock.Verify(r => r.PenalizeScoreAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        escrowMock.Verify(e => e.RefundEscrowAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<string>(), It.IsAny<decimal>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+
+        // Job giữ nguyên open
+        var updatedJob = await dbContext.Jobs.FindAsync(jobId);
+        Assert.NotNull(updatedJob);
+        Assert.Equal("open", updatedJob.Status);
+
+        // Đơn sang cancelled
+        var updatedApp = await dbContext.Applications.FindAsync(601);
+        Assert.NotNull(updatedApp);
+        Assert.Equal("cancelled", updatedApp.Status);
     }
 }
