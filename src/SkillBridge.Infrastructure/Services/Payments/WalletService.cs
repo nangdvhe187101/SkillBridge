@@ -78,9 +78,12 @@ public class WalletService : IWalletService
             })
             .ToListAsync(cancellationToken);
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var activeSubscriptions = await _dbContext.Subscriptions
             .AsNoTracking()
-            .Where(s => s.UserId == userId && s.Status == "active")
+            .Where(s => s.UserId == userId 
+                     && s.Status == PaymentConstants.ActiveSubscriptionStatus
+                     && (s.RenewalDate == null || s.RenewalDate >= today))
             .Select(s => s.PlanName)
             .ToListAsync(cancellationToken);
 
@@ -92,7 +95,7 @@ public class WalletService : IWalletService
             Transactions = txs,
             Receipts = receipts,
             HasVipSubscription = activeSubscriptions.Any(p => p.Contains(PaymentConstants.VipPlanKeyword)),
-            HasProSubscription = activeSubscriptions.Any(p => p.Contains("Pro"))
+            HasProSubscription = activeSubscriptions.Any(p => p.Contains(PaymentConstants.ProPlanKeyword))
         };
     }
 

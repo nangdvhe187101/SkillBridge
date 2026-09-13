@@ -470,8 +470,12 @@ public class DeliverableService : IDeliverableService
 
                 // Tính toán hoa hồng nền tảng (VIP Business: 5%, Thường: 10%)
                 decimal commissionRate = 0.10m;
+                var today = DateOnly.FromDateTime(DateTime.UtcNow);
                 var hasVipSubscription = await _dbContext.Subscriptions
-                    .AnyAsync(s => s.UserId == currentJob.EmployerId && s.Status == "active" && s.PlanName.Contains("VIP"), cancellationToken);
+                    .AnyAsync(s => s.UserId == currentJob.EmployerId 
+                                && s.Status == PaymentConstants.ActiveSubscriptionStatus 
+                                && s.PlanName.Contains(PaymentConstants.VipPlanKeyword)
+                                && (s.RenewalDate == null || s.RenewalDate >= today), cancellationToken);
                 if (hasVipSubscription)
                 {
                     commissionRate = 0.05m;
