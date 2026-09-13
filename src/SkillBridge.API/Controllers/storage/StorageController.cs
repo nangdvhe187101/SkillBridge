@@ -48,8 +48,7 @@ public class StorageController : ControllerBase
             return BadRequest(new { message = "Khóa tệp tin không hợp lệ." });
         }
 
-        // ⚠️ BẢO MẬT: Chỉ cho phép tải các tệp tin thuộc danh mục công khai (ảnh đại diện, tài liệu công việc)
-        // Tuyệt đối không cho phép tải trực tiếp CV sinh viên hoặc sản phẩm bàn giao (Deliverables)
+        // Chỉ cho phép tải các tệp tin thuộc danh mục công khai (ảnh đại diện, tài liệu công việc)
         var isAllowed = AllowedPublicPrefixes.Any(p => normalizedKey.StartsWith(p, StringComparison.OrdinalIgnoreCase));
         if (!isAllowed)
         {

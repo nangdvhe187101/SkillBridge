@@ -32,6 +32,7 @@ public class NotificationService : INotificationService
         };
 
         await _dbContext.Notifications.AddAsync(notif, cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Đã tạo thông báo [{Icon}] cho UserId {UserId}: {Message}", icon, userId, message);
     }
 }

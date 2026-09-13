@@ -140,7 +140,8 @@ public class JobService : IJobService
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
             try
             {
-                var job = await _jobRepository.GetByIdAsync(jobId);
+                // Khóa hàng Job bằng SELECT ... FOR UPDATE bên trong transaction để chống race condition (double cancel / duplicate refund request)
+                var job = await GetJobWithLockAsync(jobId);
                 if (job == null)
                 {
                     throw new BusinessException("Không tìm thấy công việc.");
@@ -536,5 +537,16 @@ public class JobService : IJobService
                 }
             }
         }
+    }
+
+    private async Task<Job?> GetJobWithLockAsync(int jobId)
+    {
+        if (_dbContext.Database.IsRelational())
+        {
+            return await _dbContext.Jobs
+                .FromSqlRaw("SELECT * FROM jobs WHERE id = {0} FOR UPDATE", jobId)
+                .SingleOrDefaultAsync();
+        }
+        return await _jobRepository.GetByIdAsync(jobId);
     }
 }

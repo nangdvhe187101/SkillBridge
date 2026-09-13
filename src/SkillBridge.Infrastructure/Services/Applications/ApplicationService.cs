@@ -272,8 +272,8 @@ public class ApplicationService : IApplicationService
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
             try
             {
-                // Re-check trạng thái công việc bên trong transaction để chống race condition khi có nhiều request đồng thời
-                var currentJob = await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId);
+                // Khóa hàng Job bằng SELECT ... FOR UPDATE bên trong transaction để chống race condition (double-hire / duplicate request)
+                var currentJob = await GetJobWithLockAsync(jobId);
                 if (currentJob == null || currentJob.Status != "open")
                 {
                     throw new BusinessException("Công việc này không còn ở trạng thái mở nhận ứng viên.");
@@ -324,15 +324,22 @@ public class ApplicationService : IApplicationService
                     other.UpdatedAt = DateTime.UtcNow;
                 }
 
-                // Gửi thông báo trúng tuyển cho sinh viên
-                await _notificationService.SendAsync(
-                    currentApp.StudentId,
-                    "🎉",
-                    $"Chúc mừng! Bạn đã được chọn thực hiện công việc \"{currentJob.Title}\".",
-                    "/mywork");
-
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                // Gửi thông báo trúng tuyển cho sinh viên sau khi commit thành công
+                try
+                {
+                    await _notificationService.SendAsync(
+                        currentApp.StudentId,
+                        "🎉",
+                        $"Chúc mừng! Bạn đã được chọn thực hiện công việc \"{currentJob.Title}\".",
+                        "/mywork");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Lỗi khi gửi thông báo trúng tuyển cho sinh viên {StudentId} sau khi tuyển thành công cho Job {JobId}.", currentApp.StudentId, jobId);
+                }
 
                 return new HireApplicantResultDto
                 {
@@ -407,8 +414,8 @@ public class ApplicationService : IApplicationService
                         10,
                         $"Sinh viên hủy việc đang làm tại Job #{jobId}. Lý do: {reason ?? "Không có lý do"}");
 
-                    // Reset Job về trạng thái open để NTD có thể chọn người khác
-                    var job = application.Job ?? await _jobRepository.GetByIdAsync(jobId);
+                    // Khóa hàng Job để cập nhật trạng thái open và hoàn tiền ký quỹ an toàn
+                    var job = await GetJobWithLockAsync(jobId) ?? application.Job;
                     if (job != null)
                     {
                         job.Status = "open";
@@ -516,5 +523,16 @@ public class ApplicationService : IApplicationService
                 throw;
             }
         });
+    }
+
+    private async Task<Job?> GetJobWithLockAsync(int jobId, CancellationToken ct = default)
+    {
+        if (_dbContext.Database.IsRelational())
+        {
+            return await _dbContext.Jobs
+                .FromSqlRaw("SELECT * FROM jobs WHERE id = {0} FOR UPDATE", jobId)
+                .SingleOrDefaultAsync(ct);
+        }
+        return await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
     }
 }

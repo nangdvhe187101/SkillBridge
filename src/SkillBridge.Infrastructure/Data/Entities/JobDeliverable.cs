@@ -48,7 +48,7 @@ public partial class JobDeliverable
     [Column("note", TypeName = "text")]
     public string? Note { get; set; }
 
-    [Column("status", TypeName = "enum('submitted','revision_requested','accepted')")]
+    [Column("status", TypeName = "enum('submitted','revision_requested','accepted','cancelled')")]
     public string Status { get; set; } = null!;
 
     [Column("submitted_at", TypeName = "datetime")]

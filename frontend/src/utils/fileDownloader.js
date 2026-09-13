@@ -52,7 +52,7 @@ export async function downloadJobAttachment(file, jobTitle = '', jobId = null) {
                 return;
             }
         } catch {
-            // bỏ qua
+            // Fallback tải văn bản nếu không tải được blob
         }
     }
 

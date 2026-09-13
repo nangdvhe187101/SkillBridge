@@ -155,4 +155,28 @@ public class EscrowPaymentTests
 
         Assert.Contains("đã được giải ngân", ex.Message);
     }
+
+    [Fact]
+    public async Task RefundEscrowAsync_DuplicateCall_ShouldThrowBusinessException_IdempotencyGuard()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new EscrowPaymentService(dbContext, _loggerMock.Object);
+
+        var employerId = 1;
+        var jobId = 505;
+        var jobBudget = 400000m;
+
+        // First refund succeeds
+        await service.RefundEscrowAsync(employerId, jobId, "Job 505", jobBudget, "Hủy lần 1");
+        await dbContext.SaveChangesAsync();
+
+        // Act & Assert: Duplicate refund must throw
+        var ex = await Assert.ThrowsAsync<BusinessException>(async () =>
+        {
+            await service.RefundEscrowAsync(employerId, jobId, "Job 505", jobBudget, "Hủy lần 2");
+        });
+
+        Assert.Contains("đã được hoàn tiền", ex.Message);
+    }
 }

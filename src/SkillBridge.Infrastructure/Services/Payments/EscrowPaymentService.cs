@@ -56,12 +56,15 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (amount <= 0) return;
 
+        // Khóa hàng Job để chống race condition giải ngân kép (double-release)
+        await GetJobWithLockAsync(jobId, cancellationToken);
+
         // Idempotency Guard: Đảm bảo công việc này chưa từng được giải ngân trước đó
         var alreadyReleased = await _dbContext.Receipts.AnyAsync(r => r.JobId == jobId, cancellationToken)
             || await _dbContext.Transactions.AnyAsync(t => t.Type == "escrow_release" && t.ReferenceId == jobId, cancellationToken);
         if (alreadyReleased)
         {
-            _logger.LogWarning("⚠️ PHÁT HIỆN YÊU CẦU GIẢI NGÂN TRÙNG LẶP cho Job #{JobId}, StudentId={StudentId}. Thao tác bị chặn lại.", jobId, studentId);
+            _logger.LogWarning("Phát hiện yêu cầu giải ngân trùng lặp cho Job #{JobId}, StudentId={StudentId}. Thao tác bị chặn.", jobId, studentId);
             throw new BusinessException($"Công việc #{jobId} đã được giải ngân thù lao trước đó.");
         }
 
@@ -145,18 +148,21 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (amount <= 0) return;
 
+        // Khóa hàng Job để chống race condition hoàn tiền kép (double-refund)
+        await GetJobWithLockAsync(jobId, cancellationToken);
+
         // Idempotency Guard: Không hoàn tiền nếu công việc đã được giải ngân hoặc đã hoàn tiền
         var alreadyReleased = await _dbContext.Receipts.AnyAsync(r => r.JobId == jobId, cancellationToken);
         if (alreadyReleased)
         {
-            _logger.LogWarning("⚠️ KHÔNG THỂ HOÀN TIỀN vì Job #{JobId} đã được giải ngân thành công trước đó.", jobId);
+            _logger.LogWarning("Không thể hoàn tiền vì Job #{JobId} đã được giải ngân thành công trước đó.", jobId);
             throw new BusinessException($"Công việc #{jobId} đã được giải ngân thù lao, không thể hoàn tiền.");
         }
 
         var alreadyRefunded = await _dbContext.Transactions.AnyAsync(t => t.Type == "escrow_refund" && t.ReferenceId == jobId && t.UserId == employerId, cancellationToken);
         if (alreadyRefunded)
         {
-            _logger.LogWarning("⚠️ PHÁT HIỆN YÊU CẦU HOÀN TIỀN TRÙNG LẶP cho Job #{JobId}, EmployerId={EmployerId}.", jobId, employerId);
+            _logger.LogWarning("Phát hiện yêu cầu hoàn tiền trùng lặp cho Job #{JobId}, EmployerId={EmployerId}.", jobId, employerId);
             throw new BusinessException($"Công việc #{jobId} đã được hoàn tiền ký quỹ trước đó.");
         }
 
@@ -201,5 +207,16 @@ public class EscrowPaymentService : IEscrowPaymentService
                 .SingleOrDefaultAsync(ct);
         }
         return await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
+    }
+
+    private async Task<Job?> GetJobWithLockAsync(int jobId, CancellationToken ct)
+    {
+        if (_dbContext.Database.IsRelational())
+        {
+            return await _dbContext.Jobs
+                .FromSqlRaw("SELECT * FROM jobs WHERE id = {0} FOR UPDATE", jobId)
+                .SingleOrDefaultAsync(ct);
+        }
+        return await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
     }
 }

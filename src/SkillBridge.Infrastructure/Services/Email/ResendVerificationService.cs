@@ -56,8 +56,8 @@ namespace SkillBridge.Infrastructure.Services.Email
                 var cooldownEnd = lastToken.CreatedAt.AddSeconds(resendCooldownSeconds);
                 if (cooldownEnd > DateTime.UtcNow)
                 {
-                    var waitSeconds = (int)Math.Ceiling((cooldownEnd - DateTime.UtcNow).TotalSeconds);
-                    throw new BusinessException($"Vui lòng đợi {waitSeconds} giây trước khi gửi lại email xác thực.");
+                    logger.LogInformation("Yêu cầu gửi lại email xác thực cho user {UserId} bị bỏ qua do đang trong thời gian cooldown.", user.Id);
+                    return GenericMessage;
                 }
             }
 

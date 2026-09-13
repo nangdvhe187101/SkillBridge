@@ -266,9 +266,7 @@ public class DeliverableService : IDeliverableService
                 }
             }
 
-            // ⚠️ TUYỆT ĐỐI KHÔNG gán previewUrl = finalUrl cho các file chưa có watermark (DOCX, XLSX, MP4, ZIP, Code...).
-            // Nếu hệ thống chưa hỗ trợ tạo watermark server-side cho định dạng đó, previewUrl giữ nguyên null
-            // để bảo vệ quyền tác giả, tránh rò rỉ file gốc sạch khi gọi endpoint download với type=preview.
+            // Không gán previewUrl = finalUrl cho file chưa có watermark để bảo vệ bản quyền tác giả.
         }
         else if (string.IsNullOrWhiteSpace(externalUrl))
         {
@@ -319,14 +317,6 @@ public class DeliverableService : IDeliverableService
                     studentApp.UpdatedAt = DateTime.UtcNow;
                 }
 
-                // Gửi thông báo cho Nhà tuyển dụng
-                await _notificationService.SendAsync(
-                    job.EmployerId,
-                    "📤",
-                    $"Sinh viên đã nộp sản phẩm bàn giao v{deliverable.Version} cho công việc \"{job.Title}\".",
-                    $"/jobs/{job.Id}/applicants",
-                    cancellationToken);
-
                 await _dbContext.SaveChangesAsync(cancellationToken);
                 createdEntity = deliverable;
                 break;
@@ -342,6 +332,21 @@ public class DeliverableService : IDeliverableService
         if (createdEntity == null)
         {
             throw new BusinessException("Không thể hoàn tất nộp sản phẩm do xung đột phiên bản. Vui lòng thử lại.");
+        }
+
+        // Gửi thông báo cho Nhà tuyển dụng sau khi lưu deliverable thành công
+        try
+        {
+            await _notificationService.SendAsync(
+                job.EmployerId,
+                "📤",
+                $"Sinh viên đã nộp sản phẩm bàn giao v{createdEntity.Version} cho công việc \"{job.Title}\".",
+                $"/jobs/{job.Id}/applicants",
+                cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Lỗi khi gửi thông báo nộp sản phẩm cho Nhà tuyển dụng {EmployerId} cho Job {JobId}.", job.EmployerId, jobId);
         }
 
         // Load lại với quan hệ
@@ -381,9 +386,8 @@ public class DeliverableService : IDeliverableService
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
 
-            // Re-check công việc và bản nộp bên trong transaction để chống race condition (double click / duplicate request)
-            var currentJob = await _dbContext.Jobs
-                .FirstOrDefaultAsync(j => j.Id == jobId, cancellationToken);
+            // Khóa hàng Job bằng SELECT ... FOR UPDATE bên trong transaction để chống race condition (double click / duplicate review request)
+            var currentJob = await GetJobWithLockAsync(jobId, cancellationToken);
 
             if (currentJob == null || currentJob.EmployerId != employerId)
             {
@@ -404,12 +408,12 @@ public class DeliverableService : IDeliverableService
             // Kiểm soát tranh chấp & Idempotency: Nếu job hoặc deliverable không còn ở trạng thái submitted
             if (currentJob.Status != "submitted" || currentDeliverable.Status != "submitted")
             {
-                _logger.LogWarning("⚠️ PHÁT HIỆN TRÙNG LẶP/RACE CONDITION khi duyệt sản phẩm: Job #{JobId} (Status={JobStatus}), Deliverable #{DeliverableId} (Status={DeliverableStatus}), EmployerId={EmployerId}. Hủy bỏ request trùng.",
-                    jobId, currentJob.Status, deliverableId, currentDeliverable.Status, employerId);
+                _logger.LogWarning("Phát hiện trùng lặp hoặc xung đột khi duyệt sản phẩm: Job #{JobId} (Status={JobStatus}), Deliverable #{DeliverableId} (Status={DeliverableStatus}), EmployerId={EmployerId}. Hủy bỏ request trùng.",
+                    jobId, currentJob.Status, currentDeliverable.Id, currentDeliverable.Status, employerId);
                 throw new BusinessException("Công việc hoặc bản nộp này không còn ở trạng thái chờ duyệt sản phẩm (có thể đã được xử lý trước đó).");
             }
 
-            // BẢO MẬT & TOÀN VẸN NGHIỆP VỤ: Đảm bảo bản nộp thuộc về ứng viên đang được thuê chính thức hiện tại
+            // Đảm bảo bản nộp thuộc về ứng viên đang được thuê chính thức hiện tại
             if (!currentJob.HiredApplicantId.HasValue || currentDeliverable.StudentId != currentJob.HiredApplicantId.Value)
             {
                 throw new BusinessException("Bản nộp sản phẩm này không thuộc về sinh viên đang được thuê hiện tại của công việc.");
@@ -489,7 +493,7 @@ public class DeliverableService : IDeliverableService
                         cancellationToken);
                 }
 
-                // 🚀 TỐI ƯU HÓA CLOUDFLARE R2: Chuẩn bị dọn dẹp các tệp nháp cũ & bản watermark dư thừa sau khi nghiệm thu thành công
+                // Chuẩn bị dọn dẹp các tệp nháp cũ và bản watermark dư thừa sau khi nghiệm thu thành công
                 if (!string.IsNullOrWhiteSpace(currentDeliverable.PreviewFileUrl)
                     && !string.Equals(currentDeliverable.PreviewFileUrl, currentDeliverable.FinalFileUrl, StringComparison.OrdinalIgnoreCase)
                     && !string.Equals(currentDeliverable.FileType, "url", StringComparison.OrdinalIgnoreCase))
@@ -636,7 +640,7 @@ public class DeliverableService : IDeliverableService
         var isAccepted = string.Equals(deliverable.Status, "accepted", StringComparison.OrdinalIgnoreCase);
         var isPreviewRequest = string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase);
 
-        // ⚠️ BẢO VỆ SẢN PHẨM: Nếu Nhà tuyển dụng chưa nghiệm thu sản phẩm, TUYỆT ĐỐI KHÔNG được tải bản gốc (Final)
+        // Nhà tuyển dụng chỉ được tải bản gốc (Final) sau khi đã nghiệm thu sản phẩm
         if (isEmployer && !isAccepted && !isPreviewRequest)
         {
             throw new BusinessException("Chỉ có thể tải bản gốc (Final) sau khi bạn đã xác nhận nghiệm thu sản phẩm và giải ngân cho sinh viên.");
@@ -647,7 +651,7 @@ public class DeliverableService : IDeliverableService
         var hasWatermarkedPreview = !string.IsNullOrWhiteSpace(deliverable.PreviewFileUrl)
             && !string.Equals(deliverable.PreviewFileUrl, deliverable.FinalFileUrl, StringComparison.OrdinalIgnoreCase);
 
-        // ⚠️ BẢO VỆ BẢN PREVIEW (Zero-Trust): Nhà tuyển dụng chỉ được xem trước nếu file THỰC SỰ có bản đóng watermark server-side HOẶC là video/tài liệu xem qua Secure Viewer có watermark overlay
+        // Chỉ cho phép xem trước nếu file có watermark server-side hoặc được hỗ trợ qua Secure Viewer
         if (isEmployer && string.Equals(type, "preview", StringComparison.OrdinalIgnoreCase) && !isAccepted)
         {
             if (!hasWatermarkedPreview && !isVideo && !isDocument)
@@ -747,10 +751,7 @@ public class DeliverableService : IDeliverableService
 
         var isExternalUrl = string.Equals(d.FileType, "url", StringComparison.OrdinalIgnoreCase);
 
-        // ⚠️ Bảo vệ tuyệt mật URL file: KHÔNG BAO GIỜ trả về direct public link của Cloudflare R2!
-        // Mọi lượt truy cập file đều được trỏ về endpoint API backend:
-        // /api/jobs/{jobId}/deliverables/{id}/download?type=...
-        // để bắt buộc qua tầng xác thực JWT, rate limiting, phân quyền IDOR và kiểm tra status accepted.
+        // Trỏ về endpoint download của backend để kiểm soát xác thực JWT, rate limiting và phân quyền IDOR
         string? exposedFinalUrl = null;
         if (!isEmployer || isAccepted)
         {
@@ -845,5 +846,16 @@ public class DeliverableService : IDeliverableService
         }
 
         return $"SkillBridge_Job{jobId}_v{version}_{previewTag}{baseName}{ext}";
+    }
+
+    private async Task<Job?> GetJobWithLockAsync(int jobId, CancellationToken ct = default)
+    {
+        if (_dbContext.Database.IsRelational())
+        {
+            return await _dbContext.Jobs
+                .FromSqlRaw("SELECT * FROM jobs WHERE id = {0} FOR UPDATE", jobId)
+                .SingleOrDefaultAsync(ct);
+        }
+        return await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
     }
 }

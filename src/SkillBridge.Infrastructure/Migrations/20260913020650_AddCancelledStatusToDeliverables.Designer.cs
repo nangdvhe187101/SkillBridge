@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using SkillBridge.Infrastructure.Data;
 
@@ -11,9 +12,11 @@ using SkillBridge.Infrastructure.Data;
 namespace SkillBridge.Infrastructure.Migrations
 {
     [DbContext(typeof(SkillBridgeDbContext))]
-    partial class SkillBridgeDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260913020650_AddCancelledStatusToDeliverables")]
+    partial class AddCancelledStatusToDeliverables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1710,10 +1713,9 @@ namespace SkillBridge.Infrastructure.Migrations
 
                     b.HasIndex(new[] { "EmployerId" }, "fk_receipts_employer");
 
-                    b.HasIndex(new[] { "StudentId" }, "fk_receipts_student");
+                    b.HasIndex(new[] { "JobId" }, "fk_receipts_job");
 
-                    b.HasIndex(new[] { "JobId" }, "uq_receipts_job")
-                        .IsUnique();
+                    b.HasIndex(new[] { "StudentId" }, "fk_receipts_student");
 
                     b.ToTable("receipts");
                 });
