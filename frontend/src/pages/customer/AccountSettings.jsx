@@ -8,6 +8,8 @@ import { downloadCandidateCv } from '../../utils/fileDownloader';
 import Icon from '../../components/Icon';
 import '../../styles/account-settings.css';
 
+const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
+
 const PHONE_REGEX = /^0\d{9}$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
@@ -67,7 +69,7 @@ function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
             >
                 {currentUser?.avatarUrl ? (
                     <img
-                        src={currentUser.avatarUrl.startsWith('http') ? currentUser.avatarUrl : `http://localhost:5004/api/storage/file?key=${encodeURIComponent(currentUser.avatarUrl)}`}
+                        src={currentUser.avatarUrl.startsWith('http') ? currentUser.avatarUrl : `${API_URL}/storage/file?key=${encodeURIComponent(currentUser.avatarUrl)}`}
                         alt="Avatar"
                         className="acct-avatar-img"
                         onError={(e) => {
@@ -76,7 +78,7 @@ function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
                                 const key = currentUser.avatarUrl.includes('avatars/')
                                     ? currentUser.avatarUrl.substring(currentUser.avatarUrl.indexOf('avatars/'))
                                     : currentUser.avatarUrl;
-                                e.currentTarget.src = `http://localhost:5004/api/storage/file?key=${encodeURIComponent(key)}`;
+                                e.currentTarget.src = `${API_URL}/storage/file?key=${encodeURIComponent(key)}`;
                             }
                         }}
                     />

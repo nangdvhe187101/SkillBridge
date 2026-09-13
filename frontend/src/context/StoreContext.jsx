@@ -1083,14 +1083,16 @@ export function StoreProvider({ children }) {
         let created;
         if (payload instanceof FormData) {
           created = await cvApi.uploadCvFile(payload);
-        } else if (payload.file instanceof File || payload.file instanceof Blob) {
+        } else if (payload?.file instanceof File || payload?.file instanceof Blob) {
           const formData = new FormData();
           formData.append('file', payload.file);
           if (payload.label) formData.append('label', payload.label);
           if (payload.categoryId) formData.append('categoryId', payload.categoryId);
           created = await cvApi.uploadCvFile(formData);
-        } else {
+        } else if (payload?.fileUrl && typeof payload.fileUrl === 'string' && payload.fileUrl.trim()) {
           created = await cvApi.uploadCv(payload);
+        } else {
+          throw new Error('Vui lòng chọn file CV từ thiết bị để tải lên.');
         }
 
         const formatted = {

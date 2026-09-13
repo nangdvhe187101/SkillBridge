@@ -71,7 +71,7 @@ public class EscrowPaymentService : IEscrowPaymentService
         // Xác định tỷ lệ hoa hồng nền tảng (VIP Business: 5%, Tài khoản thông thường: 10%)
         decimal commissionRate = 0.10m;
         var hasVipSubscription = await _dbContext.Subscriptions
-            .AnyAsync(s => s.UserId == employerId && s.Status == "active" && s.PlanName.Contains("VIP"), cancellationToken);
+            .AnyAsync(s => s.UserId == employerId && s.Status == PaymentConstants.ActiveSubscriptionStatus && s.PlanName.Contains(PaymentConstants.VipPlanKeyword), cancellationToken);
         if (hasVipSubscription)
         {
             commissionRate = 0.05m;

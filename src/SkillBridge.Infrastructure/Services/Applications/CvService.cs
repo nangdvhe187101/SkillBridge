@@ -73,26 +73,24 @@ public class CvService : ICvService
             throw new BusinessException("Dung lượng file CV không hợp lệ hoặc vượt quá giới hạn cho phép (tối đa 10MB).");
         }
 
-        string fileUrl;
-        if (!string.IsNullOrWhiteSpace(request.FileUrl))
+        if (string.IsNullOrWhiteSpace(request.FileUrl))
         {
-            var trimmedUrl = request.FileUrl.Trim();
-            // Validate URL an toàn: chấp nhận relative /uploads/ hoặc absolute URL với host được whitelist
-            if (trimmedUrl.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase) ||
-                (Uri.TryCreate(trimmedUrl, UriKind.Absolute, out var parsedUri) &&
-                 (parsedUri.Scheme == Uri.UriSchemeHttps || (parsedUri.Scheme == Uri.UriSchemeHttp && parsedUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))) &&
-                 IsAllowedStorageHost(parsedUri.Host)))
-            {
-                fileUrl = trimmedUrl;
-            }
-            else
-            {
-                throw new BusinessException("Đường dẫn file CV không hợp lệ hoặc không thuộc hệ thống lưu trữ được tin cậy.");
-            }
+            throw new BusinessException("Đường dẫn file CV không được để trống. Vui lòng tải file trực tiếp qua hệ thống.");
+        }
+
+        string fileUrl;
+        var trimmedUrl = request.FileUrl.Trim();
+        // Validate URL an toàn: chấp nhận relative /uploads/ hoặc absolute URL với host được whitelist
+        if (trimmedUrl.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase) ||
+            (Uri.TryCreate(trimmedUrl, UriKind.Absolute, out var parsedUri) &&
+             (parsedUri.Scheme == Uri.UriSchemeHttps || (parsedUri.Scheme == Uri.UriSchemeHttp && parsedUri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase))) &&
+             IsAllowedStorageHost(parsedUri.Host)))
+        {
+            fileUrl = trimmedUrl;
         }
         else
         {
-            fileUrl = $"/uploads/cv/{Guid.NewGuid()}_{cleanFileName}";
+            throw new BusinessException("Đường dẫn file CV không hợp lệ hoặc không thuộc hệ thống lưu trữ được tin cậy.");
         }
 
         string? categoryName = null;

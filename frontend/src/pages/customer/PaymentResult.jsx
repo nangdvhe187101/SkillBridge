@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { getPaymentOrderStatus } from '../../api/paymentApi';
 import { useStore, fmtVND } from '../../context/StoreContext';
+import { connectPaymentRealtime } from '../../services/paymentSignalR';
 import Icon from '../../components/Icon';
 
 export default function PaymentResult() {
@@ -15,6 +16,25 @@ export default function PaymentResult() {
   const [error, setError] = useState('');
   const [retryCount, setRetryCount] = useState(0);
   const pollTimerRef = useRef(null);
+
+  const handlePaymentSuccess = useCallback(async (payload) => {
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    if (typeof refreshWallet === 'function') {
+      await refreshWallet();
+    }
+    try {
+      if (orderCode) {
+        const data = await getPaymentOrderStatus(orderCode);
+        setOrder(data);
+      }
+    } catch {
+      setOrder((prev) => ({
+        ...(prev || {}),
+        status: 'paid',
+        paidAt: payload?.paidAt || new Date().toISOString(),
+      }));
+    }
+  }, [orderCode, refreshWallet]);
 
   const fetchStatus = useCallback(async () => {
     if (!orderCode) {
@@ -45,12 +65,31 @@ export default function PaymentResult() {
     }
   }, [orderCode, retryCount, refreshWallet]);
 
+  // Initial fetch and poll timer cleanup
   useEffect(() => {
     fetchStatus();
     return () => {
       if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     };
   }, [fetchStatus]);
+
+  // Realtime SignalR connection fallback
+  useEffect(() => {
+    if (!orderCode || order?.status === 'paid') return;
+
+    const signalR = connectPaymentRealtime(orderCode, {
+      onPaymentSuccess: (payload) => {
+        handlePaymentSuccess(payload);
+      },
+      onReconnected: () => {
+        fetchStatus();
+      },
+    });
+
+    return () => {
+      signalR.stop();
+    };
+  }, [orderCode, order?.status, handlePaymentSuccess, fetchStatus]);
 
   return (
     <div className="page wrap" style={{ maxWidth: 560, margin: '40px auto', padding: '0 16px' }}>
@@ -173,7 +212,13 @@ export default function PaymentResult() {
               Cổng thanh toán đang xử lý giao dịch của bạn. Quá trình này thường diễn ra trong vài giây.
             </p>
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-              <button className="btn btn-primary" onClick={fetchStatus}>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  setRetryCount(0);
+                  fetchStatus();
+                }}
+              >
                 Kiểm tra lại ngay
               </button>
               <Link to="/wallet" className="btn btn-outline">

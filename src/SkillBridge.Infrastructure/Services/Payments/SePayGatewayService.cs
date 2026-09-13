@@ -36,7 +36,7 @@ public class SePayGatewayService : ISePayGatewayService
     public string GenerateVietQrUrl(string orderCode, decimal amount)
     {
         var (acc, bank, _) = GetBankInfo();
-        var roundedAmount = (long)amount;
+        var roundedAmount = (long)Math.Round(amount, MidpointRounding.AwayFromZero);
         var encodedDes = Uri.EscapeDataString(orderCode);
 
         // SePay VietQR template URL

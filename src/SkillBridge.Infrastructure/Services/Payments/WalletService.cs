@@ -91,7 +91,7 @@ public class WalletService : IWalletService
             EscrowLocked = escrowLocked,
             Transactions = txs,
             Receipts = receipts,
-            HasVipSubscription = activeSubscriptions.Any(p => p.Contains("VIP")),
+            HasVipSubscription = activeSubscriptions.Any(p => p.Contains(PaymentConstants.VipPlanKeyword)),
             HasProSubscription = activeSubscriptions.Any(p => p.Contains("Pro"))
         };
     }
