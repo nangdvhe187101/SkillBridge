@@ -11,9 +11,7 @@ import '../../styles/account-settings.css';
 const PHONE_REGEX = /^0\d{9}$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
-// ==========================================
-// AVATAR UPLOAD COMPONENT
-// ==========================================
+// Avatar Upload Component
 function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
     const { addToast } = useToast();
     const fileInputRef = useRef(null);
@@ -110,9 +108,7 @@ function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
     );
 }
 
-// ==========================================
-// 1. EMPLOYER PROFILE TAB
-// ==========================================
+// 1. Employer Profile Tab
 function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
     const [form, setForm] = useState({
         fullName: currentUser.fullName || currentUser.companyName || '',
@@ -262,9 +258,7 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
     );
 }
 
-// ==========================================
-// 2. STUDENT PROFILE TAB
-// ==========================================
+// 2. Student Profile Tab
 function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
     const [form, setForm] = useState({
         fullName: currentUser.fullName || '',
@@ -387,9 +381,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
     );
 }
 
-// ==========================================
-// 3. CV & STORAGE MANAGER TAB (STUDENT)
-// ==========================================
+// 3. CV & Storage Manager Tab (Student)
 function CvManagerTab() {
     const { addToast } = useToast();
     const [cvList, setCvList] = useState([]);
@@ -565,9 +557,7 @@ function CvManagerTab() {
     );
 }
 
-// ==========================================
-// 4. PASSWORD TAB
-// ==========================================
+// 4. Password Tab
 function PasswordTab({ changePassword, logout }) {
     const [form, setForm] = useState({ current: '', next: '', next2: '' });
     const [saving, setSaving] = useState(false);
@@ -654,9 +644,7 @@ function PasswordTab({ changePassword, logout }) {
     );
 }
 
-// ==========================================
-// MAIN COMPONENT
-// ==========================================
+// Main Component
 export default function AccountSettings({ forcedTab }) {
     const { state, updateProfile, changePassword, logout } = useStore();
     const { currentUser, role } = state;

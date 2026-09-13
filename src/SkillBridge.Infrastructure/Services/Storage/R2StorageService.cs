@@ -112,10 +112,7 @@ public class R2StorageService : IStorageService
                 _logger.LogWarning("PublicBaseUrl chưa được cấu hình. Sinh presigned URL 7 ngày cho tệp công khai {FileKey}.", fileKey);
                 fileUrl = await GetPresignedUrlAsync(fileKey, TimeSpan.FromDays(7));
             }
-            // ⚠️ LƯU Ý BẢO MẬT: Đối với tệp tin thuộc danh mục riêng tư (cvs/, job-deliverables/),
-            // fileUrl CÓ CHỦ ĐÍCH giữ nguyên chuỗi rỗng (string.Empty) để ngăn chặn rò rỉ link trực tiếp (kể cả presigned URL)
-            // có thể bypass qua tầng xác thực JWT, rate-limit và phân quyền IDOR.
-            // Caller BẮT BUỘC sử dụng FileKey kết hợp với endpoint download nghiệp vụ có thẩm quyền.
+            // Đối với tệp tin riêng tư (cvs/, job-deliverables/), giữ fileUrl rỗng để buộc client truy cập qua API backend.
 
             _logger.LogInformation("Upload file {FileKey} thành công.", fileKey);
 
@@ -165,7 +162,7 @@ public class R2StorageService : IStorageService
 
         var trimmed = fileKeyOrUrl.Trim();
 
-        // ⚠️ BẢO MẬT: Chặn tuyệt đối việc sinh Public URL cho các tệp tin nhạy cảm/riêng tư (CVs, Deliverables)
+        // Không sinh Public URL cho các tệp tin nhạy cảm hoặc riêng tư (CVs, Deliverables)
         if (IsPrivateFolder(trimmed))
         {
             return string.Empty;

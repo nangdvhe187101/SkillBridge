@@ -139,8 +139,14 @@ public class JobAttachmentService : IJobAttachmentService
             throw new BusinessException("Tài liệu đính kèm không tồn tại.");
         }
 
-        // Xóa file vật lý trên Cloudflare R2
         var fileKey = ExtractFileKeyFromUrl(attachment.FileUrl);
+
+        _dbContext.JobAttachments.Remove(attachment);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        _logger.LogInformation("Nhà tuyển dụng {EmployerId} đã xóa tài liệu đính kèm {AttachmentId} khỏi Job {JobId}.", employerId, attachmentId, jobId);
+
+        // Xóa file vật lý trên Cloudflare R2 sau khi đã xóa DB thành công
         if (!string.IsNullOrWhiteSpace(fileKey))
         {
             try
@@ -152,11 +158,6 @@ public class JobAttachmentService : IJobAttachmentService
                 _logger.LogWarning(ex, "Không thể xóa file {FileKey} trên Cloudflare R2 khi xóa JobAttachment {AttachmentId}.", fileKey, attachmentId);
             }
         }
-
-        _dbContext.JobAttachments.Remove(attachment);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        _logger.LogInformation("Nhà tuyển dụng {EmployerId} đã xóa tài liệu đính kèm {AttachmentId} khỏi Job {JobId}.", employerId, attachmentId, jobId);
     }
 
     public async Task<(Stream Stream, string ContentType, string FileName)?> GetAttachmentFileStreamAsync(

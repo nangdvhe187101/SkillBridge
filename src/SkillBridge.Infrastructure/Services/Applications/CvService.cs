@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Applications;
 using SkillBridge.Application.Interfaces.Applications;
@@ -18,17 +19,20 @@ public class CvService : ICvService
     private readonly ICategoryRepository _categoryRepository;
     private readonly IStorageService _storageService;
     private readonly SkillBridge.Infrastructure.Data.SkillBridgeDbContext _context;
+    private readonly Microsoft.Extensions.Logging.ILogger<CvService>? _logger;
 
     public CvService(
         ICvFileRepository cvFileRepository,
         ICategoryRepository categoryRepository,
         IStorageService storageService,
-        SkillBridge.Infrastructure.Data.SkillBridgeDbContext context)
+        SkillBridge.Infrastructure.Data.SkillBridgeDbContext context,
+        Microsoft.Extensions.Logging.ILogger<CvService>? logger = null)
     {
         _cvFileRepository = cvFileRepository;
         _categoryRepository = categoryRepository;
         _storageService = storageService;
         _context = context;
+        _logger = logger;
     }
 
     public async Task<List<CvFileDto>> GetStudentCvFilesAsync(int studentId)
@@ -193,13 +197,25 @@ public class CvService : ICvService
             throw new BusinessException("CV không tồn tại hoặc bạn không có quyền xóa.");
         }
 
-        // Xóa file trên Cloudflare R2 nếu có publicId (fileKey)
-        if (!string.IsNullOrWhiteSpace(cv.PublicId))
-        {
-            await _storageService.DeleteFileAsync(cv.PublicId);
-        }
+        var fileKey = !string.IsNullOrWhiteSpace(cv.PublicId)
+            ? cv.PublicId
+            : ExtractFileKeyFromUrl(cv.FileUrl);
 
+        // Xóa bản ghi trong cơ sở dữ liệu trước
         await _cvFileRepository.DeleteAsync(cv);
+
+        // Xóa file vật lý trên Cloudflare R2 sau khi đã xóa DB thành công
+        if (!string.IsNullOrWhiteSpace(fileKey))
+        {
+            try
+            {
+                await _storageService.DeleteFileAsync(fileKey);
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogWarning(ex, "Không thể xóa file {FileKey} trên Cloudflare R2 khi xóa CV {CvId}.", fileKey, cvId);
+            }
+        }
     }
 
     public async Task<(Stream Stream, string ContentType, string FileName)> GetCvFileStreamAsync(int currentUserId, int cvId)

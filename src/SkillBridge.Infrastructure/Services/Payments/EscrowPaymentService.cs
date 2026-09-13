@@ -64,7 +64,7 @@ public class EscrowPaymentService : IEscrowPaymentService
             || await _dbContext.Transactions.AnyAsync(t => t.Type == "escrow_release" && t.ReferenceId == jobId, cancellationToken);
         if (alreadyReleased)
         {
-            _logger.LogWarning("⚠️ PHÁT HIỆN YÊU CẦU GIẢI NGÂN TRÙNG LẶP cho Job #{JobId}, StudentId={StudentId}. Thao tác bị chặn lại.", jobId, studentId);
+            _logger.LogWarning("Phát hiện yêu cầu giải ngân trùng lặp cho Job #{JobId}, StudentId={StudentId}. Thao tác bị chặn.", jobId, studentId);
             throw new BusinessException($"Công việc #{jobId} đã được giải ngân thù lao trước đó.");
         }
 
@@ -155,14 +155,14 @@ public class EscrowPaymentService : IEscrowPaymentService
         var alreadyReleased = await _dbContext.Receipts.AnyAsync(r => r.JobId == jobId, cancellationToken);
         if (alreadyReleased)
         {
-            _logger.LogWarning("⚠️ KHÔNG THỂ HOÀN TIỀN vì Job #{JobId} đã được giải ngân thành công trước đó.", jobId);
+            _logger.LogWarning("Không thể hoàn tiền vì Job #{JobId} đã được giải ngân thành công trước đó.", jobId);
             throw new BusinessException($"Công việc #{jobId} đã được giải ngân thù lao, không thể hoàn tiền.");
         }
 
         var alreadyRefunded = await _dbContext.Transactions.AnyAsync(t => t.Type == "escrow_refund" && t.ReferenceId == jobId && t.UserId == employerId, cancellationToken);
         if (alreadyRefunded)
         {
-            _logger.LogWarning("⚠️ PHÁT HIỆN YÊU CẦU HOÀN TIỀN TRÙNG LẶP cho Job #{JobId}, EmployerId={EmployerId}.", jobId, employerId);
+            _logger.LogWarning("Phát hiện yêu cầu hoàn tiền trùng lặp cho Job #{JobId}, EmployerId={EmployerId}.", jobId, employerId);
             throw new BusinessException($"Công việc #{jobId} đã được hoàn tiền ký quỹ trước đó.");
         }
 

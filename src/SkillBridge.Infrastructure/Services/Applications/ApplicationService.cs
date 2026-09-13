@@ -324,15 +324,22 @@ public class ApplicationService : IApplicationService
                     other.UpdatedAt = DateTime.UtcNow;
                 }
 
-                // Gửi thông báo trúng tuyển cho sinh viên
-                await _notificationService.SendAsync(
-                    currentApp.StudentId,
-                    "🎉",
-                    $"Chúc mừng! Bạn đã được chọn thực hiện công việc \"{currentJob.Title}\".",
-                    "/mywork");
-
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
+
+                // Gửi thông báo trúng tuyển cho sinh viên sau khi commit thành công
+                try
+                {
+                    await _notificationService.SendAsync(
+                        currentApp.StudentId,
+                        "🎉",
+                        $"Chúc mừng! Bạn đã được chọn thực hiện công việc \"{currentJob.Title}\".",
+                        "/mywork");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Lỗi khi gửi thông báo trúng tuyển cho sinh viên {StudentId} sau khi tuyển thành công cho Job {JobId}.", currentApp.StudentId, jobId);
+                }
 
                 return new HireApplicantResultDto
                 {

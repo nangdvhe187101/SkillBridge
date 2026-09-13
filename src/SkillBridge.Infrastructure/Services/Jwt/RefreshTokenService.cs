@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
 using SkillBridge.Application.Interfaces;
+using SkillBridge.Application.Interfaces.Auth;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
 
@@ -15,15 +16,18 @@ namespace SkillBridge.Infrastructure.Services
         private readonly IAuthTokenRepository authTokenRepository;
         private readonly IJwtService jwtService;
         private readonly SkillBridge.Application.Interfaces.Storage.IStorageService storageService;
+        private readonly ITokenVersionService tokenVersionService;
 
         public RefreshTokenService(
             IAuthTokenRepository _authTokenRepository,
             IJwtService _jwtService,
-            SkillBridge.Application.Interfaces.Storage.IStorageService _storageService)
+            SkillBridge.Application.Interfaces.Storage.IStorageService _storageService,
+            ITokenVersionService _tokenVersionService)
         {
             authTokenRepository = _authTokenRepository;
             jwtService = _jwtService;
             storageService = _storageService;
+            tokenVersionService = _tokenVersionService;
         }
 
         public async Task<(AuthResponseDto Result, string RefreshToken)> RefreshAsync(string refreshToken)
@@ -42,6 +46,9 @@ namespace SkillBridge.Infrastructure.Services
                 if (token.UsedAt < DateTime.UtcNow.AddSeconds(-30))
                 {
                     await authTokenRepository.InvalidateAllActiveTokensAsync(token.UserId, TokenTypes.Refresh);
+                    token.User.TokenVersion += 1;
+                    await authTokenRepository.SaveChangesAsync();
+                    await tokenVersionService.InvalidateOrUpdateVersionAsync(token.UserId, token.User.TokenVersion);
                     throw new BusinessException("Phiên làm việc đã bị thu hồi do phát hiện bất thường.");
                 }
                 throw new BusinessException("Phiên làm việc vừa được làm mới, vui lòng tải lại trang.", isGraceWindow: true);
@@ -73,6 +80,9 @@ namespace SkillBridge.Infrastructure.Services
                     if (currentToken.UsedAt < DateTime.UtcNow.AddSeconds(-30))
                     {
                         await authTokenRepository.InvalidateAllActiveTokensAsync(token.UserId, TokenTypes.Refresh);
+                        currentToken.User.TokenVersion += 1;
+                        await authTokenRepository.SaveChangesAsync();
+                        await tokenVersionService.InvalidateOrUpdateVersionAsync(token.UserId, currentToken.User.TokenVersion);
                         throw new BusinessException("Phiên làm việc đã bị thu hồi do phát hiện bất thường.");
                     }
                     throw new BusinessException("Phiên làm việc vừa được làm mới, vui lòng tải lại trang.", isGraceWindow: true);
