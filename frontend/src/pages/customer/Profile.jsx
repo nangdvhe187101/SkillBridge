@@ -15,6 +15,8 @@ function tierFromScore(score) {
 }
 const TIER_LABEL = { gold: 'Gold Tier', silver: 'Silver Tier', bronze: 'Bronze Tier' };
 
+const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
+
 const SKILL_BADGES = ['Verified Canva Operator', 'CapCut Speed Editor', 'Content Writing', 'Photoshop Advanced'];
 const SAMPLE_REVIEWS = [
   { name: 'Trà Sữa Mộc', stars: 5, comment: 'Bạn Minh Anh làm việc rất nhanh và đúng brief, chắc chắn sẽ thuê lại.' },
@@ -44,7 +46,7 @@ export default function Profile() {
   const resolveAvatarUrl = (url) => {
     if (!url) return null;
     if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    return `http://localhost:5004/api/storage/file?key=${encodeURIComponent(url)}`;
+    return `${API_URL}/storage/file?key=${encodeURIComponent(url)}`;
   };
   const avatarUrl = resolveAvatarUrl(rawAvatarUrl);
   const [avatarError, setAvatarError] = useState(false);
@@ -160,7 +162,7 @@ export default function Profile() {
                       const key = rawAvatarUrl.includes('avatars/')
                         ? rawAvatarUrl.substring(rawAvatarUrl.indexOf('avatars/'))
                         : rawAvatarUrl;
-                      e.currentTarget.src = `http://localhost:5004/api/storage/file?key=${encodeURIComponent(key)}`;
+                      e.currentTarget.src = `${API_URL}/storage/file?key=${encodeURIComponent(key)}`;
                       return;
                     }
                     setAvatarError(true);

@@ -8,6 +8,9 @@ const GRADIENTS = [
   'linear-gradient(135deg, #FF9A5C, var(--coral, #f43f5e))',
 ];
 
+const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:5004/api';
+const API_BASE = API_URL.replace(/\/api\/?$/, '');
+
 function hashStr(s) {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
@@ -31,13 +34,13 @@ export default function Avatar({ src, name = '?', className, style, fontSize = 1
       resolvedSrc = s;
     } else if (s.includes('.r2.dev/')) {
       const key = s.substring(s.indexOf('.r2.dev/') + 8);
-      resolvedSrc = `http://localhost:5004/api/storage/file?key=${encodeURIComponent(key)}`;
+      resolvedSrc = `${API_URL}/storage/file?key=${encodeURIComponent(key)}`;
     } else if (s.includes('/api/storage/file')) {
-      resolvedSrc = s.startsWith('http') ? s : `http://localhost:5004${s.startsWith('/') ? '' : '/'}${s}`;
+      resolvedSrc = s.startsWith('http') ? s : `${API_BASE}${s.startsWith('/') ? '' : '/'}${s}`;
     } else if (s.startsWith('http://') || s.startsWith('https://')) {
       resolvedSrc = s;
     } else if (s) {
-      resolvedSrc = `http://localhost:5004/api/storage/file?key=${encodeURIComponent(s)}`;
+      resolvedSrc = `${API_URL}/storage/file?key=${encodeURIComponent(s)}`;
     }
   }
 
@@ -60,7 +63,7 @@ export default function Avatar({ src, name = '?', className, style, fontSize = 1
           if (!e.currentTarget.dataset.retried && src) {
             e.currentTarget.dataset.retried = 'true';
             const key = src.includes('avatars/') ? src.substring(src.indexOf('avatars/')) : src;
-            e.currentTarget.src = `http://localhost:5004/api/storage/file?key=${encodeURIComponent(key)}`;
+            e.currentTarget.src = `${API_URL}/storage/file?key=${encodeURIComponent(key)}`;
             return;
           }
           setError(true);

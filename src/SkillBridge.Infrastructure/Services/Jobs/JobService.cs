@@ -318,6 +318,8 @@ public class JobService : IJobService
         }
 
         job.DeadlineAt = request.NewDeadlineAt;
+        job.DeadlineWarningSentAt = null;
+        job.DeadlineOverdueSentAt = null;
         job.UpdatedAt = DateTime.UtcNow;
         await _jobRepository.UpdateJobAsync(job);
 

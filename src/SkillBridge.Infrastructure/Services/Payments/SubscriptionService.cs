@@ -31,7 +31,7 @@ public class SubscriptionService : ISubscriptionService
         decimal amount;
 
         var normalizedPlan = request.PlanType?.Trim().ToUpperInvariant() ?? string.Empty;
-        if (normalizedPlan == "VIP" || normalizedPlan.Contains("VIP"))
+        if (normalizedPlan == PaymentConstants.VipPlanKeyword || normalizedPlan.Contains(PaymentConstants.VipPlanKeyword))
         {
             planName = "VIP Business Suite";
             amount = 199000m;

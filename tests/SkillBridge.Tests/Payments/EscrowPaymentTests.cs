@@ -107,6 +107,46 @@ public class EscrowPaymentTests
     }
 
     [Fact]
+    public async Task ReleaseEscrowAsync_ExpiredVipSubscription_ShouldChargeStandard10PercentCommission()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new EscrowPaymentService(dbContext, _loggerMock.Object);
+
+        var employerId = 15;
+        var studentId = 25;
+        var jobId = 205;
+        var jobBudget = 1000000m;
+
+        // Employer has VIP subscription BUT it expired yesterday
+        dbContext.Subscriptions.Add(new Subscription
+        {
+            UserId = employerId,
+            PlanName = "VIP Business Suite",
+            Status = "active",
+            AmountPaid = 299000m,
+            RenewalDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-1)), // Đã quá hạn
+            StartedAt = DateTime.UtcNow.AddMonths(-1),
+            UpdatedAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        await service.ReleaseEscrowAsync(studentId, employerId, jobId, "Thiết kế Banner", jobBudget);
+        await dbContext.SaveChangesAsync();
+
+        // Assert - Hoa hồng phải là 10% (100,000đ) thay vì 5% (50,000đ)
+        var studentWallet = await dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == studentId);
+        Assert.NotNull(studentWallet);
+        Assert.Equal(900000m, studentWallet.Balance); // 1,000,000 - 10% (100,000) = 900,000
+
+        var receipt = await dbContext.Receipts.FirstOrDefaultAsync(r => r.JobId == jobId);
+        Assert.NotNull(receipt);
+        Assert.Equal(1000000m, receipt.Budget);
+        Assert.Equal(100000m, receipt.Commission);
+    }
+
+    [Fact]
     public async Task ReleaseEscrowAsync_DuplicateCall_ShouldThrowBusinessException_IdempotencyGuard()
     {
         // Arrange

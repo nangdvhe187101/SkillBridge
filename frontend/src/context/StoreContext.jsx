@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useCallback } from 'react';
+import { createContext, useContext, useEffect, useMemo, useReducer, useCallback, useRef } from 'react';
 import { jobsSeed } from '../data/jobs';
 import { myJobsSeed } from '../data/myJobs';
 import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
@@ -11,6 +11,7 @@ import * as applicationApi from '../api/applicationApi';
 import * as userApi from '../api/userApi';
 import * as deliverableApi from '../api/deliverableApi';
 import * as walletApi from '../api/walletApi';
+import * as notificationApi from '../api/notificationApi';
 import { setAccessToken, clearAccessToken } from '../api/tokenStore';
 
 const StoreContext = createContext(null);
@@ -175,10 +176,7 @@ const initialState = {
   vipBusiness: false,
   myReliability: 96,
   myApplications: [],
-  notifications: [
-    { id: 1, icon: 'bell', text: 'Chào mừng bạn đến với SkillBridge!', read: false, time: 'Vừa xong', link: '/' },
-    { id: 2, icon: 'check', text: 'Hồ sơ của bạn đã được xác thực qua email trường.', read: false, time: '1 giờ trước', link: '/profile' },
-  ],
+  notifications: [],
   reviews: [],
   employerReviews: [],
   token: null, // token chỉ lưu trong memory (tokenStore.js), không còn persist localStorage
@@ -221,9 +219,6 @@ const initialState = {
   ],
 };
 
-function addNotifTo(list, icon, text, link = null) {
-  return [{ id: Date.now() + Math.random(), icon, text, read: false, time: 'Vừa xong', link }, ...list];
-}
 function addTxTo(list, type, label, amount, sign, referenceId = null) {
   return [{ id: Date.now() + Math.random(), type, label, amount, sign, referenceId, date: fmtNow() }, ...list];
 }
@@ -301,6 +296,7 @@ function reducer(state, action) {
         return {
           ...oldJ,
           ...newJ,
+          deadlineReminderSent: oldJ.deadlineReminderSent,
           hiredApplicant: newJ.hiredApplicant || oldJ.hiredApplicant || null,
           hiredApplicantId: newJ.hiredApplicantId || oldJ.hiredApplicantId || null,
           hiredStudentName: newJ.hiredStudentName || oldJ.hiredStudentName || null,
@@ -353,12 +349,10 @@ function reducer(state, action) {
         id: 'ap' + Date.now(), jobId: j.id, dashJobId: j.dashJobId || null,
         title: j.title, emp: j.emp, budget: j.budget, status: 'pending', appliedAt: 'Vừa xong',
       };
-      const notifications = addNotifTo(state.notifications, 'bell', `Bạn đã ứng tuyển "${j.title}". Nhà tuyển dụng sẽ phản hồi sớm.`, '/mywork');
       return {
         ...state,
         appliedJobIds: [...state.appliedJobIds, action.id],
         myApplications: [myApp, ...state.myApplications],
-        notifications,
       };
     }
 
@@ -368,11 +362,7 @@ function reducer(state, action) {
         ? (state.savedJobIds || []).filter((id) => id !== action.jobId)
         : [...(state.savedJobIds || []), action.jobId];
       localStorage.setItem('savedJobIds', JSON.stringify(savedJobIds));
-      const job = state.jobs.find((j) => j.id === action.jobId);
-      const notifications = !isSaved
-        ? addNotifTo(state.notifications, 'heart', `Đã lưu công việc "${job?.title || '#' + action.jobId}" vào danh sách yêu thích.`, `/jobs/${action.jobId}`)
-        : state.notifications;
-      return { ...state, savedJobIds, notifications };
+      return { ...state, savedJobIds };
     }
 
     case 'UPDATE_ADS_SETTINGS': {
@@ -436,10 +426,7 @@ function reducer(state, action) {
         ];
       }
 
-      let notifications = addNotifTo(state.notifications, 'lock', `Đã thuê ${selectedName} và giữ ${hireAmount.toLocaleString('vi-VN')}đ trong ví ký quỹ. Hạn: ${days || 3} ngày.`, '/dashboard');
-      notifications = addNotifTo(notifications, 'check', `Ứng viên "${selectedName}" đã trúng tuyển "${job.title}".`, '/mywork');
-
-      return { ...state, myJobs, jobs, balance, transactions, myApplications, notifications };
+      return { ...state, myJobs, jobs, balance, transactions, myApplications };
     }
 
     case 'MARK_JOB_COMPLETE': {
@@ -459,8 +446,7 @@ function reducer(state, action) {
         id: 'rc' + Date.now(), dashJobId: job.id, jobTitle: job.title, budget: job.budget, commission,
         total: job.budget, student: job.hiredApplicant, date: fmtNow(),
       };
-      const notifications = addNotifTo(state.notifications, 'check', `Công việc "${job.title}" đã hoàn thành và tiền đã giải ngân cho ${job.hiredApplicant}.`, '/wallet');
-      return { ...state, myJobs, transactions, myReliability, myApplications, receipts: [receipt, ...state.receipts], notifications, lastReceiptId: receipt.id };
+      return { ...state, myJobs, transactions, myReliability, myApplications, receipts: [receipt, ...state.receipts], lastReceiptId: receipt.id };
     }
 
     case 'RECORD_REAL_RECEIPT': {
@@ -508,13 +494,6 @@ function reducer(state, action) {
         }
       }
 
-      const notifications = addNotifTo(
-        state.notifications,
-        'check',
-        `Công việc "${job.title}" đã hoàn thành và giải ngân ${budget.toLocaleString('vi-VN')}đ cho ${studentName}.`,
-        '/wallet'
-      );
-
       return {
         ...state,
         myJobs,
@@ -522,7 +501,6 @@ function reducer(state, action) {
         myApplications,
         transactions,
         receipts: [receipt, ...state.receipts.filter((r) => r.dashJobId !== job.id && r.jobId !== job.id)],
-        notifications,
         lastReceiptId: receipt.id
       };
     }
@@ -536,12 +514,7 @@ function reducer(state, action) {
       const deliverable = { mode, url: url || '', fileName: fileName || '', fileSize: fileSize || 0, previewDataUrl: previewDataUrl || null, finalDataUrl: finalDataUrl || null, note, submittedAt: fmtNow(), version, status: 'submitted' };
       const myJobs = state.myJobs.map((j) => (j.id === jobId ? { ...j, deliverable, status: 'submitted', hiredApplicantIsMe: true } : j));
       let myApplications = state.myApplications.map((a) => (a.jobId === jobId || a.dashJobId === jobId ? { ...a, status: 'submitted', jobStatus: 'submitted' } : a));
-      const notifications = addNotifTo(
-        state.notifications, 'download',
-        wasRevision ? `Bạn đã nộp lại bàn giao (phiên bản ${version}).` : (wasUpdate ? `Bạn đã cập nhật bàn giao.` : `Bạn đã nộp bàn giao — đang chờ xác nhận.`),
-        '/mywork'
-      );
-      return { ...state, myJobs, myApplications, notifications };
+      return { ...state, myJobs, myApplications };
     }
 
     case 'REQUEST_REVISION': {
@@ -553,8 +526,7 @@ function reducer(state, action) {
       const myJobs = state.myJobs.map((j) =>
         j.id === jobId ? { ...j, deliverableFeedback: feedback, revisionCount, status: 'revision_requested', deliverable: { ...j.deliverable, status: 'revision_requested' } } : j
       );
-      const notifications = addNotifTo(state.notifications, 'edit', `Bạn đã yêu cầu ${job.hiredApplicant} sửa lại bàn giao (lượt ${revisionCount}/${job.revisionLimit}).`, '/dashboard');
-      return { ...state, myJobs, notifications };
+      return { ...state, myJobs };
     }
 
     /* ---- wallet ---- */
@@ -573,8 +545,7 @@ function reducer(state, action) {
       if (action.amount > state.balance) return state;
       const balance = state.balance - action.amount;
       const transactions = addTxTo(state.transactions, 'withdraw', 'Rút tiền về Vietcombank ****4821', action.amount, -1);
-      const notifications = addNotifTo(state.notifications, 'card', `Yêu cầu rút ${action.amount.toLocaleString('vi-VN')}đ đã được xử lý.`, '/wallet');
-      return { ...state, balance, transactions, notifications };
+      return { ...state, balance, transactions };
     }
     case 'SUBMIT_CLAIM': {
       const { jobTitle, jobBudget, desc } = action.payload;
@@ -583,23 +554,17 @@ function reducer(state, action) {
       let insuranceFund = state.insuranceFund;
       let balance = state.balance;
       let transactions = state.transactions;
-      let msg;
       if (insuranceFund >= payout) {
         insuranceFund -= payout;
         balance += payout;
         transactions = addTxTo(transactions, 'insurance_payout', 'Bồi thường Quỹ Bảo hiểm · ' + jobTitle, payout, 1);
-        msg = `Khiếu nại "${jobTitle}" đã được duyệt — bồi thường ${payout.toLocaleString('vi-VN')}đ (${Math.round(rate * 100)}%).`;
-      } else {
-        msg = `Khiếu nại "${jobTitle}" đã ghi nhận, quỹ tạm thời không đủ — sẽ xử lý ở kỳ đối soát tiếp theo.`;
       }
       const claims = [{ id: 'c' + Date.now(), jobTitle, desc, payout, status: 'approved', date: 'Vừa xong' }, ...state.claims];
-      const notifications = addNotifTo(state.notifications, 'shield-check', msg, '/wallet');
-      return { ...state, insuranceFund, balance, transactions, claims, notifications };
+      return { ...state, insuranceFund, balance, transactions, claims };
     }
 
     case 'UPDATE_BANK_ACCOUNT': {
-      const notifications = addNotifTo(state.notifications, 'card', 'Đã cập nhật thông tin tài khoản ngân hàng nhận tiền.', '/wallet');
-      return { ...state, bankAccount: action.payload, notifications };
+      return { ...state, bankAccount: action.payload };
     }
 
     case 'SUBMIT_ONE_TOUCH_LEAD': {
@@ -616,12 +581,11 @@ function reducer(state, action) {
         sponsor: action.payload.sponsor || 'Doanh nghiệp'
       };
       const affiliateLeads = [newLead, ...(state.affiliateLeads || [])];
-      const notifications = addNotifTo(state.notifications, 'zap', `Đã gửi hồ sơ One-Touch Portfolio tới ${action.payload.sponsor || 'Doanh nghiệp'}!`, '/mywork');
-      return { ...state, affiliateLeads, notifications };
+      return { ...state, affiliateLeads };
     }
 
     case 'SET_CV':
-      return { ...state, cvFile: action.file, notifications: addNotifTo(state.notifications, 'file-text', `Đã cập nhật CV: ${action.file.name}`, '/profile') };
+      return { ...state, cvFile: action.file };
     case 'REMOVE_CV':
       return { ...state, cvFile: null };
     case 'ADD_CV_FILE': {
@@ -633,16 +597,16 @@ function reducer(state, action) {
         size: action.payload.size ? (action.payload.size > 1024 * 1024 ? (action.payload.size / (1024 * 1024)).toFixed(1) + ' MB' : (action.payload.size / 1024).toFixed(0) + ' KB') : '250 KB',
         date: fmtNow()
       };
-      return { ...state, cvFiles: [newCv, ...(state.cvFiles || [])], notifications: addNotifTo(state.notifications, 'file-text', `Đã thêm CV mới: ${newCv.label}`, '/profile') };
+      return { ...state, cvFiles: [newCv, ...(state.cvFiles || [])] };
     }
     case 'REMOVE_CV_FILE':
       return { ...state, cvFiles: (state.cvFiles || []).filter((c) => c.id !== action.id) };
     case 'ADD_EMPLOYER_DOCS':
-      return { ...state, employerDocs: [...action.files, ...state.employerDocs], notifications: addNotifTo(state.notifications, 'building', `Đã tải ${action.files.length} file hồ sơ nhà tuyển dụng.`, '/profile') };
+      return { ...state, employerDocs: [...action.files, ...state.employerDocs] };
     case 'REMOVE_EMPLOYER_DOC':
       return { ...state, employerDocs: state.employerDocs.filter((_, i) => i !== action.idx) };
     case 'ADD_PORTFOLIO':
-      return { ...state, portfolioUploads: [action.item, ...state.portfolioUploads], notifications: addNotifTo(state.notifications, 'image', `Đã thêm portfolio: ${action.item.name}`, '/profile') };
+      return { ...state, portfolioUploads: [action.item, ...state.portfolioUploads] };
     case 'REMOVE_PORTFOLIO':
       return { ...state, portfolioUploads: state.portfolioUploads.filter((_, i) => i !== action.idx) };
 
@@ -653,7 +617,6 @@ function reducer(state, action) {
         return {
           ...state,
           employerReviews: [{ name: withName, stars, comment, jobTitle }, ...state.employerReviews],
-          notifications: addNotifTo(state.notifications, 'star', `Bạn đã đánh giá nhà tuyển dụng ${withName} ${stars} sao.`, '/profile'),
         };
       }
       const delta = (stars - 3) * 5;
@@ -662,34 +625,42 @@ function reducer(state, action) {
         ...state,
         reviews: [{ name: withName, stars, comment }, ...state.reviews],
         myReliability,
-        notifications: addNotifTo(state.notifications, 'star', `Bạn đã đánh giá ${withName} ${stars} sao.`, '/profile'),
       };
     }
 
     case 'CHECK_DEADLINES': {
-      let notifications = state.notifications;
+      if (action.reminders && action.reminders.length > 0) {
+        const reminderMap = new Map(action.reminders.map((r) => [r.jobId, r.level]));
+        const myJobs = state.myJobs.map((job) => {
+          const level = reminderMap.get(job.id);
+          return level ? { ...job, deadlineReminderSent: level } : job;
+        });
+        return { ...state, myJobs };
+      }
+
       let changed = false;
       const myJobs = state.myJobs.map((job) => {
-        if (['in_progress', 'submitted', 'revision_requested'].includes(job.status) && job.deadlineAt && !job.deadlineReminderSent) {
+        if (['in_progress', 'submitted', 'revision_requested'].includes(job.status) && job.deadlineAt) {
           const deadlineTs = typeof job.deadlineAt === 'number' ? job.deadlineAt : new Date(job.deadlineAt).getTime();
           if (isNaN(deadlineTs)) return job;
           const remain = deadlineTs - Date.now();
-          if (remain <= 0) {
-            notifications = addNotifTo(notifications, 'clock', `Công việc "${job.title}" đã quá hạn hoàn thành. Vui lòng liên hệ ${job.hiredApplicant || 'sinh viên'} hoặc gửi khiếu nại nếu cần.`, '/dashboard');
+          if (remain <= 0 && job.deadlineReminderSent !== 'overdue') {
             changed = true;
-            return { ...job, deadlineReminderSent: true };
+            return { ...job, deadlineReminderSent: 'overdue' };
           }
-          if (remain > 0 && remain < 12 * 3600000) {
-            notifications = addNotifTo(notifications, 'clock', `Công việc "${job.title}" sắp tới hạn (còn dưới 12 giờ). Nhắc ${job.hiredApplicant || 'sinh viên'} nộp bàn giao sớm.`, '/dashboard');
+          if (remain > 0 && remain < 12 * 3600000 && !job.deadlineReminderSent) {
             changed = true;
-            return { ...job, deadlineReminderSent: true };
+            return { ...job, deadlineReminderSent: 'warning' };
           }
         }
         return job;
       });
       if (!changed) return state;
-      return { ...state, myJobs, notifications };
+      return { ...state, myJobs };
     }
+
+    case 'SET_NOTIFICATIONS':
+      return { ...state, notifications: action.notifications };
 
     case 'MARK_ALL_NOTIF_READ':
       return { ...state, notifications: state.notifications.map((n) => ({ ...n, read: true })) };
@@ -777,6 +748,16 @@ const authBroadcast = typeof window !== 'undefined' && 'BroadcastChannel' in win
 export function StoreProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { showToast } = useToast();
+  const showToastRef = useRef(showToast);
+  const stateRef = useRef(state);
+
+  useEffect(() => {
+    showToastRef.current = showToast;
+  }, [showToast]);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // Lắng nghe sự kiện đăng nhập/đăng xuất từ các tab khác
   useEffect(() => {
@@ -931,6 +912,42 @@ export function StoreProvider({ children }) {
     }
   }, []);
 
+  const refreshNotifications = useCallback(async () => {
+    try {
+      const res = await notificationApi.getNotifications(1, 30);
+      if (res?.items) {
+        const formatted = res.items.map((n) => {
+          const createdAt = new Date(n.createdAt);
+          const diffMs = Date.now() - createdAt.getTime();
+          const diffMins = Math.floor(diffMs / 60000);
+          let time = 'Vừa xong';
+          if (diffMins >= 1440) {
+            time = `${Math.floor(diffMins / 1440)} ngày trước`;
+          } else if (diffMins >= 60) {
+            time = `${Math.floor(diffMins / 60)} giờ trước`;
+          } else if (diffMins > 1) {
+            time = `${diffMins} phút trước`;
+          }
+
+          return {
+            id: n.id,
+            icon: n.icon || 'bell',
+            text: n.messageText,
+            link: n.link || null,
+            read: n.isRead,
+            time,
+            createdAt: n.createdAt,
+          };
+        });
+        dispatch({ type: 'SET_NOTIFICATIONS', notifications: formatted });
+        return formatted;
+      }
+    } catch {
+      // Bỏ qua khi chưa đăng nhập hoặc lỗi mạng tạm thời
+    }
+    return [];
+  }, []);
+
   // Tải danh mục và danh sách công việc công khai (không cần đăng nhập)
   useEffect(() => {
     jobApi.getCategories()
@@ -950,6 +967,9 @@ export function StoreProvider({ children }) {
     if (state.isInitializing || !state.currentUser) {
       return;
     }
+
+    // Tải thông báo thực tế của người dùng từ backend
+    refreshNotifications();
 
     // Nếu là employer, tải danh sách myJobs từ backend
     if (state.currentUser.roleCode === 'employer') {
@@ -983,10 +1003,51 @@ export function StoreProvider({ children }) {
 
       refreshMyApplications();
     }
-  }, [state.currentUser, state.isInitializing, refreshMyJobs, refreshMyApplications]);
+  }, [state.currentUser, state.isInitializing, refreshMyJobs, refreshMyApplications, refreshNotifications]);
 
   useEffect(() => {
-    const id = setInterval(() => dispatch({ type: 'CHECK_DEADLINES' }), 30000);
+    const checkDeadlines = () => {
+      const currentJobs = stateRef.current?.myJobs || [];
+      const now = Date.now();
+      const reminders = [];
+
+      currentJobs.forEach((job) => {
+        if (!['in_progress', 'submitted', 'revision_requested'].includes(job.status)) return;
+        if (!job.deadlineAt) return;
+
+        const deadlineTs = typeof job.deadlineAt === 'number' ? job.deadlineAt : new Date(job.deadlineAt).getTime();
+        if (isNaN(deadlineTs)) return;
+        const remain = deadlineTs - now;
+
+        if (remain <= 0 && job.deadlineReminderSent !== 'overdue') {
+          showToastRef.current?.(
+            `Công việc "${job.title}" đã quá hạn hoàn thành. Vui lòng liên hệ ${job.hiredApplicant || 'sinh viên'} hoặc gửi khiếu nại nếu cần.`,
+            'warning'
+          );
+          reminders.push({ jobId: job.id, level: 'overdue' });
+        } else if (remain > 0 && remain < 12 * 3600000 && !job.deadlineReminderSent) {
+          showToastRef.current?.(
+            `Công việc "${job.title}" sắp tới hạn (còn dưới 12 giờ). Nhắc ${job.hiredApplicant || 'sinh viên'} nộp bàn giao sớm.`,
+            'clock'
+          );
+          reminders.push({ jobId: job.id, level: 'warning' });
+        }
+      });
+
+      if (reminders.length > 0) {
+        dispatch({ type: 'CHECK_DEADLINES', reminders });
+      }
+    };
+
+    checkDeadlines();
+
+    const id = setInterval(() => {
+      checkDeadlines();
+      if (stateRef.current?.currentUser) {
+        refreshNotifications();
+      }
+    }, 30000);
+
     const onTokenRefreshed = (e) => {
       if (e.detail?.token) {
         dispatch({ type: 'SET_ACCESS_TOKEN', token: e.detail.token });
@@ -998,7 +1059,7 @@ export function StoreProvider({ children }) {
       clearInterval(id);
       window.removeEventListener('auth:token_refreshed', onTokenRefreshed);
     };
-  }, []);
+  }, [refreshNotifications]);
 
   const actions = useMemo(() => {
     const act = {
@@ -1083,14 +1144,16 @@ export function StoreProvider({ children }) {
         let created;
         if (payload instanceof FormData) {
           created = await cvApi.uploadCvFile(payload);
-        } else if (payload.file instanceof File || payload.file instanceof Blob) {
+        } else if (payload?.file instanceof File || payload?.file instanceof Blob) {
           const formData = new FormData();
           formData.append('file', payload.file);
           if (payload.label) formData.append('label', payload.label);
           if (payload.categoryId) formData.append('categoryId', payload.categoryId);
           created = await cvApi.uploadCvFile(formData);
-        } else {
+        } else if (payload?.fileUrl && typeof payload.fileUrl === 'string' && payload.fileUrl.trim()) {
           created = await cvApi.uploadCv(payload);
+        } else {
+          throw new Error('Vui lòng chọn file CV từ thiết bị để tải lên.');
         }
 
         const formatted = {
@@ -1187,8 +1250,23 @@ export function StoreProvider({ children }) {
       addPortfolio: (item) => { dispatch({ type: 'ADD_PORTFOLIO', item }); showToast('Đã thêm vào portfolio.', 'check'); },
       removePortfolio: (idx) => dispatch({ type: 'REMOVE_PORTFOLIO', idx }),
       submitReview: (payload) => { dispatch({ type: 'SUBMIT_REVIEW', payload }); showToast('Cảm ơn bạn đã gửi đánh giá!', 'check'); },
-      markAllNotifRead: () => dispatch({ type: 'MARK_ALL_NOTIF_READ' }),
-      markNotifRead: (id) => dispatch({ type: 'MARK_NOTIF_READ', id }),
+      markAllNotifRead: async () => {
+        dispatch({ type: 'MARK_ALL_NOTIF_READ' });
+        try {
+          await notificationApi.markAllNotificationsAsRead();
+        } catch (err) {
+          console.error('Không thể đánh dấu đã đọc tất cả thông báo:', err);
+        }
+      },
+      markNotifRead: async (id) => {
+        dispatch({ type: 'MARK_NOTIF_READ', id });
+        try {
+          await notificationApi.markNotificationAsRead(id);
+        } catch (err) {
+          console.error(`Không thể đánh dấu đã đọc thông báo ${id}:`, err);
+        }
+      },
+      refreshNotifications,
       toggleMessengerPanel: (open) => dispatch({ type: 'TOGGLE_MESSENGER_PANEL', open }),
       openChat: (id) => dispatch({ type: 'OPEN_CHAT_WINDOW', id }),
       openChatWithPerson: (name, subtitle) => dispatch({ type: 'OPEN_CHAT_WITH_PERSON', payload: { name, subtitle } }),
@@ -1281,7 +1359,7 @@ export function StoreProvider({ children }) {
     act.toggleSaveJob = act.toggleSaveJobAsync;
     return act;
   },
-  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, refreshWallet, state.cvFiles, state.myApplications]
+  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, refreshWallet, state.cvFiles, state.myApplications, refreshNotifications]
 );
 
   const value = useMemo(() => ({ state, dispatch, ...actions }), [state, actions]);

@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using SkillBridge.Application.Common;
 using SkillBridge.Infrastructure.Data;
 
 namespace SkillBridge.Infrastructure.Services.Payments;
@@ -33,6 +34,7 @@ public class PaymentReconciliationJob : BackgroundService
             try
             {
                 await ReconcileExpiredOrdersAsync(stoppingToken);
+                await ReconcileExpiredSubscriptionsAsync(stoppingToken);
                 await timer.WaitForNextTickAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -71,6 +73,26 @@ public class PaymentReconciliationJob : BackgroundService
         if (expiredCount > 0)
         {
             _logger.LogInformation("PaymentReconciliationJob: Đã đánh dấu {Count} đơn thanh toán quá hạn thành 'expired'.", expiredCount);
+        }
+    }
+
+    private async Task ReconcileExpiredSubscriptionsAsync(CancellationToken ct)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SkillBridgeDbContext>();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // Chuyển các gói đăng ký VIP/PRO đã quá hạn RenewalDate sang trạng thái 'cancelled'
+        var expiredSubsCount = await db.Subscriptions
+            .Where(s => s.Status == PaymentConstants.ActiveSubscriptionStatus && s.RenewalDate != null && s.RenewalDate.Value < today)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(sub => sub.Status, PaymentConstants.CancelledSubscriptionStatus)
+                .SetProperty(sub => sub.UpdatedAt, DateTime.UtcNow), ct);
+
+        if (expiredSubsCount > 0)
+        {
+            _logger.LogInformation("PaymentReconciliationJob: Đã đánh dấu {Count} gói đăng ký quá hạn thành '{Status}'.", expiredSubsCount, PaymentConstants.CancelledSubscriptionStatus);
         }
     }
 }

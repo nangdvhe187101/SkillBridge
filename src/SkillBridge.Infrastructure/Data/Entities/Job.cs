@@ -64,6 +64,12 @@ public partial class Job
     [Column("deadline_at", TypeName = "datetime")]
     public DateTime? DeadlineAt { get; set; }
 
+    [Column("deadline_warning_sent_at", TypeName = "datetime")]
+    public DateTime? DeadlineWarningSentAt { get; set; }
+
+    [Column("deadline_overdue_sent_at", TypeName = "datetime")]
+    public DateTime? DeadlineOverdueSentAt { get; set; }
+
     [Column("auto_release_at", TypeName = "datetime")]
     public DateTime? AutoReleaseAt { get; set; }
 

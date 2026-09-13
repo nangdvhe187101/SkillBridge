@@ -333,6 +333,9 @@ export function TopupModal({ onClose, initialOrder }) {
                   {copiedField === 'Nội dung chuyển khoản' ? 'Đã sao chép' : 'Sao chép'}
                 </button>
               </div>
+              <p style={{ margin: '8px 0 0', fontSize: 11.5, color: 'var(--ink-soft)', lineHeight: 1.4, textAlign: 'left' }}>
+                ⚠️ <i>Lưu ý: Vui lòng chuyển <b>chính xác số tiền</b> và <b>nội dung</b> ở trên để hệ thống tự động đối soát và cộng tiền vào ví tức thì.</i>
+              </p>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 16 }}>

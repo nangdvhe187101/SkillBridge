@@ -201,22 +201,22 @@ export default function JobDetail() {
 
   const handleUploadCvSubmit = async (e) => {
     e.preventDefault();
-    if (!uploadFile && !uploadLabel) {
-      showToast('Vui lòng chọn file CV hoặc đặt tên bản CV.', 'x');
+    if (!uploadFile) {
+      showToast('Vui lòng chọn file CV từ thiết bị.', 'x');
       return;
     }
     setIsSubmitting(true);
     try {
-      const fileName = uploadFile ? uploadFile.name : `${uploadLabel || 'CV_UngTuyen'}.pdf`;
+      const fileName = uploadFile.name;
       const catObj = (state.categories || []).find(c => String(c.id) === String(uploadCategory)) ||
                      (state.categories || []).find(c => c.name === j.cat);
 
       const createdCv = await uploadCvAsync({
         file: uploadFile,
         fileName: fileName,
-        label: uploadLabel || fileName,
+        label: (uploadLabel && uploadLabel.trim()) || fileName,
         categoryId: catObj?.id || (state.categories?.[0]?.id || 1),
-        fileSize: uploadFile?.size || 1024 * 250
+        fileSize: uploadFile.size
       });
 
       setUploadCvModalOpen(false);
