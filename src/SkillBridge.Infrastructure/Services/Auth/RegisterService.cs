@@ -146,7 +146,7 @@ public class RegisterService : IRegisterService
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Gửi email xác thực thất bại cho user {UserId}", user.Id);
+            logger.LogError(ex, "Gửi email xác thực thất bại cho user {UserId}. Link xác thực (dành cho DEV): {VerifyLink}", user.Id, verifyLink);
         }
 
         var emailLabel = dto.RoleCode == RoleCode.Student ? "email trường" : "email";
