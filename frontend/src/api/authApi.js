@@ -14,8 +14,28 @@ async function handleResponse(response) {
             err.status = 429;
             throw err;
         }
-        const fallback = `Lỗi ${response.status}: không thể kết nối tới máy chủ hoặc endpoint không tồn tại.`;
-        const err = new Error(data?.message || fallback);
+
+        let errorMessage = data?.message;
+        if (!errorMessage && data?.errors && typeof data.errors === 'object') {
+            const msgs = [];
+            for (const key of Object.keys(data.errors)) {
+                const val = data.errors[key];
+                if (Array.isArray(val)) {
+                    msgs.push(...val);
+                } else if (typeof val === 'string') {
+                    msgs.push(val);
+                }
+            }
+            if (msgs.length > 0) {
+                errorMessage = msgs.join('. ');
+            }
+        }
+        if (!errorMessage && data?.title) {
+            errorMessage = data.title;
+        }
+
+        const fallback = `Lỗi ${response.status}: không thể hoàn tất thao tác. Vui lòng thử lại.`;
+        const err = new Error(errorMessage || fallback);
         err.status = response.status;
         err.data = data;
         err.isGraceWindow = !!data?.isGraceWindow;
@@ -24,11 +44,30 @@ async function handleResponse(response) {
     return data;
 }
 
-export async function register(fullName, email, password, phoneNumber, roleCode) {
+export async function register(fullNameOrData, email, password, phoneNumber, roleCode) {
+    let payload;
+    if (typeof fullNameOrData === 'object' && fullNameOrData !== null) {
+        payload = {
+            fullName: fullNameOrData.fullName || fullNameOrData.name || '',
+            email: fullNameOrData.email || '',
+            password: fullNameOrData.password || '',
+            phoneNumber: fullNameOrData.phoneNumber || fullNameOrData.phone || null,
+            roleCode: fullNameOrData.roleCode || fullNameOrData.role || 'student',
+        };
+    } else {
+        payload = {
+            fullName: fullNameOrData || '',
+            email: email || '',
+            password: password || '',
+            phoneNumber: phoneNumber || null,
+            roleCode: roleCode || 'student',
+        };
+    }
+
     const res = await fetch(`${API_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fullName, email, password, phoneNumber, roleCode }),
+        body: JSON.stringify(payload),
     });
     return handleResponse(res);
 }

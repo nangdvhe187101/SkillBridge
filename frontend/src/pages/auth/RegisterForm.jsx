@@ -85,7 +85,9 @@ export default function RegisterForm({ onSwitchTab }) {
                 email,
                 password,
                 phone: phone || undefined,
-                role
+                phoneNumber: phone || undefined,
+                role,
+                roleCode: role
             });
             setRegisterMessage(res?.message || 'Đăng ký thành công! Vui lòng kiểm tra email để kích hoạt tài khoản.');
         } catch (err) {

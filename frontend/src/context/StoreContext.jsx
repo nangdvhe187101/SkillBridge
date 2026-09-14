@@ -1421,8 +1421,8 @@ export function StoreProvider({ children }) {
         showToast(result?.message || 'Đã đổi mật khẩu thành công.', 'check');
         return result;
       },
-      register: async (fullName, email, password, phoneNumber, roleCode) => {
-        return registerApi(fullName, email, password, phoneNumber, roleCode);
+      register: async (fullNameOrData, email, password, phoneNumber, roleCode) => {
+        return registerApi(fullNameOrData, email, password, phoneNumber, roleCode);
       },
       updateAdsSettings: (patch) => {
         dispatch({ type: 'UPDATE_ADS_SETTINGS', payload: patch });
