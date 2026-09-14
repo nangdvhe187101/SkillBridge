@@ -1,7 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAdmin } from '../../context/AdminContext';
 import { useToast } from '../../context/ToastContext';
 import Icon from '../Icon';
+import {
+  getSystemSettings,
+  updateSystemSettings,
+  triggerAutoAcceptScan,
+  triggerPaymentReconciliation
+} from '../../api/adminApi';
 
 const PRIORITY_LABEL = { high: 'Cao', medium: 'Vừa', low: 'Thấp' };
 const PRIORITY_STYLE = {
@@ -16,6 +22,77 @@ export default function AdminOps() {
   const [form, setForm] = useState(config);
   const [viewTicket, setViewTicket] = useState(null);
   const [replyText, setReplyText] = useState('');
+
+  // Backend SystemSettings State
+  const [sysSettings, setSysSettings] = useState({
+    autoAcceptHours: 72,
+    autoCloseJobDays: 30,
+    featuredDurationHours: 48,
+    emailJobHiredEnabled: true,
+    emailDeliverable72hEnabled: true,
+    emailPayoutEnabled: true,
+    emailDigest18hEnabled: true,
+    emailVipMatchEnabled: true
+  });
+  const [loadingSys, setLoadingSys] = useState(true);
+  const [savingSys, setSavingSys] = useState(false);
+  const [runningAction, setRunningAction] = useState(null);
+
+  useEffect(() => {
+    getSystemSettings()
+      .then((res) => {
+        if (res) {
+          setSysSettings({
+            autoAcceptHours: res.autoAcceptHours ?? 72,
+            autoCloseJobDays: res.autoCloseJobDays ?? 30,
+            featuredDurationHours: res.featuredDurationHours ?? 48,
+            emailJobHiredEnabled: res.emailJobHiredEnabled ?? true,
+            emailDeliverable72hEnabled: res.emailDeliverable72hEnabled ?? true,
+            emailPayoutEnabled: res.emailPayoutEnabled ?? true,
+            emailDigest18hEnabled: res.emailDigest18hEnabled ?? true,
+            emailVipMatchEnabled: res.emailVipMatchEnabled ?? true
+          });
+        }
+      })
+      .catch((err) => console.warn('Không thể tải SystemSettings từ backend:', err))
+      .finally(() => setLoadingSys(false));
+  }, []);
+
+  const handleSaveSysSettings = async () => {
+    setSavingSys(true);
+    try {
+      await updateSystemSettings(sysSettings);
+      showToast('Đã lưu cấu hình tự động & công tắc Email vào cơ sở dữ liệu!', 'check');
+    } catch (err) {
+      showToast(err?.message || 'Không thể lưu cấu hình hệ thống.', 'warning');
+    } finally {
+      setSavingSys(false);
+    }
+  };
+
+  const handleRunAutoAccept = async () => {
+    setRunningAction('autoAccept');
+    try {
+      const res = await triggerAutoAcceptScan();
+      showToast(res?.message || 'Đã kích hoạt quét nghiệm thu tự động thành công!', 'check');
+    } catch (err) {
+      showToast(err?.message || 'Lỗi khi kích hoạt quét nghiệm thu.', 'warning');
+    } finally {
+      setRunningAction(null);
+    }
+  };
+
+  const handleRunReconcile = async () => {
+    setRunningAction('reconcile');
+    try {
+      const res = await triggerPaymentReconciliation();
+      showToast(res?.message || 'Đã đối soát thanh toán và hạn thuê bao thành công!', 'check');
+    } catch (err) {
+      showToast(err?.message || 'Lỗi khi đối soát thanh toán.', 'warning');
+    } finally {
+      setRunningAction(null);
+    }
+  };
 
   const openTickets = tickets.filter((t) => t.status === 'open');
 
@@ -104,36 +181,183 @@ export default function AdminOps() {
         </div>
       </div>
 
+      {/* ========================================================================= */}
+      {/* CẤU HÌNH TÁC VỤ TỰ ĐỘNG & ĐỐI SOÁT TỨC THÌ (BACKEND PERSISTED) */}
+      {/* ========================================================================= */}
+      <div className="adm-card" style={{ marginTop: 24 }}>
+        <div className="adm-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div>
+            <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icon name="clock" width="16" height="16" style={{ color: 'var(--primary)' }} />
+              Cấu hình Tác vụ Tự động & Vận hành Định kỳ
+            </h4>
+            <span className="sub">Lưu trữ động trong cơ sở dữ liệu SystemSettings, có hiệu lực tức thì</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: '#f59e0b', color: '#b45309' }}
+              onClick={handleRunAutoAccept}
+              disabled={runningAction === 'autoAccept'}
+            >
+              <Icon name="zap" width="13" height="13" />
+              <span>{runningAction === 'autoAccept' ? 'Đang quét...' : '⚡ Quét nghiệm thu 72h ngay'}</span>
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, borderColor: '#10b981', color: '#047857' }}
+              onClick={handleRunReconcile}
+              disabled={runningAction === 'reconcile'}
+            >
+              <Icon name="refresh-cw" width="13" height="13" />
+              <span>{runningAction === 'reconcile' ? 'Đang đối soát...' : '⚡ Đối soát thanh toán ngay'}</span>
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 14 }}>
+          <div className="field">
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Thời gian tự động nghiệm thu (giờ)</label>
+            <input
+              type="number"
+              min={1}
+              max={720}
+              value={sysSettings.autoAcceptHours}
+              onChange={(e) => setSysSettings({ ...sysSettings, autoAcceptHours: Number(e.target.value) || 72 })}
+            />
+            <small style={{ color: 'var(--ink-soft)', fontSize: 11.5 }}>Mặc định 72 giờ sau khi SV nộp bài</small>
+          </div>
+          <div className="field">
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Thời hạn tự động đóng job cũ (ngày)</label>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={sysSettings.autoCloseJobDays}
+              onChange={(e) => setSysSettings({ ...sysSettings, autoCloseJobDays: Number(e.target.value) || 30 })}
+            />
+            <small style={{ color: 'var(--ink-soft)', fontSize: 11.5 }}>Mặc định 30 ngày cho tin mở không tuyển</small>
+          </div>
+          <div className="field">
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Thời hạn ghim tin nổi bật (giờ)</label>
+            <input
+              type="number"
+              min={1}
+              max={720}
+              value={sysSettings.featuredDurationHours}
+              onChange={(e) => setSysSettings({ ...sysSettings, featuredDurationHours: Number(e.target.value) || 48 })}
+            />
+            <small style={{ color: 'var(--ink-soft)', fontSize: 11.5 }}>Mặc định 48 giờ cho gói Featured Listing</small>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 16 }}>
+          <button
+            className="btn btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            onClick={handleSaveSysSettings}
+            disabled={savingSys}
+          >
+            <Icon name="check" width="14" height="14" />
+            <span>{savingSys ? 'Đang lưu...' : 'Lưu cấu hình tham số tự động'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* BẢNG CÔNG TẮC EMAIL THÔNG BÁO TỰ ĐỘNG (FEATURE TOGGLES) */}
+      {/* ========================================================================= */}
       <div className="adm-card" style={{ marginTop: 24 }}>
         <div className="adm-card-head">
-          <h4>Cấu hình tham số hệ thống</h4>
-          <span className="sub">Điều chỉnh chính sách tự động không cần can thiệp code</span>
+          <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="mail" width="16" height="16" style={{ color: 'var(--primary)' }} />
+            Công tắc Email Thông báo Tự động (Feature Toggles)
+          </h4>
+          <span className="sub">Bật hoặc tắt độc lập từng luồng Email gửi đi mà không cần khởi động lại Server</span>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, marginTop: 12 }}>
-          <div className="field">
-            <label>Phí hoa hồng công việc chuẩn (%)</label>
-            <input type="number" value={form.commission} onChange={(e) => setForm({ ...form, commission: Number(e.target.value) })} />
-          </div>
-          <div className="field">
-            <label>Phí hoa hồng VIP Business (%)</label>
-            <input type="number" value={form.vipCommission} onChange={(e) => setForm({ ...form, vipCommission: Number(e.target.value) })} />
-          </div>
-          <div className="field">
-            <label>Phí gắn nhãn Featured Listing (VND)</label>
-            <input type="number" value={form.featuredFee} onChange={(e) => setForm({ ...form, featuredFee: Number(e.target.value) })} />
-          </div>
-          <div className="field">
-            <label>Giới hạn số lần yêu cầu sửa đổi (Revision)</label>
-            <input type="number" value={form.revisionLimit} onChange={(e) => setForm({ ...form, revisionLimit: Number(e.target.value) })} />
-          </div>
-          <div className="field">
-            <label>Ngưỡng điểm khoá tài khoản tự động</label>
-            <input type="number" value={form.reliabilityLockThreshold} onChange={(e) => setForm({ ...form, reliabilityLockThreshold: Number(e.target.value) })} />
-          </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 14 }}>
+          {[
+            {
+              key: 'emailJobHiredEnabled',
+              title: 'Email Chúc mừng Sinh viên Trúng tuyển',
+              desc: 'Gửi email cho sinh viên ngay khi NTD bấm chọn thuê, thông báo thù lao và hạn chót bàn giao (Deadline).',
+              badge: 'Sinh viên'
+            },
+            {
+              key: 'emailDeliverable72hEnabled',
+              title: 'Email Thông báo NTD khi Sinh viên Nộp bài (Nhắc 72h)',
+              desc: 'Gửi email cho Nhà tuyển dụng kèm đếm ngược 72 giờ tự động nghiệm thu giải ngân.',
+              badge: 'Nhà tuyển dụng'
+            },
+            {
+              key: 'emailPayoutEnabled',
+              title: 'Email Giải ngân Thù lao Thành công vào Ví',
+              desc: 'Gửi biên nhận điện tử cho sinh viên khi nghiệm thu hoàn tất, chi tiết số tiền thực nhận và hoa hồng sàn.',
+              badge: 'Sinh viên'
+            },
+            {
+              key: 'emailDigest18hEnabled',
+              title: 'Email Báo cáo 18h Hàng ngày về Ứng viên mới',
+              desc: 'Tổng hợp số lượng ứng viên mới nộp hồ sơ gửi đến hộp thư Nhà tuyển dụng lúc 18h00 mỗi ngày.',
+              badge: 'Nhà tuyển dụng'
+            },
+            {
+              key: 'emailVipMatchEnabled',
+              title: 'Email Thông báo Việc làm mới Phù hợp (VIP/Master)',
+              desc: 'Gửi cảnh báo việc làm lương cao phù hợp kỹ năng cho ứng viên sở hữu gói Pro và Master Talent.',
+              badge: 'VIP Talent'
+            }
+          ].map((toggle) => (
+            <div
+              key={toggle.key}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '12px 14px',
+                background: 'var(--surface)',
+                borderRadius: 10,
+                border: '1px solid var(--border)',
+                gap: 12
+              }}
+            >
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <b style={{ fontSize: 13.5 }}>{toggle.title}</b>
+                  <span className="chip" style={{ fontSize: 11, background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)' }}>
+                    {toggle.badge}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 3 }}>
+                  {toggle.desc}
+                </div>
+              </div>
+
+              <label style={{ display: 'inline-flex', alignItems: 'center', cursor: 'pointer', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={sysSettings[toggle.key]}
+                  onChange={(e) => setSysSettings({ ...sysSettings, [toggle.key]: e.target.checked })}
+                  style={{ width: 18, height: 18, accentColor: 'var(--primary)', cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 12, fontWeight: 600, color: sysSettings[toggle.key] ? '#16a34a' : 'var(--ink-soft)' }}>
+                  {sysSettings[toggle.key] ? 'Đang BẬT' : 'Đã TẮT'}
+                </span>
+              </label>
+            </div>
+          ))}
         </div>
+
         <div style={{ marginTop: 16 }}>
-          <button className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => saveConfig(form)}>
-            <Icon name="check" width="14" height="14" /> Lưu cấu hình tham số
+          <button
+            className="btn btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            onClick={handleSaveSysSettings}
+            disabled={savingSys}
+          >
+            <Icon name="check" width="14" height="14" />
+            <span>{savingSys ? 'Đang lưu...' : 'Lưu công tắc Email'}</span>
           </button>
         </div>
       </div>

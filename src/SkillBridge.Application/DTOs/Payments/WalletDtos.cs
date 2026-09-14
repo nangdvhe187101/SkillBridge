@@ -17,6 +17,22 @@ public class WalletResponseDto
     public DateTime? SubscriptionExpiresAt { get; set; }
     public decimal EffectiveCommissionRate { get; set; } = 0.10m;
     public string? Badge { get; set; }
+    public string? BankBin { get; set; }
+    public string? BankName { get; set; }
+    public string? AccountNumber { get; set; }
+    public string? AccountHolder { get; set; }
+    public string? BankBranch { get; set; }
+    public bool IsBankVerified { get; set; }
+    public DateTime? BankLinkedAt { get; set; }
+}
+
+public class UpdateBankAccountRequest
+{
+    public string BankBin { get; set; } = string.Empty;
+    public string BankName { get; set; } = string.Empty;
+    public string AccountNumber { get; set; } = string.Empty;
+    public string AccountHolder { get; set; } = string.Empty;
+    public string? Branch { get; set; }
 }
 
 public class ReceiptDto

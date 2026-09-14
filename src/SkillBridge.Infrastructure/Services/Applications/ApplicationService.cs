@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Applications;
 using SkillBridge.Application.DTOs.Jobs;
+using SkillBridge.Application.Interfaces;
 using SkillBridge.Application.Interfaces.Applications;
 using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Application.Interfaces.Payments;
@@ -28,6 +29,7 @@ public class ApplicationService : IApplicationService
     private readonly IEscrowPaymentService _escrowPaymentService;
     private readonly IUserReliabilityService _reliabilityService;
     private readonly INotificationService _notificationService;
+    private readonly IEmailService? _emailService;
     private readonly ILogger<ApplicationService> _logger;
 
     public ApplicationService(
@@ -39,7 +41,8 @@ public class ApplicationService : IApplicationService
         IEscrowPaymentService escrowPaymentService,
         IUserReliabilityService reliabilityService,
         INotificationService notificationService,
-        ILogger<ApplicationService> logger)
+        ILogger<ApplicationService> logger,
+        IEmailService? emailService = null)
     {
         _applicationRepository = applicationRepository;
         _jobRepository = jobRepository;
@@ -50,6 +53,7 @@ public class ApplicationService : IApplicationService
         _reliabilityService = reliabilityService;
         _notificationService = notificationService;
         _logger = logger;
+        _emailService = emailService;
     }
 
     public async Task<JobApplicationResponseDto> ApplyJobAsync(int studentId, ApplyJobRequest request)
@@ -341,6 +345,23 @@ public class ApplicationService : IApplicationService
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Lỗi khi gửi thông báo trúng tuyển cho sinh viên {StudentId} sau khi tuyển thành công cho Job {JobId}.", currentApp.StudentId, jobId);
+                }
+
+                if (_emailService != null && currentApp.Student != null && !string.IsNullOrWhiteSpace(currentApp.Student.Email) && currentJob.DeadlineAt.HasValue)
+                {
+                    try
+                    {
+                        await _emailService.SendJobHiredEmailAsync(
+                            currentApp.Student.Email,
+                            currentApp.Student.FullName,
+                            currentJob.Title,
+                            currentJob.Budget,
+                            currentJob.DeadlineAt.Value);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Lỗi khi gửi email trúng tuyển cho sinh viên {Email} Job #{JobId}.", currentApp.Student.Email, jobId);
+                    }
                 }
 
                 return new HireApplicantResultDto

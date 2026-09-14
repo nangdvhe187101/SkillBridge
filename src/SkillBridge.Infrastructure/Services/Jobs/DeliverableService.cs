@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Jobs;
+using SkillBridge.Application.Interfaces;
 using SkillBridge.Application.Interfaces.Jobs;
 using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Application.Interfaces.Media;
@@ -28,6 +29,7 @@ public class DeliverableService : IDeliverableService
     private readonly IEscrowPaymentService _escrowPaymentService;
     private readonly IUserReliabilityService _reliabilityService;
     private readonly INotificationService _notificationService;
+    private readonly IEmailService? _emailService;
     private readonly ILogger<DeliverableService> _logger;
 
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -72,7 +74,8 @@ public class DeliverableService : IDeliverableService
         IEscrowPaymentService escrowPaymentService,
         IUserReliabilityService reliabilityService,
         INotificationService notificationService,
-        ILogger<DeliverableService> logger)
+        ILogger<DeliverableService> logger,
+        IEmailService? emailService = null)
     {
         _dbContext = dbContext;
         _storageService = storageService;
@@ -81,6 +84,7 @@ public class DeliverableService : IDeliverableService
         _reliabilityService = reliabilityService;
         _notificationService = notificationService;
         _logger = logger;
+        _emailService = emailService;
     }
 
     public async Task<List<DeliverableDto>> GetDeliverablesByJobIdAsync(
@@ -347,6 +351,28 @@ public class DeliverableService : IDeliverableService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Lỗi khi gửi thông báo nộp sản phẩm cho Nhà tuyển dụng {EmployerId} cho Job {JobId}.", job.EmployerId, jobId);
+        }
+
+        if (_emailService != null)
+        {
+            try
+            {
+                var employer = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == job.EmployerId, cancellationToken);
+                var student = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == studentId, cancellationToken);
+                if (employer != null && !string.IsNullOrWhiteSpace(employer.Email))
+                {
+                    await _emailService.SendDeliverableSubmittedEmailAsync(
+                        employer.Email,
+                        employer.FullName,
+                        job.Title,
+                        student?.FullName ?? "Sinh viên",
+                        72);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Lỗi khi gửi email thông báo nộp bài cho Nhà tuyển dụng {EmployerId} Job #{JobId}.", job.EmployerId, jobId);
+            }
         }
 
         // Load lại với quan hệ

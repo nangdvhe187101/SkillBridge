@@ -184,12 +184,7 @@ const initialState = {
   receipts: initialReceiptsSeed,
   insuranceFund: 8200000,
   claims: initialClaimsSeed,
-  bankAccount: {
-    bankName: 'MB Bank (Ngân hàng Quân Đội)',
-    accountNumber: '999988886666',
-    accountHolder: 'NGUYEN VAN A',
-    branch: 'Chi nhánh Hà Nội'
-  },
+  bankAccount: null,
   subscriptionPro: false,
   vipBusiness: false,
   activePlanCode: null,
@@ -582,12 +577,16 @@ function reducer(state, action) {
         subscriptionExpiresAt: action.subscriptionExpiresAt !== undefined ? action.subscriptionExpiresAt : state.subscriptionExpiresAt,
         effectiveCommissionRate: action.effectiveCommissionRate !== undefined ? action.effectiveCommissionRate : state.effectiveCommissionRate,
         badge: action.badge !== undefined ? action.badge : state.badge,
+        bankAccount: action.bankAccount !== undefined ? action.bankAccount : state.bankAccount,
       };
     }
     case 'WITHDRAW': {
       if (action.amount > state.balance) return state;
       const balance = state.balance - action.amount;
-      const transactions = addTxTo(state.transactions, 'withdraw', 'Rút tiền về Vietcombank ****4821', action.amount, -1);
+      const bankLabel = state.bankAccount
+        ? `${state.bankAccount.bankName} ****${state.bankAccount.accountNumber ? String(state.bankAccount.accountNumber).slice(-4) : ''}`
+        : 'Tài khoản ngân hàng';
+      const transactions = addTxTo(state.transactions, 'withdraw', `Rút tiền về ${bankLabel}`, action.amount, -1);
       return { ...state, balance, transactions };
     }
     case 'SUBMIT_CLAIM': {
@@ -848,10 +847,19 @@ export function StoreProvider({ children }) {
           const wallet = await walletApi.getMyWallet();
           if (wallet && isMounted) {
             const mappedReceipts = mapReceiptsFromApi(wallet.receipts);
+            const mappedBank = wallet.bankName ? {
+              bankBin: wallet.bankBin,
+              bankName: wallet.bankName,
+              accountNumber: wallet.accountNumber,
+              accountHolder: wallet.accountHolder,
+              branch: wallet.bankBranch,
+              isVerified: wallet.isBankVerified
+            } : null;
             dispatch({
               type: 'SET_WALLET',
               balance: wallet.balance,
               escrowLocked: wallet.escrowLocked ?? 0,
+              bankAccount: mappedBank,
               transactions: (wallet.transactions || []).map(t => ({
                 id: t.id,
                 type: t.type,
@@ -924,10 +932,19 @@ export function StoreProvider({ children }) {
       const res = await walletApi.getMyWallet();
       if (res) {
         const mappedReceipts = mapReceiptsFromApi(res.receipts);
+        const mappedBank = res.bankName ? {
+          bankBin: res.bankBin,
+          bankName: res.bankName,
+          accountNumber: res.accountNumber,
+          accountHolder: res.accountHolder,
+          branch: res.bankBranch,
+          isVerified: res.isBankVerified
+        } : null;
         dispatch({
           type: 'SET_WALLET',
           balance: res.balance,
           escrowLocked: res.escrowLocked ?? 0,
+          bankAccount: mappedBank,
           transactions: (res.transactions || []).map(t => ({
             id: t.id,
             type: t.type,
@@ -1263,7 +1280,31 @@ export function StoreProvider({ children }) {
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),
       refreshWallet,
       withdraw: (amount) => { dispatch({ type: 'WITHDRAW', amount }); showToast(`Đã gửi yêu cầu rút ${amount.toLocaleString('vi-VN')}đ.`, 'check'); },
-      updateBankAccount: (payload) => { dispatch({ type: 'UPDATE_BANK_ACCOUNT', payload }); showToast('Cập nhật tài khoản ngân hàng thành công!', 'check'); },
+      updateBankAccount: async (payload) => {
+        try {
+          const res = await walletApi.updateBankAccount({
+            bankBin: payload.bankBin || '',
+            bankName: payload.bankName,
+            accountNumber: payload.accountNumber,
+            accountHolder: payload.accountHolder,
+            branch: payload.branch || ''
+          });
+          const mappedBank = res?.bankName ? {
+            bankBin: res.bankBin,
+            bankName: res.bankName,
+            accountNumber: res.accountNumber,
+            accountHolder: res.accountHolder,
+            branch: res.bankBranch,
+            isVerified: res.isBankVerified
+          } : payload;
+          dispatch({ type: 'UPDATE_BANK_ACCOUNT', payload: mappedBank });
+          showToast('Liên kết tài khoản ngân hàng thành công!', 'check');
+          return mappedBank;
+        } catch (err) {
+          showToast(err?.message || 'Không thể lưu tài khoản ngân hàng.', 'warning');
+          throw err;
+        }
+      },
       purchaseSubscription: async (planType) => {
         try {
           const res = await walletApi.purchaseSubscription(planType);

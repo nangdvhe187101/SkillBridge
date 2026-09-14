@@ -513,25 +513,72 @@ export function TopupModal({ onClose, initialOrder }) {
 export function WithdrawModal({ onClose }) {
   const { withdraw, state } = useStore();
   const [amount, setAmount] = useState(100000);
+
+  if (!state.bankAccount) {
+    return (
+      <ModalShell onClose={onClose}>
+        <div style={{ textAlign: 'center', padding: '12px 0' }}>
+          <div style={{ color: '#d97706', marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
+            <Icon name="warning" width="44" height="44" />
+          </div>
+          <h3 style={{ margin: '0 0 8px', fontSize: 18 }}>Chưa liên kết tài khoản ngân hàng</h3>
+          <p style={{ color: 'var(--ink-soft)', fontSize: 13.5, lineHeight: 1.6, marginBottom: 20 }}>
+            Để bảo vệ an toàn tài chính và phòng ngừa gian lận, bạn bắt buộc phải liên kết tài khoản ngân hàng chính chủ trước khi yêu cầu rút tiền.
+          </p>
+          <div className="modal-actions" style={{ justifyContent: 'center', gap: 10 }}>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                onClose();
+                window.location.href = '/wallet';
+              }}
+            >
+              Đến trang Ví để liên kết ngay
+            </button>
+            <button className="btn btn-outline" onClick={onClose}>
+              Để sau
+            </button>
+          </div>
+        </div>
+      </ModalShell>
+    );
+  }
+
+  const bank = state.bankAccount;
+  const bankDisplay = `${bank.bankName} - ${bank.accountNumber} (${bank.accountHolder})`;
+
   const confirm = () => {
     if (!amount || amount <= 0 || amount > state.balance) return;
     withdraw(amount);
     onClose();
   };
+
   return (
     <ModalShell onClose={onClose}>
       <h3>Rút tiền về ngân hàng</h3>
-      <p>Số dư khả dụng: <b>{fmtVND(state.balance)}</b>. Tiền thường về tài khoản trong 24 giờ (mô phỏng demo).</p>
+      <p>Số dư khả dụng: <b>{fmtVND(state.balance)}</b>. Tiền thường về tài khoản trong 5–15 phút sau khi duyệt.</p>
       <div className="field">
         <label>Số tiền muốn rút (VND)</label>
-        <input type="number" defaultValue={100000} onChange={(e) => setAmount(Number(e.target.value) || 0)} />
+        <input
+          type="number"
+          value={amount}
+          min={50000}
+          max={state.balance}
+          onChange={(e) => setAmount(Number(e.target.value) || 0)}
+        />
       </div>
       <div className="field">
-        <label>Tài khoản nhận</label>
-        <input type="text" disabled style={{ opacity: 0.7 }} defaultValue="**** **** 4821 · Vietcombank" />
+        <label>Tài khoản nhận (Chính chủ)</label>
+        <input type="text" disabled style={{ opacity: 0.9, fontWeight: 600 }} value={bankDisplay} />
       </div>
       <div className="modal-actions">
-        <button className="btn btn-primary" onClick={confirm}>Xác nhận rút tiền</button>
+        <button
+          className="btn btn-primary"
+          onClick={confirm}
+          disabled={!amount || amount < 50000 || amount > state.balance}
+        >
+          Xác nhận rút tiền
+        </button>
         <button className="btn btn-outline" onClick={onClose}>Hủy</button>
       </div>
     </ModalShell>

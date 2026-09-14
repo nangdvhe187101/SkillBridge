@@ -7,4 +7,5 @@ namespace SkillBridge.Application.Interfaces.Payments;
 public interface IWalletService
 {
     Task<WalletResponseDto> GetMyWalletAsync(int userId, CancellationToken cancellationToken = default);
+    Task<WalletResponseDto> UpdateBankAccountAsync(int userId, UpdateBankAccountRequest request, CancellationToken cancellationToken = default);
 }

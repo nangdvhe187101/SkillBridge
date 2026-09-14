@@ -29,4 +29,14 @@ public class WalletController : ControllerBase
         var wallet = await _walletService.GetMyWalletAsync(userId, cancellationToken);
         return Ok(wallet);
     }
+
+    [Authorize]
+    [HttpPost("bank-account")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> UpdateBankAccount([FromBody] UpdateBankAccountRequest request, CancellationToken cancellationToken)
+    {
+        var userId = User.GetRequiredUserId();
+        var wallet = await _walletService.UpdateBankAccountAsync(userId, request, cancellationToken);
+        return Ok(wallet);
+    }
 }

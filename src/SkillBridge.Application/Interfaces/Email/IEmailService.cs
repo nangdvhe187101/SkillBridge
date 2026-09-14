@@ -16,5 +16,15 @@ namespace SkillBridge.Application.Interfaces
         Task SendDeadlineWarningEmailAsync(string toEmail, string fullName, string jobTitle, DateTime deadlineAt);
 
         Task SendDeadlineOverdueEmailAsync(string toEmail, string fullName, string jobTitle, DateTime deadlineAt);
+
+        Task SendJobHiredEmailAsync(string toEmail, string studentName, string jobTitle, decimal budget, DateTime deadlineAt);
+
+        Task SendDeliverableSubmittedEmailAsync(string toEmail, string employerName, string jobTitle, string studentName, int autoAcceptHours);
+
+        Task SendPayoutSuccessEmailAsync(string toEmail, string studentName, string jobTitle, decimal netPayout, decimal commission);
+
+        Task SendDailyApplicantDigestEmailAsync(string toEmail, string employerName, string jobTitle, int applicantCount);
+
+        Task SendJobMatchAlertEmailAsync(string toEmail, string studentName, string jobTitle, decimal budget, string jobUrl);
     }
 }

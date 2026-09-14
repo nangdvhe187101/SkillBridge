@@ -150,8 +150,72 @@ public class WalletService : IWalletService
             ActivePlanName = planName,
             SubscriptionExpiresAt = expiresAt,
             EffectiveCommissionRate = effectiveCommissionRate,
-            Badge = badge
+            Badge = badge,
+            BankBin = wallet?.BankBin,
+            BankName = wallet?.BankName,
+            AccountNumber = wallet?.AccountNumber,
+            AccountHolder = wallet?.AccountHolder,
+            BankBranch = wallet?.BankBranch,
+            IsBankVerified = wallet?.IsBankVerified ?? false,
+            BankLinkedAt = wallet?.BankLinkedAt
         };
+    }
+
+    public async Task<WalletResponseDto> UpdateBankAccountAsync(int userId, UpdateBankAccountRequest request, CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+        {
+            throw new BusinessException("Thông tin tài khoản ngân hàng không hợp lệ.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.BankName) || string.IsNullOrWhiteSpace(request.AccountNumber))
+        {
+            throw new BusinessException("Vui lòng nhập đầy đủ tên ngân hàng và số tài khoản.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.AccountHolder))
+        {
+            throw new BusinessException("Vui lòng cung cấp tên chủ tài khoản ngân hàng.");
+        }
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+        if (user == null)
+        {
+            throw new BusinessException("Không tìm thấy thông tin người dùng trong hệ thống.");
+        }
+
+        var cleanProfileName = VietnameseConverter.RemoveVietnameseTones(user.FullName);
+        var cleanAccountHolder = VietnameseConverter.RemoveVietnameseTones(request.AccountHolder);
+
+        if (!string.Equals(cleanProfileName, cleanAccountHolder, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException($"Tên chủ tài khoản ngân hàng ({cleanAccountHolder}) không trùng khớp với họ tên chính chủ trong hồ sơ ({cleanProfileName}). Vui lòng kiểm tra lại để đảm bảo an toàn tài chính.");
+        }
+
+        var wallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, cancellationToken);
+        if (wallet == null)
+        {
+            wallet = new Wallet
+            {
+                UserId = userId,
+                Balance = 0
+            };
+            await _dbContext.Wallets.AddAsync(wallet, cancellationToken);
+        }
+
+        wallet.BankBin = request.BankBin?.Trim();
+        wallet.BankName = request.BankName?.Trim();
+        wallet.AccountNumber = request.AccountNumber?.Trim();
+        wallet.AccountHolder = cleanProfileName; // Lưu tên chuẩn hóa chính chủ in hoa không dấu
+        wallet.BankBranch = request.Branch?.Trim();
+        wallet.IsBankVerified = true;
+        wallet.BankLinkedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Người dùng {UserId} đã liên kết tài khoản ngân hàng {BankName} - {AccountMask} thành công.", 
+            userId, wallet.BankName, wallet.AccountNumber?.Length > 4 ? "****" + wallet.AccountNumber[^4..] : wallet.AccountNumber);
+
+        return await GetMyWalletAsync(userId, cancellationToken);
     }
 
     private async Task<Wallet?> GetWalletWithLockAsync(int userId, CancellationToken ct)

@@ -10,3 +10,10 @@ export async function purchaseSubscription(planType) {
     body: JSON.stringify({ planType }),
   });
 }
+
+export async function updateBankAccount(bankData) {
+  return apiFetch('/wallets/bank-account', {
+    method: 'POST',
+    body: JSON.stringify(bankData),
+  });
+}

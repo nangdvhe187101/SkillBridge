@@ -18,18 +18,8 @@ const TX_CONFIG = {
   default: { icon: 'card', label: 'Giao dịch', color: 'var(--primary)', bg: 'rgba(99, 102, 241, 0.12)' },
 };
 
-const VN_BANKS = [
-  'MB Bank (Ngân hàng Quân Đội)',
-  'Vietcombank (Ngân hàng Ngoại Thương)',
-  'Techcombank (Ngân hàng Kỹ Thương)',
-  'VPBank (Ngân hàng Việt Nam Thịnh Vượng)',
-  'BIDV (Ngân hàng Đầu tư và Phát triển)',
-  'VietinBank (Ngân hàng Công Thương)',
-  'ACB (Ngân hàng Á Châu)',
-  'TPBank (Ngân hàng Tiên Phong)',
-  'HDBank (Ngân hàng Phát triển TP.HCM)',
-  'Sacombank (Ngân hàng Sài Gòn Thương Tín)'
-];
+import { VIETNAM_BANKS } from '../../constants/banks';
+import { lookupAccountName, removeVietnameseTones } from '../../services/vietqrService';
 
 export default function Wallet() {
   const { state, updateBankAccount, showToast } = useStore();
@@ -77,13 +67,51 @@ export default function Wallet() {
   const [claimModal, setClaimModal] = useState(null); // Claim object
   const [bankModalOpen, setBankModalOpen] = useState(false);
 
+  const userFullName = state.currentUser?.fullName || state.profile?.fullName || 'NGUYEN VAN A';
+  const lockedHolderName = useMemo(() => removeVietnameseTones(userFullName), [userFullName]);
+
   // Bank form state
-  const [bankForm, setBankForm] = useState(state.bankAccount || {
-    bankName: 'MB Bank (Ngân hàng Quân Đội)',
-    accountNumber: '999988886666',
-    accountHolder: 'NGUYEN VAN A',
-    branch: 'Chi nhánh Hà Nội'
+  const [bankForm, setBankForm] = useState(() => state.bankAccount || {
+    bankBin: '970422',
+    bankName: 'MB Bank',
+    accountNumber: '',
+    accountHolder: lockedHolderName,
+    branch: ''
   });
+
+  const [lookingUp, setLookingUp] = useState(false);
+  const [lookupResult, setLookupResult] = useState(null);
+  const [savingBank, setSavingBank] = useState(false);
+
+  useEffect(() => {
+    if (state.bankAccount) {
+      setBankForm(state.bankAccount);
+    } else {
+      setBankForm((prev) => ({
+        ...prev,
+        accountHolder: lockedHolderName
+      }));
+    }
+  }, [state.bankAccount, lockedHolderName]);
+
+  // Debounced lookup STK VietQR
+  useEffect(() => {
+    if (!bankModalOpen) {
+      setLookupResult(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      if (bankForm.bankBin && bankForm.accountNumber && bankForm.accountNumber.trim().length >= 6) {
+        setLookingUp(true);
+        const res = await lookupAccountName(bankForm.bankBin, bankForm.accountNumber, lockedHolderName);
+        setLookupResult(res);
+        setLookingUp(false);
+      } else {
+        setLookupResult(null);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [bankForm.bankBin, bankForm.accountNumber, bankModalOpen, lockedHolderName]);
 
   const isEmployer = state.role === 'employer' || state.currentUser?.roleCode === 'employer';
 
@@ -126,17 +154,24 @@ export default function Wallet() {
     return filteredTransactions.slice(start, start + txPageSize);
   }, [filteredTransactions, txPage]);
 
-  const handleSaveBank = (e) => {
+  const handleSaveBank = async (e) => {
     e.preventDefault();
-    if (!bankForm.accountNumber || !bankForm.accountHolder) {
-      alert('Vui lòng nhập đầy đủ Số tài khoản và Tên chủ tài khoản.');
+    if (!bankForm.accountNumber || !bankForm.accountNumber.trim()) {
+      showToast('Vui lòng nhập số tài khoản ngân hàng.', 'warning');
       return;
     }
-    updateBankAccount({
-      ...bankForm,
-      accountHolder: bankForm.accountHolder.toUpperCase().trim()
-    });
-    setBankModalOpen(false);
+    setSavingBank(true);
+    try {
+      await updateBankAccount({
+        ...bankForm,
+        accountHolder: lockedHolderName
+      });
+      setBankModalOpen(false);
+    } catch {
+      // Bắt lỗi hiển thị từ toast
+    } finally {
+      setSavingBank(false);
+    }
   };
 
   const handleDownloadReceipt = (r) => {
@@ -463,49 +498,91 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                   <Icon name="bank" width="18" height="18" style={{ color: 'var(--primary)' }} />
                   <span>Tài khoản Ngân hàng nhận tiền</span>
                 </h4>
-                <button
-                  className="btn btn-outline btn-sm"
-                  style={{ fontSize: 11.5, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                  onClick={() => setBankModalOpen(true)}
-                >
-                  <Icon name="edit" width="12" height="12" />
-                  <span>Thay đổi</span>
-                </button>
+                {state.bankAccount && (
+                  <button
+                    className="btn btn-outline btn-sm"
+                    style={{ fontSize: 11.5, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => {
+                      setBankForm(state.bankAccount);
+                      setBankModalOpen(true);
+                    }}
+                  >
+                    <Icon name="edit" width="12" height="12" />
+                    <span>Thay đổi</span>
+                  </button>
+                )}
               </div>
 
-              <div
-                style={{
-                  background: 'linear-gradient(135deg, #1e293b, #0f172a)',
-                  color: '#fff',
-                  borderRadius: 14,
-                  padding: '16px 18px',
-                  boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
-                  position: 'relative',
-                  overflow: 'hidden'
-                }}
-              >
-                <div style={{ position: 'absolute', right: 12, top: 12, opacity: 0.12, color: '#fff' }}>
-                  <Icon name="card" width="56" height="56" />
-                </div>
-                <div style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  {state.bankAccount?.bankName || 'MB Bank'}
-                </div>
-                <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, margin: '10px 0', letterSpacing: 2, color: '#CBFF4D' }}>
-                  {state.bankAccount?.accountNumber || '9999 8888 6666'}
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: 12 }}>
-                  <div>
-                    <span style={{ fontSize: 10, color: '#94a3b8', display: 'block' }}>CHỦ TÀI KHOẢN</span>
-                    <b style={{ textTransform: 'uppercase' }}>{state.bankAccount?.accountHolder || 'NGUYEN VAN A'}</b>
+              {!state.bankAccount ? (
+                <div
+                  style={{
+                    border: '2px dashed #f59e0b',
+                    borderRadius: 14,
+                    padding: '24px 18px',
+                    background: 'rgba(245, 158, 11, 0.04)',
+                    textAlign: 'center'
+                  }}
+                >
+                  <div style={{ color: '#d97706', marginBottom: 8, display: 'flex', justifyContent: 'center' }}>
+                    <Icon name="card" width="36" height="36" />
                   </div>
-                  <span style={{ fontSize: 11, background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '2px 8px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <Icon name="check" width="11" height="11" />
-                    <span>Đã liên kết</span>
-                  </span>
+                  <h4 style={{ margin: '0 0 6px', fontSize: 15, color: 'var(--ink)' }}>Chưa liên kết tài khoản nhận tiền</h4>
+                  <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 16px', lineHeight: 1.5 }}>
+                    Vui lòng liên kết tài khoản ngân hàng chính chủ để rút thù lao về tài khoản nhanh chóng.
+                  </p>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '0 auto' }}
+                    onClick={() => {
+                      setBankForm({
+                        bankBin: '970422',
+                        bankName: 'MB Bank',
+                        accountNumber: '',
+                        accountHolder: lockedHolderName,
+                        branch: ''
+                      });
+                      setBankModalOpen(true);
+                    }}
+                  >
+                    <Icon name="plus" width="13" height="13" />
+                    <span>Liên kết tài khoản ngay</span>
+                  </button>
                 </div>
-              </div>
+              ) : (
+                <div
+                  style={{
+                    background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+                    color: '#fff',
+                    borderRadius: 14,
+                    padding: '16px 18px',
+                    boxShadow: '0 8px 20px rgba(0,0,0,0.15)',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div style={{ position: 'absolute', right: 12, top: 12, opacity: 0.12, color: '#fff' }}>
+                    <Icon name="card" width="56" height="56" />
+                  </div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    {state.bankAccount.bankName}
+                  </div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, margin: '10px 0', letterSpacing: 2, color: '#CBFF4D' }}>
+                    {state.bankAccount.accountNumber}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', fontSize: 12 }}>
+                    <div>
+                      <span style={{ fontSize: 10, color: '#94a3b8', display: 'block' }}>CHỦ TÀI KHOẢN</span>
+                      <b style={{ textTransform: 'uppercase' }}>{state.bankAccount.accountHolder}</b>
+                    </div>
+                    <span style={{ fontSize: 11, background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '2px 8px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Icon name="check" width="11" height="11" />
+                      <span>Đã liên kết</span>
+                    </span>
+                  </div>
+                </div>
+              )}
               <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 10, marginBottom: 0 }}>
-                Tiền rút sẽ được chuyển trực tiếp vào tài khoản này trong vòng 5–15 phút sau khi duyệt.
+                Tiền rút sẽ được chuyển trực tiếp vào tài khoản ngân hàng chính chủ trong vòng 5–15 phút sau khi duyệt.
               </p>
             </div>
 
@@ -802,15 +879,28 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#1d4ed8', lineHeight: 1.5 }}>
+                💡 <b>Quy định bảo đảm chính chủ:</b> Tài khoản ngân hàng nhận tiền phải mang tên chính chủ của bạn (trùng khớp với CCCD) để hệ thống tự động giải ngân và ngăn ngừa gian lận.
+              </div>
+
               <div>
                 <label style={{ fontSize: 12.5, fontWeight: 600, display: 'block', marginBottom: 6 }}>Ngân hàng thụ hưởng:</label>
                 <select
-                  value={bankForm.bankName}
-                  onChange={(e) => setBankForm({ ...bankForm, bankName: e.target.value })}
+                  value={bankForm.bankBin || '970422'}
+                  onChange={(e) => {
+                    const selected = VIETNAM_BANKS.find((b) => b.bin === e.target.value);
+                    setBankForm({
+                      ...bankForm,
+                      bankBin: e.target.value,
+                      bankName: selected?.name || e.target.value
+                    });
+                  }}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 13 }}
                 >
-                  {VN_BANKS.map((b) => (
-                    <option key={b} value={b}>{b}</option>
+                  {VIETNAM_BANKS.map((b) => (
+                    <option key={b.bin} value={b.bin}>
+                      {b.name} - {b.fullName}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -820,23 +910,48 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                 <input
                   type="text"
                   placeholder="Ví dụ: 0987654321"
-                  value={bankForm.accountNumber}
-                  onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value })}
+                  value={bankForm.accountNumber || ''}
+                  onChange={(e) => setBankForm({ ...bankForm, accountNumber: e.target.value.replace(/\s/g, '') })}
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 13 }}
                   required
                 />
+                {lookingUp && (
+                  <div style={{ fontSize: 11.5, color: 'var(--primary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>⏳ Đang tra cứu tài khoản qua VietQR...</span>
+                  </div>
+                )}
+                {lookupResult && !lookingUp && (
+                  <div style={{ fontSize: 11.5, color: lookupResult.isFallback ? '#d97706' : '#16a34a', marginTop: 4 }}>
+                    {lookupResult.isFallback ? '🔒 ' : '✅ '} {lookupResult.message}
+                  </div>
+                )}
               </div>
 
               <div>
-                <label style={{ fontSize: 12.5, fontWeight: 600, display: 'block', marginBottom: 6 }}>Tên chủ tài khoản (In hoa không dấu):</label>
+                <label style={{ fontSize: 12.5, fontWeight: 600, display: 'block', marginBottom: 6 }}>
+                  Tên chủ tài khoản (In hoa không dấu - Khóa cứng chính chủ):
+                </label>
                 <input
                   type="text"
-                  placeholder="Ví dụ: NGUYEN VAN A"
-                  value={bankForm.accountHolder}
-                  onChange={(e) => setBankForm({ ...bankForm, accountHolder: e.target.value })}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 13, textTransform: 'uppercase' }}
+                  value={lockedHolderName}
+                  readOnly
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    border: '1px solid var(--border)',
+                    background: 'rgba(100, 116, 139, 0.08)',
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: 'var(--ink)',
+                    cursor: 'not-allowed',
+                    textTransform: 'uppercase'
+                  }}
                   required
                 />
+                <small style={{ fontSize: 11, color: '#64748b', marginTop: 4, display: 'block' }}>
+                  🔒 Tự động khóa theo tên hồ sơ của bạn ({userFullName}) để bảo vệ an toàn rút tiền.
+                </small>
               </div>
 
               <div>
@@ -853,7 +968,13 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
 
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 20 }}>
               <button type="button" className="btn btn-outline btn-sm" onClick={() => setBankModalOpen(false)}>Hủy</button>
-              <button type="submit" className="btn btn-primary btn-sm">Lưu thông tin TKNH</button>
+              <button
+                type="submit"
+                className="btn btn-primary btn-sm"
+                disabled={savingBank || !bankForm.accountNumber || bankForm.accountNumber.trim().length < 4}
+              >
+                {savingBank ? 'Đang lưu...' : 'Lưu thông tin TKNH'}
+              </button>
             </div>
           </form>
         </div>

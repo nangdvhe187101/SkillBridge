@@ -142,6 +142,12 @@ export default function RegisterForm({ onSwitchTab }) {
                     value={regForm.name}
                     onChange={(e) => updateField({ name: e.target.value })}
                 />
+                {role === 'student' && (
+                    <div className="hint" style={{ color: '#6366f1', fontSize: '0.8rem', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span>💡</span>
+                        <span>Vui lòng nhập đúng Họ và Tên theo CCCD để thuận tiện liên kết ngân hàng và rút tiền sau này.</span>
+                    </div>
+                )}
             </div>
 
             <div className={'field' + (emailError ? ' has-error' : '')}>

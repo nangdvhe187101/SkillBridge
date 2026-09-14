@@ -319,6 +319,10 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
                             value={form.fullName}
                             onChange={(e) => setForm({ ...form, fullName: e.target.value })}
                         />
+                        <div style={{ fontSize: '0.78rem', color: '#6366f1', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span>💡</span>
+                            <span>Vui lòng nhập đúng Họ và Tên theo CCCD để trùng khớp với tài khoản ngân hàng khi rút tiền.</span>
+                        </div>
                     </div>
                     <div className="acct-field">
                         <label>Trường Đại học / Cao đẳng</label>

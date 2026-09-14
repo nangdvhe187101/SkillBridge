@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
+using SkillBridge.Application.Interfaces;
 using SkillBridge.Application.Interfaces.Payments;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
@@ -13,12 +14,14 @@ namespace SkillBridge.Infrastructure.Services.Payments;
 public class EscrowPaymentService : IEscrowPaymentService
 {
     private readonly SkillBridgeDbContext _dbContext;
+    private readonly IEmailService? _emailService;
     private readonly ILogger<EscrowPaymentService> _logger;
 
-    public EscrowPaymentService(SkillBridgeDbContext dbContext, ILogger<EscrowPaymentService> logger)
+    public EscrowPaymentService(SkillBridgeDbContext dbContext, ILogger<EscrowPaymentService> logger, IEmailService? emailService = null)
     {
         _dbContext = dbContext;
         _logger = logger;
+        _emailService = emailService;
     }
 
     public async Task HoldEscrowAsync(int employerId, int jobId, string jobTitle, decimal amount, CancellationToken cancellationToken = default)
@@ -173,6 +176,27 @@ public class EscrowPaymentService : IEscrowPaymentService
 
         _logger.LogInformation("Đã giải ngân thù lao {Payout:N0}đ (phí sàn {Commission:N0}đ từ tổng {Budget:N0}đ) cho sinh viên {StudentId} từ Job #{JobId}.",
             studentPayout, commissionAmount, amount, studentId, jobId);
+
+        if (_emailService != null)
+        {
+            try
+            {
+                var student = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == studentId, cancellationToken);
+                if (student != null && !string.IsNullOrWhiteSpace(student.Email))
+                {
+                    await _emailService.SendPayoutSuccessEmailAsync(
+                        student.Email,
+                        student.FullName,
+                        jobTitle,
+                        studentPayout,
+                        commissionAmount);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Lỗi khi gửi email giải ngân thành công cho sinh viên {StudentId} Job #{JobId}.", studentId, jobId);
+            }
+        }
     }
 
     public async Task RefundEscrowAsync(int employerId, int jobId, string jobTitle, decimal amount, string reason, CancellationToken cancellationToken = default)

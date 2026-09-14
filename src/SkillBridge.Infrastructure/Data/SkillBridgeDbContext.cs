@@ -101,6 +101,7 @@ public partial class SkillBridgeDbContext : DbContext
     public virtual DbSet<UserBadge> UserBadges { get; set; }
 
     public virtual DbSet<Wallet> Wallets { get; set; }
+    public virtual DbSet<SystemSetting> SystemSettings { get; set; }
 
     public virtual DbSet<WithdrawalRequest> WithdrawalRequests { get; set; }
     public virtual DbSet<PaymentOrder> PaymentOrders { get; set; }
