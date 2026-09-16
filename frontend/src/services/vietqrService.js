@@ -12,12 +12,16 @@ export function removeVietnameseTones(str) {
 export async function lookupAccountName(bin, accountNumber, fallbackName = '') {
   const normalizedFallback = removeVietnameseTones(fallbackName);
   if (!bin || !accountNumber || accountNumber.trim().length < 6) {
-    return {
-      success: false,
-      accountName: normalizedFallback,
-      isFallback: true,
-      message: 'Số tài khoản chưa đủ độ dài hợp lệ'
-    };
+    return null;
+  }
+
+  // Nếu chưa cấu hình VietQR API Key (môi trường dev/test), trực tiếp dùng cơ chế an toàn chính chủ
+  // tránh gọi fetch gây lỗi 401 Unauthorized trong console trình duyệt
+  const apiKey = import.meta.env?.VITE_VIETQR_API_KEY;
+  const clientId = import.meta.env?.VITE_VIETQR_CLIENT_ID;
+
+  if (!apiKey || !clientId) {
+    return null;
   }
 
   try {
@@ -27,7 +31,9 @@ export async function lookupAccountName(bin, accountNumber, fallbackName = '') {
     const res = await fetch('https://api.vietqr.io/v2/lookup', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'x-client-id': clientId,
+        'x-api-key': apiKey
       },
       body: JSON.stringify({
         bin: String(bin).trim(),
@@ -39,38 +45,29 @@ export async function lookupAccountName(bin, accountNumber, fallbackName = '') {
     clearTimeout(timeoutId);
 
     if (!res.ok) {
-      return {
-        success: true,
-        accountName: normalizedFallback,
-        isFallback: true,
-        message: 'Dùng tên hồ sơ chính chủ (VietQR offline)'
-      };
+      return null;
     }
 
     const data = await res.json();
+    // Chỉ hiển thị kết quả khi thực sự tra cứu được từ cổng ngân hàng
     if (data && (data.code === '00' || data.code === '200') && data.data?.accountName) {
+      const bankHolder = removeVietnameseTones(data.data.accountName);
+      const isMatch = !normalizedFallback || bankHolder === normalizedFallback;
       return {
-        success: true,
-        accountName: removeVietnameseTones(data.data.accountName),
-        isFallback: false,
-        message: 'Xác thực thành công từ ngân hàng thụ hưởng'
+        success: isMatch,
+        isVerifiedOnline: true,
+        isMatch,
+        status: isMatch ? 'matched' : 'mismatched',
+        accountName: bankHolder,
+        message: isMatch
+          ? `Xác thực thành công từ ngân hàng: Trùng khớp chủ tài khoản (${normalizedFallback})`
+          : `Không khớp tên: Tên tại ngân hàng (${bankHolder}) không trùng với tên hồ sơ (${normalizedFallback})`
       };
     }
 
-    // Khi không tìm thấy hoặc hết lượt test của VietQR
-    return {
-      success: true,
-      accountName: normalizedFallback,
-      isFallback: true,
-      message: data?.desc || 'Tự động khóa theo tên chính chủ hồ sơ'
-    };
+    // Nếu là code 47 (gói Free không hỗ trợ) hoặc dịch vụ offline, trả về null để không hiển thị cảnh báo gây hiểu lầm
+    return null;
   } catch {
-    // Fallback an toàn khi lỗi mạng hoặc CORS
-    return {
-      success: true,
-      accountName: normalizedFallback,
-      isFallback: true,
-      message: 'Khóa theo tên hồ sơ chính chủ'
-    };
+    return null;
   }
 }

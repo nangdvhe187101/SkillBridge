@@ -1,10 +1,16 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import Pagination from '../../components/Pagination';
 import { exportTransactionsToCSV } from '../../utils/fileDownloader';
 import { getActivePendingOrder, cancelPendingOrder } from '../../api/paymentApi';
+import {
+  createBankVerificationRequest,
+  decodeBankQr,
+  cancelBankVerificationRequest,
+  getCurrentBankVerification
+} from '../../api/walletApi';
 import Icon from '../../components/Icon';
 
 const TX_CONFIG = {
@@ -19,7 +25,7 @@ const TX_CONFIG = {
 };
 
 import { VIETNAM_BANKS } from '../../constants/banks';
-import { lookupAccountName, removeVietnameseTones } from '../../services/vietqrService';
+import { removeVietnameseTones } from '../../services/vietqrService';
 
 export default function Wallet() {
   const { state, updateBankAccount, showToast } = useStore();
@@ -67,6 +73,24 @@ export default function Wallet() {
   const [claimModal, setClaimModal] = useState(null); // Claim object
   const [bankModalOpen, setBankModalOpen] = useState(false);
 
+  // Bank Verification State
+  const [verificationReq, setVerificationReq] = useState(null);
+  const [qrDecoding, setQrDecoding] = useState(false);
+  const qrFileInputRef = useRef(null);
+
+  const loadVerificationStatus = async () => {
+    try {
+      const res = await getCurrentBankVerification();
+      setVerificationReq(res || null);
+    } catch {
+      setVerificationReq(null);
+    }
+  };
+
+  useEffect(() => {
+    loadVerificationStatus();
+  }, []);
+
   const userFullName = state.currentUser?.fullName || state.profile?.fullName || 'NGUYEN VAN A';
   const lockedHolderName = useMemo(() => removeVietnameseTones(userFullName), [userFullName]);
 
@@ -79,8 +103,6 @@ export default function Wallet() {
     branch: ''
   });
 
-  const [lookingUp, setLookingUp] = useState(false);
-  const [lookupResult, setLookupResult] = useState(null);
   const [savingBank, setSavingBank] = useState(false);
 
   useEffect(() => {
@@ -89,29 +111,10 @@ export default function Wallet() {
     } else {
       setBankForm((prev) => ({
         ...prev,
-        accountHolder: lockedHolderName
+        accountHolder: prev.accountHolder || lockedHolderName
       }));
     }
   }, [state.bankAccount, lockedHolderName]);
-
-  // Debounced lookup STK VietQR
-  useEffect(() => {
-    if (!bankModalOpen) {
-      setLookupResult(null);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      if (bankForm.bankBin && bankForm.accountNumber && bankForm.accountNumber.trim().length >= 6) {
-        setLookingUp(true);
-        const res = await lookupAccountName(bankForm.bankBin, bankForm.accountNumber, lockedHolderName);
-        setLookupResult(res);
-        setLookingUp(false);
-      } else {
-        setLookupResult(null);
-      }
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [bankForm.bankBin, bankForm.accountNumber, bankModalOpen, lockedHolderName]);
 
   const isEmployer = state.role === 'employer' || state.currentUser?.roleCode === 'employer';
 
@@ -162,15 +165,52 @@ export default function Wallet() {
     }
     setSavingBank(true);
     try {
-      await updateBankAccount({
-        ...bankForm,
-        accountHolder: lockedHolderName
+      await createBankVerificationRequest({
+        bankName: bankForm.bankName,
+        bankCode: bankForm.bankBin,
+        accountNumber: bankForm.accountNumber.trim()
       });
       setBankModalOpen(false);
-    } catch {
-      // Bắt lỗi hiển thị từ toast
+      await loadVerificationStatus();
+      showToast('Đã gửi yêu cầu xác thực ngân hàng thành công! Đang chờ Admin duyệt đối soát tên chính chủ.', 'check');
+    } catch (err) {
+      showToast(err?.message || 'Không thể gửi yêu cầu xác thực.', 'x');
     } finally {
       setSavingBank(false);
+    }
+  };
+
+  const handleCancelVerification = async (reqId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn hủy yêu cầu xác thực ngân hàng đang chờ duyệt này?')) return;
+    try {
+      await cancelBankVerificationRequest(reqId);
+      await loadVerificationStatus();
+      showToast('Đã hủy yêu cầu xác thực thành công.', 'check');
+    } catch (err) {
+      showToast(err?.message || 'Không thể hủy yêu cầu.', 'x');
+    }
+  };
+
+  const handleQrUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setQrDecoding(true);
+    try {
+      const res = await decodeBankQr(file);
+      if (res?.accountNumber) {
+        setBankForm((prev) => ({
+          ...prev,
+          bankBin: res.bankCode || prev.bankBin,
+          accountNumber: res.accountNumber,
+          bankName: VIETNAM_BANKS.find((b) => b.bin === res.bankCode)?.name || prev.bankName
+        }));
+        showToast('Đã trích xuất số tài khoản từ mã QR thành công! Vui lòng kiểm tra lại.', 'check');
+      }
+    } catch (err) {
+      showToast(err?.message || 'Không thể đọc mã QR từ ảnh tải lên. Vui lòng thử ảnh khác hoặc nhập tay.', 'x');
+    } finally {
+      setQrDecoding(false);
+      if (qrFileInputRef.current) qrFileInputRef.current.value = '';
     }
   };
 
@@ -498,41 +538,101 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                   <Icon name="bank" width="18" height="18" style={{ color: 'var(--primary)' }} />
                   <span>Tài khoản Ngân hàng nhận tiền</span>
                 </h4>
-                {state.bankAccount && (
+                {(!verificationReq || verificationReq.status !== 'pending') && (
                   <button
                     className="btn btn-outline btn-sm"
                     style={{ fontSize: 11.5, padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                     onClick={() => {
-                      setBankForm(state.bankAccount);
+                      setBankForm({
+                        bankBin: state.bankAccount?.bankBin || '970422',
+                        bankName: state.bankAccount?.bankName || 'MB Bank',
+                        accountNumber: '',
+                        accountHolder: lockedHolderName,
+                        branch: ''
+                      });
                       setBankModalOpen(true);
                     }}
                   >
                     <Icon name="edit" width="12" height="12" />
-                    <span>Thay đổi</span>
+                    <span>{state.bankAccount?.isBankVerified ? 'Thay đổi' : 'Liên kết'}</span>
                   </button>
                 )}
               </div>
 
-              {!state.bankAccount ? (
+              {/* TRƯỜNG HỢP 1: ĐANG CÓ YÊU CẦU CHỜ ADMIN DUYỆT (PENDING) */}
+              {verificationReq && verificationReq.status === 'pending' ? (
                 <div
                   style={{
-                    border: '2px dashed #f59e0b',
+                    background: 'linear-gradient(135deg, #1e293b, #0f172a)',
+                    border: '1px solid #f59e0b',
+                    color: '#fff',
                     borderRadius: 14,
-                    padding: '24px 18px',
-                    background: 'rgba(245, 158, 11, 0.04)',
+                    padding: '16px 18px',
+                    boxShadow: '0 8px 24px rgba(245, 158, 11, 0.15)',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <span
+                      style={{
+                        fontSize: 11.5,
+                        background: 'rgba(245, 158, 11, 0.2)',
+                        color: '#fcd34d',
+                        padding: '3px 10px',
+                        borderRadius: 6,
+                        fontWeight: 600,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6
+                      }}
+                    >
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#f59e0b', display: 'inline-block' }} />
+                      Đang chờ Admin duyệt
+                    </span>
+                    <button
+                      className="btn btn-outline btn-sm"
+                      style={{ color: '#f87171', borderColor: 'rgba(248, 113, 113, 0.4)', fontSize: 11, padding: '2px 8px' }}
+                      onClick={() => handleCancelVerification(verificationReq.id)}
+                    >
+                      Hủy yêu cầu
+                    </button>
+                  </div>
+
+                  <div style={{ fontSize: 12, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    {verificationReq.bankName}
+                  </div>
+                  <div style={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 700, margin: '8px 0', letterSpacing: 2, color: '#fde047' }}>
+                    {verificationReq.accountNumberMask}
+                  </div>
+                  <div style={{ fontSize: 11.5, color: '#cbd5e1' }}>
+                    CHỦ TÀI KHOẢN: <b style={{ textTransform: 'uppercase' }}>{lockedHolderName}</b>
+                  </div>
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: 11, color: '#94a3b8', lineHeight: 1.4 }}>
+                    ⏳ Admin đang kiểm tra tên chính chủ qua App ngân hàng. Quá trình duyệt tay thường mất từ 5-15 phút.
+                  </div>
+                </div>
+              ) : verificationReq && verificationReq.status === 'rejected' && (!state.bankAccount || !state.bankAccount.isBankVerified) ? (
+                /* TRƯỜNG HỢP 2: BỊ TỪ CHỐI DUYỆT */
+                <div
+                  style={{
+                    border: '1px solid #ef4444',
+                    borderRadius: 14,
+                    padding: '16px 18px',
+                    background: 'rgba(239, 68, 68, 0.05)',
                     textAlign: 'center'
                   }}
                 >
-                  <div style={{ color: '#d97706', marginBottom: 8, display: 'flex', justifyContent: 'center' }}>
-                    <Icon name="card" width="36" height="36" />
+                  <div style={{ color: '#ef4444', marginBottom: 6, display: 'flex', justifyContent: 'center' }}>
+                    <Icon name="alert-circle" width="30" height="30" />
                   </div>
-                  <h4 style={{ margin: '0 0 6px', fontSize: 15, color: 'var(--ink)' }}>Chưa liên kết tài khoản nhận tiền</h4>
-                  <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 16px', lineHeight: 1.5 }}>
-                    Vui lòng liên kết tài khoản ngân hàng chính chủ để rút thù lao về tài khoản nhanh chóng.
+                  <h4 style={{ margin: '0 0 4px', fontSize: 14, color: '#dc2626' }}>Yêu cầu xác thực bị từ chối</h4>
+                  <p style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '0 0 10px' }}>
+                    Lý do: <b>{verificationReq.rejectionReason || 'Tên tài khoản không trùng khớp tên hồ sơ.'}</b>
                   </p>
                   <button
                     className="btn btn-primary btn-sm"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '0 auto' }}
+                    style={{ fontSize: 12 }}
                     onClick={() => {
                       setBankForm({
                         bankBin: '970422',
@@ -544,11 +644,11 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                       setBankModalOpen(true);
                     }}
                   >
-                    <Icon name="plus" width="13" height="13" />
-                    <span>Liên kết tài khoản ngay</span>
+                    Gửi lại yêu cầu xác thực
                   </button>
                 </div>
-              ) : (
+              ) : state.bankAccount && state.bankAccount.isBankVerified ? (
+                /* TRƯỜNG HỢP 3: ĐÃ XÁC THỰC THÀNH CÔNG */
                 <div
                   style={{
                     background: 'linear-gradient(135deg, #1e293b, #0f172a)',
@@ -576,9 +676,45 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                     </div>
                     <span style={{ fontSize: 11, background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '2px 8px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                       <Icon name="check" width="11" height="11" />
-                      <span>Đã liên kết</span>
+                      <span>Đã xác thực</span>
                     </span>
                   </div>
+                </div>
+              ) : (
+                /* TRƯỜNG HỢP 4: CHƯA LIÊN KẾT */
+                <div
+                  style={{
+                    border: '2px dashed #f59e0b',
+                    borderRadius: 14,
+                    padding: '24px 18px',
+                    background: 'rgba(245, 158, 11, 0.04)',
+                    textAlign: 'center'
+                  }}
+                >
+                  <div style={{ color: '#d97706', marginBottom: 8, display: 'flex', justifyContent: 'center' }}>
+                    <Icon name="card" width="36" height="36" />
+                  </div>
+                  <h4 style={{ margin: '0 0 6px', fontSize: 15, color: 'var(--ink)' }}>Chưa liên kết tài khoản nhận tiền</h4>
+                  <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '0 0 16px', lineHeight: 1.5 }}>
+                    Vui lòng nộp thông tin tài khoản ngân hàng chính chủ để Admin duyệt trước khi rút tiền.
+                  </p>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6, margin: '0 auto' }}
+                    onClick={() => {
+                      setBankForm({
+                        bankBin: '970422',
+                        bankName: 'MB Bank',
+                        accountNumber: '',
+                        accountHolder: lockedHolderName,
+                        branch: ''
+                      });
+                      setBankModalOpen(true);
+                    }}
+                  >
+                    <Icon name="plus" width="13" height="13" />
+                    <span>Xác thực tài khoản ngay</span>
+                  </button>
                 </div>
               )}
               <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 10, marginBottom: 0 }}>
@@ -879,8 +1015,32 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.2)', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#1d4ed8', lineHeight: 1.5 }}>
-                💡 <b>Quy định bảo đảm chính chủ:</b> Tài khoản ngân hàng nhận tiền phải mang tên chính chủ của bạn (trùng khớp với CCCD) để hệ thống tự động giải ngân và ngăn ngừa gian lận.
+              <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: 8, padding: '10px 12px', fontSize: 12, color: '#b45309', lineHeight: 1.5 }}>
+                🛡️ <b>Quy trình duyệt tay:</b> Sau khi gửi, Admin sẽ tra cứu tên chủ tài khoản qua App ngân hàng để xác nhận chính chủ trước khi kích hoạt tính năng rút tiền.
+              </div>
+
+              {/* TÙY CHỌN QUÉT ẢNH MÃ QR NGÂN HÀNG AUTOFILL */}
+              <div style={{ background: 'rgba(99, 102, 241, 0.06)', border: '1px dashed #6366f1', borderRadius: 10, padding: '12px 14px', textAlign: 'center' }}>
+                <input
+                  type="file"
+                  ref={qrFileInputRef}
+                  accept="image/png, image/jpeg, image/jpg"
+                  style={{ display: 'none' }}
+                  onChange={handleQrUpload}
+                />
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ background: '#6366f1', color: '#fff', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  disabled={qrDecoding}
+                  onClick={() => qrFileInputRef.current?.click()}
+                >
+                  <span>📸</span>
+                  <span>{qrDecoding ? 'Đang giải mã QR...' : 'Tải ảnh mã QR ngân hàng (Tự điền STK)'}</span>
+                </button>
+                <span style={{ fontSize: 11, color: '#64748b', display: 'block', marginTop: 4 }}>
+                  Hỗ trợ ảnh QR VietQR từ app ngân hàng (MB, VCB, TPBank...).
+                </span>
               </div>
 
               <div>
@@ -915,54 +1075,31 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                   style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 13 }}
                   required
                 />
-                {lookingUp && (
-                  <div style={{ fontSize: 11.5, color: 'var(--primary)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span>⏳ Đang tra cứu tài khoản qua VietQR...</span>
-                  </div>
-                )}
-                {lookupResult && !lookingUp && (
-                  <div style={{ fontSize: 11.5, color: lookupResult.isFallback ? '#d97706' : '#16a34a', marginTop: 4 }}>
-                    {lookupResult.isFallback ? '🔒 ' : '✅ '} {lookupResult.message}
-                  </div>
-                )}
               </div>
 
               <div>
                 <label style={{ fontSize: 12.5, fontWeight: 600, display: 'block', marginBottom: 6 }}>
-                  Tên chủ tài khoản (In hoa không dấu - Khóa cứng chính chủ):
+                  Tên chủ tài khoản (Hồ sơ chính chủ):
                 </label>
                 <input
                   type="text"
                   value={lockedHolderName}
-                  readOnly
+                  disabled
                   style={{
                     width: '100%',
                     padding: '8px 12px',
                     borderRadius: 8,
                     border: '1px solid var(--border)',
-                    background: 'rgba(100, 116, 139, 0.08)',
+                    background: 'rgba(0,0,0,0.05)',
                     fontSize: 13,
                     fontWeight: 600,
-                    color: 'var(--ink)',
-                    cursor: 'not-allowed',
-                    textTransform: 'uppercase'
+                    textTransform: 'uppercase',
+                    color: 'var(--ink)'
                   }}
-                  required
                 />
                 <small style={{ fontSize: 11, color: '#64748b', marginTop: 4, display: 'block' }}>
-                  🔒 Tự động khóa theo tên hồ sơ của bạn ({userFullName}) để bảo vệ an toàn rút tiền.
+                  💡 Tên chủ tài khoản phải trùng với tên hồ sơ của bạn trên hệ thống.
                 </small>
-              </div>
-
-              <div>
-                <label style={{ fontSize: 12.5, fontWeight: 600, display: 'block', marginBottom: 6 }}>Chi nhánh (Tùy chọn):</label>
-                <input
-                  type="text"
-                  placeholder="Ví dụ: Chi nhánh Hà Nội"
-                  value={bankForm.branch || ''}
-                  onChange={(e) => setBankForm({ ...bankForm, branch: e.target.value })}
-                  style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', fontSize: 13 }}
-                />
               </div>
             </div>
 
@@ -971,9 +1108,9 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
               <button
                 type="submit"
                 className="btn btn-primary btn-sm"
-                disabled={savingBank || !bankForm.accountNumber || bankForm.accountNumber.trim().length < 4}
+                disabled={savingBank || !bankForm.accountNumber || !bankForm.accountNumber.trim()}
               >
-                {savingBank ? 'Đang lưu...' : 'Lưu thông tin TKNH'}
+                {savingBank ? 'Đang gửi...' : 'Gửi yêu cầu xác thực'}
               </button>
             </div>
           </form>

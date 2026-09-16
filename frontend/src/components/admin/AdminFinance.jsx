@@ -5,6 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import { exportTransactionsToCSV } from '../../utils/fileDownloader';
 import Icon from '../Icon';
+import AdminBankVerification from './AdminBankVerification';
 
 export default function AdminFinance() {
   const { subscriptions, renewSubscription, cancelSubscription } = useAdmin();
@@ -85,6 +86,8 @@ export default function AdminFinance() {
           </table>
         </div>
       </div>
+
+      <AdminBankVerification />
 
       <div className="adm-card">
         <div className="adm-card-head"><h4>Xuất báo cáo tài chính</h4></div>

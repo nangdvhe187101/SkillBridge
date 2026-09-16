@@ -30,6 +30,8 @@ public partial class SkillBridgeDbContext : DbContext
 
     public virtual DbSet<BankAccount> BankAccounts { get; set; }
 
+    public virtual DbSet<BankVerificationRequest> BankVerificationRequests { get; set; }
+
     public virtual DbSet<Category> Categories { get; set; }
 
     public virtual DbSet<ChatMessage> ChatMessages { get; set; }
@@ -767,6 +769,32 @@ public partial class SkillBridgeDbContext : DbContext
             entity.HasKey(e => e.Id).HasName("PRIMARY");
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.ProcessedStatus).HasDefaultValueSql("'pending'");
+        });
+
+        modelBuilder.Entity<BankVerificationRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("bank_verification_requests");
+
+            entity.HasIndex(e => new { e.UserId, e.Status }, "idx_bank_verif_user_status");
+            entity.HasIndex(e => new { e.Status, e.SubmittedAt }, "idx_bank_verif_status_submitted");
+
+            entity.Property(e => e.SubmittedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.Status)
+                .HasConversion<string>()
+                .HasMaxLength(20);
+
+            entity.HasOne(d => d.User)
+                .WithMany(p => p.BankVerificationRequests)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_bank_verif_user");
+
+            entity.HasOne(d => d.ReviewedByAdmin)
+                .WithMany(p => p.BankVerificationRequests)
+                .HasForeignKey(d => d.ReviewedByAdminId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_bank_verif_admin");
         });
 
         OnModelCreatingPartial(modelBuilder);

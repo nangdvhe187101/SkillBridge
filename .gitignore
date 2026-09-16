@@ -20,6 +20,9 @@ appsettings.Development.json
 node_modules/
 frontend/dist/
 frontend/.vite/
+*.env
+*.env.*
+!.env.example
 
 # IDE
 .idea/

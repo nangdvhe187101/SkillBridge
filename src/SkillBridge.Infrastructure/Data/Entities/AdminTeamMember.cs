@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -60,4 +60,7 @@ public partial class AdminTeamMember
 
     [InverseProperty("ProcessedByNavigation")]
     public virtual ICollection<WithdrawalRequest> WithdrawalRequests { get; set; } = new List<WithdrawalRequest>();
+
+    [InverseProperty("ReviewedByAdmin")]
+    public virtual ICollection<BankVerificationRequest> BankVerificationRequests { get; set; } = new List<BankVerificationRequest>();
 }

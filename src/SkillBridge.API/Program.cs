@@ -149,6 +149,7 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
 }
 
 builder.Services.AddScoped<SkillBridge.Application.Interfaces.Payments.IPaymentRealtimeNotifier, SkillBridge.API.Services.SignalRPaymentRealtimeService>();
+builder.Services.AddHttpClient();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
