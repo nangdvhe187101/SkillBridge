@@ -121,11 +121,15 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("RequireEmployerRole", policy => policy.RequireRole("employer"));
-    options.AddPolicy("RequireStudentRole", policy => policy.RequireRole("student"));
-});
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("RequireEmployerRole", policy => policy.RequireRole("employer"))
+    .AddPolicy("RequireStudentRole", policy => policy.RequireRole("student"))
+    .AddPolicy("RequireAdminRole", policy =>
+        policy.RequireAssertion(context =>
+            context.User.IsInRole("admin") ||
+            context.User.IsInRole("super_admin") ||
+            context.User.HasClaim(c => (c.Type == "role_type" || c.Type == "RoleType") && string.Equals(c.Value, "admin", StringComparison.OrdinalIgnoreCase))));
+
 
 builder.Services.Scan(scan => scan
     .FromAssemblies(
@@ -143,12 +147,11 @@ var signalR = builder.Services.AddSignalR();
 if (!string.IsNullOrWhiteSpace(redisConnection))
 {
     signalR.AddStackExchangeRedis(redisConnection, options =>
-    {
-        options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("SkillBridge_SignalR");
-    });
+        options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("SkillBridge_SignalR"));
 }
 
 builder.Services.AddScoped<SkillBridge.Application.Interfaces.Payments.IPaymentRealtimeNotifier, SkillBridge.API.Services.SignalRPaymentRealtimeService>();
+builder.Services.AddHttpClient();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -301,5 +304,21 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<SkillBridge.API.Hubs.PaymentHub>("/hubs/payment");
+
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    try
+    {
+        var dbContext = services.GetRequiredService<SkillBridge.Infrastructure.Data.SkillBridgeDbContext>();
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        await SkillBridge.Infrastructure.Data.DbInitializer.SeedAdminAsync(dbContext, app.Configuration, logger);
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Lỗi xảy ra trong quá trình khởi tạo dữ liệu Admin.");
+    }
+}
 
 app.Run();

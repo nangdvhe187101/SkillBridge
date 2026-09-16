@@ -81,7 +81,7 @@ namespace SkillBridge.Infrastructure.Services.Email
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Gửi email gửi lại xác thực thất bại cho user {UserId}", user.Id);
+                logger.LogError(ex, "Gửi email gửi lại xác thực thất bại cho user {UserId}. Link xác thực (dành cho DEV): {VerifyLink}", user.Id, verifyLink);
             }
 
             return GenericMessage;

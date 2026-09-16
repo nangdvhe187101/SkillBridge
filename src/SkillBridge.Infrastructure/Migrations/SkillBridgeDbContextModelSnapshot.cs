@@ -440,6 +440,98 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.ToTable("bank_accounts");
                 });
 
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.BankVerificationRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AccountNumber")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("account_number");
+
+                    b.Property<string>("AccountNumberMask")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("account_number_mask");
+
+                    b.Property<string>("BankCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("bank_code");
+
+                    b.Property<string>("BankName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("bank_name");
+
+                    b.Property<string>("BankReturnedName")
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("bank_returned_name");
+
+                    b.Property<int?>("PendingUserId")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("int")
+                        .HasComputedColumnSql("CASE WHEN `status` = 'Pending' THEN `user_id` ELSE NULL END", false);
+
+                    b.Property<string>("RejectionReason")
+                        .HasColumnType("text")
+                        .HasColumnName("rejection_reason");
+
+                    b.Property<string>("RequestIpAddress")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("request_ip_address");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<int?>("ReviewedByAdminId")
+                        .HasColumnType("int")
+                        .HasColumnName("reviewed_by_admin_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("submitted_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("PRIMARY");
+
+                    b.HasIndex("PendingUserId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_bank_verif_pending_user");
+
+                    b.HasIndex("ReviewedByAdminId");
+
+                    b.HasIndex(new[] { "Status", "SubmittedAt" }, "idx_bank_verif_status_submitted");
+
+                    b.HasIndex(new[] { "UserId", "Status" }, "idx_bank_verif_user_status");
+
+                    b.ToTable("bank_verification_requests", (string)null);
+                });
+
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.Category", b =>
                 {
                     b.Property<int>("Id")
@@ -2261,6 +2353,33 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.ToTable("system_config");
                 });
 
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.SystemSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("description");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("varchar(1000)")
+                        .HasColumnName("value");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("system_settings");
+                });
+
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.Transaction", b =>
                 {
                     b.Property<int>("Id")
@@ -2514,10 +2633,43 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasColumnType("int")
                         .HasColumnName("user_id");
 
+                    b.Property<string>("AccountHolder")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("account_holder");
+
+                    b.Property<string>("AccountNumber")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("account_number");
+
                     b.Property<decimal>("Balance")
                         .HasPrecision(12)
                         .HasColumnType("decimal(12,0)")
                         .HasColumnName("balance");
+
+                    b.Property<string>("BankBin")
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("bank_bin");
+
+                    b.Property<string>("BankBranch")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("bank_branch");
+
+                    b.Property<DateTime?>("BankLinkedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("bank_linked_at");
+
+                    b.Property<string>("BankName")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("bank_name");
+
+                    b.Property<bool>("IsBankVerified")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("is_bank_verified");
 
                     b.HasKey("UserId")
                         .HasName("PRIMARY");
@@ -2777,6 +2929,25 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasForeignKey("UserId")
                         .IsRequired()
                         .HasConstraintName("fk_bankaccounts_user");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.BankVerificationRequest", b =>
+                {
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.AdminTeamMember", "ReviewedByAdmin")
+                        .WithMany("BankVerificationRequests")
+                        .HasForeignKey("ReviewedByAdminId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_bank_verif_admin");
+
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "User")
+                        .WithMany("BankVerificationRequests")
+                        .HasForeignKey("UserId")
+                        .IsRequired()
+                        .HasConstraintName("fk_bank_verif_user");
+
+                    b.Navigation("ReviewedByAdmin");
 
                     b.Navigation("User");
                 });
@@ -3460,6 +3631,8 @@ namespace SkillBridge.Infrastructure.Migrations
                 {
                     b.Navigation("AuditLogs");
 
+                    b.Navigation("BankVerificationRequests");
+
                     b.Navigation("Disputes");
 
                     b.Navigation("KycReviewedUsers");
@@ -3594,6 +3767,8 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Navigation("AuthTokens");
 
                     b.Navigation("BankAccounts");
+
+                    b.Navigation("BankVerificationRequests");
 
                     b.Navigation("ChatMessages");
 

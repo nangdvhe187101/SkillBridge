@@ -219,4 +219,107 @@ public class EscrowPaymentTests
 
         Assert.Contains("đã được hoàn tiền", ex.Message);
     }
+
+    [Fact]
+    public async Task ReleaseEscrowAsync_StudentMaster_EmployerNormal_ShouldDeduct3PercentCommission()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new EscrowPaymentService(dbContext, _loggerMock.Object);
+
+        var employerId = 50;
+        var studentId = 60;
+        var jobId = 606;
+        var jobBudget = 1000000m;
+
+        // Student has active Master Talent subscription (3% commission)
+        dbContext.Subscriptions.Add(new Subscription
+        {
+            UserId = studentId,
+            PlanName = "Master Talent",
+            Status = "active",
+            AmountPaid = 99000m,
+            StartedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        await service.ReleaseEscrowAsync(studentId, employerId, jobId, "Job Master SV", jobBudget);
+        await dbContext.SaveChangesAsync();
+
+        // Assert - Commission is 3% (30,000đ), Student payout is 970,000đ
+        var studentWallet = await dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == studentId);
+        Assert.NotNull(studentWallet);
+        Assert.Equal(970000m, studentWallet.Balance);
+
+        var receipt = await dbContext.Receipts.FirstOrDefaultAsync(r => r.JobId == jobId);
+        Assert.NotNull(receipt);
+        Assert.Equal(30000m, receipt.Commission);
+
+        // Crucial check: Absolutely NO commission transaction assigned to Employer
+        var employerCommissionTx = await dbContext.Transactions
+            .FirstOrDefaultAsync(t => t.UserId == employerId && t.Type == "commission");
+        Assert.Null(employerCommissionTx);
+
+        // Student receives commission deduction transaction
+        var studentCommissionTx = await dbContext.Transactions
+            .FirstOrDefaultAsync(t => t.UserId == studentId && t.Type == "commission");
+        Assert.NotNull(studentCommissionTx);
+        Assert.Equal(30000m, studentCommissionTx.Amount);
+    }
+
+    [Fact]
+    public async Task ReleaseEscrowAsync_StudentMaster_EmployerVip_ShouldTakeMinimumRate3Percent()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new EscrowPaymentService(dbContext, _loggerMock.Object);
+
+        var employerId = 70;
+        var studentId = 80;
+        var jobId = 707;
+        var jobBudget = 2000000m;
+
+        // Employer has VIP (5%)
+        dbContext.Subscriptions.Add(new Subscription
+        {
+            UserId = employerId,
+            PlanName = "VIP Business Suite",
+            Status = "active",
+            AmountPaid = 149000m,
+            StartedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+
+        // Student has Master Talent (3%)
+        dbContext.Subscriptions.Add(new Subscription
+        {
+            UserId = studentId,
+            PlanName = "Master Talent",
+            Status = "active",
+            AmountPaid = 99000m,
+            StartedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        await service.ReleaseEscrowAsync(studentId, employerId, jobId, "Job VIP & Master", jobBudget);
+        await dbContext.SaveChangesAsync();
+
+        // Assert - min(5%, 3%) = 3% => 60,000đ
+        var studentWallet = await dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == studentId);
+        Assert.NotNull(studentWallet);
+        Assert.Equal(1940000m, studentWallet.Balance); // 2,000,000 - 60,000 = 1,940,000
+
+        var receipt = await dbContext.Receipts.FirstOrDefaultAsync(r => r.JobId == jobId);
+        Assert.NotNull(receipt);
+        Assert.Equal(60000m, receipt.Commission);
+
+        // Verify employer has no commission transaction
+        var employerCommissionTx = await dbContext.Transactions
+            .FirstOrDefaultAsync(t => t.UserId == employerId && t.Type == "commission");
+        Assert.Null(employerCommissionTx);
+    }
 }

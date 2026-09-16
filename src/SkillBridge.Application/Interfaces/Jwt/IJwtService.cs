@@ -7,7 +7,7 @@ namespace SkillBridge.Application.Interfaces
 {
     public interface IJwtService
     {
-        string GenerateToken(int userId, string email, string roleCode, int tokenVersion);
+        string GenerateToken(int userId, string email, string roleCode, int tokenVersion, string? roleType = null);
         string GenerateRefreshTokenString();
     }
 }

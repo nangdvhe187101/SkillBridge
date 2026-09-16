@@ -1,0 +1,167 @@
+import { useMemo } from 'react';
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { AdminProvider, useAdmin } from '../context/AdminContext';
+import AdminUsers from '../components/AdminUsers';
+import AdminContent from '../components/AdminContent';
+import AdminDisputes from '../components/AdminDisputes';
+import AdminFinance from '../components/AdminFinance';
+import AdminPartners from '../components/AdminPartners';
+import AdminAnalytics from '../components/AdminAnalytics';
+import AdminOps from '../components/AdminOps';
+import AdminRoles from '../components/AdminRoles';
+import AdminMessages from '../components/AdminMessages';
+import AdminBankVerification from '../components/AdminBankVerification';
+import Icon from '../components/Icon';
+import { adminLogout } from '../api/authApi';
+
+const ROLE_MODULES = {
+  super: ['users', 'content', 'disputes', 'finance', 'bank-verification', 'partners', 'messages', 'analytics', 'ops', 'roles'],
+  moderator: ['content', 'messages'],
+  dispute: ['disputes', 'messages'],
+  finance: ['finance', 'bank-verification'],
+};
+const ROLE_WHOAMI = {
+  super: 'Super Admin', moderator: 'Content Moderator', dispute: 'Dispute Officer', finance: 'Finance Viewer',
+};
+
+const TABS = [
+  { id: 'users', path: '/users', icon: 'users', label: 'Người dùng' },
+  { id: 'content', path: '/content', icon: 'shield-check', label: 'Kiểm duyệt nội dung' },
+  { id: 'disputes', path: '/disputes', icon: 'scale', label: 'Tranh chấp' },
+  { id: 'finance', path: '/finance', icon: 'bank', label: 'Tài chính' },
+  { id: 'bank-verification', path: '/bank-verification', icon: 'shield-check', label: 'Duyệt ngân hàng' },
+  { id: 'partners', path: '/partners', icon: 'handshake', label: 'Đối tác & Quảng cáo' },
+  { id: 'messages', path: '/messages', icon: 'chat', label: 'Tin nhắn & Giám sát' },
+  { id: 'analytics', path: '/analytics', icon: 'chart-bar', label: 'Báo cáo & Phân tích' },
+  { id: 'ops', path: '/ops', icon: 'headset', label: 'Vận hành & CS' },
+  { id: 'roles', path: '/roles', icon: 'key', label: 'Phân quyền & URL Matrix' },
+];
+
+function AdminInner({ forcedTab }) {
+  const { viewRole, setViewRole, queue, disputes, tickets, adminChats } = useAdmin();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams();
+  const [searchParams] = useSearchParams();
+
+  const allowed = ROLE_MODULES[viewRole];
+
+  const currentTabId = useMemo(() => {
+    if (forcedTab) return forcedTab;
+    if (params.module) return params.module;
+    const p = location.pathname.replace('/', '');
+    if (p && allowed.includes(p)) return p;
+    const queryTab = searchParams.get('tab');
+    if (queryTab && allowed.includes(queryTab)) return queryTab;
+    return allowed[0];
+  }, [forcedTab, params.module, location.pathname, searchParams, allowed]);
+
+  const activeTab = allowed.includes(currentTabId) ? currentTabId : allowed[0];
+
+  const counts = {
+    content: queue.length,
+    disputes: disputes.filter((d) => d.status === 'open').length,
+    ops: tickets.filter((t) => t.status === 'open').length,
+    messages: adminChats.filter((c) => c.status === 'warned').length,
+  };
+
+  const handleTabClick = (t) => {
+    navigate(t.path);
+  };
+
+  return (
+    <div className="page active" style={{ minHeight: '100vh', background: 'var(--bg, #0f172a)' }}>
+      <div className="admin-topbar">
+        <div className="wrap">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <img
+              src="/logo.png"
+              alt="SkillBridge Logo"
+              style={{ height: 44, width: 'auto', borderRadius: 10, background: '#fff', padding: 3 }}
+            />
+            <div>
+              <h1 style={{ fontSize: 20, margin: 0 }}>Bảng điều khiển Quản trị SkillBridge</h1>
+              <p style={{ margin: 0, fontSize: 13 }}>Đăng nhập với vai trò: {ROLE_WHOAMI[viewRole]}</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div className="admin-role-switch">
+              <span style={{ paddingLeft: 10, fontSize: 12, color: '#A9A4CC' }}>Vai trò xem thử</span>
+              <select value={viewRole} onChange={(e) => setViewRole(e.target.value)}>
+                <option value="super">Super Admin (toàn quyền)</option>
+                <option value="moderator">Content Moderator</option>
+                <option value="dispute">Dispute Officer</option>
+                <option value="finance">Finance Viewer</option>
+              </select>
+            </div>
+            <button
+              onClick={adminLogout}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 8,
+                border: '1px solid #ef4444',
+                background: '#ef4444',
+                color: '#ffffff',
+                fontSize: 13.5,
+                fontWeight: 600,
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)',
+                transition: 'all 0.2s ease',
+              }}
+              title="Đăng xuất khỏi tài khoản Quản trị"
+            >
+              Đăng xuất
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="wrap admin-shell">
+        <nav className="admin-side">
+          {TABS.filter((t) => allowed.includes(t.id)).map((t) => (
+            <button
+              key={t.id}
+              className={'admin-tab' + (activeTab === t.id ? ' is-active' : '')}
+              onClick={() => handleTabClick(t)}
+            >
+              <span className="adm-ic" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name={t.icon} width="16" height="16" />
+              </span>
+              <span>{t.label}</span>
+              {counts[t.id] > 0 && <span className="adm-count">{counts[t.id]}</span>}
+            </button>
+          ))}
+        </nav>
+
+        <div className="admin-main">
+          {activeTab === 'users' && <AdminUsers />}
+          {activeTab === 'content' && <AdminContent />}
+          {activeTab === 'disputes' && <AdminDisputes />}
+          {activeTab === 'finance' && <AdminFinance />}
+          {activeTab === 'bank-verification' && (
+            <section className="adm-section active">
+              <div className="adm-head">
+                <h2>Xác thực tài khoản ngân hàng</h2>
+                <p>Đối soát và phê duyệt / từ chối thông tin tài khoản ngân hàng của sinh viên và nhà tuyển dụng.</p>
+              </div>
+              <AdminBankVerification />
+            </section>
+          )}
+          {activeTab === 'partners' && <AdminPartners />}
+          {activeTab === 'messages' && <AdminMessages />}
+          {activeTab === 'analytics' && <AdminAnalytics />}
+          {activeTab === 'ops' && <AdminOps />}
+          {activeTab === 'roles' && <AdminRoles />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function Admin({ forcedTab }) {
+  return (
+    <AdminProvider>
+      <AdminInner forcedTab={forcedTab} />
+    </AdminProvider>
+  );
+}

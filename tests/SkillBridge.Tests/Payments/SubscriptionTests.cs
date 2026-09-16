@@ -36,7 +36,7 @@ public class SubscriptionTests
         dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 50000m });
         await dbContext.SaveChangesAsync();
 
-        var request = new PurchaseSubscriptionRequest { PlanType = "VIP" }; // 199,000 VND
+        var request = new PurchaseSubscriptionRequest { PlanType = "EMP_VIP" }; // 149,000 VND
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<BusinessException>(() =>
@@ -45,38 +45,127 @@ public class SubscriptionTests
         Assert.Contains("không đủ", ex.Message);
     }
 
-    [Fact]
-    public async Task PurchaseSubscription_SufficientBalance_ShouldDeductBalanceAndCreateSubscription()
+    [Theory]
+    [InlineData("EMP_STARTER", 49000, "Employer Starter")]
+    [InlineData("EMP_GROWTH", 89000, "Employer Growth")]
+    [InlineData("EMP_VIP", 149000, "VIP Business Suite")]
+    [InlineData("STU_STARTER", 29000, "Student Starter")]
+    [InlineData("STU_PRO", 49000, "Freelance Pro")]
+    [InlineData("STU_MASTER", 99000, "Master Talent")]
+    public async Task PurchaseSubscription_AllSixTiers_ShouldDeductCorrectBalanceAndCreateActiveSubscription(
+        string planType, decimal expectedPrice, string expectedPlanName)
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
         var service = new SubscriptionService(dbContext, _loggerMock.Object);
 
-        var userId = 2;
-        dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 300000m });
+        var userId = 100;
+        dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 500000m });
         await dbContext.SaveChangesAsync();
 
-        var request = new PurchaseSubscriptionRequest { PlanType = "VIP" };
+        var request = new PurchaseSubscriptionRequest { PlanType = planType };
 
         // Act
         var result = await service.PurchaseSubscriptionAsync(userId, request);
 
         // Assert
         Assert.NotNull(result);
-        Assert.Equal("VIP Business Suite", result.PlanName);
-        Assert.Equal(199000m, result.AmountPaid);
+        Assert.Equal(expectedPlanName, result.PlanName);
+        Assert.Equal(expectedPrice, result.AmountPaid);
         Assert.Equal("active", result.Status);
 
         var updatedWallet = await dbContext.Wallets.FirstAsync(w => w.UserId == userId);
-        Assert.Equal(101000m, updatedWallet.Balance); // 300,000 - 199,000 = 101,000
+        Assert.Equal(500000m - expectedPrice, updatedWallet.Balance);
 
         var transaction = await dbContext.Transactions.FirstOrDefaultAsync(t => t.UserId == userId && t.Type == "subscription");
         Assert.NotNull(transaction);
-        Assert.Equal(199000m, transaction.Amount);
+        Assert.Equal(expectedPrice, transaction.Amount);
         Assert.Equal(-1, transaction.Sign);
 
         var sub = await dbContext.Subscriptions.FirstOrDefaultAsync(s => s.UserId == userId && s.Status == "active");
         Assert.NotNull(sub);
-        Assert.Equal("VIP Business Suite", sub.PlanName);
+        Assert.Equal(expectedPlanName, sub.PlanName);
+    }
+
+    [Fact]
+    public async Task PurchaseSubscription_SamePlanRenewal_ShouldExtendExistingRenewalDateByOneMonth()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new SubscriptionService(dbContext, _loggerMock.Object);
+
+        var userId = 200;
+        dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 300000m });
+
+        var initialRenewalDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(20));
+        dbContext.Subscriptions.Add(new Subscription
+        {
+            UserId = userId,
+            PlanName = "Employer Starter",
+            Status = "active",
+            AmountPaid = 49000m,
+            RenewalDate = initialRenewalDate,
+            StartedAt = DateTime.UtcNow.AddDays(-10),
+            UpdatedAt = DateTime.UtcNow.AddDays(-10)
+        });
+        await dbContext.SaveChangesAsync();
+
+        var request = new PurchaseSubscriptionRequest { PlanType = "EMP_STARTER" };
+
+        // Act
+        var result = await service.PurchaseSubscriptionAsync(userId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        var expectedRenewal = initialRenewalDate.AddMonths(1);
+        Assert.Equal(expectedRenewal, result.RenewalDate);
+
+        var activeSubs = await dbContext.Subscriptions
+            .Where(s => s.UserId == userId && s.Status == "active")
+            .ToListAsync();
+        Assert.Single(activeSubs);
+        Assert.Equal(expectedRenewal, activeSubs[0].RenewalDate);
+    }
+
+    [Fact]
+    public async Task PurchaseSubscription_UpgradeToHigherPlan_ShouldCancelOldPlanAndActivateNewPlan()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new SubscriptionService(dbContext, _loggerMock.Object);
+
+        var userId = 300;
+        dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 300000m });
+
+        dbContext.Subscriptions.Add(new Subscription
+        {
+            UserId = userId,
+            PlanName = "Student Starter",
+            Status = "active",
+            AmountPaid = 29000m,
+            RenewalDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(15)),
+            StartedAt = DateTime.UtcNow.AddDays(-15),
+            UpdatedAt = DateTime.UtcNow.AddDays(-15)
+        });
+        await dbContext.SaveChangesAsync();
+
+        var request = new PurchaseSubscriptionRequest { PlanType = "STU_MASTER" };
+
+        // Act
+        var result = await service.PurchaseSubscriptionAsync(userId, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("Master Talent", result.PlanName);
+        Assert.Equal(99000m, result.AmountPaid);
+
+        var oldSub = await dbContext.Subscriptions
+            .FirstOrDefaultAsync(s => s.UserId == userId && s.PlanName == "Student Starter");
+        Assert.NotNull(oldSub);
+        Assert.Equal("cancelled", oldSub.Status);
+
+        var newSub = await dbContext.Subscriptions
+            .FirstOrDefaultAsync(s => s.UserId == userId && s.PlanName == "Master Talent" && s.Status == "active");
+        Assert.NotNull(newSub);
     }
 }

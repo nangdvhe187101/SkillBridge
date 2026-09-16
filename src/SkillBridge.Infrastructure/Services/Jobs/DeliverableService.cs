@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Jobs;
+using SkillBridge.Application.Interfaces;
 using SkillBridge.Application.Interfaces.Jobs;
 using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Application.Interfaces.Media;
@@ -28,6 +29,7 @@ public class DeliverableService : IDeliverableService
     private readonly IEscrowPaymentService _escrowPaymentService;
     private readonly IUserReliabilityService _reliabilityService;
     private readonly INotificationService _notificationService;
+    private readonly IEmailService? _emailService;
     private readonly ILogger<DeliverableService> _logger;
 
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -72,7 +74,8 @@ public class DeliverableService : IDeliverableService
         IEscrowPaymentService escrowPaymentService,
         IUserReliabilityService reliabilityService,
         INotificationService notificationService,
-        ILogger<DeliverableService> logger)
+        ILogger<DeliverableService> logger,
+        IEmailService? emailService = null)
     {
         _dbContext = dbContext;
         _storageService = storageService;
@@ -81,6 +84,7 @@ public class DeliverableService : IDeliverableService
         _reliabilityService = reliabilityService;
         _notificationService = notificationService;
         _logger = logger;
+        _emailService = emailService;
     }
 
     public async Task<List<DeliverableDto>> GetDeliverablesByJobIdAsync(
@@ -349,6 +353,28 @@ public class DeliverableService : IDeliverableService
             _logger.LogWarning(ex, "Lỗi khi gửi thông báo nộp sản phẩm cho Nhà tuyển dụng {EmployerId} cho Job {JobId}.", job.EmployerId, jobId);
         }
 
+        if (_emailService != null)
+        {
+            try
+            {
+                var employer = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == job.EmployerId, cancellationToken);
+                var student = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == studentId, cancellationToken);
+                if (employer != null && !string.IsNullOrWhiteSpace(employer.Email))
+                {
+                    await _emailService.SendDeliverableSubmittedEmailAsync(
+                        employer.Email,
+                        employer.FullName,
+                        job.Title,
+                        student?.FullName ?? "Sinh viên",
+                        72);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Lỗi khi gửi email thông báo nộp bài cho Nhà tuyển dụng {EmployerId} Job #{JobId}.", job.EmployerId, jobId);
+            }
+        }
+
         // Load lại với quan hệ
         var created = await _dbContext.JobDeliverables
             .Include(d => d.Student)
@@ -468,9 +494,11 @@ public class DeliverableService : IDeliverableService
                 // Tăng số việc đã xong và điểm uy tín cho sinh viên (qua IUserReliabilityService)
                 await _reliabilityService.RewardCompletionAsync(currentDeliverable.StudentId, 3, cancellationToken);
 
-                // Tính toán hoa hồng nền tảng (VIP Business: 5%, Thường: 10%)
-                decimal commissionRate = 0.10m;
+                // Tính toán hoa hồng nền tảng: min(studentRate, employerRate)
                 var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+                // 1. Tỷ lệ phí theo NTD: VIP Business Suite được ưu đãi 5% cho SV, ngược lại mặc định 10%
+                decimal employerRate = PaymentConstants.DefaultCommissionRate; // 10%
                 var hasVipSubscription = await _dbContext.Subscriptions
                     .AnyAsync(s => s.UserId == currentJob.EmployerId 
                                 && s.Status == PaymentConstants.ActiveSubscriptionStatus 
@@ -478,8 +506,33 @@ public class DeliverableService : IDeliverableService
                                 && (s.RenewalDate == null || s.RenewalDate >= today), cancellationToken);
                 if (hasVipSubscription)
                 {
-                    commissionRate = 0.05m;
+                    employerRate = PaymentConstants.ProOrVipCommissionRate; // 5%
                 }
+
+                // 2. Tỷ lệ phí theo Sinh viên: Master Talent (3%), Freelance Pro (5%), Student Starter (8%), Thường (10%)
+                decimal studentRate = PaymentConstants.DefaultCommissionRate; // 10%
+                var activeStudentSubs = await _dbContext.Subscriptions
+                    .Where(s => s.UserId == currentDeliverable.StudentId
+                             && s.Status == PaymentConstants.ActiveSubscriptionStatus
+                             && (s.RenewalDate == null || s.RenewalDate >= today))
+                    .Select(s => s.PlanName)
+                    .ToListAsync(cancellationToken);
+
+                if (activeStudentSubs.Any(p => p.Contains(PaymentConstants.MasterPlanKeyword, StringComparison.OrdinalIgnoreCase)))
+                {
+                    studentRate = PaymentConstants.MasterCommissionRate; // 3%
+                }
+                else if (activeStudentSubs.Any(p => p.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase)))
+                {
+                    studentRate = PaymentConstants.ProOrVipCommissionRate; // 5%
+                }
+                else if (activeStudentSubs.Any(p => p.Contains(PaymentConstants.StarterPlanKeyword, StringComparison.OrdinalIgnoreCase)))
+                {
+                    studentRate = PaymentConstants.StarterCommissionRate; // 8%
+                }
+
+                // 3. Tỷ lệ áp dụng là mức có lợi nhất cho sinh viên: min(studentRate, employerRate)
+                decimal commissionRate = Math.Min(studentRate, employerRate);
 
                 computedBudget = currentJob.Budget;
                 computedCommission = Math.Round(currentJob.Budget * commissionRate);

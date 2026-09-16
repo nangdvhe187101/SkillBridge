@@ -1,8 +1,11 @@
 using System;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Payments;
@@ -16,11 +19,19 @@ public class WalletService : IWalletService
 {
     private readonly SkillBridgeDbContext _dbContext;
     private readonly ILogger<WalletService> _logger;
+    private readonly IConfiguration? _configuration;
+    private readonly HttpClient? _httpClient;
 
-    public WalletService(SkillBridgeDbContext dbContext, ILogger<WalletService> logger)
+    public WalletService(
+        SkillBridgeDbContext dbContext,
+        ILogger<WalletService> logger,
+        IConfiguration? configuration = null,
+        HttpClient? httpClient = null)
     {
         _dbContext = dbContext;
         _logger = logger;
+        _configuration = configuration;
+        _httpClient = httpClient;
     }
 
     public async Task<WalletResponseDto> GetMyWalletAsync(int userId, CancellationToken cancellationToken = default)
@@ -79,13 +90,63 @@ public class WalletService : IWalletService
             .ToListAsync(cancellationToken);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
-        var activeSubscriptions = await _dbContext.Subscriptions
+        var activeSub = await _dbContext.Subscriptions
             .AsNoTracking()
             .Where(s => s.UserId == userId 
                      && s.Status == PaymentConstants.ActiveSubscriptionStatus
                      && (s.RenewalDate == null || s.RenewalDate >= today))
-            .Select(s => s.PlanName)
-            .ToListAsync(cancellationToken);
+            .OrderByDescending(s => s.UpdatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        string? planCode = null;
+        string? planName = activeSub?.PlanName;
+        DateTime? expiresAt = activeSub?.RenewalDate.HasValue == true
+            ? activeSub.RenewalDate.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+            : null;
+        decimal effectiveCommissionRate = PaymentConstants.DefaultCommissionRate; // 10%
+        string? badge = null;
+
+        if (activeSub != null)
+        {
+            var pName = activeSub.PlanName;
+            if (pName.Contains(PaymentConstants.MasterPlanKeyword, StringComparison.OrdinalIgnoreCase))
+            {
+                planCode = PaymentConstants.PlanStuMaster;
+                effectiveCommissionRate = PaymentConstants.MasterCommissionRate; // 3%
+                badge = "master";
+            }
+            else if (pName.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase))
+            {
+                planCode = PaymentConstants.PlanEmpVip;
+                effectiveCommissionRate = PaymentConstants.ProOrVipCommissionRate; // 5%
+                badge = "vip";
+            }
+            else if (pName.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase))
+            {
+                planCode = PaymentConstants.PlanStuPro;
+                effectiveCommissionRate = PaymentConstants.ProOrVipCommissionRate; // 5%
+                badge = "pro";
+            }
+            else if (pName.Contains(PaymentConstants.GrowthPlanKeyword, StringComparison.OrdinalIgnoreCase))
+            {
+                planCode = PaymentConstants.PlanEmpGrowth;
+                badge = "growth";
+            }
+            else if (pName.Contains(PaymentConstants.StarterPlanKeyword, StringComparison.OrdinalIgnoreCase))
+            {
+                if (pName.Contains("Student", StringComparison.OrdinalIgnoreCase))
+                {
+                    planCode = PaymentConstants.PlanStuStarter;
+                    effectiveCommissionRate = PaymentConstants.StarterCommissionRate; // 8%
+                    badge = "starter";
+                }
+                else
+                {
+                    planCode = PaymentConstants.PlanEmpStarter;
+                    badge = "verified";
+                }
+            }
+        }
 
         return new WalletResponseDto
         {
@@ -94,9 +155,91 @@ public class WalletService : IWalletService
             EscrowLocked = escrowLocked,
             Transactions = txs,
             Receipts = receipts,
-            HasVipSubscription = activeSubscriptions.Any(p => p.Contains(PaymentConstants.VipPlanKeyword)),
-            HasProSubscription = activeSubscriptions.Any(p => p.Contains(PaymentConstants.ProPlanKeyword))
+            HasVipSubscription = activeSub?.PlanName.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase) == true,
+            HasProSubscription = activeSub?.PlanName.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase) == true,
+            ActivePlanCode = planCode,
+            ActivePlanName = planName,
+            SubscriptionExpiresAt = expiresAt,
+            EffectiveCommissionRate = effectiveCommissionRate,
+            Badge = badge,
+            BankBin = wallet?.BankBin,
+            BankName = wallet?.BankName,
+            AccountNumber = wallet?.AccountNumber,
+            AccountHolder = wallet?.AccountHolder,
+            BankBranch = wallet?.BankBranch,
+            IsBankVerified = wallet?.IsBankVerified ?? false,
+            BankLinkedAt = wallet?.BankLinkedAt
         };
+    }
+
+    public async Task<WalletResponseDto> UpdateBankAccountAsync(int userId, UpdateBankAccountRequest request, CancellationToken cancellationToken = default)
+    {
+        if (request == null)
+        {
+            throw new BusinessException("Thông tin tài khoản ngân hàng không hợp lệ.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.BankName) || string.IsNullOrWhiteSpace(request.AccountNumber))
+        {
+            throw new BusinessException("Vui lòng nhập đầy đủ tên ngân hàng và số tài khoản.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.AccountHolder))
+        {
+            throw new BusinessException("Vui lòng cung cấp tên chủ tài khoản ngân hàng.");
+        }
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+        if (user == null)
+        {
+            throw new BusinessException("Không tìm thấy thông tin người dùng trong hệ thống.");
+        }
+
+        var wallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, cancellationToken);
+        if (wallet != null && wallet.IsBankVerified)
+        {
+            var cleanNewAcc = request.AccountNumber?.Trim();
+            if (!string.Equals(wallet.AccountNumber, cleanNewAcc, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BusinessException("Không thể sửa trực tiếp số tài khoản đã được xác thực. Vui lòng tạo yêu cầu xác thực ngân hàng mới.");
+            }
+        }
+
+        var cleanProfileName = user.FullName != null ? VietnameseConverter.RemoveVietnameseTones(user.FullName) : string.Empty;
+        var cleanInputHolder = !string.IsNullOrWhiteSpace(request.AccountHolder)
+            ? VietnameseConverter.RemoveVietnameseTones(request.AccountHolder)
+            : cleanProfileName;
+
+        if (!string.IsNullOrEmpty(cleanProfileName) && !string.Equals(cleanProfileName, cleanInputHolder, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Tên chủ tài khoản không khớp với tên hồ sơ của bạn.");
+        }
+
+        if (wallet == null)
+        {
+            wallet = new Wallet
+            {
+                UserId = userId,
+                Balance = 0
+            };
+            await _dbContext.Wallets.AddAsync(wallet, cancellationToken);
+        }
+
+        wallet.BankBin = request.BankBin?.Trim();
+        wallet.BankName = request.BankName?.Trim();
+        wallet.AccountNumber = request.AccountNumber?.Trim();
+        wallet.AccountHolder = !string.IsNullOrWhiteSpace(request.AccountHolder)
+            ? request.AccountHolder.Trim().ToUpper()
+            : (user.FullName != null ? VietnameseConverter.RemoveVietnameseTones(user.FullName).ToUpper() : "CHỦ TÀI KHOẢN");
+        wallet.BankBranch = request.Branch?.Trim();
+        wallet.IsBankVerified = true;
+        wallet.BankLinkedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        _logger.LogInformation("Người dùng {UserId} đã liên kết tài khoản ngân hàng {BankName} - {AccountMask} thành công.", 
+            userId, wallet.BankName, wallet.AccountNumber?.Length > 4 ? "****" + wallet.AccountNumber[^4..] : wallet.AccountNumber);
+
+        return await GetMyWalletAsync(userId, cancellationToken);
     }
 
     private async Task<Wallet?> GetWalletWithLockAsync(int userId, CancellationToken ct)

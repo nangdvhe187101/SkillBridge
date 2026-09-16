@@ -94,7 +94,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Gửi OTP quên mật khẩu thất bại cho user {UserId}", user.Id);
+                logger.LogError(ex, "Gửi OTP quên mật khẩu thất bại cho user {UserId}. Mã OTP (dành cho DEV): {Otp}", user.Id, otp);
             }
 
             return GenericOtpMessage;

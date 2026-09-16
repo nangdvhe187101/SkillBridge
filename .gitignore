@@ -18,8 +18,16 @@ appsettings.Development.json
 
 # React / Node
 node_modules/
+**/node_modules/
 frontend/dist/
 frontend/.vite/
+frontend-user/dist/
+frontend-user/.vite/
+frontend-admin/dist/
+frontend-admin/.vite/
+*.env
+*.env.*
+!.env.example
 
 # IDE
 .idea/

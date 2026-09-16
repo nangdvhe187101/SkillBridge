@@ -58,9 +58,28 @@ public class JobService : IJobService
             throw new BusinessException("Danh mục công việc không tồn tại.");
         }
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var activeEmployerSub = await _dbContext.Subscriptions
+            .Where(s => s.UserId == employerId 
+                     && s.Status == PaymentConstants.ActiveSubscriptionStatus
+                     && (s.RenewalDate == null || s.RenewalDate >= today))
+            .Select(s => s.PlanName)
+            .FirstOrDefaultAsync();
+
+        int tierRevisionLimit = category.DefaultRevisionLimit; // Mặc định 2
+        if (activeEmployerSub != null)
+        {
+            if (activeEmployerSub.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                tierRevisionLimit = Math.Max(tierRevisionLimit, 5);
+            else if (activeEmployerSub.Contains(PaymentConstants.GrowthPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                tierRevisionLimit = Math.Max(tierRevisionLimit, 4);
+            else if (activeEmployerSub.Contains(PaymentConstants.StarterPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                tierRevisionLimit = Math.Max(tierRevisionLimit, 3);
+        }
+
         var revisionLimit = request.RevisionLimit.HasValue && request.RevisionLimit.Value >= 0
             ? request.RevisionLimit.Value
-            : category.DefaultRevisionLimit;
+            : tierRevisionLimit;
 
         var job = new Job
         {
@@ -286,6 +305,8 @@ public class JobService : IJobService
         job.Status = "open";
         job.HiredApplicantId = null;
         job.DeadlineAt = null;
+        job.DeadlineWarningSentAt = null;
+        job.DeadlineOverdueSentAt = null;
         job.EscrowAmount = null;
         job.RevisionCount = 0;
         job.UpdatedAt = DateTime.UtcNow;

@@ -225,4 +225,7 @@ public partial class User
 
     [InverseProperty("User")]
     public virtual ICollection<PaymentOrder> PaymentOrders { get; set; } = new List<PaymentOrder>();
+
+    [InverseProperty("User")]
+    public virtual ICollection<BankVerificationRequest> BankVerificationRequests { get; set; } = new List<BankVerificationRequest>();
 }

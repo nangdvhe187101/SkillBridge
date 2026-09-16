@@ -19,6 +19,7 @@ public class CreatePaymentOrderResponse
     public string? AccountNumber { get; set; }
     public string? BankCode { get; set; }
     public string? BankName { get; set; }
+    public string? AccountName { get; set; }
     public string? TransferContent { get; set; }
     public DateTime ExpiresAt { get; set; }
 }

@@ -145,4 +145,77 @@ public class WalletServiceTests
         Assert.Equal(500000m, r.Total);
         Assert.Equal(450000m, r.NetPayout); // 500,000 - 50,000 = 450,000
     }
+
+    [Fact]
+    public async Task UpdateBankAccountAsync_WithMatchingName_ShouldSaveSuccessfullyAndNormalize()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new WalletService(dbContext, _loggerMock.Object);
+
+        var user = new User
+        {
+            Id = 15,
+            FullName = "Đào Văn Năng",
+            Email = "nangdv@fpt.edu.vn",
+            PasswordHash = "x",
+            RoleId = 2,
+            AccountStatus = "active",
+            KycStatus = "verified"
+        };
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        var request = new SkillBridge.Application.DTOs.Payments.UpdateBankAccountRequest
+        {
+            BankBin = "970422",
+            BankName = "MB Bank",
+            AccountNumber = "0987654321",
+            AccountHolder = "DAO VAN NANG",
+            Branch = "Chi nhánh Hà Nội"
+        };
+
+        // Act
+        var result = await service.UpdateBankAccountAsync(15, request);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("MB Bank", result.BankName);
+        Assert.Equal("0987654321", result.AccountNumber);
+        Assert.Equal("DAO VAN NANG", result.AccountHolder);
+        Assert.True(result.IsBankVerified);
+    }
+
+    [Fact]
+    public async Task UpdateBankAccountAsync_WithMismatchedName_ShouldThrowBusinessException()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new WalletService(dbContext, _loggerMock.Object);
+
+        var user = new User
+        {
+            Id = 16,
+            FullName = "Nguyễn Văn A",
+            Email = "nguyenvana@gmail.com",
+            PasswordHash = "x",
+            RoleId = 1,
+            AccountStatus = "active",
+            KycStatus = "verified"
+        };
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        var request = new SkillBridge.Application.DTOs.Payments.UpdateBankAccountRequest
+        {
+            BankBin = "970436",
+            BankName = "Vietcombank",
+            AccountNumber = "123456789",
+            AccountHolder = "TRAN THI B" // Mismatched name
+        };
+
+        // Act & Assert
+        await Assert.ThrowsAsync<SkillBridge.Application.Common.BusinessException>(() =>
+            service.UpdateBankAccountAsync(16, request));
+    }
 }

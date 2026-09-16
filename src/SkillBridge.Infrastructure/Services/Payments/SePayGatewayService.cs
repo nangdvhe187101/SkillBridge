@@ -25,17 +25,18 @@ public class SePayGatewayService : ISePayGatewayService
         _logger = logger;
     }
 
-    public (string AccountNumber, string BankCode, string BankName) GetBankInfo()
+    public (string AccountNumber, string BankCode, string BankName, string AccountName) GetBankInfo()
     {
         var acc = _config["SePay:AccountNumber"] ?? "00000807297";
         var bank = _config["SePay:BankCode"] ?? "TPBank";
+        var bankName = _config["SePay:BankName"] ?? "TPBank";
         var name = _config["SePay:AccountName"] ?? "DAO VAN NANG";
-        return (acc, bank, name);
+        return (acc, bank, bankName, name);
     }
 
     public string GenerateVietQrUrl(string orderCode, decimal amount)
     {
-        var (acc, bank, _) = GetBankInfo();
+        var (acc, bank, _, _) = GetBankInfo();
         var roundedAmount = (long)Math.Round(amount, MidpointRounding.AwayFromZero);
         var encodedDes = Uri.EscapeDataString(orderCode);
 

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
+using SkillBridge.Application.Interfaces;
 using SkillBridge.Application.Interfaces.Payments;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
@@ -13,12 +14,14 @@ namespace SkillBridge.Infrastructure.Services.Payments;
 public class EscrowPaymentService : IEscrowPaymentService
 {
     private readonly SkillBridgeDbContext _dbContext;
+    private readonly IEmailService? _emailService;
     private readonly ILogger<EscrowPaymentService> _logger;
 
-    public EscrowPaymentService(SkillBridgeDbContext dbContext, ILogger<EscrowPaymentService> logger)
+    public EscrowPaymentService(SkillBridgeDbContext dbContext, ILogger<EscrowPaymentService> logger, IEmailService? emailService = null)
     {
         _dbContext = dbContext;
         _logger = logger;
+        _emailService = emailService;
     }
 
     public async Task HoldEscrowAsync(int employerId, int jobId, string jobTitle, decimal amount, CancellationToken cancellationToken = default)
@@ -68,9 +71,11 @@ public class EscrowPaymentService : IEscrowPaymentService
             throw new BusinessException($"Công việc #{jobId} đã được giải ngân thù lao trước đó.");
         }
 
-        // Xác định tỷ lệ hoa hồng nền tảng (VIP Business: 5%, Tài khoản thông thường: 10%)
-        decimal commissionRate = 0.10m;
+        // Xác định tỷ lệ hoa hồng nền tảng: min(studentRate, employerRate)
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // 1. Tỷ lệ phí theo NTD: VIP Business Suite được ưu đãi 5% cho SV, ngược lại mặc định 10%
+        decimal employerRate = PaymentConstants.DefaultCommissionRate; // 10%
         var hasVipSubscription = await _dbContext.Subscriptions
             .AnyAsync(s => s.UserId == employerId 
                         && s.Status == PaymentConstants.ActiveSubscriptionStatus 
@@ -78,8 +83,33 @@ public class EscrowPaymentService : IEscrowPaymentService
                         && (s.RenewalDate == null || s.RenewalDate >= today), cancellationToken);
         if (hasVipSubscription)
         {
-            commissionRate = 0.05m;
+            employerRate = PaymentConstants.ProOrVipCommissionRate; // 5%
         }
+
+        // 2. Tỷ lệ phí theo Sinh viên: Master Talent (3%), Freelance Pro (5%), Student Starter (8%), Thường (10%)
+        decimal studentRate = PaymentConstants.DefaultCommissionRate; // 10%
+        var activeStudentSubs = await _dbContext.Subscriptions
+            .Where(s => s.UserId == studentId
+                     && s.Status == PaymentConstants.ActiveSubscriptionStatus
+                     && (s.RenewalDate == null || s.RenewalDate >= today))
+            .Select(s => s.PlanName)
+            .ToListAsync(cancellationToken);
+
+        if (activeStudentSubs.Any(p => p.Contains(PaymentConstants.MasterPlanKeyword, StringComparison.OrdinalIgnoreCase)))
+        {
+            studentRate = PaymentConstants.MasterCommissionRate; // 3%
+        }
+        else if (activeStudentSubs.Any(p => p.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase)))
+        {
+            studentRate = PaymentConstants.ProOrVipCommissionRate; // 5%
+        }
+        else if (activeStudentSubs.Any(p => p.Contains(PaymentConstants.StarterPlanKeyword, StringComparison.OrdinalIgnoreCase)))
+        {
+            studentRate = PaymentConstants.StarterCommissionRate; // 8%
+        }
+
+        // 3. Tỷ lệ áp dụng là mức có lợi nhất cho sinh viên: min(studentRate, employerRate)
+        decimal commissionRate = Math.Min(studentRate, employerRate);
 
         var commissionAmount = Math.Round(amount * commissionRate);
         var studentPayout = amount - commissionAmount;
@@ -146,6 +176,27 @@ public class EscrowPaymentService : IEscrowPaymentService
 
         _logger.LogInformation("Đã giải ngân thù lao {Payout:N0}đ (phí sàn {Commission:N0}đ từ tổng {Budget:N0}đ) cho sinh viên {StudentId} từ Job #{JobId}.",
             studentPayout, commissionAmount, amount, studentId, jobId);
+
+        if (_emailService != null)
+        {
+            try
+            {
+                var student = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == studentId, cancellationToken);
+                if (student != null && !string.IsNullOrWhiteSpace(student.Email))
+                {
+                    await _emailService.SendPayoutSuccessEmailAsync(
+                        student.Email,
+                        student.FullName,
+                        jobTitle,
+                        studentPayout,
+                        commissionAmount);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Lỗi khi gửi email giải ngân thành công cho sinh viên {StudentId} Job #{JobId}.", studentId, jobId);
+            }
+        }
     }
 
     public async Task RefundEscrowAsync(int employerId, int jobId, string jobTitle, decimal amount, string reason, CancellationToken cancellationToken = default)
