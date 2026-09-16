@@ -21,7 +21,7 @@ public class BankVerificationService : IBankVerificationService
 {
     private readonly SkillBridgeDbContext _dbContext;
     private readonly ILogger<BankVerificationService> _logger;
-    private readonly string? _encryptionKey;
+    private readonly string _encryptionKey;
 
     public BankVerificationService(
         SkillBridgeDbContext dbContext,
@@ -30,7 +30,9 @@ public class BankVerificationService : IBankVerificationService
     {
         _dbContext = dbContext;
         _logger = logger;
-        _encryptionKey = configuration?["Encryption:Key"];
+        _encryptionKey = configuration?["Encryption:Key"]
+            ?? Environment.GetEnvironmentVariable("ENCRYPTION_KEY")
+            ?? throw new InvalidOperationException("Encryption:Key chưa được cấu hình. Không cho phép dùng khóa mặc định trong source code.");
     }
 
     public async Task<BankVerificationResponseDto> CreateRequestAsync(int userId, CreateBankVerificationDto dto, string? ipAddress = null, CancellationToken ct = default)
@@ -60,6 +62,16 @@ public class BankVerificationService : IBankVerificationService
         if (user == null)
         {
             throw new BusinessException("Không tìm thấy thông tin người dùng trong hệ thống.");
+        }
+
+        // Chống Race Condition (TOCTOU): sử dụng transaction + row lock nếu là relational DB
+        var hasRelational = _dbContext.Database.IsRelational();
+        await using var transaction = hasRelational ? await _dbContext.Database.BeginTransactionAsync(ct) : null;
+
+        if (hasRelational)
+        {
+            // Lock ví của user để tuần tự hóa các request đồng thời của cùng 1 user
+            await _dbContext.Wallets.FromSqlRaw("SELECT * FROM wallets WHERE user_id = {0} FOR UPDATE", userId).FirstOrDefaultAsync(ct);
         }
 
         // Rule 1: 1 user chỉ có tối đa 1 record pending tại 1 thời điểm
@@ -113,7 +125,20 @@ public class BankVerificationService : IBankVerificationService
         };
 
         await _dbContext.BankVerificationRequests.AddAsync(request, ct);
-        await _dbContext.SaveChangesAsync(ct);
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(ct);
+            if (transaction != null)
+            {
+                await transaction.CommitAsync(ct);
+            }
+        }
+        catch (DbUpdateException ex)
+        {
+            _logger.LogWarning(ex, "Phát hiện xung đột hoặc race condition khi tạo yêu cầu cho UserId={UserId}", userId);
+            throw new BusinessException("Bạn đang có một yêu cầu xác thực đang chờ duyệt. Vui lòng chờ admin xử lý hoặc hủy yêu cầu trước khi tạo mới.");
+        }
 
         _logger.LogInformation("Người dùng {UserId} đã tạo yêu cầu xác thực ngân hàng #{RequestId} ({BankName} - {Mask})", 
             userId, request.Id, request.BankName, mask);
@@ -288,6 +313,23 @@ public class BankVerificationService : IBankVerificationService
 
         var normalizedUser = VietnameseConverter.RemoveVietnameseTones(request.User?.FullName);
 
+        // Kiểm tra chống Sybil: phát hiện nếu STK này đã được xác thực cho tài khoản người dùng khác
+        var conflictUser = await _dbContext.BankAccounts
+            .AsNoTracking()
+            .Include(b => b.User)
+            .Where(b => b.UserId != request.UserId && b.IsVerified && b.AccountNumberMask == request.AccountNumberMask && b.BankName == request.BankName)
+            .Select(b => new { b.UserId, b.User.FullName, b.User.Email })
+            .FirstOrDefaultAsync(ct);
+
+        bool hasConflict = conflictUser != null;
+        string? conflictWarning = null;
+        if (conflictUser != null)
+        {
+            conflictWarning = $"CẢNH BÁO PHÁT HIỆN TRÙNG LẶP: Số tài khoản này (đuôi {request.AccountNumberMask}) đã được xác thực thành công cho tài khoản người dùng khác (UserId: {conflictUser.UserId} - {conflictUser.FullName} - {conflictUser.Email}). Hãy kiểm tra đối soát kỹ lưỡng để phòng chống tài khoản ảo (Sybil attack).";
+            _logger.LogWarning("SUSPICIOUS_SYBIL: STK {Mask} cua UserId={UserId} trung voi verified BankAccount cua UserId={ConflictUserId}",
+                request.AccountNumberMask, request.UserId, conflictUser.UserId);
+        }
+
         return new AdminBankVerificationDetailDto
         {
             Id = request.Id,
@@ -307,7 +349,9 @@ public class BankVerificationService : IBankVerificationService
             ReviewedByAdminName = request.ReviewedByAdmin?.Name,
             RejectionReason = request.RejectionReason,
             BankReturnedName = request.BankReturnedName,
-            RequestIpAddress = request.RequestIpAddress
+            RequestIpAddress = request.RequestIpAddress,
+            HasConflictWithOtherUser = hasConflict,
+            ConflictWarning = conflictWarning
         };
     }
 
@@ -342,6 +386,19 @@ public class BankVerificationService : IBankVerificationService
         {
             _logger.LogWarning("Admin {AdminMemberId} phê duyệt yêu cầu #{RequestId} dù tên không khớp hoàn toàn: Hồ sơ [{Profile}] vs Ngân hàng [{Returned}]",
                 adminMemberId, requestId, cleanProfileName, cleanReturnedConverted);
+        }
+
+        // Chống Sybil: phát hiện nếu STK trùng đã được verified bởi user khác
+        var conflictExists = await _dbContext.BankAccounts.AnyAsync(b =>
+            b.AccountNumberMask == request.AccountNumberMask &&
+            b.BankName == request.BankName &&
+            b.IsVerified &&
+            b.UserId != request.UserId, ct);
+
+        if (conflictExists)
+        {
+            _logger.LogWarning("SUSPICIOUS: STK {Mask} trùng đã verified bởi user khác. RequestId={RequestId}, UserId={UserId}",
+                request.AccountNumberMask, requestId, request.UserId);
         }
 
         request.Status = BankVerificationStatus.Approved;

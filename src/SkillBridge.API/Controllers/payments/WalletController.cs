@@ -46,16 +46,6 @@ public class WalletController : ControllerBase
     }
 
     [Authorize]
-    [HttpPost("verify-bank-account")]
-    [EnableRateLimiting("GeneralApiPolicy")]
-    public async Task<IActionResult> VerifyBankAccount([FromBody] VerifyBankAccountRequest request, CancellationToken cancellationToken)
-    {
-        var userId = User.GetRequiredUserId();
-        var result = await _walletService.VerifyBankAccountAsync(userId, request, cancellationToken);
-        return Ok(result);
-    }
-
-    [Authorize]
     [HttpPost("bank-verification/request")]
     [EnableRateLimiting("GeneralApiPolicy")]
     public async Task<IActionResult> CreateVerificationRequest(

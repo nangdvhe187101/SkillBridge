@@ -18,13 +18,6 @@ export async function updateBankAccount(bankData) {
   });
 }
 
-export async function verifyBankAccount(data) {
-  return apiFetch('/wallets/verify-bank-account', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-}
-
 // Bank Verification (Admin manual review flow)
 export async function createBankVerificationRequest(data) {
   return apiFetch('/wallets/bank-verification/request', {

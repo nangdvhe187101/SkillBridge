@@ -11,7 +11,7 @@ namespace SkillBridge.API.Controllers.admin;
 
 [ApiController]
 [Route("api/admin/bank-verification")]
-[Authorize]
+[Authorize(Policy = "RequireAdminRole")]
 public class AdminBankVerificationController : ControllerBase
 {
     private readonly IBankVerificationService _bankVerificationService;

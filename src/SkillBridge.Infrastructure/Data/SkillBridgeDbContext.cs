@@ -779,6 +779,12 @@ public partial class SkillBridgeDbContext : DbContext
             entity.HasIndex(e => new { e.UserId, e.Status }, "idx_bank_verif_user_status");
             entity.HasIndex(e => new { e.Status, e.SubmittedAt }, "idx_bank_verif_status_submitted");
 
+            entity.Property<int?>("PendingUserId")
+                .HasComputedColumnSql("CASE WHEN `status` = 'Pending' THEN `user_id` ELSE NULL END", stored: false);
+            entity.HasIndex("PendingUserId")
+                .IsUnique()
+                .HasDatabaseName("uq_bank_verif_pending_user");
+
             entity.Property(e => e.SubmittedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.Status)
                 .HasConversion<string>()

@@ -65,6 +65,8 @@ public class AdminBankVerificationDetailDto
     public string? RejectionReason { get; set; }
     public string? BankReturnedName { get; set; }
     public string? RequestIpAddress { get; set; }
+    public bool HasConflictWithOtherUser { get; set; }
+    public string? ConflictWarning { get; set; }
 }
 
 public class AdminApproveBankVerificationDto

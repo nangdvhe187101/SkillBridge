@@ -8,5 +8,4 @@ public interface IWalletService
 {
     Task<WalletResponseDto> GetMyWalletAsync(int userId, CancellationToken cancellationToken = default);
     Task<WalletResponseDto> UpdateBankAccountAsync(int userId, UpdateBankAccountRequest request, CancellationToken cancellationToken = default);
-    Task<VerifyBankAccountResponse> VerifyBankAccountAsync(int userId, VerifyBankAccountRequest request, CancellationToken cancellationToken = default);
 }

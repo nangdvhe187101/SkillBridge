@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 using SkillBridge.Application.Common;
@@ -18,6 +20,22 @@ public class BankVerificationServiceTests
 {
     private readonly Mock<ILogger<BankVerificationService>> _loggerMock = new();
     private readonly Mock<ILogger<WalletService>> _walletLoggerMock = new();
+    private const string TestEncryptionKey = "SkillBridge_Test_Encryption_Key_32_Chars_Long!!";
+
+    private static IConfiguration CreateTestConfig(string? key = TestEncryptionKey)
+    {
+        var dict = new Dictionary<string, string?>();
+        if (key != null)
+        {
+            dict["Encryption:Key"] = key;
+        }
+        return new ConfigurationBuilder().AddInMemoryCollection(dict).Build();
+    }
+
+    private BankVerificationService CreateService(SkillBridgeDbContext dbContext, IConfiguration? config = null)
+    {
+        return new BankVerificationService(dbContext, _loggerMock.Object, config ?? CreateTestConfig());
+    }
 
     private SkillBridgeDbContext CreateInMemoryDbContext()
     {
@@ -33,7 +51,7 @@ public class BankVerificationServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new BankVerificationService(dbContext, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 101;
         dbContext.Users.Add(new User
@@ -79,7 +97,7 @@ public class BankVerificationServiceTests
     {
         // Arrange (Tối đa 3 request trong 24 giờ)
         using var dbContext = CreateInMemoryDbContext();
-        var service = new BankVerificationService(dbContext, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 102;
         dbContext.Users.Add(new User
@@ -129,7 +147,7 @@ public class BankVerificationServiceTests
     {
         // Arrange (Tối đa 10 request trong 30 ngày)
         using var dbContext = CreateInMemoryDbContext();
-        var service = new BankVerificationService(dbContext, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 103;
         dbContext.Users.Add(new User
@@ -179,7 +197,7 @@ public class BankVerificationServiceTests
     {
         // Arrange: User đã có ví được xác thực trước đó
         using var dbContext = CreateInMemoryDbContext();
-        var service = new BankVerificationService(dbContext, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 104;
         dbContext.Users.Add(new User
@@ -227,7 +245,7 @@ public class BankVerificationServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new BankVerificationService(dbContext, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 105;
         var req = new BankVerificationRequest
@@ -258,7 +276,7 @@ public class BankVerificationServiceTests
     {
         // Arrange: Record đã approved hoặc rejected
         using var dbContext = CreateInMemoryDbContext();
-        var service = new BankVerificationService(dbContext, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 106;
         var req = new BankVerificationRequest
@@ -285,7 +303,7 @@ public class BankVerificationServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new BankVerificationService(dbContext, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var adminId = 1;
         dbContext.Users.Add(new User { Id = adminId, FullName = "Super Admin", Email = "admin@skillbridge.vn", PasswordHash = "x", RoleId = 1, AccountStatus = "active", KycStatus = "verified" });
@@ -296,7 +314,7 @@ public class BankVerificationServiceTests
             UserId = 107,
             BankName = "MB Bank",
             BankCode = "970422",
-            AccountNumber = EncryptionHelper.Encrypt("0987654321"),
+            AccountNumber = EncryptionHelper.Encrypt("0987654321", TestEncryptionKey),
             AccountNumberMask = "****4321",
             Status = BankVerificationStatus.Pending,
             SubmittedAt = DateTime.UtcNow
@@ -315,7 +333,7 @@ public class BankVerificationServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new BankVerificationService(dbContext, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var adminUserId = 1;
         var studentUserId = 200;
@@ -332,7 +350,7 @@ public class BankVerificationServiceTests
             UserId = studentUserId,
             BankName = "MB Bank",
             BankCode = "970422",
-            AccountNumber = EncryptionHelper.Encrypt("036614042004"),
+            AccountNumber = EncryptionHelper.Encrypt("036614042004", TestEncryptionKey),
             AccountNumberMask = "****2004",
             Status = BankVerificationStatus.Pending,
             SubmittedAt = DateTime.UtcNow.AddMinutes(-30)
@@ -345,7 +363,7 @@ public class BankVerificationServiceTests
             UserId = studentUserId,
             BankName = "Vietcombank",
             BankCode = "970436",
-            AccountNumber = EncryptionHelper.Encrypt("1234567890"),
+            AccountNumber = EncryptionHelper.Encrypt("1234567890", TestEncryptionKey),
             AccountNumberMask = "****7890",
             Status = BankVerificationStatus.Pending,
             SubmittedAt = DateTime.UtcNow.AddMinutes(-10)
@@ -386,7 +404,7 @@ public class BankVerificationServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new BankVerificationService(dbContext, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var adminId = 1;
         dbContext.Users.Add(new User { Id = adminId, FullName = "Admin", Email = "admin@sb.vn", PasswordHash = "x", RoleId = 1, AccountStatus = "active", KycStatus = "verified" });
@@ -485,7 +503,7 @@ public class BankVerificationServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new BankVerificationService(dbContext, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var bankBin = "970422";
         var account = "036614042004";
@@ -506,5 +524,69 @@ public class BankVerificationServiceTests
         Assert.Equal(bankBin, result.BankCode);
         Assert.Equal(account, result.AccountNumber);
         Assert.Equal(payload, result.RawPayload);
+    }
+
+    [Fact]
+    public void Constructor_WithoutEncryptionKey_ShouldThrowInvalidOperationException()
+    {
+        using var dbContext = CreateInMemoryDbContext();
+        var emptyConfig = CreateTestConfig(null);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            new BankVerificationService(dbContext, _loggerMock.Object, emptyConfig));
+    }
+
+    [Fact]
+    public async Task GetAdminDetail_WhenAnotherUserHasVerifiedSameAccount_ShouldReturnSybilWarning()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = CreateService(dbContext);
+
+        var existingUserId = 301;
+        var newUserId = 302;
+
+        dbContext.Users.AddRange(
+            new User { Id = existingUserId, FullName = "Nguyen Van Mot", Email = "mot@gmail.com", PasswordHash = "x", RoleId = 2, AccountStatus = "active", KycStatus = "verified" },
+            new User { Id = newUserId, FullName = "Nguyen Van Hai", Email = "hai@gmail.com", PasswordHash = "x", RoleId = 2, AccountStatus = "active", KycStatus = "verified" }
+        );
+
+        // User 301 đã có tài khoản ngân hàng được xác thực trước đó
+        dbContext.BankAccounts.Add(new BankAccount
+        {
+            UserId = existingUserId,
+            BankName = "MB Bank",
+            AccountNumberEncrypted = EncryptionHelper.Encrypt("036614042004", TestEncryptionKey),
+            AccountNumberMask = "****2004",
+            AccountHolderName = "NGUYEN VAN MOT",
+            IsVerified = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+
+        // User 302 tạo yêu cầu gửi cùng STK đó
+        var request = new BankVerificationRequest
+        {
+            Id = 888,
+            UserId = newUserId,
+            BankName = "MB Bank",
+            BankCode = "970422",
+            AccountNumber = EncryptionHelper.Encrypt("036614042004", TestEncryptionKey),
+            AccountNumberMask = "****2004",
+            Status = BankVerificationStatus.Pending,
+            SubmittedAt = DateTime.UtcNow
+        };
+        dbContext.BankVerificationRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var detail = await service.GetAdminDetailAsync(888);
+
+        // Assert: Hệ thống phải phát hiện và giương cờ cảnh báo Sybil attack
+        Assert.NotNull(detail);
+        Assert.True(detail.HasConflictWithOtherUser);
+        Assert.NotNull(detail.ConflictWarning);
+        Assert.Contains("CẢNH BÁO PHÁT HIỆN TRÙNG LẶP", detail.ConflictWarning);
+        Assert.Contains("Nguyen Van Mot", detail.ConflictWarning);
     }
 }

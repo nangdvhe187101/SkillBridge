@@ -7,14 +7,15 @@ namespace SkillBridge.Application.Common;
 
 public static class EncryptionHelper
 {
-    // Khóa mã hóa bí mật mặc định (được override bởi config Encryption:Key nếu có)
-    private const string DefaultMasterSecret = "SkillBridge_Banking_Secret_Key_2026_Enterprise_Salt";
-
-    public static string Encrypt(string plainText, string? key = null)
+    public static string Encrypt(string plainText, string key)
     {
         if (string.IsNullOrEmpty(plainText)) return string.Empty;
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            throw new InvalidOperationException("Encryption:Key chưa được cấu hình. Không cho phép dùng khóa mặc định trong source code.");
+        }
 
-        var keyBytes = DeriveKey(key ?? DefaultMasterSecret);
+        var keyBytes = DeriveKey(key);
         using var aes = Aes.Create();
         aes.Key = keyBytes;
         aes.GenerateIV();
@@ -34,9 +35,13 @@ public static class EncryptionHelper
         return Convert.ToBase64String(ms.ToArray());
     }
 
-    public static string Decrypt(string cipherText, string? key = null)
+    public static string Decrypt(string cipherText, string key)
     {
         if (string.IsNullOrEmpty(cipherText)) return string.Empty;
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            throw new InvalidOperationException("Encryption:Key chưa được cấu hình. Không cho phép dùng khóa mặc định trong source code.");
+        }
 
         var fullCipher = Convert.FromBase64String(cipherText);
         if (fullCipher.Length < 16)
@@ -44,7 +49,7 @@ public static class EncryptionHelper
             throw new InvalidOperationException("Chuỗi mã hóa không hợp lệ.");
         }
 
-        var keyBytes = DeriveKey(key ?? DefaultMasterSecret);
+        var keyBytes = DeriveKey(key);
         using var aes = Aes.Create();
         aes.Key = keyBytes;
 

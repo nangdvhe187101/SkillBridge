@@ -19,13 +19,18 @@ namespace SkillBridge.Infrastructure.Services
         {
             config = _config;
         }
-        public string GenerateToken(int userId, string email, string roleCode, int tokenVersion)
+        public string GenerateToken(int userId, string email, string roleCode, int tokenVersion, string? roleType = null)
         {
+            var effectiveRoleType = !string.IsNullOrWhiteSpace(roleType)
+                ? roleType
+                : (roleCode.Equals("admin", StringComparison.OrdinalIgnoreCase) || roleCode.Equals("super_admin", StringComparison.OrdinalIgnoreCase) ? "admin" : "user");
+
             var claim = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
                 new Claim(ClaimTypes.Email, email),
                 new Claim(ClaimTypes.Role, roleCode),
+                new Claim("role_type", effectiveRoleType),
                 new Claim("token_version", tokenVersion.ToString())
             };
 

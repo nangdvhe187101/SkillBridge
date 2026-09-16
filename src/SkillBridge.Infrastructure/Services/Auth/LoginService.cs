@@ -86,7 +86,7 @@ namespace SkillBridge.Infrastructure.Services
                 await userRepository.SaveChangesAsync();
             }
 
-            var accessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code, user.TokenVersion);
+            var accessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code, user.TokenVersion, user.Role.Type);
             var refreshToken = jwtService.GenerateRefreshTokenString();
 
             await authTokenRepository.AddAsync(new AuthToken

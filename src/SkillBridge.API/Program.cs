@@ -125,6 +125,11 @@ builder.Services.AddAuthorization(options =>
 {
     options.AddPolicy("RequireEmployerRole", policy => policy.RequireRole("employer"));
     options.AddPolicy("RequireStudentRole", policy => policy.RequireRole("student"));
+    options.AddPolicy("RequireAdminRole", policy =>
+        policy.RequireAssertion(context =>
+            context.User.IsInRole("admin") ||
+            context.User.IsInRole("super_admin") ||
+            context.User.HasClaim(c => (c.Type == "role_type" || c.Type == "RoleType") && c.Value.ToLower() == "admin")));
 });
 
 builder.Services.Scan(scan => scan

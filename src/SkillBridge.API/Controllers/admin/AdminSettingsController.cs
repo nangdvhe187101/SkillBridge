@@ -10,6 +10,7 @@ namespace SkillBridge.API.Controllers.admin;
 
 [ApiController]
 [Route("api/admin")]
+[Authorize(Policy = "RequireAdminRole")]
 public class AdminSettingsController : ControllerBase
 {
     private readonly ISystemSettingService _systemSettingService;

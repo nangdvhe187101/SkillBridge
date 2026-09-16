@@ -35,22 +35,6 @@ public class UpdateBankAccountRequest
     public string? Branch { get; set; }
 }
 
-public class VerifyBankAccountRequest
-{
-    public string BankBin { get; set; } = string.Empty;
-    public string AccountNumber { get; set; } = string.Empty;
-}
-
-public class VerifyBankAccountResponse
-{
-    public bool Exists { get; set; }
-    public string? AccountHolderName { get; set; }
-    public string UserProfileName { get; set; } = string.Empty;
-    public bool IsNameMatched { get; set; }
-    public string Message { get; set; } = string.Empty;
-    public string BankName { get; set; } = string.Empty;
-}
-
 public class ReceiptDto
 {
     public int Id { get; set; }

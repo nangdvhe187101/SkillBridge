@@ -263,6 +263,27 @@ export default function AdminBankVerification() {
               <div style={{ textAlign: 'center', padding: '40px 0' }}>Đang giải mã và sinh mã QR...</div>
             ) : detail ? (
               <div>
+                {detail.hasConflictWithOtherUser && (
+                  <div style={{
+                    marginBottom: 16,
+                    padding: '12px 16px',
+                    borderRadius: 8,
+                    background: '#fff7ed',
+                    border: '1px solid #fdba74',
+                    color: '#c2410c',
+                    fontSize: 13,
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 10
+                  }}>
+                    <span style={{ fontSize: 18, lineHeight: 1 }}>⚠️</span>
+                    <div>
+                      <strong>CẢNH BÁO PHÁT HIỆN TRÙNG LẶP (CHỐNG SYBIL ATTACK):</strong>
+                      <p style={{ margin: '4px 0 0', lineHeight: 1.4 }}>{detail.conflictWarning}</p>
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20, marginBottom: 20 }}>
                   {/* CỘT TRÁI: MÃ QR TỰ SINH CHUẨN VIETQR CHO ADMIN QUÉT */}
                   <div style={{ textAlign: 'center', background: '#f8fafc', padding: 18, borderRadius: 12, border: '1px solid #e2e8f0' }}>
