@@ -13,7 +13,7 @@ using SkillBridge.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Cấu hình ThreadPool linh hoạt (không hard-code, mặc định 50)
+// Cấu hình ThreadPool linh hoạt
 var minWorkerThreads = builder.Configuration.GetValue<int>("ThreadPool:MinWorkerThreads", 50);
 var minIocpThreads = builder.Configuration.GetValue<int>("ThreadPool:MinCompletionPortThreads", 50);
 ThreadPool.SetMinThreads(minWorkerThreads, minIocpThreads);
@@ -45,7 +45,7 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
     builder.Services.AddStackExchangeRedisCache(options =>
     {
         options.Configuration = redisConnection;
-        options.InstanceName = "SkillBridge:";
+        options.InstanceName = "SkillBridgeAdmin:";
     });
 }
 else
@@ -69,21 +69,11 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
         ValidAudience = builder.Configuration["Jwt:Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-        ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 }, // chặn alg:none và alg confusion
+        ValidAlgorithms = new[] { SecurityAlgorithms.HmacSha256 },
         ClockSkew = TimeSpan.FromMinutes(1)
     };
     options.Events = new JwtBearerEvents
     {
-        OnMessageReceived = context =>
-        {
-            var accessToken = context.Request.Query["access_token"];
-            var path = context.HttpContext.Request.Path;
-            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
-            {
-                context.Token = accessToken;
-            }
-            return Task.CompletedTask;
-        },
         OnTokenValidated = async context =>
         {
             var tokenVersionService = context.HttpContext.RequestServices.GetRequiredService<ITokenVersionService>();
@@ -115,21 +105,19 @@ builder.Services.AddAuthentication(options =>
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Lỗi kiểm tra TokenVersion cho UserId {UserId}. Áp dụng Fail-Closed.", userIdClaim);
+                logger.LogError(ex, "Lỗi kiểm tra TokenVersion cho UserId {UserId} tại AdminAPI. Áp dụng Fail-Closed.", userIdClaim);
                 context.Fail("Authentication verification service temporarily unavailable.");
             }
         }
     };
 });
+
 builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("RequireEmployerRole", policy => policy.RequireRole("employer"))
-    .AddPolicy("RequireStudentRole", policy => policy.RequireRole("student"))
     .AddPolicy("RequireAdminRole", policy =>
         policy.RequireAssertion(context =>
             context.User.IsInRole("admin") ||
             context.User.IsInRole("super_admin") ||
             context.User.HasClaim(c => (c.Type == "role_type" || c.Type == "RoleType") && string.Equals(c.Value, "admin", StringComparison.OrdinalIgnoreCase))));
-
 
 builder.Services.Scan(scan => scan
     .FromAssemblies(
@@ -140,36 +128,24 @@ builder.Services.Scan(scan => scan
     .AsImplementedInterfaces()
     .WithScopedLifetime());
 
-builder.Services.AddHostedService<SkillBridge.Infrastructure.Services.Payments.PaymentReconciliationJob>();
-builder.Services.AddHostedService<SkillBridge.Infrastructure.Services.Jobs.JobDeadlineReminderJob>();
-
-var signalR = builder.Services.AddSignalR();
-if (!string.IsNullOrWhiteSpace(redisConnection))
-{
-    signalR.AddStackExchangeRedis(redisConnection, options =>
-        options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("SkillBridge_SignalR"));
-}
-
-builder.Services.AddScoped<SkillBridge.Application.Interfaces.Payments.IPaymentRealtimeNotifier, SkillBridge.API.Services.SignalRPaymentRealtimeService>();
+builder.Services.AddScoped<SkillBridge.Application.Interfaces.Payments.IPaymentRealtimeNotifier, SkillBridge.AdminAPI.Services.NullPaymentRealtimeNotifier>();
 builder.Services.AddHttpClient();
-
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-var frontendBaseUrl = builder.Configuration["Frontend:BaseUrl"] ?? "http://localhost:5173";
+var adminFrontendBaseUrl = builder.Configuration["AdminFrontend:BaseUrl"] ?? "http://localhost:5174";
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("AllowFrontend", policy =>
-        policy.WithOrigins(frontendBaseUrl, "http://localhost:5173")
+    options.AddPolicy("AllowAdminFrontend", policy =>
+        policy.WithOrigins(adminFrontendBaseUrl, "http://localhost:5174")
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials()); // cần thiết cho SignalR và Cookie
+              .AllowCredentials());
 });
 
 builder.Services.AddRateLimiter(options =>
 {
-    // AuthPolicy (login, register, forgot-password, v.v.): 10 req/phút per IP
     options.AddPolicy("AuthPolicy", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -181,51 +157,6 @@ builder.Services.AddRateLimiter(options =>
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst
             }));
 
-    // RefreshTokenPolicy (refresh, logout): 30 req/phút per IP
-    options.AddPolicy("RefreshTokenPolicy", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 30,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
-            }));
-
-    // UploadPolicy (upload avatar, CV, deliverables): 15 req/phút per User/IP
-    options.AddPolicy("UploadPolicy", httpContext =>
-    {
-        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var partitionKey = !string.IsNullOrEmpty(userId) ? $"user_{userId}" : httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: partitionKey,
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 15,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
-            });
-    });
-
-    // ResourceCreationPolicy (đăng job, apply job, review deliverable): 20 req/phút per User/IP
-    options.AddPolicy("ResourceCreationPolicy", httpContext =>
-    {
-        var userId = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        var partitionKey = !string.IsNullOrEmpty(userId) ? $"user_{userId}" : httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-        return RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: partitionKey,
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 20,
-                Window = TimeSpan.FromMinutes(1),
-                QueueLimit = 0,
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
-            });
-    });
-
-    // GeneralApiPolicy (các endpoint đọc/ghi thông thường): 120 req/phút per IP
     options.AddPolicy("GeneralApiPolicy", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
             partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -242,10 +173,7 @@ builder.Services.AddRateLimiter(options =>
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
-    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor |
-                               Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
-    // Giữ loopback mặc định (127.0.0.1, ::1) để chỉ chấp nhận proxy nội bộ tin cậy.
-    // KHÔNG clear KnownNetworks/KnownProxies để ngăn kẻ tấn công giả mạo X-Forwarded-For bypass rate limit.
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     var knownProxiesConfig = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>();
     if (knownProxiesConfig != null)
     {
@@ -261,20 +189,13 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
-    serverOptions.Limits.MaxRequestBodySize = 35 * 1024 * 1024; // 35MB cho request body
-});
-
-builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
-{
-    options.MultipartBodyLengthLimit = 30 * 1024 * 1024; // 30MB multipart form
-    options.ValueLengthLimit = 10 * 1024 * 1024;
+    serverOptions.Limits.MaxRequestBodySize = 35 * 1024 * 1024;
 });
 
 var app = builder.Build();
 
 app.UseForwardedHeaders();
-
-app.UseMiddleware<SkillBridge.API.Middleware.ExceptionHandlingMiddleware>();
+app.UseMiddleware<SkillBridge.AdminAPI.Middleware.ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
@@ -296,29 +217,12 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.UseCors("AllowFrontend");
+app.UseCors("AllowAdminFrontend");
 app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapHub<SkillBridge.API.Hubs.PaymentHub>("/hubs/payment");
-
-using (var scope = app.Services.CreateScope())
-{
-    var services = scope.ServiceProvider;
-    try
-    {
-        var dbContext = services.GetRequiredService<SkillBridge.Infrastructure.Data.SkillBridgeDbContext>();
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        await SkillBridge.Infrastructure.Data.DbInitializer.SeedAdminAsync(dbContext, app.Configuration, logger);
-    }
-    catch (Exception ex)
-    {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Lỗi xảy ra trong quá trình khởi tạo dữ liệu Admin.");
-    }
-}
 
 app.Run();
