@@ -34,13 +34,18 @@ const TIER_COLOR = { gold: '#CBFF4D', silver: '#57C7FF', bronze: '#FF5C7A' };
 
 function formatDeadline(ts) {
   if (!ts) return '—';
-  const time = typeof ts === 'string' || ts instanceof Date ? new Date(ts).getTime() : ts;
+  let iso = typeof ts === 'string' ? ts.trim().replace(' ', 'T') : ts;
+  if (typeof iso === 'string' && !iso.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(iso)) {
+    iso += 'Z';
+  }
+  const time = typeof iso === 'string' || iso instanceof Date ? new Date(iso).getTime() : iso;
   if (isNaN(time)) return '—';
   const diff = time - Date.now();
   if (diff <= 0) return 'Đã quá hạn';
   const days = Math.floor(diff / 86400000);
   const hours = Math.floor((diff % 86400000) / 3600000);
-  if (days > 0) return `còn ${days} ngày ${hours} giờ`;
+  if (days > 0 && hours > 0) return `còn ${days} ngày ${hours} giờ`;
+  if (days > 0) return `còn ${days} ngày`;
   return `còn ${hours} giờ`;
 }
 
@@ -775,7 +780,7 @@ function JobsTab({ state, navigate, goToPostTab }) {
                           <Icon name="bolt" width={12} height={12} /> Tuyển gấp
                         </span>
                       )}
-                      {j.deadlineAt && (
+                      {j.deadlineAt && j.status !== 'completed' && j.status !== 'cancelled' && (
                         <span className="chip" style={{ background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', fontSize: 11.5, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <Icon name="clock" width={12} height={12} /> {formatDeadline(j.deadlineAt)}
                         </span>
@@ -810,8 +815,17 @@ function JobsTab({ state, navigate, goToPostTab }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--ink-soft)' }}>
                         <span>Đăng ngày: <b style={{ color: 'var(--ink)' }}>{j.posted || 'gần đây'}</b></span>
                         {j.hiredApplicant && (
-                          <span style={{ color: 'var(--primary)', fontWeight: 600, background: 'rgba(108, 76, 255, 0.08)', padding: '2px 8px', borderRadius: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            <Icon name="user" width={12} height={12} /> Đang làm: {j.hiredApplicant}
+                          <span style={{
+                            color: j.status === 'completed' ? '#16a34a' : 'var(--primary)',
+                            fontWeight: 600,
+                            background: j.status === 'completed' ? 'rgba(22, 163, 74, 0.08)' : 'rgba(108, 76, 255, 0.08)',
+                            padding: '2px 8px',
+                            borderRadius: 6,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4
+                          }}>
+                            <Icon name="user" width={12} height={12} /> {j.status === 'completed' ? 'Đã hoàn thành bởi' : 'Đang làm'}: {j.hiredApplicant}
                           </span>
                         )}
                         {j.status === 'submitted' && (

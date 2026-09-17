@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from './Icon';
 
@@ -6,54 +5,54 @@ export default function Footer() {
 
   return (
     <footer style={{
-      background: '#ffffff',
-      borderTop: '1px solid #e5e7eb',
+      background: 'var(--surface-2)',
+      borderTop: '1px solid var(--border)',
       padding: '40px 0 24px 0',
       marginTop: 48,
       fontSize: 13,
-      color: '#1e293b'
+      color: 'var(--ink)'
     }}>
       <div className="wrap" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px' }}>
 
-        {/* 1. Main Navigation Columns (CellphoneS Style) */}
+        {/* 1. Main Navigation Columns */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
           gap: 28,
           paddingBottom: 28,
-          borderBottom: '1px solid #f1f5f9'
+          borderBottom: '1px solid var(--border)'
         }}>
 
           {/* Column 1: Hotline & Customer Support */}
           <div>
-            <h5 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#0f172a', marginBottom: 14 }}>
+            <h5 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink)', marginBottom: 14 }}>
               Tổng đài hỗ trợ (Miễn phí)
             </h5>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, color: '#475569' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, color: 'var(--ink-soft)' }}>
               <div>
                 <span>Hỗ trợ sinh viên & người dùng:</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
                   <b style={{ color: '#d70018', fontSize: 16 }}>1900 6828</b>
-                  <span style={{ fontSize: 11.5 }}>(8h00 - 21h00)</span>
+                  <span style={{ fontSize: 11.5 }}>(8h00 – 21h00)</span>
                 </div>
               </div>
               <div>
                 <span>Khiếu nại & Tranh chấp:</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
                   <b style={{ color: '#2563eb', fontSize: 15 }}>0987 654 321</b>
-                  <span style={{ fontSize: 11.5 }}>(8h00 - 21h30)</span>
+                  <span style={{ fontSize: 11.5 }}>(8h00 – 21h30)</span>
                 </div>
               </div>
               <div>
                 <span>Email hỗ trợ:</span>
                 <div style={{ marginTop: 2 }}>
-                  <span style={{ color: '#0f172a', fontWeight: 600 }}>support@skillbridge.vn</span>
+                  <span style={{ color: 'var(--ink)', fontWeight: 600 }}>support@skillbridge.vn</span>
                 </div>
               </div>
               <div>
                 <span>Hợp tác trường học & doanh nghiệp:</span>
                 <div style={{ marginTop: 2 }}>
-                  <span style={{ color: '#0f172a', fontWeight: 600 }}>partner@skillbridge.vn</span>
+                  <span style={{ color: 'var(--ink)', fontWeight: 600 }}>partner@skillbridge.vn</span>
                 </div>
               </div>
             </div>
@@ -61,44 +60,44 @@ export default function Footer() {
 
           {/* Column 2: About SkillBridge */}
           <div>
-            <h5 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#0f172a', marginBottom: 14 }}>
+            <h5 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink)', marginBottom: 14 }}>
               Về SkillBridge
             </h5>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <li><Link to="/jobs" style={{ color: '#475569', textDecoration: 'none' }}>Tìm việc làm vi mô (Micro-jobs)</Link></li>
-              <li><Link to="/employer/post-job" style={{ color: '#475569', textDecoration: 'none' }}>Đăng tin tuyển dụng sinh viên</Link></li>
-              <li><Link to="/pricing" style={{ color: '#475569', textDecoration: 'none' }}>Bảng giá dịch vụ & Gói tin VIP</Link></li>
-              <li><Link to="/wallet" style={{ color: '#475569', textDecoration: 'none' }}>Ví tiền & Quản lý số dư</Link></li>
-              <li><Link to="/contact" style={{ color: '#475569', textDecoration: 'none' }}>Dự án Khởi nghiệp EXE FPT</Link></li>
-              <li><Link to="/dispute-policy" style={{ color: '#475569', textDecoration: 'none' }}>Quỹ Bảo hiểm Tương hỗ Cộng đồng</Link></li>
+              <li><Link to="/jobs" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Tìm việc làm vi mô (Micro-jobs)</Link></li>
+              <li><Link to="/employer/post-job" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Đăng tin tuyển dụng sinh viên</Link></li>
+              <li><Link to="/pricing" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Bảng giá dịch vụ & Gói tin VIP</Link></li>
+              <li><Link to="/wallet" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Ví tiền & Quản lý số dư</Link></li>
+              <li><Link to="/contact" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Dự án Khởi nghiệp EXE FPT</Link></li>
+              <li><Link to="/dispute-policy" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Quỹ Bảo hiểm Tương hỗ Cộng đồng</Link></li>
             </ul>
           </div>
 
           {/* Column 3: Policies & Regulations */}
           <div>
-            <h5 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#0f172a', marginBottom: 14 }}>
+            <h5 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink)', marginBottom: 14 }}>
               Chính sách & Quy định
             </h5>
             <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <li><Link to="/terms" style={{ color: '#475569', textDecoration: 'none' }}>Quy chế hoạt động sàn TMĐT</Link></li>
-              <li><Link to="/terms" style={{ color: '#475569', textDecoration: 'none' }}>Điều khoản dịch vụ</Link></li>
-              <li><Link to="/privacy" style={{ color: '#475569', textDecoration: 'none' }}>Chính sách bảo mật dữ liệu cá nhân</Link></li>
-              <li><Link to="/payment-policy" style={{ color: '#475569', textDecoration: 'none' }}>Chính sách thanh toán & hoàn tiền</Link></li>
-              <li><Link to="/dispute-policy" style={{ color: '#475569', textDecoration: 'none' }}>Quy trình giải quyết tranh chấp (Dispute)</Link></li>
-              <li><Link to="/contact" style={{ color: '#475569', textDecoration: 'none' }}>Liên hệ & Tiếp nhận khiếu nại</Link></li>
+              <li><Link to="/terms" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Quy chế hoạt động sàn TMĐT</Link></li>
+              <li><Link to="/terms" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Điều khoản dịch vụ</Link></li>
+              <li><Link to="/privacy" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Chính sách bảo mật dữ liệu cá nhân</Link></li>
+              <li><Link to="/payment-policy" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Chính sách thanh toán & hoàn tiền</Link></li>
+              <li><Link to="/dispute-policy" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Quy trình giải quyết tranh chấp (Dispute)</Link></li>
+              <li><Link to="/contact" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Liên hệ & Tiếp nhận khiếu nại</Link></li>
             </ul>
           </div>
 
           {/* Column 4: Payment Partners & Social */}
           <div>
-            <h5 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#0f172a', marginBottom: 14 }}>
+            <h5 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink)', marginBottom: 14 }}>
               Phương thức thanh toán
             </h5>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 16 }}>
               {/* VietQR Badge */}
               <div style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
                 padding: '6px 4px',
                 textAlign: 'center',
@@ -111,8 +110,8 @@ export default function Footer() {
 
               {/* TPBank Badge */}
               <div style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
                 padding: '6px 4px',
                 textAlign: 'center',
@@ -120,13 +119,13 @@ export default function Footer() {
                 cursor: 'default'
               }} title="Ngân hàng thụ hưởng TPBank">
                 <span style={{ fontSize: 10.5, fontWeight: 800, color: '#5b2d90', display: 'block' }}>TPBank</span>
-                <span style={{ fontSize: 9, color: '#64748b' }}>Ngân hàng</span>
+                <span style={{ fontSize: 9, color: 'var(--ink-soft)' }}>Ngân hàng</span>
               </div>
 
               {/* VNPAY Badge */}
               <div style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
                 padding: '6px 4px',
                 textAlign: 'center',
@@ -139,8 +138,8 @@ export default function Footer() {
 
               {/* Napas 247 */}
               <div style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
                 padding: '6px 4px',
                 textAlign: 'center',
@@ -148,13 +147,13 @@ export default function Footer() {
                 cursor: 'default'
               }}>
                 <span style={{ fontSize: 11, fontWeight: 800, color: '#004c8f', display: 'block' }}>napas</span>
-                <span style={{ fontSize: 9, color: '#64748b' }}>247</span>
+                <span style={{ fontSize: 9, color: 'var(--ink-soft)' }}>247</span>
               </div>
 
               {/* MB Bank Badge */}
               <div style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
                 padding: '6px 4px',
                 textAlign: 'center',
@@ -162,13 +161,13 @@ export default function Footer() {
                 cursor: 'default'
               }}>
                 <span style={{ fontSize: 10, fontWeight: 800, color: '#001a9c', display: 'block' }}>MB Bank</span>
-                <span style={{ fontSize: 9, color: '#64748b' }}>Ngân hàng</span>
+                <span style={{ fontSize: 9, color: 'var(--ink-soft)' }}>Ngân hàng</span>
               </div>
 
               {/* Visa / Master Badge */}
               <div style={{
-                background: '#ffffff',
-                border: '1px solid #e2e8f0',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
                 borderRadius: 8,
                 padding: '6px 4px',
                 textAlign: 'center',
@@ -180,7 +179,7 @@ export default function Footer() {
               </div>
             </div>
 
-            <h5 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#64748b', marginBottom: 8 }}>
+            <h5 style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink-soft)', marginBottom: 8 }}>
               Kết nối cùng SkillBridge
             </h5>
             <div style={{ display: 'flex', gap: 10 }}>
@@ -191,16 +190,16 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* 2. Popular Search Keywords Row (CellphoneS Bottom Tags Style) */}
+        {/* 2. Popular Search Keywords Row */}
         <div style={{
           display: 'flex',
           flexWrap: 'wrap',
           justifyContent: 'center',
           gap: '6px 12px',
           fontSize: 11.5,
-          color: '#64748b',
+          color: 'var(--ink-soft)',
           padding: '16px 0 16px 0',
-          borderBottom: '1px solid #f1f5f9',
+          borderBottom: '1px solid var(--border)',
           textAlign: 'center'
         }}>
           <span>Tìm việc làm sinh viên</span> <span>|</span>
@@ -217,16 +216,16 @@ export default function Footer() {
           <span>Ký quỹ Escrow an toàn</span>
         </div>
 
-        {/* 3. Corporate Legal Details & Non-clickable Official Badges (CellphoneS Style) */}
+        {/* 3. Corporate Legal Details & Non-clickable Official Badges */}
         <div style={{
           paddingTop: 18,
           textAlign: 'center',
           fontSize: 12,
-          color: '#64748b',
+          color: 'var(--ink-soft)',
           lineHeight: 1.8
         }}>
           {/* Company details lines */}
-          <p style={{ margin: '0 0 4px 0', fontWeight: 700, color: '#334155' }}>
+          <p style={{ margin: '0 0 4px 0', fontWeight: 700, color: 'var(--ink)' }}>
             Dự án Khởi nghiệp Sáng tạo Sinh viên · FPT University EXE Capstone Project
           </p>
           <p style={{ margin: '0 0 4px 0' }}>
@@ -354,17 +353,17 @@ export default function Footer() {
             gap: 14,
             flexWrap: 'wrap',
             fontSize: 12,
-            color: '#64748b'
+            color: 'var(--ink-soft)'
           }}>
-            <Link to="/terms" style={{ color: '#64748b', textDecoration: 'none' }}>Điều khoản dịch vụ</Link>
+            <Link to="/terms" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Điều khoản dịch vụ</Link>
             <span>·</span>
-            <Link to="/privacy" style={{ color: '#64748b', textDecoration: 'none' }}>Chính sách bảo mật</Link>
+            <Link to="/privacy" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Chính sách bảo mật</Link>
             <span>·</span>
-            <Link to="/payment-policy" style={{ color: '#64748b', textDecoration: 'none' }}>Chính sách thanh toán</Link>
+            <Link to="/payment-policy" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Chính sách thanh toán</Link>
             <span>·</span>
-            <Link to="/dispute-policy" style={{ color: '#64748b', textDecoration: 'none' }}>Giải quyết tranh chấp</Link>
+            <Link to="/dispute-policy" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Giải quyết tranh chấp</Link>
             <span>·</span>
-            <Link to="/contact" style={{ color: '#64748b', textDecoration: 'none' }}>Liên hệ & Khiếu nại</Link>
+            <Link to="/contact" style={{ color: 'var(--ink-soft)', textDecoration: 'none' }}>Liên hệ & Khiếu nại</Link>
           </div>
         </div>
 

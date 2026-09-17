@@ -65,7 +65,11 @@ function formatDeliverableDisplayName(fileName, jobId, version = 1, isExternal =
 
 function formatDeadline(ts) {
   if (!ts) return '—';
-  const time = typeof ts === 'string' || ts instanceof Date ? new Date(ts).getTime() : ts;
+  let iso = typeof ts === 'string' ? ts.trim().replace(' ', 'T') : ts;
+  if (typeof iso === 'string' && !iso.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(iso)) {
+    iso += 'Z';
+  }
+  const time = typeof iso === 'string' || iso instanceof Date ? new Date(iso).getTime() : iso;
   if (isNaN(time)) return '—';
   const diff = time - Date.now();
   if (diff <= 0) return 'Đã quá hạn';
@@ -77,7 +81,11 @@ function formatDeadline(ts) {
 
 function getDeadlineUrgency(ts) {
   if (!ts) return 'normal';
-  const time = typeof ts === 'string' || ts instanceof Date ? new Date(ts).getTime() : ts;
+  let iso = typeof ts === 'string' ? ts.trim().replace(' ', 'T') : ts;
+  if (typeof iso === 'string' && !iso.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(iso)) {
+    iso += 'Z';
+  }
+  const time = typeof iso === 'string' || iso instanceof Date ? new Date(iso).getTime() : iso;
   if (isNaN(time)) return 'normal';
   const diff = time - Date.now();
   if (diff <= 0) return 'overdue';

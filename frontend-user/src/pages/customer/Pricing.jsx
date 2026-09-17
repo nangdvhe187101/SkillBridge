@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
@@ -141,13 +141,29 @@ function CheckBulletIcon({ color = '#10b981' }) {
    MAIN COMPONENT: PRICING
    ========================================================================== */
 
+export const PLAN_RANKS = {
+  FREE: 0,
+  STU_STARTER: 1,
+  STU_PRO: 2,
+  STU_MASTER: 3,
+  EMP_STARTER: 1,
+  EMP_GROWTH: 2,
+  EMP_VIP: 3,
+};
+
 export default function Pricing() {
-  const { state } = useStore();
+  const { state, showToast, refreshWallet } = useStore();
   const { openModal } = useModal();
   const navigate = useNavigate();
 
   const isLoggedIn = Boolean(state.currentUser);
   const userRole = state.currentUser?.roleCode || state.role;
+
+  useEffect(() => {
+    if (isLoggedIn && typeof refreshWallet === 'function') {
+      refreshWallet();
+    }
+  }, [isLoggedIn, refreshWallet]);
 
   // Khóa tab theo vai trò khi đã login, cho phép khách chuyển tab khi chưa login
   const [guestTab, setGuestTab] = useState('student');
@@ -155,11 +171,47 @@ export default function Pricing() {
 
   const currentPlanCode = state.activePlanCode;
 
+  // Tính cấp bậc gói hiện tại (0: Chưa có gói / Miễn phí, 1: Starter, 2: Pro/Growth, 3: VIP/Master)
+  const currentRank = useMemo(() => {
+    if (!isLoggedIn) return 0;
+    if (currentPlanCode && PLAN_RANKS[currentPlanCode] !== undefined) {
+      return PLAN_RANKS[currentPlanCode];
+    }
+    if (state.vipBusiness) return 3;
+    if (state.subscriptionPro) return 2;
+    return 0;
+  }, [isLoggedIn, currentPlanCode, state.vipBusiness, state.subscriptionPro]);
+
+  const activePlanName = useMemo(() => {
+    if (!isLoggedIn || currentRank === 0) return null;
+    if (activeTab === 'employer') {
+      if (currentPlanCode === 'EMP_VIP' || state.vipBusiness) return 'VIP Business';
+      if (currentPlanCode === 'EMP_GROWTH') return 'Doanh Nghiệp Tiêu Chuẩn';
+      if (currentPlanCode === 'EMP_STARTER') return 'Tuyển Dụng Nhanh';
+    } else {
+      if (currentPlanCode === 'STU_MASTER') return 'Master Talent (VIP)';
+      if (currentPlanCode === 'STU_PRO' || state.subscriptionPro) return 'Freelance Pro';
+      if (currentPlanCode === 'STU_STARTER') return 'Sinh Viên Tích Cực';
+    }
+    return currentRank === 3 ? 'Gói VIP' : 'Gói cao hơn';
+  }, [isLoggedIn, currentRank, activeTab, currentPlanCode, state.vipBusiness, state.subscriptionPro]);
+
   const handleSelectPlan = (plan) => {
     if (!isLoggedIn) {
       navigate('/auth?tab=register');
       return;
     }
+
+    const planRank = PLAN_RANKS[plan.code] ?? 0;
+
+    // Chặn người dùng mua gói thấp hơn khi đang có gói cao hơn
+    if (currentRank > 0 && planRank < currentRank) {
+      if (typeof showToast === 'function') {
+        showToast(`Bạn đang sử dụng ${activePlanName || 'gói cao hơn'}. Không thể mua gói thấp hơn khi gói hiện tại còn hạn sử dụng.`, 'warning');
+      }
+      return;
+    }
+
     if (plan.code === 'FREE') {
       if (activeTab === 'employer') {
         navigate('/employer/post');
@@ -176,8 +228,10 @@ export default function Pricing() {
       badge: plan.badge,
       features: plan.features,
       role: activeTab,
+      isUpgrade: currentRank > 0 && planRank > currentRank,
     });
   };
+
 
   // DANH SÁCH GÓI SINH VIÊN: Tinh gọn, trọng tâm, kích thích quyết định
   const studentPlans = useMemo(() => [
@@ -440,7 +494,11 @@ export default function Pricing() {
           }}
         >
           {currentPlans.map((plan) => {
-            const isCurrent = plan.isCurrent;
+            const planRank = PLAN_RANKS[plan.code] ?? 0;
+            const isCurrent = currentRank > 0 ? (planRank === currentRank) : (plan.code === 'FREE');
+            const isLower = currentRank > 0 && planRank < currentRank;
+            const isUpgrade = currentRank > 0 && planRank > currentRank;
+
             return (
               <div
                 key={plan.code}
@@ -451,14 +509,44 @@ export default function Pricing() {
                   borderRadius: 18,
                   position: 'relative',
                   background: plan.cardBg,
-                  border: isCurrent ? '2px solid #22c55e' : `1.5px solid ${plan.borderColor}`,
-                  boxShadow: isCurrent ? '0 10px 30px rgba(34, 197, 94, 0.18)' : (plan.glowShadow || '0 4px 16px rgba(0,0,0,0.04)'),
+                  border: isCurrent
+                    ? '2.5px solid #22c55e'
+                    : isLower
+                      ? '1.5px dashed var(--border)'
+                      : `1.5px solid ${plan.borderColor}`,
+                  boxShadow: isCurrent
+                    ? '0 12px 32px rgba(34, 197, 94, 0.22)'
+                    : isLower
+                      ? 'none'
+                      : (plan.glowShadow || '0 4px 16px rgba(0,0,0,0.04)'),
+                  opacity: isLower ? 0.75 : 1,
                   padding: '24px 20px',
-                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                  transition: 'transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease',
                 }}
               >
-                {/* Ribbon Tag cho gói phổ biến / VIP */}
-                {plan.ribbonText && (
+                {/* Ribbon Tag cho gói đang kích hoạt / phổ biến / VIP */}
+                {isCurrent ? (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: -12,
+                      right: 16,
+                      background: 'linear-gradient(135deg, #16a34a, #059669)',
+                      color: '#fff',
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      padding: '3px 12px',
+                      borderRadius: 999,
+                      letterSpacing: 0.5,
+                      boxShadow: '0 4px 14px rgba(22, 163, 74, 0.35)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                  >
+                    <span>✓</span> ĐANG SỬ DỤNG
+                  </div>
+                ) : plan.ribbonText ? (
                   <div
                     style={{
                       position: 'absolute',
@@ -478,7 +566,7 @@ export default function Pricing() {
                   >
                     {plan.ribbonText}
                   </div>
-                )}
+                ) : null}
 
                 <div>
                   {/* Header: Icon SVG tự tạo + Badge */}
@@ -504,12 +592,12 @@ export default function Pricing() {
                         fontWeight: 800,
                         padding: '3px 10px',
                         borderRadius: 999,
-                        background: plan.themeBg,
-                        color: plan.themeColor,
-                        border: `1px solid ${plan.borderColor}`
+                        background: isLower ? 'rgba(0,0,0,0.06)' : plan.themeBg,
+                        color: isLower ? 'var(--ink-soft)' : plan.themeColor,
+                        border: `1px solid ${isLower ? 'var(--border)' : plan.borderColor}`
                       }}
                     >
-                      {plan.badge}
+                      {isLower ? 'Bậc thấp hơn' : plan.badge}
                     </span>
                   </div>
 
@@ -517,13 +605,13 @@ export default function Pricing() {
                   <h3 style={{ margin: '0 0 4px 0', fontSize: 19, fontWeight: 800, color: 'var(--ink)' }}>
                     {plan.name}
                   </h3>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: plan.themeColor, marginBottom: 14 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, color: isLower ? 'var(--ink-soft)' : plan.themeColor, marginBottom: 14 }}>
                     {plan.tagline}
                   </div>
 
                   {/* Giá niêm yết */}
                   <div style={{ marginBottom: 2, display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                    <span style={{ fontSize: 32, fontWeight: 900, color: plan.price > 0 ? plan.themeColor : 'var(--ink)', letterSpacing: -0.5 }}>
+                    <span style={{ fontSize: 32, fontWeight: 900, color: isLower ? 'var(--ink-soft)' : (plan.price > 0 ? plan.themeColor : 'var(--ink)'), letterSpacing: -0.5 }}>
                       {plan.price === 0 ? '0đ' : fmtVND(plan.price)}
                     </span>
                     <span style={{ fontSize: 13, color: 'var(--ink-soft)', fontWeight: 600 }}>/tháng</span>
@@ -538,8 +626,8 @@ export default function Pricing() {
                   <ul style={{ paddingLeft: 0, listStyle: 'none', margin: '0 0 22px', fontSize: 13 }}>
                     {plan.features.map((featNode, idx) => (
                       <li key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginBottom: 10, lineHeight: 1.4 }}>
-                        <CheckBulletIcon color={plan.themeColor} />
-                        <span style={{ color: 'var(--ink)' }}>{featNode}</span>
+                        <CheckBulletIcon color={isLower ? 'var(--ink-soft)' : plan.themeColor} />
+                        <span style={{ color: isLower ? 'var(--ink-soft)' : 'var(--ink)' }}>{featNode}</span>
                       </li>
                     ))}
                   </ul>
@@ -552,23 +640,52 @@ export default function Pricing() {
                     className="btn btn-block"
                     style={{
                       ...(isCurrent
-                        ? { background: 'rgba(34, 197, 94, 0.1)', color: '#16a34a', border: '1.5px solid #22c55e' }
-                        : plan.btnStyle),
+                        ? { background: 'rgba(34, 197, 94, 0.12)', color: '#16a34a', border: '1.5px solid #22c55e', cursor: 'default' }
+                        : isLower
+                          ? { background: 'rgba(0, 0, 0, 0.05)', color: 'var(--ink-soft)', border: '1.5px dashed var(--border)', cursor: 'not-allowed' }
+                          : isUpgrade
+                            ? { ...plan.btnStyle, boxShadow: '0 4px 16px rgba(99, 102, 241, 0.35)' }
+                            : plan.btnStyle),
                       fontWeight: 800,
                       padding: '11px 16px',
                       borderRadius: 12,
                       fontSize: 13.5,
-                      cursor: isCurrent && plan.code !== 'FREE' ? 'default' : 'pointer'
                     }}
-                    disabled={isCurrent && plan.code !== 'FREE'}
+                    disabled={isCurrent || isLower}
                     onClick={() => handleSelectPlan(plan)}
+                    title={
+                      isLower
+                        ? `Bạn đang dùng ${activePlanName || 'gói cao hơn'}. Không thể đăng ký gói thấp hơn khi gói hiện tại còn hạn.`
+                        : isCurrent
+                          ? 'Gói đang kích hoạt trên tài khoản của bạn'
+                          : ''
+                    }
                   >
-                    {isCurrent ? '✓ Gói đang sử dụng' : plan.btnLabel}
+                    {isCurrent
+                      ? '✓ Gói đang sử dụng'
+                      : isLower
+                        ? (plan.code === 'FREE' ? 'Gói mặc định' : `Đã có ở ${activePlanName || 'gói cao hơn'}`)
+                        : isUpgrade
+                          ? `⚡ Nâng cấp ${plan.name}`
+                          : plan.btnLabel}
                   </button>
+
+                  {/* Ghi chú trạng thái dưới nút */}
+                  {isLower && (
+                    <div style={{ fontSize: 11, color: 'var(--ink-soft)', textAlign: 'center', marginTop: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                      <span>🔒 Đã bao gồm trong {activePlanName || 'gói cao hơn'}</span>
+                    </div>
+                  )}
+                  {isUpgrade && (
+                    <div style={{ fontSize: 11, color: plan.themeColor, textAlign: 'center', marginTop: 7, fontWeight: 700 }}>
+                      ⚡ Nâng cấp đặc quyền tức thì
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
+
         </div>
       </div>
     </div>

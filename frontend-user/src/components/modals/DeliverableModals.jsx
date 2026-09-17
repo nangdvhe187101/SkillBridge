@@ -714,11 +714,11 @@ export function DeliverableModal({ onClose, jobId, job: propJob, onSubmitted }) 
   );
 }
 
-export function RevisionModal({ onClose, jobId, deliverable: propDeliverable, job: propJob, onReviewed }) {
+export function RevisionModal({ onClose, jobId, deliverable: propDeliverable, job: propJob, onReviewed, onRequested }) {
   const { state, reviewDeliverableAsync } = useStore();
-  const numericJobId = Number(jobId);
+  const numericJobId = Number(jobId || propJob?.id);
   const localJob = state.myJobs.find((j) => Number(j.id) === numericJobId);
-  const job = propJob || localJob || { id: jobId, title: 'Công việc', revisionCount: 0, revisionLimit: 2 };
+  const job = propJob || localJob || { id: jobId || propJob?.id, title: 'Công việc', revisionCount: 0, revisionLimit: 2 };
   const [deliverable, setDeliverable] = useState(propDeliverable || job?.deliverable || null);
   const [loading, setLoading] = useState(!propDeliverable?.id && !job?.deliverable?.id && !!numericJobId);
   const [text, setText] = useState('');
@@ -763,7 +763,7 @@ export function RevisionModal({ onClose, jobId, deliverable: propDeliverable, jo
           feedbackComment: text.trim()
         });
       }
-      onReviewed?.();
+      (onReviewed || onRequested)?.();
       onClose();
     } catch (err) {
       setErrorMsg(err?.message || 'Không thể gửi yêu cầu chỉnh sửa.');
@@ -803,10 +803,10 @@ export function RevisionModal({ onClose, jobId, deliverable: propDeliverable, jo
   );
 }
 
-export function DeliverableReviewModal({ onClose, jobId, deliverable: propDeliverable, job: propJob, onReviewed }) {
+export function DeliverableReviewModal({ onClose, jobId, deliverable: propDeliverable, job: propJob, onReviewed, onCompleted }) {
   const { state, reviewDeliverableAsync } = useStore();
   const { openModal } = useModal();
-  const numericJobId = Number(jobId);
+  const numericJobId = Number(jobId || propJob?.id);
   const localJob = state.myJobs.find((j) => Number(j.id) === numericJobId);
   const job = propJob || localJob;
   const [deliverable, setDeliverable] = useState(propDeliverable || job?.deliverable || null);
@@ -848,9 +848,9 @@ export function DeliverableReviewModal({ onClose, jobId, deliverable: propDelive
           status: 'accepted'
         });
       }
-      onReviewed?.();
+      (onReviewed || onCompleted)?.();
       onClose();
-      openModal('receipt', { justCompletedId: job.id || numericJobId });
+      openModal('receipt', { justCompletedId: job?.id || numericJobId, job });
     } catch (err) {
       setErrorMsg(err?.message || 'Không thể nghiệm thu công việc.');
     } finally {

@@ -1,11 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import ModalShell from './ModalShell';
 import PaymentMethods from './PaymentMethods';
 import { useStore, commissionRate, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import Icon from '../Icon';
 
-import { useEffect, useRef } from 'react';
 import { createPaymentOrder, getPaymentOrderStatus, getActivePendingOrder, cancelPendingOrder } from '../../api/paymentApi';
 import { connectPaymentRealtime } from '../../services/paymentSignalR';
 
@@ -29,21 +28,37 @@ function getDisplayAccountName(order) {
   return order.accountName || 'DAO VAN NANG';
 }
 
-export function TopupModal({ onClose, initialOrder }) {
+export function calculateRemainingSeconds(expiresAt, defaultSecs = 900) {
+  if (!expiresAt) return defaultSecs;
+  let iso = String(expiresAt).trim().replace(' ', 'T');
+  if (iso && !iso.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(iso)) {
+    iso += 'Z';
+  }
+  const targetMs = new Date(iso).getTime();
+  if (isNaN(targetMs)) return defaultSecs;
+  const diffSecs = Math.floor((targetMs - Date.now()) / 1000);
+  return Math.max(0, diffSecs);
+}
+
+export function TopupModal({ onClose, initialOrder, initialAmount, autoCreate }) {
   const { state, refreshWallet, showToast } = useStore();
-  const [amount, setAmount] = useState(() => initialOrder?.amount || 200000);
+
+  const isRealOrder = Boolean(initialOrder?.orderCode || initialOrder?.qrCodeUrl);
+  const targetAmount = initialAmount || (initialOrder && !isRealOrder ? initialOrder.amount : null) || initialOrder?.amount || 200000;
+  const shouldAutoCreate = Boolean(autoCreate || (initialOrder?.amount && !isRealOrder));
+
+  const [amount, setAmount] = useState(targetAmount);
   const [method, setMethod] = useState('bank'); // 'bank' (SePay) | 'vnpay'
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
   // QR Screen state (for SePay)
-  const [orderData, setOrderData] = useState(() => initialOrder || null);
+  const [orderData, setOrderData] = useState(() => (isRealOrder ? initialOrder : null));
   const [activePending, setActivePending] = useState(null);
   const [timeLeft, setTimeLeft] = useState(() => {
-    if (initialOrder?.expiresAt) {
-      return Math.max(10, Math.floor((new Date(initialOrder.expiresAt).getTime() - Date.now()) / 1000));
-    }
-    return 900;
+    return isRealOrder && initialOrder?.expiresAt
+      ? calculateRemainingSeconds(initialOrder.expiresAt)
+      : 900;
   });
   const [paymentSuccess, setPaymentSuccess] = useState(false);
   const [copiedField, setCopiedField] = useState('');
@@ -51,17 +66,18 @@ export function TopupModal({ onClose, initialOrder }) {
   const pollIntervalRef = useRef(null);
   const timerIntervalRef = useRef(null);
   const signalRRef = useRef(null);
+  const autoCreatedRef = useRef(false);
 
   // Tự động kiểm tra đơn pending còn hiệu lực nếu người dùng mở modal nạp tiền
   useEffect(() => {
-    if (!initialOrder && !orderData) {
+    if (!initialOrder && !orderData && !shouldAutoCreate) {
       getActivePendingOrder()
         .then((p) => {
           if (p) setActivePending(p);
         })
         .catch(() => {});
     }
-  }, [initialOrder, orderData]);
+  }, [initialOrder, orderData, shouldAutoCreate]);
 
   // Clear polling, timer and SignalR on unmount
   useEffect(() => {
@@ -119,6 +135,7 @@ export function TopupModal({ onClose, initialOrder }) {
 
     const checkStatus = async () => {
       try {
+        if (!orderData?.orderCode) return;
         const res = await getPaymentOrderStatus(orderData.orderCode);
         if (res && res.status === 'paid') {
           await handleSuccess(res);
@@ -129,22 +146,24 @@ export function TopupModal({ onClose, initialOrder }) {
     };
 
     // 1. Kết nối SignalR Realtime với Redis Pub/Sub backplane
-    signalRRef.current = connectPaymentRealtime(orderData.orderCode, {
-      onPaymentSuccess: (payload) => {
-        handleSuccess(payload);
-      },
-      onReconnected: () => {
-        // Reconnect: sync lại trạng thái qua REST API ngay lập tức
-        checkStatus();
-      },
-      onError: () => {
-        // Fallback polling vẫn tiếp tục chạy làm safety net
-      }
-    });
+    if (orderData?.orderCode) {
+      signalRRef.current = connectPaymentRealtime(orderData.orderCode, {
+        onPaymentSuccess: (payload) => {
+          handleSuccess(payload);
+        },
+        onReconnected: () => {
+          // Reconnect: sync lại trạng thái qua REST API ngay lập tức
+          checkStatus();
+        },
+        onError: () => {
+          // Fallback polling vẫn tiếp tục chạy làm safety net
+        }
+      });
 
-    // 2. Chốt chặn an toàn: Kiểm tra ngay và fallback polling nhẹ (mỗi 4s)
-    checkStatus();
-    pollIntervalRef.current = setInterval(checkStatus, 4000);
+      // 2. Chốt chặn an toàn: Kiểm tra ngay và fallback polling nhẹ (mỗi 4s)
+      checkStatus();
+      pollIntervalRef.current = setInterval(checkStatus, 4000);
+    }
 
     return () => {
       isSubscribed = false;
@@ -156,9 +175,10 @@ export function TopupModal({ onClose, initialOrder }) {
     };
   }, [orderData, paymentSuccess, refreshWallet, showToast]);
 
-  const handleStartPayment = async () => {
+  const handleStartPayment = useCallback(async (overrideAmount) => {
+    const payAmount = typeof overrideAmount === 'number' ? overrideAmount : amount;
     setErrorMsg('');
-    if (!amount || amount < 10000 || amount > 100000000) {
+    if (!payAmount || payAmount < 10000 || payAmount > 100000000) {
       setErrorMsg('Số tiền nạp tối thiểu là 10.000đ và tối đa là 100.000.000đ.');
       return;
     }
@@ -170,20 +190,27 @@ export function TopupModal({ onClose, initialOrder }) {
 
     try {
       setLoading(true);
-      const res = await createPaymentOrder('SEPAY', amount);
+      if (typeof overrideAmount === 'number') {
+        setAmount(overrideAmount);
+      }
+      const res = await createPaymentOrder('SEPAY', payAmount);
 
       // SePay VietQR mode
       setOrderData(res);
-      const remainingSecs = res.expiresAt
-        ? Math.max(10, Math.floor((new Date(res.expiresAt).getTime() - Date.now()) / 1000))
-        : 900;
-      setTimeLeft(remainingSecs);
+      setTimeLeft(calculateRemainingSeconds(res.expiresAt));
     } catch (err) {
       setErrorMsg(err?.message || 'Có lỗi xảy ra khi khởi tạo đơn nạp tiền.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [amount, method]);
+
+  useEffect(() => {
+    if (shouldAutoCreate && !isRealOrder && !orderData && !autoCreatedRef.current) {
+      autoCreatedRef.current = true;
+      handleStartPayment(targetAmount);
+    }
+  }, [shouldAutoCreate, isRealOrder, orderData, targetAmount, handleStartPayment]);
 
   const copyToClipboard = (text, fieldName) => {
     if (navigator?.clipboard?.writeText) {
@@ -199,6 +226,21 @@ export function TopupModal({ onClose, initialOrder }) {
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // Screen: Generating QR
+  if (loading && !orderData) {
+    return (
+      <ModalShell onClose={onClose}>
+        <div style={{ textAlign: 'center', padding: '36px 16px' }}>
+          <div className="verify-spin" style={{ width: 44, height: 44, margin: '0 auto 16px auto' }} />
+          <h3 style={{ fontSize: 18, marginBottom: 8 }}>Đang tạo mã VietQR...</h3>
+          <p style={{ color: 'var(--ink-soft)', fontSize: 13, margin: 0 }}>
+            Đang kết nối cổng thanh toán để tạo mã QR nạp <b>{fmtVND(amount)}</b> vào ví.
+          </p>
+        </div>
+      </ModalShell>
+    );
+  }
 
   // Screen 3: Payment Success
   if (paymentSuccess) {
@@ -420,10 +462,7 @@ export function TopupModal({ onClose, initialOrder }) {
               style={{ background: '#ea580c', borderColor: '#ea580c', fontSize: 12, padding: '4px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
               onClick={() => {
                 setOrderData(activePending);
-                const remainingSecs = activePending.expiresAt
-                  ? Math.max(10, Math.floor((new Date(activePending.expiresAt).getTime() - Date.now()) / 1000))
-                  : 900;
-                setTimeLeft(remainingSecs);
+                setTimeLeft(calculateRemainingSeconds(activePending.expiresAt));
               }}
             >
               <Icon name="qr" width="14" height="14" />
@@ -600,9 +639,26 @@ export function PlanPurchaseModal({
   const isInsufficient = state.balance < amount;
   const shortfall = amount - state.balance;
 
+  const PLAN_RANKS = {
+    FREE: 0,
+    STU_STARTER: 1,
+    STU_PRO: 2,
+    STU_MASTER: 3,
+    EMP_STARTER: 1,
+    EMP_GROWTH: 2,
+    EMP_VIP: 3,
+  };
+  const currentPlanCode = state.activePlanCode;
+  const currentRank = currentPlanCode && PLAN_RANKS[currentPlanCode] !== undefined
+    ? PLAN_RANKS[currentPlanCode]
+    : (state.vipBusiness ? 3 : (state.subscriptionPro ? 2 : 0));
+  const targetRank = PLAN_RANKS[planCode] ?? 0;
+  const isLowerPlan = currentRank > 0 && targetRank < currentRank;
+
   const [payMethod, setPayMethod] = useState(isInsufficient ? 'bank' : 'wallet');
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
 
   // QR Screen state (for online VietQR payment)
   const [orderData, setOrderData] = useState(null);
@@ -715,10 +771,7 @@ export function PlanPurchaseModal({
       setErrorMsg('');
       const res = await createPaymentOrder('SEPAY', amount);
       setOrderData(res);
-      const remainingSecs = res.expiresAt
-        ? Math.max(10, Math.floor((new Date(res.expiresAt).getTime() - Date.now()) / 1000))
-        : 900;
-      setTimeLeft(remainingSecs);
+      setTimeLeft(calculateRemainingSeconds(res.expiresAt));
     } catch (err) {
       setErrorMsg(err?.message || 'Có lỗi xảy ra khi khởi tạo đơn thanh toán trực tuyến.');
     } finally {
@@ -1108,12 +1161,21 @@ export function PlanPurchaseModal({
               className="btn btn-primary btn-sm"
               onClick={() => {
                 onClose();
-                openModal('topup', { initialOrder: { amount: shortfall } });
+                openModal('topup', { initialAmount: shortfall > 0 ? shortfall : 100000, autoCreate: true });
               }}
             >
               + Nạp thêm vào ví
             </button>
           </div>
+        </div>
+      )}
+
+      {isLowerPlan && (
+        <div style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1.5px solid #ef4444', borderRadius: 10, padding: 12, margin: '12px 0', fontSize: 13, color: '#dc2626' }}>
+          <b>⚠️ Không thể đăng ký gói thấp hơn</b>
+          <p style={{ margin: '4px 0 0', color: 'var(--ink)' }}>
+            Tài khoản của bạn đang có gói cấp bậc cao hơn. Hệ thống bảo lưu các đặc quyền cao cấp và không cho phép hạ cấp khi gói hiện tại còn hạn sử dụng.
+          </p>
         </div>
       )}
 
@@ -1125,7 +1187,7 @@ export function PlanPurchaseModal({
         {payMethod === 'bank' ? (
           <button
             className="btn btn-primary"
-            disabled={submitting}
+            disabled={submitting || isLowerPlan}
             onClick={handleStartOnlinePayment}
           >
             {submitting ? 'Đang tạo mã...' : `Thanh toán Online ${fmtVND(amount)} (VietQR)`}
@@ -1133,7 +1195,7 @@ export function PlanPurchaseModal({
         ) : (
           <button
             className="btn btn-primary"
-            disabled={submitting || isInsufficient}
+            disabled={submitting || isInsufficient || isLowerPlan}
             onClick={confirmWalletPurchase}
           >
             {submitting ? 'Đang kích hoạt...' : `Thanh toán ${fmtVND(amount)} từ ví`}
@@ -1142,6 +1204,7 @@ export function PlanPurchaseModal({
         <button className="btn btn-outline" disabled={submitting} onClick={onClose}>Hủy</button>
       </div>
     </ModalShell>
+
   );
 }
 
@@ -1259,7 +1322,7 @@ export function HireModal({ onClose, jobId, applicantIdx, applicantName, applica
 
   const handleTopup = () => {
     onClose();
-    openModal('topup', { initialOrder: { amount: shortfall > 0 ? shortfall : 200000 } });
+    openModal('topup', { initialAmount: shortfall > 0 ? shortfall : 200000, autoCreate: true });
   };
 
   return (

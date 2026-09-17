@@ -168,4 +168,41 @@ public class SubscriptionTests
             .FirstOrDefaultAsync(s => s.UserId == userId && s.PlanName == "Master Talent" && s.Status == "active");
         Assert.NotNull(newSub);
     }
+
+    [Fact]
+    public async Task PurchaseSubscription_DowngradeToLowerPlan_ShouldThrowBusinessException()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new SubscriptionService(dbContext, _loggerMock.Object);
+
+        var userId = 400;
+        dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 500000m });
+
+        dbContext.Subscriptions.Add(new Subscription
+        {
+            UserId = userId,
+            PlanName = "Master Talent", // Rank 3
+            Status = "active",
+            AmountPaid = 99000m,
+            RenewalDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(20)),
+            StartedAt = DateTime.UtcNow.AddDays(-10),
+            UpdatedAt = DateTime.UtcNow.AddDays(-10)
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Cố gắng hạ cấp về Student Starter (Rank 1)
+        var request = new PurchaseSubscriptionRequest { PlanType = "STU_STARTER" };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.PurchaseSubscriptionAsync(userId, request));
+
+        Assert.Contains("Không thể mua gói thấp hơn", ex.Message);
+
+        // Đảm bảo không bị trừ tiền ví
+        var wallet = await dbContext.Wallets.FirstAsync(w => w.UserId == userId);
+        Assert.Equal(500000m, wallet.Balance);
+    }
 }
+

@@ -12,9 +12,18 @@ import * as userApi from '../api/userApi';
 import * as deliverableApi from '../api/deliverableApi';
 import * as walletApi from '../api/walletApi';
 import * as notificationApi from '../api/notificationApi';
-import { setAccessToken, clearAccessToken } from '../api/tokenStore';
+import { setAccessToken, clearAccessToken, getAccessToken } from '../api/tokenStore';
 
 const StoreContext = createContext(null);
+
+export function normalizeUtcDate(dateStr) {
+  if (!dateStr) return null;
+  let iso = String(dateStr).trim().replace(' ', 'T');
+  if (iso && !iso.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(iso)) {
+    iso += 'Z';
+  }
+  return iso;
+}
 
 export function mapPublicJob(j) {
   return {
@@ -29,11 +38,11 @@ export function mapPublicJob(j) {
     categoryId: j.categoryId,
     budget: j.budget,
     urgent: j.isUrgent,
-    time: j.postedAt ? new Date(j.postedAt).toLocaleDateString('vi-VN') : 'Vừa đăng',
-    postedAt: j.postedAt,
+    time: j.postedAt ? new Date(normalizeUtcDate(j.postedAt)).toLocaleDateString('vi-VN') : 'Vừa đăng',
+    postedAt: normalizeUtcDate(j.postedAt),
     desc: j.description || '',
     status: j.status,
-    deadlineAt: j.deadlineAt,
+    deadlineAt: normalizeUtcDate(j.deadlineAt),
     attachmentCount: j.attachmentCount !== undefined ? j.attachmentCount : (j.attachments?.length || 0),
     req: [],
     attachments: j.attachments || [],
@@ -57,9 +66,9 @@ export function mapMyJob(j) {
     budget: j.budget,
     urgent: j.isUrgent,
     status: j.status,
-    posted: j.postedAt ? new Date(j.postedAt).toLocaleDateString('vi-VN') : 'Vừa đăng',
-    postedAt: j.postedAt,
-    deadlineAt: j.deadlineAt,
+    posted: j.postedAt ? new Date(normalizeUtcDate(j.postedAt)).toLocaleDateString('vi-VN') : 'Vừa đăng',
+    postedAt: normalizeUtcDate(j.postedAt),
+    deadlineAt: normalizeUtcDate(j.deadlineAt),
     attachmentCount: j.attachmentCount !== undefined ? j.attachmentCount : (j.attachments?.length || 0),
     applicantsCount: j.applicantCount !== undefined ? j.applicantCount : (j.applicants?.length || 0),
     applicants: j.applicants || [],
@@ -91,10 +100,10 @@ export function mapMyApplication(a) {
     cvLabel: a.cvLabel || a.cvFileName,
     coverLetter: a.coverLetter,
     status: a.status || 'pending',
-    appliedAt: a.appliedAt ? new Date(a.appliedAt).toLocaleDateString('vi-VN') : 'Mới nộp',
-    rawAppliedAt: a.appliedAt,
+    appliedAt: a.appliedAt ? new Date(normalizeUtcDate(a.appliedAt)).toLocaleDateString('vi-VN') : 'Mới nộp',
+    rawAppliedAt: normalizeUtcDate(a.appliedAt),
     jobStatus: a.jobStatus || a.status || 'open',
-    deadlineAt: a.deadlineAt,
+    deadlineAt: normalizeUtcDate(a.deadlineAt),
     revisionLimit: a.revisionLimit ?? 2,
     revisionCount: a.revisionCount ?? 0,
   };
@@ -823,6 +832,51 @@ export function StoreProvider({ children }) {
     };
   }, []);
 
+  const refreshWallet = useCallback(async () => {
+    if (!stateRef.current?.currentUser && !getAccessToken()) {
+      return;
+    }
+    try {
+      const res = await walletApi.getMyWallet();
+      if (res) {
+        const mappedReceipts = mapReceiptsFromApi(res.receipts);
+        const mappedBank = res.bankName ? {
+          bankBin: res.bankBin,
+          bankName: res.bankName,
+          accountNumber: res.accountNumber,
+          accountHolder: res.accountHolder,
+          branch: res.bankBranch,
+          isVerified: res.isBankVerified
+        } : null;
+        dispatch({
+          type: 'SET_WALLET',
+          balance: res.balance,
+          escrowLocked: res.escrowLocked ?? 0,
+          bankAccount: mappedBank,
+          transactions: (res.transactions || []).map(t => ({
+            id: t.id,
+            type: t.type,
+            label: t.label,
+            amount: t.amount,
+            sign: t.sign,
+            date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
+          })),
+          receipts: mappedReceipts || undefined,
+          vipBusiness: Boolean(res.hasVipSubscription || res.activePlanCode === 'EMP_VIP'),
+          subscriptionPro: Boolean(res.hasProSubscription || res.activePlanCode === 'STU_PRO'),
+          activePlanCode: res.activePlanCode || null,
+          activePlanName: res.activePlanName || null,
+          subscriptionExpiresAt: res.subscriptionExpiresAt || null,
+          effectiveCommissionRate: res.effectiveCommissionRate !== undefined ? res.effectiveCommissionRate : null,
+          badge: res.badge || null
+        });
+        return res;
+      }
+    } catch {
+      // Bỏ qua khi chưa đăng nhập hoặc lỗi mạng tạm thời
+    }
+  }, []);
+
   useEffect(() => {
     if (!state.currentUser) {
       dispatch({ type: 'SET_ACCESS_TOKEN', token: null });
@@ -844,34 +898,8 @@ export function StoreProvider({ children }) {
           if (profile && isMounted) {
             dispatch({ type: 'UPDATE_PROFILE', patch: profile });
           }
-          const wallet = await walletApi.getMyWallet();
-          if (wallet && isMounted) {
-            const mappedReceipts = mapReceiptsFromApi(wallet.receipts);
-            const mappedBank = wallet.bankName ? {
-              bankBin: wallet.bankBin,
-              bankName: wallet.bankName,
-              accountNumber: wallet.accountNumber,
-              accountHolder: wallet.accountHolder,
-              branch: wallet.bankBranch,
-              isVerified: wallet.isBankVerified
-            } : null;
-            dispatch({
-              type: 'SET_WALLET',
-              balance: wallet.balance,
-              escrowLocked: wallet.escrowLocked ?? 0,
-              bankAccount: mappedBank,
-              transactions: (wallet.transactions || []).map(t => ({
-                id: t.id,
-                type: t.type,
-                label: t.label,
-                amount: t.amount,
-                sign: t.sign,
-                date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
-              })),
-              receipts: mappedReceipts || undefined,
-              vipBusiness: Boolean(wallet.hasVipSubscription),
-              subscriptionPro: Boolean(wallet.hasProSubscription)
-            });
+          if (isMounted) {
+            await refreshWallet();
           }
         } catch (e) {
           console.warn('Không thể tải hồ sơ hoặc ví chi tiết khi khởi động:', e);
@@ -927,46 +955,6 @@ export function StoreProvider({ children }) {
     }
   }, []);
 
-  const refreshWallet = useCallback(async () => {
-    try {
-      const res = await walletApi.getMyWallet();
-      if (res) {
-        const mappedReceipts = mapReceiptsFromApi(res.receipts);
-        const mappedBank = res.bankName ? {
-          bankBin: res.bankBin,
-          bankName: res.bankName,
-          accountNumber: res.accountNumber,
-          accountHolder: res.accountHolder,
-          branch: res.bankBranch,
-          isVerified: res.isBankVerified
-        } : null;
-        dispatch({
-          type: 'SET_WALLET',
-          balance: res.balance,
-          escrowLocked: res.escrowLocked ?? 0,
-          bankAccount: mappedBank,
-          transactions: (res.transactions || []).map(t => ({
-            id: t.id,
-            type: t.type,
-            label: t.label,
-            amount: t.amount,
-            sign: t.sign,
-            date: t.createdAt ? new Date(t.createdAt).toLocaleString('vi-VN') : 'Vừa xong'
-          })),
-          receipts: mappedReceipts || undefined,
-          vipBusiness: Boolean(res.hasVipSubscription || res.activePlanCode === 'EMP_VIP'),
-          subscriptionPro: Boolean(res.hasProSubscription || res.activePlanCode === 'STU_PRO'),
-          activePlanCode: res.activePlanCode || null,
-          activePlanName: res.activePlanName || null,
-          subscriptionExpiresAt: res.subscriptionExpiresAt || null,
-          effectiveCommissionRate: res.effectiveCommissionRate !== undefined ? res.effectiveCommissionRate : null,
-          badge: res.badge || null
-        });
-      }
-    } catch {
-      // Bỏ qua khi chưa đăng nhập hoặc lỗi mạng tạm thời
-    }
-  }, []);
 
   const refreshMyApplications = useCallback(async () => {
     try {

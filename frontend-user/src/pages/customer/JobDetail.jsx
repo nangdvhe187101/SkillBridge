@@ -28,7 +28,11 @@ function formatDurationDetail(deadlineAt, postedAt) {
 
 function formatDeadline(ts) {
   if (!ts) return '—';
-  const time = typeof ts === 'string' || ts instanceof Date ? new Date(ts).getTime() : ts;
+  let iso = typeof ts === 'string' ? ts.trim().replace(' ', 'T') : ts;
+  if (typeof iso === 'string' && !iso.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(iso)) {
+    iso += 'Z';
+  }
+  const time = typeof iso === 'string' || iso instanceof Date ? new Date(iso).getTime() : iso;
   if (isNaN(time)) return '—';
   const diff = time - Date.now();
   if (diff <= 0) return 'Đã quá hạn';

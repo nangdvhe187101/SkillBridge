@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import Pagination from '../../components/Pagination';
-import { exportTransactionsToCSV } from '../../utils/fileDownloader';
+import { exportTransactionsToExcel, exportTransactionsToCSV } from '../../utils/fileDownloader';
+import { printReceipt, downloadReceiptTxt } from '../../utils/receiptExporter';
 import { getActivePendingOrder, cancelPendingOrder } from '../../api/paymentApi';
 import {
   createBankVerificationRequest,
@@ -28,9 +29,15 @@ import { VIETNAM_BANKS } from '../../constants/banks';
 import { removeVietnameseTones } from '../../services/vietqrService';
 
 export default function Wallet() {
-  const { state, updateBankAccount, showToast } = useStore();
+  const { state, updateBankAccount, showToast, refreshWallet } = useStore();
   const { openModal } = useModal();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (typeof refreshWallet === 'function') {
+      refreshWallet();
+    }
+  }, [refreshWallet]);
 
   // Pending payment order state (Resume pending payment)
   const [pendingOrder, setPendingOrder] = useState(null);
@@ -156,6 +163,43 @@ export default function Wallet() {
     const start = (txPage - 1) * txPageSize;
     return filteredTransactions.slice(start, start + txPageSize);
   }, [filteredTransactions, txPage]);
+
+  // Quản lý menu dropdown xuất sao kê (Excel/CSV)
+  const [exportDropdownOpen, setExportDropdownOpen] = useState(false);
+  const exportRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (exportRef.current && !exportRef.current.contains(e.target)) {
+        setExportDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleExport = (format = 'xlsx') => {
+    setExportDropdownOpen(false);
+    if (!filteredTransactions || filteredTransactions.length === 0) {
+      if (typeof showToast === 'function') showToast('Không có giao dịch nào để xuất sao kê.', 'warning');
+      return;
+    }
+    const metadata = {
+      user: state.currentUser,
+      balance: state.balance,
+      escrowLocked: state.escrowLocked,
+      bankAccount: state.bankAccount,
+      filterLabel: txFilterList.find((f) => f.key === txFilter)?.label || 'Tất cả danh mục'
+    };
+
+    if (format === 'csv') {
+      exportTransactionsToCSV(filteredTransactions, metadata);
+      if (typeof showToast === 'function') showToast('Đã tải file CSV sao kê giao dịch thành công!', 'check');
+    } else {
+      exportTransactionsToExcel(filteredTransactions, metadata);
+      if (typeof showToast === 'function') showToast('Đã tải file Excel (.xlsx) sao kê giao dịch thành công!', 'check');
+    }
+  };
 
   const handleSaveBank = async (e) => {
     e.preventDefault();
@@ -423,19 +467,173 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                   <span>Lịch sử giao dịch</span>
                 </h4>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <button
-                    className="btn btn-outline btn-sm"
-                    style={{ fontSize: 11.5, padding: '4px 10px', display: 'flex', alignItems: 'center', gap: 6 }}
-                    onClick={() => exportTransactionsToCSV(filteredTransactions, `Sao_ke_vi_${state.currentUser?.fullName || 'User'}.csv`)}
-                    title="Xuất danh sách giao dịch ra file Excel/CSV"
-                  >
-                    <Icon name="download" width="13" height="13" />
-                    <span>Xuất Excel/CSV</span>
-                  </button>
+                  <div style={{ position: 'relative' }} ref={exportRef}>
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      style={{
+                        fontSize: 12,
+                        padding: '5px 12px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        fontWeight: 600,
+                        borderRadius: 8,
+                        borderColor: exportDropdownOpen ? 'var(--primary)' : 'var(--border)'
+                      }}
+                      onClick={() => setExportDropdownOpen((prev) => !prev)}
+                      title="Tải bảng sao kê lịch sử giao dịch (Excel .xlsx hoặc CSV)"
+                    >
+                      <Icon name="download" width="13" height="13" style={{ color: 'var(--primary)' }} />
+                      <span>Xuất sao kê giao dịch</span>
+                      <Icon
+                        name="chevdown"
+                        width="11"
+                        height="11"
+                        style={{
+                          transition: 'transform 0.2s ease',
+                          transform: exportDropdownOpen ? 'rotate(180deg)' : 'none',
+                          color: 'var(--ink-soft)'
+                        }}
+                      />
+                    </button>
+
+                    {exportDropdownOpen && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          right: 0,
+                          top: 'calc(100% + 6px)',
+                          zIndex: 60,
+                          background: 'var(--bg-card, #ffffff)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 12,
+                          boxShadow: '0 12px 28px -4px rgba(0, 0, 0, 0.18), 0 4px 10px rgba(0, 0, 0, 0.08)',
+                          width: 310,
+                          padding: '8px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4
+                        }}
+                      >
+                        <div style={{ padding: '6px 10px 8px', borderBottom: '1px solid var(--border)', marginBottom: 2 }}>
+                          <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--ink)' }}>Chọn định dạng sao kê</div>
+                          <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+                            Bao gồm {filteredTransactions.length} giao dịch theo bộ lọc hiện tại
+                          </div>
+                        </div>
+
+                        {/* Option 1: Excel .xlsx */}
+                        <button
+                          type="button"
+                          onClick={() => handleExport('xlsx')}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 10,
+                            padding: '9px 10px',
+                            border: 'none',
+                            borderRadius: 8,
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            transition: 'background 0.15s ease',
+                            color: 'inherit'
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(16, 185, 129, 0.08)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <div
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 8,
+                              background: 'rgba(16, 185, 129, 0.15)',
+                              color: '#10b981',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              fontSize: 14,
+                              fontWeight: 800
+                            }}
+                          >
+                            📊
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                              <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)' }}>Tải file Excel (.xlsx)</span>
+                              <span
+                                style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  padding: '1px 6px',
+                                  borderRadius: 99,
+                                  background: 'rgba(16, 185, 129, 0.18)',
+                                  color: '#059669'
+                                }}
+                              >
+                                Khuyên dùng
+                              </span>
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2, lineHeight: 1.35 }}>
+                              Căn chỉnh cột tự động, định dạng tiền tệ VNĐ, kèm sheet phân loại dòng tiền
+                            </div>
+                          </div>
+                        </button>
+
+                        {/* Option 2: CSV .csv */}
+                        <button
+                          type="button"
+                          onClick={() => handleExport('csv')}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 10,
+                            padding: '9px 10px',
+                            border: 'none',
+                            borderRadius: 8,
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            transition: 'background 0.15s ease',
+                            color: 'inherit'
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(99, 102, 241, 0.08)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <div
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 8,
+                              background: 'rgba(99, 102, 241, 0.15)',
+                              color: 'var(--primary)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              fontSize: 14,
+                              fontWeight: 800
+                            }}
+                          >
+                            📄
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--ink)' }}>Tải file CSV (.csv)</div>
+                            <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2, lineHeight: 1.35 }}>
+                              Định dạng bảng phân cách UTF-8 chuẩn, có header sao kê, phù hợp phần mềm kế toán
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <span style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
                     Tổng: <b>{filteredTransactions.length}</b> mục
                   </span>
                 </div>
+
               </div>
 
               {/* Transaction Filter Chips */}
@@ -785,7 +983,7 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                 </h4>
                 {state.badge && (
                   <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px', textTransform: 'uppercase', fontWeight: 700 }}>
-                    {state.badge}
+                    {state.badge === 'master' ? 'VIP MASTER' : state.badge}
                   </span>
                 )}
               </div>
@@ -814,7 +1012,9 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
               </div>
 
               <button className="btn btn-outline btn-block" onClick={() => navigate('/pricing')}>
-                {state.activePlanCode && state.activePlanCode !== 'FREE' ? 'Nâng cấp / Gia hạn gói →' : 'Xem các gói đặc quyền →'}
+                {state.activePlanCode === 'STU_MASTER' || state.activePlanCode === 'EMP_VIP'
+                  ? 'Gia hạn gói đặc quyền →'
+                  : (state.activePlanCode && state.activePlanCode !== 'FREE' ? 'Nâng cấp / Gia hạn gói →' : 'Xem các gói đặc quyền →')}
               </button>
             </div>
           </div>
@@ -899,10 +1099,13 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <button className="btn btn-outline btn-sm" onClick={() => setReceiptModal(null)}>Đóng</button>
-              <button className="btn btn-primary btn-sm" onClick={() => handleDownloadReceipt(receiptModal)}>
-                Tải biên nhận (.txt)
+              <button className="btn btn-secondary btn-sm" onClick={() => downloadReceiptTxt(receiptModal)} title="Tải văn bản chi tiết sao kê dạng TXT">
+                Tải văn bản (.txt)
+              </button>
+              <button className="btn btn-primary btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => printReceipt(receiptModal)} title="Mở giao diện in và lưu file PDF tiêu chuẩn A4">
+                <Icon name="download" width="14" height="14" /> Tải về / In phiếu thu (PDF)
               </button>
             </div>
           </div>

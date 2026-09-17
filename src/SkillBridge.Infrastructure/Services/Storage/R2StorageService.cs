@@ -33,23 +33,26 @@ public class R2StorageService : IStorageService
 
         if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(accessKey) || string.IsNullOrWhiteSpace(secretKey))
         {
-            _logger.LogWarning("Cloudflare R2 credentials chưa được cấu hình đầy đủ trong appsettings.json.");
+            _logger.LogWarning("Cloudflare R2 credentials chưa được cấu hình đầy đủ trong appsettings.json. Thao tác lưu trữ S3 sẽ tạm thời không khả dụng.");
+            _s3Client = null!;
+        }
+        else
+        {
+            var credentials = new BasicAWSCredentials(accessKey, secretKey);
+            var s3Config = new AmazonS3Config
+            {
+                ServiceURL = $"https://{accountId}.r2.cloudflarestorage.com",
+                ForcePathStyle = true,
+                AuthenticationRegion = "auto"
+            };
+
+            _s3Client = new AmazonS3Client(credentials, s3Config);
         }
 
         if (string.IsNullOrWhiteSpace(_publicBaseUrl))
         {
             _logger.LogWarning("Cloudflare R2 PublicBaseUrl chưa được cấu hình. Các tệp tải lên sẽ sử dụng presigned URL tạm thời (7 ngày), có nguy cơ hỏng link vĩnh viễn trong DB nếu không qua download endpoint.");
         }
-
-        var credentials = new BasicAWSCredentials(accessKey, secretKey);
-        var s3Config = new AmazonS3Config
-        {
-            ServiceURL = $"https://{accountId}.r2.cloudflarestorage.com",
-            ForcePathStyle = true,
-            AuthenticationRegion = "auto"
-        };
-
-        _s3Client = new AmazonS3Client(credentials, s3Config);
     }
 
     public async Task<FileUploadResult> UploadStreamAsync(
@@ -59,6 +62,11 @@ public class R2StorageService : IStorageService
         string? folder = null,
         CancellationToken cancellationToken = default)
     {
+        if (_s3Client == null)
+        {
+            throw new BusinessException("Hệ thống lưu trữ Cloudflare R2 chưa được cấu hình credentials.");
+        }
+
         if (stream == null || stream.Length == 0)
         {
             throw new BusinessException("Dữ liệu file không hợp lệ hoặc rỗng.");
@@ -135,7 +143,7 @@ public class R2StorageService : IStorageService
 
     public async Task<bool> DeleteFileAsync(string fileKey, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(fileKey)) return false;
+        if (_s3Client == null || string.IsNullOrWhiteSpace(fileKey)) return false;
 
         try
         {
@@ -198,6 +206,8 @@ public class R2StorageService : IStorageService
 
     public Task<string> GetPresignedUrlAsync(string fileKey, TimeSpan expiry)
     {
+        if (_s3Client == null) return Task.FromResult(string.Empty);
+
         try
         {
             var request = new GetPreSignedUrlRequest
@@ -221,7 +231,7 @@ public class R2StorageService : IStorageService
         string fileKey,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(fileKey)) return null;
+        if (_s3Client == null || string.IsNullOrWhiteSpace(fileKey)) return null;
 
         try
         {
