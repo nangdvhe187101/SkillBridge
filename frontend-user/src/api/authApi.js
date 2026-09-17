@@ -213,9 +213,10 @@ export async function apiFetch(path, options = {}) {
 }
 
 function handleAuthExpired() {
+    const hadAuth = Boolean(getAccessToken() || localStorage.getItem('user'));
     clearAccessToken();
     localStorage.removeItem('user');
-    if (window.location.pathname !== '/auth') {
+    if (hadAuth && window.location.pathname !== '/auth') {
         window.location.href = '/auth?tab=login';
     }
 }

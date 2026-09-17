@@ -153,7 +153,12 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
 builder.Services.AddScoped<SkillBridge.Application.Interfaces.Payments.IPaymentRealtimeNotifier, SkillBridge.API.Services.SignalRPaymentRealtimeService>();
 builder.Services.AddHttpClient();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new SkillBridge.API.Converters.UtcDateTimeJsonConverter());
+        options.JsonSerializerOptions.Converters.Add(new SkillBridge.API.Converters.NullableUtcDateTimeJsonConverter());
+    });
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 

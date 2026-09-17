@@ -78,7 +78,7 @@ public class PaymentService : IPaymentService
                     OrderCode = existingPendingOrder.OrderCode,
                     Provider = existingPendingOrder.Provider,
                     Amount = existingPendingOrder.Amount,
-                    ExpiresAt = existingPendingOrder.ExpiresAt ?? now.AddMinutes(15)
+                    ExpiresAt = DateTime.SpecifyKind(existingPendingOrder.ExpiresAt ?? now.AddMinutes(15), DateTimeKind.Utc)
                 };
 
                 if (provider == "VNPAY")
@@ -169,8 +169,8 @@ public class PaymentService : IPaymentService
             Provider = order.Provider,
             Amount = order.Amount,
             Status = order.Status,
-            PaidAt = order.PaidAt,
-            ExpiresAt = order.ExpiresAt
+            PaidAt = order.PaidAt.HasValue ? DateTime.SpecifyKind(order.PaidAt.Value, DateTimeKind.Utc) : null,
+            ExpiresAt = order.ExpiresAt.HasValue ? DateTime.SpecifyKind(order.ExpiresAt.Value, DateTimeKind.Utc) : null
         };
     }
 
@@ -190,7 +190,7 @@ public class PaymentService : IPaymentService
             OrderCode = order.OrderCode,
             Provider = order.Provider,
             Amount = order.Amount,
-            ExpiresAt = order.ExpiresAt!.Value
+            ExpiresAt = DateTime.SpecifyKind(order.ExpiresAt!.Value, DateTimeKind.Utc)
         };
 
         if (order.Provider == "VNPAY")

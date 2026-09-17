@@ -83,7 +83,7 @@ export default function TopNav() {
     <nav className="topnav">
       <div className="wrap">
         <NavLink to="/" className="logo" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-          <img src="/logo.png" alt="SkillBridge" style={{ height: 40, width: 'auto', objectFit: 'contain' }} />
+          <img src="/logo.png" alt="SkillBridge" width="150" height="40" style={{ height: 40, width: 'auto', objectFit: 'contain' }} />
         </NavLink>
 
         <div className={'navlinks' + (navOpen ? ' open' : '')} id="navlinks">
@@ -304,7 +304,13 @@ export default function TopNav() {
             </>
           )}
 
-          <button className="navtoggle" onClick={() => setNavOpen((o) => !o)} aria-label="Mở menu">
+          <button
+            className="navtoggle"
+            onClick={() => setNavOpen((o) => !o)}
+            aria-label={navOpen ? "Đóng menu" : "Mở menu"}
+            aria-expanded={navOpen}
+            aria-controls="navlinks"
+          >
             <Icon name="menu" />
           </button>
         </div>

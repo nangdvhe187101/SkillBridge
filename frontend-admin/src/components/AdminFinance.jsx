@@ -3,7 +3,7 @@ import { fmtVND } from '../utils/formatters';
 import { revenueBarsSeed } from '../data/adminSeed';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
-import { exportTransactionsToCSV } from '../utils/fileDownloader';
+import { exportTransactionsToExcel, exportTransactionsToCSV } from '../utils/fileDownloader';
 import Icon from './Icon';
 
 export default function AdminFinance() {
@@ -25,11 +25,24 @@ export default function AdminFinance() {
     { label: 'ARPU', value: '420.000đ' },
   ];
 
-  const exportReport = (period) => {
+  const exportReport = (period, format = 'xlsx') => {
     const labels = { week: 'tuan', month: 'thang', quarter: 'quy' };
-    exportTransactionsToCSV(state.transactions, `Bao_cao_tai_chinh_SkillBridge_${labels[period]}.csv`);
-    showToast(`Đã xuất báo cáo tài chính theo ${period} thành công!`, 'check');
+    const periodNames = { week: 'Tuần này', month: 'Tháng này', quarter: 'Quý này' };
+    const metadata = {
+      userName: 'Ban Quản trị Tài chính SkillBridge',
+      userEmail: 'finance-admin@skillbridge.vn',
+      filterLabel: `Báo cáo tài chính & doanh thu (${periodNames[period] || period})`,
+      fileName: `Bao_cao_tai_chinh_SkillBridge_${labels[period]}.${format}`
+    };
+
+    if (format === 'csv') {
+      exportTransactionsToCSV(state.transactions, metadata);
+    } else {
+      exportTransactionsToExcel(state.transactions, metadata);
+    }
+    showToast(`Đã xuất báo cáo tài chính ${format.toUpperCase()} (${periodNames[period]}) thành công!`, 'check');
   };
+
 
   return (
     <section className="adm-section active">
@@ -92,13 +105,46 @@ export default function AdminFinance() {
       </div>
 
       <div className="adm-card">
-        <div className="adm-card-head"><h4>Xuất báo cáo tài chính</h4></div>
-        <div className="adm-toolbar">
-          <button className="btn btn-outline btn-sm" onClick={() => exportReport('week')}>Xuất báo cáo tuần</button>
-          <button className="btn btn-outline btn-sm" onClick={() => exportReport('month')}>Xuất báo cáo tháng</button>
-          <button className="btn btn-outline btn-sm" onClick={() => exportReport('quarter')}>Xuất báo cáo quý</button>
+        <div className="adm-card-head">
+          <h4>Xuất báo cáo tài chính</h4>
+          <span className="sub">Trích xuất bảng kê chi tiết và tổng hợp doanh thu theo kỳ</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', minWidth: 140 }}>
+              📊 Xuất file Excel (.xlsx):
+            </span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => exportReport('week', 'xlsx')}>
+                Báo cáo tuần (.xlsx)
+              </button>
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => exportReport('month', 'xlsx')}>
+                Báo cáo tháng (.xlsx)
+              </button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => exportReport('quarter', 'xlsx')}>
+                Báo cáo quý (.xlsx)
+              </button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink-soft)', minWidth: 140 }}>
+              📄 Xuất file CSV (.csv):
+            </span>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => exportReport('week', 'csv')}>
+                Báo cáo tuần (.csv)
+              </button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => exportReport('month', 'csv')}>
+                Báo cáo tháng (.csv)
+              </button>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => exportReport('quarter', 'csv')}>
+                Báo cáo quý (.csv)
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+
     </section>
   );
 }

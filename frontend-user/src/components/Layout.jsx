@@ -15,8 +15,11 @@ export default function Layout() {
   return (
     <>
       <IconDefs />
+      <a href="#main-content" className="skip-link">Bỏ qua đến nội dung chính</a>
       <TopNav />
-      <Outlet />
+      <main id="main-content" tabIndex={-1}>
+        <Outlet />
+      </main>
       <ModalRoot />
       {isLoggedIn && !onMessagesPage && <MessengerWidget />}
       {!onMessagesPage && <Footer />}

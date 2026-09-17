@@ -35,13 +35,18 @@ function tierIconEl(tier) {
 
 function formatDeadline(ts) {
   if (!ts) return '—';
-  const time = typeof ts === 'string' || ts instanceof Date ? new Date(ts).getTime() : ts;
+  let iso = typeof ts === 'string' ? ts.trim().replace(' ', 'T') : ts;
+  if (typeof iso === 'string' && !iso.endsWith('Z') && !/[+-]\d{2}:?\d{2}$/.test(iso)) {
+    iso += 'Z';
+  }
+  const time = typeof iso === 'string' || iso instanceof Date ? new Date(iso).getTime() : iso;
   if (isNaN(time)) return '—';
   const diff = time - Date.now();
   if (diff <= 0) return 'Đã quá hạn';
   const days = Math.floor(diff / 86400000);
   const hours = Math.floor((diff % 86400000) / 3600000);
-  if (days > 0) return `còn ${days} ngày ${hours} giờ`;
+  if (days > 0 && hours > 0) return `còn ${days} ngày ${hours} giờ`;
+  if (days > 0) return `còn ${days} ngày`;
   return `còn ${hours} giờ`;
 }
 
@@ -165,6 +170,8 @@ export default function JobApplicants() {
       setLoading(false);
     }
   };
+
+  const refreshJobData = loadData;
 
   useEffect(() => {
     if (jobId) {
@@ -326,15 +333,25 @@ export default function JobApplicants() {
                 </div>
                 <div style={{ marginTop: 10, fontSize: 13, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
                   {job.hiredApplicant && (
-                    <span style={{ background: 'rgba(108, 76, 255, 0.1)', color: '#6C4CFF', border: '1px solid rgba(108, 76, 255, 0.25)', borderRadius: 6, padding: '3px 10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <Icon name="user" width={13} height={13} /> Đang làm: {job.hiredApplicant}
+                    <span style={{
+                      background: job.status === 'completed' ? 'rgba(22, 163, 74, 0.1)' : 'rgba(108, 76, 255, 0.1)',
+                      color: job.status === 'completed' ? '#16a34a' : '#6C4CFF',
+                      border: `1px solid ${job.status === 'completed' ? 'rgba(22, 163, 74, 0.25)' : 'rgba(108, 76, 255, 0.25)'}`,
+                      borderRadius: 6,
+                      padding: '3px 10px',
+                      fontWeight: 600,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}>
+                      <Icon name="user" width={13} height={13} /> {job.status === 'completed' ? 'Đã hoàn thành bởi' : 'Đang làm'}: {job.hiredApplicant}
                     </span>
                   )}
-                  {wasEscrowed && job.deadlineAt ? (
+                  {job.status !== 'completed' && job.status !== 'cancelled' && wasEscrowed && job.deadlineAt ? (
                     <span style={{ background: 'rgba(2, 132, 199, 0.1)', color: '#0284c7', border: '1px solid rgba(2, 132, 199, 0.25)', borderRadius: 6, padding: '3px 10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                       <Icon name="clock" width={13} height={13} /> Thời hạn còn lại: {formatDeadline(job.deadlineAt)}
                     </span>
-                  ) : job.deadlineAt ? (
+                  ) : job.status !== 'completed' && job.status !== 'cancelled' && job.deadlineAt ? (
                     <span style={{ background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', border: '1px solid rgba(108, 76, 255, 0.2)', borderRadius: 6, padding: '3px 10px', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                       <Icon name="clock" width={13} height={13} /> Thời hạn hoàn thành: {(() => {
                         const start = job.postedAt ? new Date(job.postedAt).getTime() : Date.now();
@@ -367,10 +384,11 @@ export default function JobApplicants() {
                 {(wasEscrowed || job.status === 'completed') && (
                   <button
                     className="btn btn-outline btn-sm"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                    onClick={() => openModal('receipt', { justCompletedId: job.id })}
-                    title="Xem và xuất biên nhận thanh toán / phiếu thu điện tử"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    onClick={() => openModal('receipt', { justCompletedId: job.id, job })}
+                    title="Xem và tải về biên nhận thanh toán / hóa đơn điện tử"
                   >
+                    <Icon name="receipt" width="14" height="14" />
                     Xuất hóa đơn / Phiếu thu
                   </button>
                 )}
@@ -546,8 +564,10 @@ export default function JobApplicants() {
                     style={{ fontWeight: 700 }}
                     onClick={() => openModal('deliverableReview', {
                       job,
+                      jobId: job.id,
                       deliverable: job.deliverable,
-                      onCompleted: refreshJobData
+                      onReviewed: loadData,
+                      onCompleted: loadData
                     })}
                   >
                     Xem xét nghiệm thu & Giải ngân
@@ -557,8 +577,10 @@ export default function JobApplicants() {
                     style={{ color: '#e11d48', borderColor: '#fecdd3' }}
                     onClick={() => openModal('revision', {
                       job,
+                      jobId: job.id,
                       deliverable: job.deliverable,
-                      onRequested: refreshJobData
+                      onReviewed: loadData,
+                      onRequested: loadData
                     })}
                   >
                     Yêu cầu chỉnh sửa lại

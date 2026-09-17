@@ -5,39 +5,141 @@ import { useModal } from '../../context/ModalContext';
 import { useNavigate } from 'react-router-dom';
 import { downloadJobAttachment } from '../../utils/fileDownloader';
 
-export function ReceiptModal({ onClose, justCompletedId }) {
+import { printReceipt, downloadReceiptTxt } from '../../utils/receiptExporter';
+
+export function ReceiptModal({ onClose, justCompletedId, job: propJob }) {
   const { state } = useStore();
   const { openModal } = useModal();
   const numericCompletedId = justCompletedId ? Number(justCompletedId) : null;
-  const receipt = numericCompletedId
+  let receipt = numericCompletedId
     ? state.receipts.find((r) => r.dashJobId === numericCompletedId || r.jobId === numericCompletedId || r.dashJobId === justCompletedId)
     : state.receipts[0];
-  if (!receipt) { onClose(); return null; }
-  const job = state.myJobs.find((j) => j.id === receipt.dashJobId || j.id === receipt.jobId) || state.myJobs.find((j) => j.title === receipt.jobTitle);
+
+  const job = propJob 
+    || (numericCompletedId ? state.myJobs.find((j) => j.id === numericCompletedId) : null)
+    || (receipt ? state.myJobs.find((j) => j.id === receipt.dashJobId || j.id === receipt.jobId || j.title === receipt.jobTitle) : null);
+
+  // Fallback nếu chưa có receipt trong state.receipts nhưng có job
+  if (!receipt && job) {
+    receipt = {
+      id: `rc-${job.id}`,
+      code: `SB-REC-${job.id}`,
+      dashJobId: job.id,
+      jobId: job.id,
+      jobTitle: job.title,
+      student: job.hiredApplicant || 'Sinh viên thực hiện',
+      employer: job.employer || state.currentUser?.name || 'Nhà tuyển dụng',
+      budget: job.budget || 0,
+      commission: 0,
+      total: job.budget || 0,
+      net: job.budget || 0,
+      date: job.completedAt ? new Date(job.completedAt).toLocaleString('vi-VN') : (job.date || new Date().toLocaleString('vi-VN')),
+    };
+  }
+
+  if (!receipt) {
+    onClose();
+    return null;
+  }
 
   const proceed = () => {
     onClose();
-    if (job) openModal('review', { jobTitle: job.title, withName: job.hiredApplicant || receipt.student, direction: 'toStudent', dashJobId: job.id });
+    if (job && (job.status === 'completed' || job.status === 'closed') && (job.hiredApplicant || receipt.student)) {
+      openModal('review', {
+        jobTitle: job.title,
+        withName: job.hiredApplicant || receipt.student,
+        direction: 'toStudent',
+        dashJobId: job.id
+      });
+    }
   };
 
   return (
     <ModalShell onClose={onClose}>
-      <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <Icon name="receipt" width="22" height="22" /> Biên nhận giao dịch
-      </h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+          <Icon name="receipt" width="22" height="22" /> Hóa đơn / Phiếu thu điện tử
+        </h3>
+        <span className="badge badge-success" style={{ fontSize: 12, padding: '4px 8px' }}>
+          Đã quyết toán
+        </span>
+      </div>
+
+      <div style={{ background: 'rgba(2, 132, 199, 0.06)', border: '1px solid rgba(2, 132, 199, 0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+          <span style={{ color: 'var(--ink-soft)' }}>Mã hóa đơn / biên nhận:</span>
+          <b><code>{receipt.code || `SB-REC-${receipt.jobId || '2026'}`}</code></b>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+          <span style={{ color: 'var(--ink-soft)' }}>Ký hiệu mẫu:</span>
+          <span>01GTKT0/001 - SB/26E</span>
+        </div>
+      </div>
+
       <div className="checkout-summary">
-        <div className="cs-row"><span>Công việc</span><span>{receipt.jobTitle}</span></div>
+        <div className="cs-row"><span>Công việc</span><span style={{ fontWeight: 600 }}>{receipt.jobTitle}</span></div>
+        <div className="cs-row"><span>Nhà tuyển dụng</span><span>{receipt.employer || state.currentUser?.name || 'Nhà tuyển dụng'}</span></div>
         <div className="cs-row"><span>Sinh viên nhận</span><span>{receipt.student}</span></div>
-        <div className="cs-row"><span>Ngân sách</span><span>{fmtVND(receipt.budget)}</span></div>
+        <div className="cs-row"><span>Ngân sách hợp đồng</span><span>{fmtVND(receipt.budget)}</span></div>
         <div className="cs-row">
-          <span>Hoa hồng nền tảng</span>
+          <span>Phí nền tảng</span>
           <span>{receipt.commission > 0 ? fmtVND(receipt.commission) : '0đ (Miễn phí nền tảng)'}</span>
         </div>
-        <div className="cs-row total"><span>Tổng đã thanh toán</span><span>{fmtVND(receipt.total || receipt.budget)}</span></div>
-        <div className="cs-row"><span>Thời gian</span><span>{receipt.date}</span></div>
+        <div className="cs-row total">
+          <span>Tổng thanh toán</span>
+          <span style={{ color: 'var(--primary)', fontSize: 16 }}>{fmtVND(receipt.total || receipt.budget)}</span>
+        </div>
+        <div className="cs-row"><span>Thời gian lập</span><span>{receipt.date}</span></div>
       </div>
-      <p style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Biên nhận được lưu trong Ví của bạn — có thể dùng làm căn cứ minh bạch thu nhập/nghĩa vụ thuế.</p>
-      <div className="modal-actions"><button className="btn btn-primary btn-block" onClick={proceed}>Đã hiểu, tiếp tục đánh giá</button></div>
+
+      <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 10, marginBottom: 18 }}>
+        Phiếu thu điện tử có giá trị pháp lý theo chứng thực số hóa đơn của SkillBridge Escrow. Bạn có thể in hoặc tải về dưới dạng PDF để lưu trữ/kê khai thuế.
+      </p>
+
+      {/* Download / Print Actions */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button 
+            type="button" 
+            className="btn btn-primary" 
+            style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            onClick={() => printReceipt(receipt)}
+            title="Mở giao diện in và lưu file PDF tiêu chuẩn A4"
+          >
+            <Icon name="download" width="16" height="16" /> Tải về / In phiếu thu (PDF)
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-secondary" 
+            style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+            onClick={() => downloadReceiptTxt(receipt)}
+            title="Tải văn bản chi tiết sao kê dạng TXT"
+          >
+            Tải .TXT
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          {job && (job.status === 'completed' || job.status === 'closed') && (job.hiredApplicant || receipt.student) && (
+            <button 
+              type="button" 
+              className="btn btn-lime" 
+              style={{ flex: 1 }}
+              onClick={proceed}
+            >
+              Tiếp tục đánh giá sinh viên →
+            </button>
+          )}
+          <button 
+            type="button" 
+            className="btn btn-outline" 
+            style={{ minWidth: 80 }}
+            onClick={onClose}
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
     </ModalShell>
   );
 }

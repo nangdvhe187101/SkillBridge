@@ -5624,6 +5624,7 @@ table.adm-table {
   outline: none !important;
   box-shadow: none !important;
   -moz-appearance: textfield;
+  appearance: textfield;
 }
 .input-with-suffix input::-webkit-outer-spin-button,
 .input-with-suffix input::-webkit-inner-spin-button {

@@ -88,6 +88,29 @@ public class SubscriptionService : ISubscriptionService
         decimal amount,
         CancellationToken cancellationToken)
     {
+        var now = DateTime.UtcNow;
+        var today = DateOnly.FromDateTime(now);
+
+        // Kiểm tra hạ cấp: Nếu đang có gói cao hơn còn hạn, không cho phép mua gói thấp hơn
+        var currentActiveSub = await _dbContext.Subscriptions
+            .Where(s => s.UserId == userId 
+                     && s.Status == PaymentConstants.ActiveSubscriptionStatus
+                     && (s.RenewalDate == null || s.RenewalDate >= today))
+            .OrderByDescending(s => s.UpdatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (currentActiveSub != null)
+        {
+            var currentRank = GetPlanTierRank(currentActiveSub.PlanName);
+            var targetRank = GetPlanTierRank(planName);
+
+            if (targetRank < currentRank)
+            {
+                throw new BusinessException(
+                    $"Bạn đang sử dụng gói cao hơn ({currentActiveSub.PlanName}). Không thể mua gói thấp hơn ({planName}) khi gói hiện tại còn hạn sử dụng.");
+            }
+        }
+
         var wallet = await GetWalletWithLockAsync(userId, cancellationToken);
         if (wallet == null || wallet.Balance < amount)
         {
@@ -105,15 +128,15 @@ public class SubscriptionService : ISubscriptionService
             Label = $"Đăng ký gói {planName} (1 tháng)",
             Amount = amount,
             Sign = -1,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = now
         };
         await _dbContext.Transactions.AddAsync(transaction, cancellationToken);
 
-        var now = DateTime.UtcNow;
-        var today = DateOnly.FromDateTime(now);
+        var existingSameSub = currentActiveSub != null && currentActiveSub.PlanName == planName
+            ? currentActiveSub
+            : await _dbContext.Subscriptions
+                .FirstOrDefaultAsync(s => s.UserId == userId && s.PlanName == planName && s.Status == "active", cancellationToken);
 
-        var existingSameSub = await _dbContext.Subscriptions
-            .FirstOrDefaultAsync(s => s.UserId == userId && s.PlanName == planName && s.Status == "active", cancellationToken);
 
         Subscription sub;
         if (existingSameSub != null)
@@ -177,4 +200,19 @@ public class SubscriptionService : ISubscriptionService
         }
         return await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
     }
+
+    public static int GetPlanTierRank(string? planName)
+    {
+        if (string.IsNullOrWhiteSpace(planName)) return 0;
+        if (planName.Contains(PaymentConstants.MasterPlanKeyword, StringComparison.OrdinalIgnoreCase) ||
+            planName.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase))
+            return 3;
+        if (planName.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase) ||
+            planName.Contains(PaymentConstants.GrowthPlanKeyword, StringComparison.OrdinalIgnoreCase))
+            return 2;
+        if (planName.Contains(PaymentConstants.StarterPlanKeyword, StringComparison.OrdinalIgnoreCase))
+            return 1;
+        return 0;
+    }
 }
+
