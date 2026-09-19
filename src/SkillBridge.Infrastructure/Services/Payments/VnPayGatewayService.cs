@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
@@ -25,10 +26,16 @@ public class VnPayGatewayService : IVnPayGatewayService
 
     public string CreatePaymentUrl(string orderCode, decimal amount, string clientIp)
     {
-        var tmnCode = _config["VnPay:TmnCode"] ?? "SBTEST01";
-        var hashSecret = _config["VnPay:HashSecret"] ?? "TESTSECRETKEYVNPAY0000000000000";
+        var tmnCode = _config["VnPay:TmnCode"];
+        var hashSecret = _config["VnPay:HashSecret"];
         var baseUrl = _config["VnPay:BaseUrl"] ?? "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html";
         var returnUrl = _config["VnPay:ReturnUrl"] ?? "http://localhost:5247/api/payments/vnpay-return";
+
+        if (string.IsNullOrWhiteSpace(hashSecret) || string.IsNullOrWhiteSpace(tmnCode))
+        {
+            _logger.LogError("VnPay chưa được cấu hình đầy đủ (TmnCode hoặc HashSecret bị thiếu).");
+            throw new InvalidOperationException("Cổng thanh toán VNPay chưa được cấu hình.");
+        }
 
         var now = DateTime.UtcNow.AddHours(7); // VNPay expects Vietnam Time (UTC+7)
         var createDate = now.ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture);
@@ -54,7 +61,8 @@ public class VnPayGatewayService : IVnPayGatewayService
             ["vnp_ExpireDate"] = expireDate
         };
 
-        var queryString = string.Join("&", vnpParams.Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value)}"));
+        // Chuẩn hóa UrlEncode theo thư viện chính thức của VNPay (khoảng trắng thành '+')
+        var queryString = string.Join("&", vnpParams.Select(kv => $"{kv.Key}={WebUtility.UrlEncode(kv.Value)}"));
         var secureHash = ComputeHmacSha512(hashSecret, queryString);
 
         return $"{baseUrl}?{queryString}&vnp_SecureHash={secureHash}";
@@ -63,7 +71,15 @@ public class VnPayGatewayService : IVnPayGatewayService
     public VnPayProcessResult ProcessIpn(IDictionary<string, string> query)
     {
         var result = new VnPayProcessResult();
-        var hashSecret = _config["VnPay:HashSecret"] ?? "TESTSECRETKEYVNPAY0000000000000";
+        var hashSecret = _config["VnPay:HashSecret"];
+
+        if (string.IsNullOrWhiteSpace(hashSecret))
+        {
+            _logger.LogError("VnPay:HashSecret chưa được cấu hình. Từ chối xác thực IPN.");
+            result.IsValidSignature = false;
+            result.Message = "Cổng thanh toán chưa cấu hình HashSecret";
+            return result;
+        }
 
         if (!query.TryGetValue("vnp_SecureHash", out var receivedHash) || string.IsNullOrWhiteSpace(receivedHash))
         {
@@ -77,18 +93,27 @@ public class VnPayGatewayService : IVnPayGatewayService
             .Where(k => !string.Equals(k.Key, "vnp_SecureHash", StringComparison.OrdinalIgnoreCase) &&
                         !string.Equals(k.Key, "vnp_SecureHashType", StringComparison.OrdinalIgnoreCase))
             .OrderBy(k => k.Key, StringComparer.Ordinal)
-            .Select(k => $"{k.Key}={Uri.EscapeDataString(k.Value ?? string.Empty)}");
+            .ToList();
 
-        var rawDataToSign = string.Join("&", filteredParams);
-        var computedHash = ComputeHmacSha512(hashSecret, rawDataToSign);
+        // Hỗ trợ kiểm tra cả 2 chuẩn mã hóa ký số: WebUtility.UrlEncode ('+') và Uri.EscapeDataString ('%20')
+        var rawDataUrlEncode = string.Join("&", filteredParams.Select(k => $"{k.Key}={WebUtility.UrlEncode(k.Value ?? string.Empty)}"));
+        var computedHashUrlEncode = ComputeHmacSha512(hashSecret, rawDataUrlEncode);
+
+        var rawDataEscape = string.Join("&", filteredParams.Select(k => $"{k.Key}={Uri.EscapeDataString(k.Value ?? string.Empty)}"));
+        var computedHashEscape = ComputeHmacSha512(hashSecret, rawDataEscape);
 
         // Constant-time comparison to prevent timing attacks
         var receivedBytes = Encoding.UTF8.GetBytes(receivedHash.ToLowerInvariant());
-        var computedBytes = Encoding.UTF8.GetBytes(computedHash.ToLowerInvariant());
+        var hash1Bytes = Encoding.UTF8.GetBytes(computedHashUrlEncode.ToLowerInvariant());
+        var hash2Bytes = Encoding.UTF8.GetBytes(computedHashEscape.ToLowerInvariant());
 
-        if (receivedBytes.Length != computedBytes.Length || !CryptographicOperations.FixedTimeEquals(receivedBytes, computedBytes))
+        var isValid = (receivedBytes.Length == hash1Bytes.Length && CryptographicOperations.FixedTimeEquals(receivedBytes, hash1Bytes))
+                   || (receivedBytes.Length == hash2Bytes.Length && CryptographicOperations.FixedTimeEquals(receivedBytes, hash2Bytes));
+
+        if (!isValid)
         {
-            _logger.LogWarning("VNPay signature verification failed for IPN. Computed: {Computed}, Received: {Received}", computedHash, receivedHash);
+            _logger.LogWarning("VNPay signature verification failed for IPN. Computed (+): {Computed1}, Computed (%20): {Computed2}, Received: {Received}",
+                computedHashUrlEncode, computedHashEscape, receivedHash);
             result.IsValidSignature = false;
             result.Message = "Chữ ký không khớp";
             return result;

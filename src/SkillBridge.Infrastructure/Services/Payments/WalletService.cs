@@ -232,11 +232,12 @@ public class WalletService : IWalletService
             ? request.AccountHolder.Trim().ToUpper()
             : (user.FullName != null ? VietnameseConverter.RemoveVietnameseTones(user.FullName).ToUpper() : "CHỦ TÀI KHOẢN");
         wallet.BankBranch = request.Branch?.Trim();
-        wallet.IsBankVerified = true;
+        // Không tự động xác thực ngân hàng: phải chờ Admin duyệt qua BankVerificationService
+        wallet.IsBankVerified = false;
         wallet.BankLinkedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(cancellationToken);
-        _logger.LogInformation("Người dùng {UserId} đã liên kết tài khoản ngân hàng {BankName} - {AccountMask} thành công.", 
+        _logger.LogInformation("Người dùng {UserId} đã cập nhật thông tin tài khoản ngân hàng {BankName} - {AccountMask} (Chờ xác thực).", 
             userId, wallet.BankName, wallet.AccountNumber?.Length > 4 ? "****" + wallet.AccountNumber[^4..] : wallet.AccountNumber);
 
         return await GetMyWalletAsync(userId, cancellationToken);
@@ -246,9 +247,7 @@ public class WalletService : IWalletService
     {
         if (_dbContext.Database.IsRelational())
         {
-            return await _dbContext.Wallets
-                .FromSqlRaw("SELECT * FROM wallets WHERE user_id = {0} FOR UPDATE", userId)
-                .SingleOrDefaultAsync(ct);
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { userId }, ct);
         }
         return await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
     }

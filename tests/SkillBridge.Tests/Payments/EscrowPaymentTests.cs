@@ -221,6 +221,57 @@ public class EscrowPaymentTests
     }
 
     [Fact]
+    public async Task RefundEscrowAsync_MultipleHiringCycles_ShouldAllowSubsequentRefunds()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new EscrowPaymentService(dbContext, _loggerMock.Object);
+
+        var employerId = 10;
+        var jobId = 999;
+        var budget = 500000m;
+
+        // Seed wallet for employer
+        dbContext.Wallets.Add(new Wallet { UserId = employerId, Balance = 1000000m });
+        await dbContext.SaveChangesAsync();
+
+        // Cycle 1: Hire SV 1 -> Hold Escrow 500k -> Cancel -> Refund Escrow 500k
+        await service.HoldEscrowAsync(employerId, jobId, "Job 999", budget);
+        await dbContext.SaveChangesAsync();
+
+        var walletAfterHold1 = await dbContext.Wallets.FirstAsync(w => w.UserId == employerId);
+        Assert.Equal(500000m, walletAfterHold1.Balance);
+
+        await service.RefundEscrowAsync(employerId, jobId, "Job 999", budget, "SV1 hủy");
+        await dbContext.SaveChangesAsync();
+
+        var walletAfterRefund1 = await dbContext.Wallets.FirstAsync(w => w.UserId == employerId);
+        Assert.Equal(1000000m, walletAfterRefund1.Balance);
+
+        // Cycle 2: Hire SV 2 -> Hold Escrow 500k -> Cancel -> Refund Escrow 500k (LẦN 2 CHO CÙNG JOB)
+        await service.HoldEscrowAsync(employerId, jobId, "Job 999", budget);
+        await dbContext.SaveChangesAsync();
+
+        var walletAfterHold2 = await dbContext.Wallets.FirstAsync(w => w.UserId == employerId);
+        Assert.Equal(500000m, walletAfterHold2.Balance);
+
+        // Act: Hoàn tiền lần 2 không bị chặn bởi AnyAsync(ReferenceId == jobId)
+        await service.RefundEscrowAsync(employerId, jobId, "Job 999", budget, "SV2 hủy");
+        await dbContext.SaveChangesAsync();
+
+        // Assert: Số dư ví hồi phục chính xác 1.000.000đ
+        var walletAfterRefund2 = await dbContext.Wallets.FirstAsync(w => w.UserId == employerId);
+        Assert.Equal(1000000m, walletAfterRefund2.Balance);
+
+        // Act & Assert: Cố hoàn lần 3 khi không còn hold sẽ bị chặn
+        var ex = await Assert.ThrowsAsync<BusinessException>(async () =>
+        {
+            await service.RefundEscrowAsync(employerId, jobId, "Job 999", budget, "Hủy lần 3 bất hợp lệ");
+        });
+        Assert.Contains("đã được hoàn tiền", ex.Message);
+    }
+
+    [Fact]
     public async Task ReleaseEscrowAsync_StudentMaster_EmployerNormal_ShouldDeduct3PercentCommission()
     {
         // Arrange

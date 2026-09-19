@@ -46,3 +46,18 @@ export async function getCurrentBankVerification() {
     method: 'GET',
   });
 }
+
+// Withdrawal APIs
+export async function requestWithdrawal(amount) {
+  return apiFetch('/wallets/withdraw', {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  });
+}
+
+export async function getMyWithdrawals(page = 1, pageSize = 20) {
+  return apiFetch(`/wallets/withdrawals?page=${page}&pageSize=${pageSize}`, {
+    method: 'GET',
+  });
+}
+

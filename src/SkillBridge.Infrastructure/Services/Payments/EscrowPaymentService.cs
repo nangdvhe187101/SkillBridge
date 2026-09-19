@@ -206,7 +206,7 @@ public class EscrowPaymentService : IEscrowPaymentService
         // Khóa hàng Job để chống race condition hoàn tiền kép (double-refund)
         await GetJobWithLockAsync(jobId, cancellationToken);
 
-        // Idempotency Guard: Không hoàn tiền nếu công việc đã được giải ngân hoặc đã hoàn tiền
+        // Idempotency Guard 1: Không hoàn tiền nếu công việc đã được giải ngân thành công
         var alreadyReleased = await _dbContext.Receipts.AnyAsync(r => r.JobId == jobId, cancellationToken);
         if (alreadyReleased)
         {
@@ -214,11 +214,33 @@ public class EscrowPaymentService : IEscrowPaymentService
             throw new BusinessException($"Công việc #{jobId} đã được giải ngân thù lao, không thể hoàn tiền.");
         }
 
-        var alreadyRefunded = await _dbContext.Transactions.AnyAsync(t => t.Type == "escrow_refund" && t.ReferenceId == jobId && t.UserId == employerId, cancellationToken);
-        if (alreadyRefunded)
+        // Idempotency Guard 2: Kiểm soát số dư ký quỹ thực tế (Số hold trừ số refund)
+        var totalHeld = await _dbContext.Transactions
+            .Where(t => t.Type == "escrow_hold" && t.ReferenceId == jobId && t.UserId == employerId)
+            .SumAsync(t => (decimal?)t.Amount, cancellationToken) ?? 0m;
+
+        var totalRefunded = await _dbContext.Transactions
+            .Where(t => t.Type == "escrow_refund" && t.ReferenceId == jobId && t.UserId == employerId)
+            .SumAsync(t => (decimal?)t.Amount, cancellationToken) ?? 0m;
+
+        if (totalHeld > 0)
         {
-            _logger.LogWarning("Phát hiện yêu cầu hoàn tiền trùng lặp cho Job #{JobId}, EmployerId={EmployerId}.", jobId, employerId);
-            throw new BusinessException($"Công việc #{jobId} đã được hoàn tiền ký quỹ trước đó.");
+            var remainingEscrow = totalHeld - totalRefunded;
+            if (remainingEscrow <= 0 || amount > remainingEscrow)
+            {
+                _logger.LogWarning("Phát hiện yêu cầu hoàn tiền vượt số dư ký quỹ Job #{JobId}, EmployerId={EmployerId}. Held: {Held}, Refunded: {Refunded}, Request: {Amount}",
+                    jobId, employerId, totalHeld, totalRefunded, amount);
+                throw new BusinessException($"Công việc #{jobId} đã được hoàn tiền ký quỹ trước đó (Số dư ký quỹ khả dụng còn lại: {Math.Max(0, remainingEscrow):N0}đ).");
+            }
+        }
+        else
+        {
+            // Khi không có bản ghi escrow_hold (môi trường test hoặc legacy): chặn nếu đã có bản ghi refund trước đó
+            if (totalRefunded > 0)
+            {
+                _logger.LogWarning("Phát hiện yêu cầu hoàn tiền trùng lặp cho Job #{JobId}, EmployerId={EmployerId}.", jobId, employerId);
+                throw new BusinessException($"Công việc #{jobId} đã được hoàn tiền ký quỹ trước đó.");
+            }
         }
 
         var refundTx = new Transaction
@@ -257,9 +279,7 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (_dbContext.Database.IsRelational())
         {
-            return await _dbContext.Wallets
-                .FromSqlRaw("SELECT * FROM wallets WHERE user_id = {0} FOR UPDATE", userId)
-                .SingleOrDefaultAsync(ct);
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { userId }, ct);
         }
         return await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
     }
@@ -268,9 +288,7 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (_dbContext.Database.IsRelational())
         {
-            return await _dbContext.Jobs
-                .FromSqlRaw("SELECT * FROM jobs WHERE id = {0} FOR UPDATE", jobId)
-                .SingleOrDefaultAsync(ct);
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM jobs WHERE id = {0} FOR UPDATE", new object[] { jobId }, ct);
         }
         return await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
     }

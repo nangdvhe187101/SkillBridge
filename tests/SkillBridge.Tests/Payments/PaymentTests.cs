@@ -214,4 +214,38 @@ public class PaymentTests
         Assert.False(result.IsSuccess);
         Assert.Contains("transferType", result.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void SePay_ProcessWebhook_WhenApiKeyNotConfigured_ShouldReject()
+    {
+        // Arrange
+        var emptyConfig = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["SePay:ApiKey"] = ""
+        }).Build();
+
+        var service = new SePayGatewayService(emptyConfig, _sePayLoggerMock.Object);
+
+        // Act
+        var result = service.ProcessWebhook("Apikey anykey", "{}");
+
+        // Assert
+        Assert.False(result.IsValidApiKey);
+        Assert.Contains("chưa được cấu hình", result.Message);
+    }
+
+    [Fact]
+    public void SePay_ProcessWebhook_WhenEmptyApikeyHeader_ShouldReject()
+    {
+        // Arrange
+        var service = new SePayGatewayService(_config, _sePayLoggerMock.Object);
+
+        // Act - Kẻ tấn công chỉ gửi header 'Apikey' hoặc 'Apikey '
+        var result1 = service.ProcessWebhook("Apikey", "{}");
+        var result2 = service.ProcessWebhook("Apikey ", "{}");
+
+        // Assert
+        Assert.False(result1.IsValidApiKey);
+        Assert.False(result2.IsValidApiKey);
+    }
 }

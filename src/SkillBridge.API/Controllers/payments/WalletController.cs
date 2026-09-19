@@ -16,13 +16,16 @@ public class WalletController : ControllerBase
 {
     private readonly IWalletService _walletService;
     private readonly IBankVerificationService _bankVerificationService;
+    private readonly IWithdrawalService _withdrawalService;
 
     public WalletController(
         IWalletService walletService,
-        IBankVerificationService bankVerificationService)
+        IBankVerificationService bankVerificationService,
+        IWithdrawalService withdrawalService)
     {
         _walletService = walletService;
         _bankVerificationService = bankVerificationService;
+        _withdrawalService = withdrawalService;
     }
 
     [Authorize]
@@ -94,6 +97,32 @@ public class WalletController : ControllerBase
     {
         var userId = User.GetRequiredUserId();
         var result = await _bankVerificationService.GetCurrentVerificationAsync(userId, cancellationToken);
+        return Ok(result);
+    }
+
+    [Authorize]
+    [HttpPost("withdraw")]
+    [EnableRateLimiting("ResourceCreationPolicy")]
+    public async Task<IActionResult> Withdraw(
+        [FromBody] CreateWithdrawalDto dto,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.GetRequiredUserId();
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var result = await _withdrawalService.RequestWithdrawalAsync(userId, dto, ip, cancellationToken);
+        return Ok(result);
+    }
+
+    [Authorize]
+    [HttpGet("withdrawals")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> GetMyWithdrawals(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = User.GetRequiredUserId();
+        var result = await _withdrawalService.GetMyWithdrawalsAsync(userId, page, pageSize, cancellationToken);
         return Ok(result);
     }
 }

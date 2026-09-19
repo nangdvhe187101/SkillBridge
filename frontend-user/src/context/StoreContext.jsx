@@ -272,12 +272,12 @@ const initialClaimsSeed = [
 ];
 
 const initialState = {
-  balance: 350000,
+  balance: 0,
   escrowLocked: 0,
-  transactions: initialTransactionsSeed,
-  receipts: initialReceiptsSeed,
+  transactions: [],
+  receipts: [],
   insuranceFund: 8200000,
-  claims: initialClaimsSeed,
+  claims: [],
   bankAccount: null,
   subscriptionPro: false,
   vipBusiness: false,
@@ -684,19 +684,9 @@ function reducer(state, action) {
       return { ...state, balance, transactions };
     }
     case 'SUBMIT_CLAIM': {
-      const { jobTitle, jobBudget, desc } = action.payload;
-      const rate = 0.3 + Math.random() * 0.2;
-      const payout = Math.round((jobBudget * rate) / 1000) * 1000;
-      let insuranceFund = state.insuranceFund;
-      let balance = state.balance;
-      let transactions = state.transactions;
-      if (insuranceFund >= payout) {
-        insuranceFund -= payout;
-        balance += payout;
-        transactions = addTxTo(transactions, 'insurance_payout', 'Bồi thường Quỹ Bảo hiểm · ' + jobTitle, payout, 1);
-      }
-      const claims = [{ id: 'c' + Date.now(), jobTitle, desc, payout, status: 'approved', date: 'Vừa xong' }, ...state.claims];
-      return { ...state, insuranceFund, balance, transactions, claims };
+      const { jobTitle, desc } = action.payload;
+      const claims = [{ id: 'c' + Date.now(), jobTitle, desc, payout: 0, status: 'pending', statusLabel: 'Đang chờ HĐ Bảo hiểm xét duyệt', date: 'Vừa xong' }, ...state.claims];
+      return { ...state, claims };
     }
 
     case 'UPDATE_BANK_ACCOUNT': {
@@ -1041,7 +1031,8 @@ export function StoreProvider({ children }) {
           accountNumber: res.accountNumber,
           accountHolder: res.accountHolder,
           branch: res.bankBranch,
-          isVerified: res.isBankVerified
+          isVerified: Boolean(res.isBankVerified),
+          isBankVerified: Boolean(res.isBankVerified)
         } : null;
         dispatch({
           type: 'SET_WALLET',
@@ -1538,7 +1529,17 @@ export function StoreProvider({ children }) {
       },
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),
       refreshWallet,
-      withdraw: (amount) => { dispatch({ type: 'WITHDRAW', amount }); showToast(`Đã gửi yêu cầu rút ${amount.toLocaleString('vi-VN')}đ.`, 'check'); },
+      withdraw: async (amount) => {
+        try {
+          const res = await walletApi.requestWithdrawal(amount);
+          await refreshWallet();
+          showToast(`Đã tạo yêu cầu rút ${Number(amount).toLocaleString('vi-VN')}đ thành công. Đang chờ Admin duyệt!`, 'check');
+          return res;
+        } catch (err) {
+          showToast(err?.message || 'Không thể tạo yêu cầu rút tiền.', 'warning');
+          throw err;
+        }
+      },
       updateBankAccount: async (payload) => {
         try {
           const res = await walletApi.updateBankAccount({
@@ -1554,10 +1555,11 @@ export function StoreProvider({ children }) {
             accountNumber: res.accountNumber,
             accountHolder: res.accountHolder,
             branch: res.bankBranch,
-            isVerified: res.isBankVerified
+            isVerified: Boolean(res.isBankVerified),
+            isBankVerified: Boolean(res.isBankVerified)
           } : payload;
           dispatch({ type: 'UPDATE_BANK_ACCOUNT', payload: mappedBank });
-          showToast('Liên kết tài khoản ngân hàng thành công!', 'check');
+          showToast(mappedBank?.isBankVerified ? 'Liên kết tài khoản ngân hàng thành công!' : 'Đã lưu thông tin tài khoản ngân hàng. Vui lòng gửi yêu cầu xác thực để được duyệt.', 'check');
           return mappedBank;
         } catch (err) {
           showToast(err?.message || 'Không thể lưu tài khoản ngân hàng.', 'warning');

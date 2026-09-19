@@ -181,7 +181,13 @@ public class JobService : IJobService
                     throw new BusinessException("Không thể hủy công việc đã hoàn thành.");
                 }
 
-                var isHired = job.Status == "in_progress" || job.HiredApplicantId.HasValue || new[] { "submitted", "revision_requested" }.Contains(job.Status);
+                // BẢO VỆ SINH VIÊN: Chặn NTD tự ý hủy Job khi sinh viên đã nộp sản phẩm bàn giao
+                if (job.Status == "submitted")
+                {
+                    throw new BusinessException("Không thể hủy công việc khi sinh viên đã nộp sản phẩm bàn giao. Vui lòng nghiệm thu sản phẩm hoặc mở khiếu nại/tranh chấp nếu có vấn đề.");
+                }
+
+                var isHired = job.Status == "in_progress" || job.HiredApplicantId.HasValue || job.Status == "revision_requested";
                 var filesToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 int? hiredStudentIdToNotify = null;
 
@@ -566,9 +572,7 @@ public class JobService : IJobService
     {
         if (_dbContext.Database.IsRelational())
         {
-            return await _dbContext.Jobs
-                .FromSqlRaw("SELECT * FROM jobs WHERE id = {0} FOR UPDATE", jobId)
-                .SingleOrDefaultAsync();
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM jobs WHERE id = {0} FOR UPDATE", jobId);
         }
         return await _jobRepository.GetByIdAsync(jobId);
     }

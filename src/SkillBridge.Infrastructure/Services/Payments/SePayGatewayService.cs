@@ -55,19 +55,27 @@ public class SePayGatewayService : ISePayGatewayService
     public SePayProcessResult ProcessWebhook(string? authHeader, string rawPayload)
     {
         var result = new SePayProcessResult();
-        var configuredApiKey = _config["SePay:ApiKey"] ?? "TEST_SEPAY_API_KEY_00000000";
-        var expectedHeader = $"Apikey {configuredApiKey}";
-
-        if (string.IsNullOrWhiteSpace(authHeader))
+        var configuredApiKey = _config["SePay:ApiKey"];
+        if (string.IsNullOrWhiteSpace(configuredApiKey))
         {
+            _logger.LogError("SePay:ApiKey chưa được cấu hình trên máy chủ. Từ chối xử lý webhook.");
             result.IsValidApiKey = false;
-            result.Message = "Missing Authorization header";
+            result.Message = "Cổng thanh toán chưa được cấu hình khóa bảo mật.";
             return result;
         }
 
+        if (string.IsNullOrWhiteSpace(authHeader) || string.Equals(authHeader.Trim(), "Apikey", StringComparison.OrdinalIgnoreCase))
+        {
+            result.IsValidApiKey = false;
+            result.Message = "Missing or invalid Authorization header";
+            return result;
+        }
+
+        var expectedHeader = $"Apikey {configuredApiKey.Trim()}";
+
         // Constant-time compare for Authorization header
         var authBytes = Encoding.UTF8.GetBytes(authHeader.Trim());
-        var expectedBytes = Encoding.UTF8.GetBytes(expectedHeader.Trim());
+        var expectedBytes = Encoding.UTF8.GetBytes(expectedHeader);
 
         if (authBytes.Length != expectedBytes.Length || !CryptographicOperations.FixedTimeEquals(authBytes, expectedBytes))
         {

@@ -100,6 +100,39 @@ public class JobServiceCancelTests
     }
 
     [Fact]
+    public async Task CancelJobAsync_WhenStatusIsSubmitted_ShouldThrowBusinessException()
+    {
+        // Arrange: Sinh viên đã nộp bài, NTD không được tự ý hủy để lấy lại 100% tiền
+        using var dbContext = CreateInMemoryDbContext();
+        var employerId = 1;
+        var jobId = 99;
+        var job = new Job
+        {
+            Id = jobId,
+            EmployerId = employerId,
+            Title = "Lập trình API",
+            Status = "submitted",
+            Budget = 1000000m,
+            HiredApplicantId = 2
+        };
+        _jobRepoMock.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+
+        var service = new JobService(
+            _jobRepoMock.Object,
+            _categoryRepoMock.Object,
+            dbContext,
+            _storageMock.Object,
+            _escrowMock.Object,
+            _reliabilityMock.Object,
+            _notificationMock.Object,
+            _loggerMock.Object);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() => service.CancelJobAsync(employerId, jobId));
+        Assert.Contains("sinh viên đã nộp sản phẩm bàn giao", ex.Message);
+    }
+
+    [Fact]
     public async Task CancelJobAsync_WhenHired_ShouldPenalizeEmployerRefundEscrowAndCleanUpFilesPostCommit()
     {
         // Arrange

@@ -183,7 +183,7 @@ public class WalletServiceTests
         Assert.Equal("MB Bank", result.BankName);
         Assert.Equal("0987654321", result.AccountNumber);
         Assert.Equal("DAO VAN NANG", result.AccountHolder);
-        Assert.True(result.IsBankVerified);
+        Assert.False(result.IsBankVerified); // Phải chờ admin duyệt qua BankVerificationService, không tự verified
     }
 
     [Fact]

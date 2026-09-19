@@ -46,3 +46,25 @@ export async function rejectBankVerification(requestId, rejectionReason) {
     body: JSON.stringify({ rejectionReason }),
   });
 }
+
+// Withdrawal Management APIs
+export async function getAdminWithdrawals(status = 'pending', page = 1, pageSize = 20) {
+  return apiFetch(`/admin/withdrawals?status=${status}&page=${page}&pageSize=${pageSize}`, {
+    method: 'GET',
+  });
+}
+
+export async function approveWithdrawal(id, note = '') {
+  return apiFetch(`/admin/withdrawals/${id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+}
+
+export async function rejectWithdrawal(id, reason = '') {
+  return apiFetch(`/admin/withdrawals/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+}
+

@@ -552,6 +552,8 @@ export function TopupModal({ onClose, initialOrder, initialAmount, autoCreate })
 export function WithdrawModal({ onClose }) {
   const { withdraw, state } = useStore();
   const [amount, setAmount] = useState(100000);
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   if (!state.bankAccount) {
     return (
@@ -584,18 +586,65 @@ export function WithdrawModal({ onClose }) {
   }
 
   const bank = state.bankAccount;
+  const isVerified = Boolean(bank.isBankVerified || bank.isVerified);
+
+  if (!isVerified) {
+    return (
+      <ModalShell onClose={onClose}>
+        <div style={{ textAlign: 'center', padding: '12px 0' }}>
+          <div style={{ color: '#d97706', marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
+            <Icon name="clock" width="44" height="44" />
+          </div>
+          <h3 style={{ margin: '0 0 8px', fontSize: 18 }}>Tài khoản ngân hàng chưa được duyệt</h3>
+          <p style={{ color: 'var(--ink-soft)', fontSize: 13.5, lineHeight: 1.6, marginBottom: 20 }}>
+            Tài khoản ngân hàng <b>{bank.bankName} - {bank.accountNumber}</b> đang chờ Ban Quản Trị xác thực chính chủ. Để phòng ngừa rủi ro và tuân thủ an toàn tài chính, bạn chỉ có thể rút tiền sau khi tài khoản được duyệt.
+          </p>
+          <div className="modal-actions" style={{ justifyContent: 'center', gap: 10 }}>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                onClose();
+                window.location.href = '/wallet';
+              }}
+            >
+              Xem trạng thái trong Ví
+            </button>
+            <button className="btn btn-outline" onClick={onClose}>
+              Đóng
+            </button>
+          </div>
+        </div>
+      </ModalShell>
+    );
+  }
+
   const bankDisplay = `${bank.bankName} - ${bank.accountNumber} (${bank.accountHolder})`;
 
-  const confirm = () => {
-    if (!amount || amount <= 0 || amount > state.balance) return;
-    withdraw(amount);
-    onClose();
+  const confirm = async () => {
+    if (!amount || amount <= 0 || amount > state.balance || loading) return;
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      await withdraw(amount);
+      onClose();
+    } catch (err) {
+      setErrorMsg(err?.message || 'Có lỗi xảy ra khi tạo yêu cầu rút tiền.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <ModalShell onClose={onClose}>
       <h3>Rút tiền về ngân hàng</h3>
-      <p>Số dư khả dụng: <b>{fmtVND(state.balance)}</b>. Tiền thường về tài khoản trong 5–15 phút sau khi duyệt.</p>
+      <p>Số dư khả dụng: <b>{fmtVND(state.balance)}</b>. Yêu cầu rút tiền sẽ được gửi tới Ban Quản Trị xét duyệt và chuyển khoản theo quy định.</p>
+      
+      {errorMsg && (
+        <div style={{ padding: '8px 12px', background: '#fee2e2', color: '#991b1b', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>
+          {errorMsg}
+        </div>
+      )}
+
       <div className="field">
         <label>Số tiền muốn rút (VND)</label>
         <input
@@ -603,22 +652,26 @@ export function WithdrawModal({ onClose }) {
           value={amount}
           min={50000}
           max={state.balance}
+          disabled={loading}
           onChange={(e) => setAmount(Number(e.target.value) || 0)}
         />
+        <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+          Tối thiểu: 50.000đ — Tối đa: {fmtVND(state.balance)}
+        </div>
       </div>
       <div className="field">
-        <label>Tài khoản nhận (Chính chủ)</label>
-        <input type="text" disabled style={{ opacity: 0.9, fontWeight: 600 }} value={bankDisplay} />
+        <label>Tài khoản nhận (Đã xác minh chính chủ ✓)</label>
+        <input type="text" disabled style={{ opacity: 0.9, fontWeight: 600, color: '#047857' }} value={bankDisplay} />
       </div>
       <div className="modal-actions">
         <button
           className="btn btn-primary"
           onClick={confirm}
-          disabled={!amount || amount < 50000 || amount > state.balance}
+          disabled={loading || !amount || amount < 50000 || amount > state.balance}
         >
-          Xác nhận rút tiền
+          {loading ? 'Đang gửi yêu cầu...' : 'Xác nhận rút tiền'}
         </button>
-        <button className="btn btn-outline" onClick={onClose}>Hủy</button>
+        <button className="btn btn-outline" disabled={loading} onClick={onClose}>Hủy</button>
       </div>
     </ModalShell>
   );
