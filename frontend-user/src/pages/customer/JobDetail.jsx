@@ -57,7 +57,7 @@ export default function JobDetail() {
   const [searchParams, setSearchParams] = useSearchParams();
   const jobId = Number(id);
   const navigate = useNavigate();
-  const { state, applyJobAsync, toggleSaveJobAsync, uploadCvAsync, openChatWithPerson } = useStore();
+  const { state, applyJobAsync, toggleSaveJobAsync, uploadCvAsync, openChatWithPerson, startConversationWithUser } = useStore();
   const { openModal } = useModal();
   const { showToast } = useToast();
 
@@ -395,7 +395,23 @@ export default function JobDetail() {
                       <button className="btn btn-primary btn-block" style={{ marginBottom: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>
                         <Icon name="send" width="16" height="16" /> Nộp sản phẩm bàn giao
                       </button>
-                      <button className="btn btn-outline btn-block" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => openChatWithPerson(j.emp)}>
+                      <button
+                        className="btn btn-outline btn-block"
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                        onClick={async () => {
+                          if (apiJob?.employerId) {
+                            try {
+                              const res = await startConversationWithUser(apiJob.employerId, apiJob.id);
+                              if (res?.id) {
+                                return;
+                              }
+                            } catch (err) {
+                              console.warn('Lỗi startConversation:', err);
+                            }
+                          }
+                          openChatWithPerson(j.emp);
+                        }}
+                      >
                         <Icon name="chat" width="16" height="16" /> Trao đổi với NTD
                       </button>
                     </div>
@@ -426,7 +442,23 @@ export default function JobDetail() {
                       <button className="btn btn-primary btn-block" style={{ marginBottom: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => openModal('deliverable', { jobId: j.id, job: j })}>
                         <Icon name="send" width="16" height="16" /> Nộp lại bàn giao
                       </button>
-                      <button className="btn btn-outline btn-block" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => openChatWithPerson(j.emp)}>
+                      <button
+                        className="btn btn-outline btn-block"
+                        style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                        onClick={async () => {
+                          if (apiJob?.employerId) {
+                            try {
+                              const res = await startConversationWithUser(apiJob.employerId, apiJob.id);
+                              if (res?.id) {
+                                return;
+                              }
+                            } catch (err) {
+                              console.warn('Lỗi startConversation:', err);
+                            }
+                          }
+                          openChatWithPerson(j.emp);
+                        }}
+                      >
                         <Icon name="chat" width="16" height="16" /> Hỏi thêm NTD
                       </button>
                     </div>
@@ -602,7 +634,23 @@ export default function JobDetail() {
                     {applyLabel}
                   </button>
 
-                  <button className="btn btn-outline btn-block" style={{ marginBottom: 10 }} onClick={() => openChatWithPerson(j.emp)}>
+                  <button
+                    className="btn btn-outline btn-block"
+                    style={{ marginBottom: 10 }}
+                    onClick={async () => {
+                      if (apiJob?.employerId) {
+                        try {
+                          const res = await startConversationWithUser(apiJob.employerId, apiJob.id);
+                          if (res?.id) {
+                            return;
+                          }
+                        } catch (err) {
+                          console.warn('Lỗi startConversation:', err);
+                        }
+                      }
+                      openChatWithPerson(j.emp);
+                    }}
+                  >
                     <span className="msg-btn-inline"><Icon name="chat" style={{ width: 14, height: 14 }} /> Nhắn tin với nhà tuyển dụng</span>
                   </button>
                   <button

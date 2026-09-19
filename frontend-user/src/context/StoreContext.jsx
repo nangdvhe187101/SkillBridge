@@ -12,9 +12,93 @@ import * as userApi from '../api/userApi';
 import * as deliverableApi from '../api/deliverableApi';
 import * as walletApi from '../api/walletApi';
 import * as notificationApi from '../api/notificationApi';
+import * as chatApi from '../api/chatApi';
+import { connectChatRealtime } from '../services/chatHubService';
 import { setAccessToken, clearAccessToken, getAccessToken } from '../api/tokenStore';
 
 const StoreContext = createContext(null);
+
+export function mapConversationFromApi(c, existingConv = null) {
+  const role = (c.otherUserRole || '').toLowerCase();
+  const isStudent = role.includes('student') || role.includes('sinh viên');
+  const isEmployer = role.includes('employer') || role.includes('nhà tuyển dụng') || role.includes('business');
+  const roleLabel = isEmployer ? 'Nhà tuyển dụng' : (isStudent ? 'Sinh viên' : (c.otherUserRole || 'Thành viên'));
+  const isPendingRequest = (c.requestStatus || '').toLowerCase() === 'pending' && !c.isRequestSender;
+
+  return {
+    id: c.id,
+    name: c.otherUserName || 'Người dùng',
+    subtitle: c.jobTitle ? `Dự án: ${c.jobTitle}` : roleLabel,
+    avatar: c.otherUserAvatar || null,
+    online: Boolean(c.isOnline),
+    kind: isPendingRequest ? 'request' : 'chat',
+    unread: c.unreadCount || 0,
+    lastTime: c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong',
+    rawLastMessageAt: c.lastMessageAt,
+    blocked: false,
+    muted: false,
+    archived: Boolean(c.isArchived),
+    isArchived: Boolean(c.isArchived),
+    isReadOnly: Boolean(c.isReadOnly),
+    readOnlyReason: c.readOnlyReason || null,
+    statusBannerMessage: c.statusBannerMessage || null,
+    gracePeriodExpiresAt: c.gracePeriodExpiresAt || null,
+    requestStatus: c.requestStatus || 'active',
+    isRequestSender: Boolean(c.isRequestSender),
+    requestInitiatedBy: c.requestInitiatedBy || null,
+    jobId: c.jobId || null,
+    jobTitle: c.jobTitle || null,
+    jobBudget: c.jobBudget || null,
+    partnerRole: isEmployer ? 'employer' : 'student',
+    otherUserId: c.otherUserId,
+    partnerSchool: c.otherUserSchool || null,
+    partnerReliability: c.otherUserReliability !== undefined && c.otherUserReliability !== null ? c.otherUserReliability : null,
+    partnerJobsDone: c.otherUserJobsDone !== undefined && c.otherUserJobsDone !== null ? c.otherUserJobsDone : 0,
+    partnerRating: c.otherUserRating || null,
+    partnerReviewCount: c.otherUserReviewCount || 0,
+    lastMessageText: c.lastMessageText || '',
+    messages: existingConv?.messages || (c.lastMessageText ? [{
+      id: 'preview-' + c.id,
+      from: 'them',
+      type: 'text',
+      text: c.lastMessageText,
+      time: c.lastMessageAt ? new Date(c.lastMessageAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '',
+    }] : []),
+  };
+}
+
+export function mapChatMessageFromApi(m) {
+  const hasFile = Boolean(m.attachmentUrl);
+  const cleanUrl = (m.attachmentUrl || '').toLowerCase().split('?')[0];
+  const isImg = hasFile && (m.attachmentType?.includes('image') || /\.(png|jpg|jpeg|webp|gif|svg)$/i.test(cleanUrl));
+  const isAudio = hasFile && (m.attachmentType?.includes('audio') || m.attachmentType === 'voice' || /\.(mp3|wav|ogg|m4a|webm|aac)$/i.test(cleanUrl));
+  const isVideo = hasFile && (m.attachmentType?.includes('video') || /\.(mp4|webm|ogg|mov|mkv)$/i.test(cleanUrl));
+  const fileName = m.attachmentUrl ? decodeURIComponent(m.attachmentUrl.split('/').pop()?.split('?')[0] || 'Tệp đính kèm') : null;
+
+  let inferredType = 'text';
+  if (isImg) inferredType = 'image';
+  else if (isAudio) inferredType = 'voice';
+  else if (isVideo) inferredType = 'video';
+  else if (hasFile) inferredType = 'file';
+  else if (m.attachmentType) inferredType = m.attachmentType;
+
+  return {
+    id: m.id,
+    conversationId: m.conversationId,
+    from: m.isMine ? 'me' : 'them',
+    type: inferredType,
+    text: m.messageText || '',
+    fileName: fileName,
+    fileUrl: m.attachmentUrl || null,
+    fileSize: hasFile ? (m.fileSize || 'Đính kèm') : null,
+    duration: m.duration || null,
+    time: m.sentAt ? new Date(m.sentAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : 'Vừa xong',
+    rawSentAt: m.sentAt,
+    senderId: m.senderId,
+    senderName: m.senderName,
+    senderAvatar: m.senderAvatar,
+  };
+}
 
 export function normalizeUtcDate(dateStr) {
   if (!dateStr) return null;
@@ -93,6 +177,7 @@ export function mapMyApplication(a) {
     employerAvatarUrl: a.employerAvatarUrl || a.employerAvatar || null,
     empAvatar: a.employerAvatarUrl || a.employerAvatar || null,
     budget: a.budget || 0,
+    employerId: a.employerId,
     studentId: a.studentId,
     cvFileId: a.cvFileId,
     cvFileName: a.cvFileName,
@@ -227,7 +312,7 @@ const initialState = {
   nextJobId: 200,
   editingJobId: null,
   triZeroUsed: 2,
-  conversations: conversationsSeed,
+  conversations: [],
   openChatIds: [],
   messengerPanelOpen: false,
   adsSettings: JSON.parse(localStorage.getItem('adsSettings') || JSON.stringify({
@@ -726,9 +811,9 @@ function reducer(state, action) {
       return { ...state, messengerPanelOpen: action.open !== undefined ? action.open : !state.messengerPanelOpen };
 
     case 'OPEN_CHAT_WINDOW': {
-      const already = state.openChatIds.includes(action.id);
+      const already = state.openChatIds.some((id) => String(id) === String(action.id));
       const openChatIds = already ? state.openChatIds : [...state.openChatIds, action.id].slice(-3);
-      const conversations = state.conversations.map((c) => (c.id === action.id ? { ...c, unread: 0 } : c));
+      const conversations = state.conversations.map((c) => (String(c.id) === String(action.id) ? { ...c, unread: 0 } : c));
       return { ...state, openChatIds, conversations, messengerPanelOpen: false };
     }
 
@@ -754,22 +839,110 @@ function reducer(state, action) {
         };
         conversations = [conv, ...state.conversations];
       }
-      const openChatIds = state.openChatIds.includes(conv.id) ? state.openChatIds : [...state.openChatIds, conv.id].slice(-3);
+      const openChatIds = state.openChatIds.some((id) => String(id) === String(conv.id)) ? state.openChatIds : [...state.openChatIds, conv.id].slice(-3);
       return { ...state, conversations, openChatIds, messengerPanelOpen: false };
     }
 
+    case 'SET_CONVERSATIONS': {
+      const existingMap = new Map((state.conversations || []).map((c) => [String(c.id), c]));
+      const mapped = action.conversations.map((c) => mapConversationFromApi(c, existingMap.get(String(c.id))));
+      return { ...state, conversations: mapped };
+    }
+
+    case 'SET_CONVERSATION_MESSAGES': {
+      const { id, messages } = action.payload;
+      const formattedMessages = messages.map(mapChatMessageFromApi);
+      const conversations = state.conversations.map((c) => (String(c.id) === String(id) ? { ...c, messages: formattedMessages } : c));
+      return { ...state, conversations };
+    }
+
+    case 'RECEIVE_REALTIME_MESSAGE': {
+      const rawMsg = action.message;
+      const conversationId = rawMsg.conversationId;
+      const currentUserId = state.currentUser?.id;
+      const isMine = (rawMsg.senderId === currentUserId);
+      const newMsg = mapChatMessageFromApi({ ...rawMsg, isMine });
+      const isOpen = state.openChatIds.includes(conversationId);
+
+      let found = false;
+      const updatedList = (state.conversations || []).map((c) => {
+        if (c.id !== conversationId) return c;
+        found = true;
+        const exists = c.messages.some((m) => m.id === newMsg.id);
+        const nextMessages = exists ? c.messages : [...c.messages, newMsg];
+        return {
+          ...c,
+          messages: nextMessages,
+          lastTime: 'Vừa xong',
+          lastMessageText: newMsg.text || (newMsg.fileUrl ? '[Tệp đính kèm]' : ''),
+          unread: (isOpen || isMine) ? 0 : (c.unread || 0) + 1,
+        };
+      });
+
+      if (!found) {
+        return state;
+      }
+
+      const activeConvo = updatedList.find((c) => c.id === conversationId);
+      const rest = updatedList.filter((c) => c.id !== conversationId);
+      return { ...state, conversations: [activeConvo, ...rest] };
+    }
+
+    case 'CONVERSATION_READ_SYNC': {
+      const { conversationId } = action.payload;
+      return {
+        ...state,
+        conversations: state.conversations.map((c) => (c.id === conversationId ? { ...c, unread: 0 } : c)),
+      };
+    }
+
+    case 'USER_STATUS_CHANGED': {
+      const { userId, isOnline } = action.payload;
+      return {
+        ...state,
+        conversations: (state.conversations || []).map((c) =>
+          Number(c.otherUserId) === Number(userId) ? { ...c, online: Boolean(isOnline) } : c
+        ),
+      };
+    }
+
+    case 'ONLINE_USERS_SYNC': {
+      const onlineSet = new Set((action.payload.onlineUserIds || []).map(Number));
+      return {
+        ...state,
+        conversations: (state.conversations || []).map((c) => ({
+          ...c,
+          online: onlineSet.has(Number(c.otherUserId)),
+        })),
+      };
+    }
+
     case 'CLOSE_CHAT_WINDOW':
-      return { ...state, openChatIds: state.openChatIds.filter((id) => id !== action.id) };
+      return { ...state, openChatIds: state.openChatIds.filter((id) => String(id) !== String(action.id)) };
 
     case 'MARK_CONVERSATION_READ':
-      return { ...state, conversations: state.conversations.map((c) => (c.id === action.id ? { ...c, unread: 0 } : c)) };
+      return { ...state, conversations: state.conversations.map((c) => (String(c.id) === String(action.id) ? { ...c, unread: 0 } : c)) };
 
     case 'SEND_CHAT_MESSAGE': {
       const { id, message } = action.payload;
       const conversations = state.conversations.map((c) => {
-        if (c.id !== id || c.blocked) return c;
-        const newMsg = { id: 'm' + Date.now() + Math.random(), from: 'me', time: fmtTimeNow(), ...message };
-        return { ...c, messages: [...c.messages, newMsg], lastTime: 'Vừa xong' };
+        if (String(c.id) !== String(id) || c.blocked) return c;
+        const newMsg = {
+          id: message.id || ('m-' + Date.now()),
+          from: 'me',
+          time: 'Vừa xong',
+          text: message.text || message.messageText || '',
+          type: message.type || 'text',
+          fileUrl: message.fileUrl || message.attachmentUrl,
+          fileName: message.fileName,
+          ...message,
+        };
+        return {
+          ...c,
+          messages: [...c.messages, newMsg],
+          lastTime: 'Vừa xong',
+          lastMessageText: newMsg.text || (newMsg.fileUrl ? '[Tệp đính kèm]' : ''),
+        };
       });
       return { ...state, conversations };
     }
@@ -789,6 +962,28 @@ function reducer(state, action) {
       const { id, flag } = action.payload;
       const conversations = state.conversations.map((c) => (c.id === id ? { ...c, [flag]: !c[flag] } : c));
       return { ...state, conversations };
+    }
+
+    case 'ARCHIVE_CONVERSATION': {
+      const { id, isArchived } = action.payload;
+      const conversations = state.conversations.map((c) =>
+        String(c.id) === String(id) ? { ...c, isArchived, archived: isArchived } : c
+      );
+      return { ...state, conversations };
+    }
+
+    case 'ACCEPT_MESSAGE_REQUEST': {
+      const { id } = action.payload;
+      const conversations = state.conversations.map((c) =>
+        String(c.id) === String(id) ? { ...c, requestStatus: 'active', kind: 'chat' } : c
+      );
+      return { ...state, conversations };
+    }
+
+    case 'DECLINE_MESSAGE_REQUEST': {
+      const { id } = action.payload;
+      const conversations = state.conversations.filter((c) => String(c.id) !== String(id));
+      return { ...state, conversations, openChatIds: state.openChatIds.filter((cid) => String(cid) !== String(id)) };
     }
 
     default:
@@ -1004,6 +1199,82 @@ export function StoreProvider({ children }) {
     }
     return [];
   }, []);
+
+  const refreshConversations = useCallback(async (tab = 'chat') => {
+    try {
+      const list = await chatApi.getConversations(tab);
+      if (Array.isArray(list)) {
+        dispatch({ type: 'SET_CONVERSATIONS', conversations: list });
+        return list;
+      }
+    } catch {
+      // Bỏ qua khi chưa đăng nhập hoặc lỗi mạng tạm thời
+    }
+    return [];
+  }, []);
+
+  const fetchConversationMessages = useCallback(async (conversationId, page = 1) => {
+    try {
+      const result = await chatApi.getConversationMessages(conversationId, { page, pageSize: 50 });
+      if (result?.items) {
+        dispatch({
+          type: 'SET_CONVERSATION_MESSAGES',
+          payload: { id: conversationId, messages: result.items },
+        });
+        return result.items;
+      }
+    } catch (err) {
+      console.warn(`Không thể tải tin nhắn cho hội thoại ${conversationId}:`, err);
+    }
+    return [];
+  }, []);
+
+  const startConversationWithUser = useCallback(async (targetUserId, jobId = null) => {
+    try {
+      const res = await chatApi.startConversation(targetUserId, jobId);
+      await refreshConversations();
+      dispatch({ type: 'OPEN_CHAT_WINDOW', id: res.id });
+      return res;
+    } catch (err) {
+      showToast(err?.message || 'Không thể bắt đầu cuộc hội thoại.', 'warning');
+      throw err;
+    }
+  }, [refreshConversations, showToast]);
+
+  // Kết nối và lắng nghe SignalR Chat realtime
+  useEffect(() => {
+    if (state.isInitializing || !state.currentUser) {
+      return;
+    }
+
+    // Tải danh sách cuộc trò chuyện thực tế từ backend
+    refreshConversations();
+
+    const realtime = connectChatRealtime({
+      onReceiveMessage: (message) => {
+        dispatch({ type: 'RECEIVE_REALTIME_MESSAGE', message });
+      },
+      onConversationUpdated: () => {
+        refreshConversations();
+      },
+      onConversationRead: ({ conversationId }) => {
+        dispatch({ type: 'CONVERSATION_READ_SYNC', payload: { conversationId } });
+      },
+      onUserStatusChanged: ({ userId, isOnline }) => {
+        dispatch({ type: 'USER_STATUS_CHANGED', payload: { userId, isOnline } });
+      },
+      onOnlineUsersList: (onlineUserIds) => {
+        dispatch({ type: 'ONLINE_USERS_SYNC', payload: { onlineUserIds } });
+      },
+      onReconnected: () => {
+        refreshConversations();
+      },
+    });
+
+    return () => {
+      realtime.stop();
+    };
+  }, [state.currentUser, state.isInitializing, refreshConversations]);
 
   // Tải danh mục và danh sách công việc công khai (không cần đăng nhập)
   useEffect(() => {
@@ -1374,19 +1645,116 @@ export function StoreProvider({ children }) {
         }
       },
       refreshNotifications,
+      refreshConversations,
+      fetchConversationMessages,
+      startConversationWithUser,
       toggleMessengerPanel: (open) => dispatch({ type: 'TOGGLE_MESSENGER_PANEL', open }),
-      openChat: (id) => dispatch({ type: 'OPEN_CHAT_WINDOW', id }),
-      openChatWithPerson: (name, subtitle) => dispatch({ type: 'OPEN_CHAT_WITH_PERSON', payload: { name, subtitle } }),
+      openChat: (id) => {
+        dispatch({ type: 'OPEN_CHAT_WINDOW', id });
+        fetchConversationMessages(id);
+      },
+      openChatWithPerson: async (name, subtitle, options = {}) => {
+        const targetUserId = options?.targetUserId || (typeof options === 'number' ? options : null);
+        const jobId = options?.jobId || null;
+
+        if (targetUserId) {
+          try {
+            const res = await chatApi.startConversation(targetUserId, jobId);
+            await refreshConversations();
+            dispatch({ type: 'OPEN_CHAT_WINDOW', id: res.id });
+            fetchConversationMessages(res.id);
+            return res;
+          } catch (err) {
+            console.warn('Lỗi startConversation:', err);
+          }
+        }
+
+        const existing = (state.conversations || []).find((c) => c.name?.toLowerCase() === name?.toLowerCase());
+        if (existing) {
+          dispatch({ type: 'OPEN_CHAT_WINDOW', id: existing.id });
+          fetchConversationMessages(existing.id);
+          return existing;
+        }
+
+        dispatch({ type: 'OPEN_CHAT_WITH_PERSON', payload: { name, subtitle } });
+      },
       closeChat: (id) => dispatch({ type: 'CLOSE_CHAT_WINDOW', id }),
-      markConversationRead: (id) => dispatch({ type: 'MARK_CONVERSATION_READ', id }),
-      sendChatMessage: (id, message) => {
-        dispatch({ type: 'SEND_CHAT_MESSAGE', payload: { id, message } });
-        setTimeout(() => {
-          const reply = AUTO_REPLIES[Math.floor(Math.random() * AUTO_REPLIES.length)];
-          dispatch({ type: 'RECEIVE_CHAT_REPLY', payload: { id, text: reply } });
-        }, 900 + Math.random() * 700);
+      markConversationRead: async (id) => {
+        dispatch({ type: 'MARK_CONVERSATION_READ', id });
+        try {
+          await chatApi.markConversationAsRead(id);
+        } catch (err) {
+          console.warn(`Lỗi đánh dấu đã đọc hội thoại ${id}:`, err);
+        }
+      },
+      sendChatMessage: async (id, message) => {
+        let targetConvId = id;
+        const conv = (state.conversations || []).find((c) => String(c.id) === String(id));
+
+        if (isNaN(Number(targetConvId)) || Number(targetConvId) <= 0) {
+          if (conv?.otherUserId) {
+            try {
+              const created = await chatApi.startConversation(conv.otherUserId, conv.jobId);
+              if (created?.id) {
+                targetConvId = created.id;
+                await refreshConversations();
+              }
+            } catch (e) {
+              console.warn('Lỗi tự động tạo cuộc hội thoại thật:', e);
+            }
+          }
+        }
+
+        const tempId = 'temp-' + Date.now();
+        dispatch({ type: 'SEND_CHAT_MESSAGE', payload: { id: targetConvId, message: { ...message, id: tempId } } });
+
+        const numericId = Number(targetConvId);
+        if (!isNaN(numericId) && numericId > 0) {
+          try {
+            const sent = await chatApi.sendMessage(numericId, {
+              messageText: message.text || message.messageText,
+              attachmentUrl: message.fileUrl || message.attachmentUrl,
+              attachmentType: message.type,
+            });
+            return sent;
+          } catch (err) {
+            showToast(err?.message || 'Không thể gửi tin nhắn. Vui lòng thử lại.', 'warning');
+          }
+        } else {
+          showToast('Cuộc hội thoại chưa được đồng bộ trên máy chủ.', 'warning');
+        }
       },
       toggleConvFlag: (id, flag) => dispatch({ type: 'TOGGLE_CONV_FLAG', payload: { id, flag } }),
+      archiveConversation: async (id, archive = true) => {
+        dispatch({ type: 'ARCHIVE_CONVERSATION', payload: { id, isArchived: archive } });
+        try {
+          await chatApi.toggleArchiveConversation(id, archive);
+          showToast(archive ? 'Đã lưu trữ cuộc hội thoại.' : 'Đã khôi phục cuộc hội thoại.', 'info');
+        } catch (err) {
+          showToast(err?.message || 'Không thể thay đổi trạng thái lưu trữ.', 'warning');
+        }
+      },
+      acceptMessageRequest: async (id) => {
+        try {
+          await chatApi.acceptMessageRequest(id);
+          dispatch({ type: 'ACCEPT_MESSAGE_REQUEST', payload: { id } });
+          showToast('Đã chấp nhận yêu cầu tin nhắn.', 'check');
+          await refreshConversations('chat');
+        } catch (err) {
+          showToast(err?.message || 'Không thể chấp nhận yêu cầu.', 'warning');
+        }
+      },
+      declineMessageRequest: async (id) => {
+        try {
+          await chatApi.declineMessageRequest(id);
+          dispatch({ type: 'DECLINE_MESSAGE_REQUEST', payload: { id } });
+          showToast('Đã từ chối yêu cầu tin nhắn.', 'info');
+          await refreshConversations('request');
+        } catch (err) {
+          showToast(err?.message || 'Không thể từ chối yêu cầu.', 'warning');
+        }
+      },
+      refreshConversations,
       login: async (email, password) => {
         const result = await loginApi(email, password);
         setAccessToken(result.token);
@@ -1465,10 +1833,10 @@ export function StoreProvider({ children }) {
     act.toggleSaveJob = act.toggleSaveJobAsync;
     return act;
   },
-  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, refreshWallet, state.cvFiles, state.myApplications, refreshNotifications]
+  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, refreshWallet, state.cvFiles, state.myApplications, refreshNotifications, refreshConversations, fetchConversationMessages, startConversationWithUser]
 );
 
-  const value = useMemo(() => ({ state, dispatch, ...actions }), [state, actions]);
+  const value = useMemo(() => ({ state, dispatch, showToast, ...actions }), [state, actions, showToast]);
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 

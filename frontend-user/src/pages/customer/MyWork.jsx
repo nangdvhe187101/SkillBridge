@@ -1462,6 +1462,24 @@ export default function MyWork() {
                             )
                           )}
 
+                          {isCompleted && (
+                            <button
+                              className="btn btn-lime"
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+                              onClick={() => openModal('review', {
+                                jobTitle: j.title,
+                                withName: empName,
+                                direction: 'toEmployer',
+                                dashJobId: targetJobId,
+                                jobId: targetJobId,
+                                onReviewed: () => refreshMyApplications?.()
+                              })}
+                            >
+                              <Icon name="star" width={14} height={14} style={{ fill: '#eab308', stroke: '#eab308' }} />
+                              Đánh giá Nhà tuyển dụng
+                            </button>
+                          )}
+
                           <button
                             className="btn btn-outline"
                             style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}

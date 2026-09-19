@@ -111,4 +111,74 @@ public static class DbInitializer
             logger?.LogInformation("AdminSeed: Đã đồng bộ tài khoản {Email} vào bảng admin_team_members.", email);
         }
     }
+
+    public static async Task EnsureChatSchemaAsync(SkillBridgeDbContext context, ILogger? logger = null)
+    {
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(@"
+                SET @dbname = DATABASE();
+                SET @tablename = 'conversations';
+
+                -- is_read_only
+                SET @col = 'is_read_only';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE conversations ADD COLUMN is_read_only TINYINT(1) NOT NULL DEFAULT 0'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- read_only_reason
+                SET @col = 'read_only_reason';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE conversations ADD COLUMN read_only_reason VARCHAR(50) NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- is_archived_user_a
+                SET @col = 'is_archived_user_a';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE conversations ADD COLUMN is_archived_user_a TINYINT(1) NOT NULL DEFAULT 0'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- is_archived_user_b
+                SET @col = 'is_archived_user_b';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE conversations ADD COLUMN is_archived_user_b TINYINT(1) NOT NULL DEFAULT 0'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- request_status
+                SET @col = 'request_status';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE conversations ADD COLUMN request_status VARCHAR(20) NOT NULL DEFAULT \'active\''
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- request_initiated_by
+                SET @col = 'request_initiated_by';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE conversations ADD COLUMN request_initiated_by INT NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            ");
+            logger?.LogInformation("DbInitializer: Đã đảm bảo schema bảng conversations cập nhật đầy đủ.");
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "DbInitializer: Lỗi cập nhật schema bảng conversations.");
+        }
+    }
 }

@@ -8,7 +8,7 @@ import ChatHeaderMenu from './ChatHeaderMenu';
 import '../../styles/messenger.css';
 
 function ChatWindow({ conv, onClose }) {
-    const { sendChatMessage, toggleConvFlag } = useStore();
+    const { sendChatMessage, toggleConvFlag, fetchConversationMessages } = useStore();
     const [menuOpen, setMenuOpen] = useState(false);
     const [minimized, setMinimized] = useState(false);
     const bodyRef = useRef(null);
@@ -16,8 +16,14 @@ function ChatWindow({ conv, onClose }) {
     const navigate = useNavigate();
 
     useEffect(() => {
+        if (conv?.id && (!conv.messages || conv.messages.length === 0)) {
+            fetchConversationMessages(conv.id);
+        }
+    }, [conv?.id, fetchConversationMessages]);
+
+    useEffect(() => {
         if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
-    }, [conv.messages.length]);
+    }, [(conv.messages || []).length]);
 
     useEffect(() => {
         if (!menuOpen) return;
@@ -31,7 +37,7 @@ function ChatWindow({ conv, onClose }) {
     return (
         <div className={'msgr-window' + (minimized ? ' minimized' : '')}>
             <div className="msgr-window-head" onClick={() => minimized && setMinimized(false)}>
-                <Avatar name={conv.name} fontSize={13} />
+                <Avatar src={conv.avatar} name={conv.name} fontSize={13} />
                 <div className="msgr-window-head-txt">
                     <b>{conv.name}</b>
                     <span>{conv.blocked ? 'Đã chặn' : conv.online ? '● Đang hoạt động' : 'Ngoại tuyến'}</span>
@@ -46,6 +52,18 @@ function ChatWindow({ conv, onClose }) {
                         />
                     )}
                 </div>
+                <button
+                    className="msgr-icon-btn"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onClose();
+                        navigate(`/messages?c=${conv.id}`);
+                    }}
+                    aria-label="Mở toàn màn hình"
+                    title="Mở toàn màn hình"
+                >
+                    ⤢
+                </button>
                 <button className="msgr-icon-btn" onClick={(e) => { e.stopPropagation(); setMinimized((m) => !m); }} aria-label={minimized ? 'Mở rộng' : 'Thu nhỏ'} title={minimized ? 'Mở rộng' : 'Thu nhỏ'}>
                     {minimized ? '▲' : '–'}
                 </button>
@@ -54,10 +72,13 @@ function ChatWindow({ conv, onClose }) {
             {!minimized && (
                 <>
                     <div className="msgr-window-body" ref={bodyRef}>
-                        {conv.messages.map((m) => <ChatBubble key={m.id} m={m} />)}
+                        {(conv.messages || []).map((m) => <ChatBubble key={m.id} m={m} />)}
                     </div>
                     <ChatComposer
+                        conversationId={conv.id}
                         blocked={conv.blocked}
+                        isReadOnly={conv.isReadOnly}
+                        readOnlyReason={conv.readOnlyReason}
                         onUnblock={() => toggleConvFlag(conv.id, 'blocked')}
                         onSend={(message) => sendChatMessage(conv.id, message)}
                     />
@@ -87,14 +108,20 @@ export default function MessengerWidget() {
 
     const filtered = conversations
         .filter((c) => !c.archived)
-        .filter((c) => c.kind === tab || (tab === 'chat' && c.kind !== 'request'))
+        .filter((c) => {
+            if (tab === 'request') {
+                return c.kind === 'request' || (c.requestStatus === 'pending' && !c.isRequestSender);
+            }
+            return c.kind !== 'request' && (c.requestStatus !== 'pending' || c.isRequestSender);
+        })
         .filter((c) => c.name.toLowerCase().includes(search.trim().toLowerCase()));
 
     const lastPreview = (c) => {
-        const m = c.messages[c.messages.length - 1];
-        if (!m) return '';
-        if (m.type === 'file') return `📎 ${m.fileName}`;
-        if (m.type === 'voice') return `🎤 Tin nhắn thoại (${m.duration})`;
+        const msgs = c.messages || [];
+        const m = msgs[msgs.length - 1];
+        if (!m) return c.lastMessageText || '';
+        if (m.type === 'file') return `📎 ${m.fileName || 'Tệp đính kèm'}`;
+        if (m.type === 'voice') return `🎤 Tin nhắn thoại (${m.duration || ''})`;
         if (m.type === 'like') return '👍';
         return m.text;
     };
@@ -102,7 +129,7 @@ export default function MessengerWidget() {
     return (
         <div className="msgr-dock">
             {openChatIds.map((id) => {
-                const conv = conversations.find((c) => c.id === id);
+                const conv = conversations.find((c) => String(c.id) === String(id));
                 if (!conv) return null;
                 return <ChatWindow key={id} conv={conv} onClose={() => closeChat(id)} />;
             })}
@@ -131,7 +158,7 @@ export default function MessengerWidget() {
                                 filtered.map((c) => (
                                     <button key={c.id} className="msgr-convo-item" onClick={() => openChat(c.id)}>
                                         <div className="msgr-convo-av">
-                                            <Avatar name={c.name} fontSize={13} />
+                                            <Avatar src={c.avatar} name={c.name} fontSize={13} />
                                             {c.online && <span className="msgr-online-dot" />}
                                         </div>
                                         <div className="msgr-convo-main">

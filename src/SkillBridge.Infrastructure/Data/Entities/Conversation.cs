@@ -10,6 +10,8 @@ namespace SkillBridge.Infrastructure.Data.Entities;
 [Index("JobId", Name = "fk_conversations_job")]
 [Index("UserAId", Name = "fk_conversations_usera")]
 [Index("UserBId", Name = "fk_conversations_userb")]
+[Index("UserAId", "RequestStatus", "IsArchivedUserA", "LastMessageAt", Name = "idx_conversations_user_a_tab")]
+[Index("UserBId", "RequestStatus", "IsArchivedUserB", "LastMessageAt", Name = "idx_conversations_user_b_tab")]
 public partial class Conversation
 {
     [Key]
@@ -37,6 +39,26 @@ public partial class Conversation
     [Column("created_at", TypeName = "datetime")]
     public DateTime CreatedAt { get; set; }
 
+    [Column("is_read_only")]
+    public bool IsReadOnly { get; set; } = false;
+
+    [Column("read_only_reason")]
+    [StringLength(50)]
+    public string? ReadOnlyReason { get; set; }
+
+    [Column("is_archived_user_a")]
+    public bool IsArchivedUserA { get; set; } = false;
+
+    [Column("is_archived_user_b")]
+    public bool IsArchivedUserB { get; set; } = false;
+
+    [Column("request_status")]
+    [StringLength(20)]
+    public string RequestStatus { get; set; } = "active";
+
+    [Column("request_initiated_by")]
+    public int? RequestInitiatedBy { get; set; }
+
     [InverseProperty("Conversation")]
     public virtual ICollection<ChatMessage> ChatMessages { get; set; } = new List<ChatMessage>();
 
@@ -51,4 +73,7 @@ public partial class Conversation
     [ForeignKey("UserBId")]
     [InverseProperty("ConversationUserBs")]
     public virtual User UserB { get; set; } = null!;
+
+    [ForeignKey("RequestInitiatedBy")]
+    public virtual User? RequestInitiatedByUser { get; set; }
 }

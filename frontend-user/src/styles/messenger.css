@@ -269,74 +269,85 @@
 }
 
 .msgr-window-head-txt span {
-    font-size: 11px;
+    font-size: 12.5px;
     opacity: 0.85;
 }
 
 .msgr-window-body {
     flex: 1;
     overflow-y: auto;
-    padding: 12px;
+    padding: 16px;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
     background: var(--bg, #f7f7fa);
 }
 
 .msgr-msg {
-    max-width: 78%;
-    padding: 8px 10px;
-    border-radius: 12px;
-    font-size: 13px;
-    line-height: 1.4;
+    max-width: 76%;
+    padding: 11px 16px;
+    border-radius: 18px;
+    font-size: 15px;
+    line-height: 1.5;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
 .msgr-msg time {
-    font-size: 10px;
-    opacity: 0.6;
+    font-size: 11px;
+    opacity: 0.7;
     align-self: flex-end;
+    margin-top: 2px;
 }
 
 .msgr-msg.them {
     align-self: flex-start;
     background: var(--surface, #fff);
     border: 1px solid var(--border, #e5e5ea);
+    border-bottom-left-radius: 4px;
 }
 
 .msgr-msg.me {
     align-self: flex-end;
     background: var(--primary, #5b4cf5);
     color: #fff;
+    border-bottom-right-radius: 4px;
 }
 
 .msgr-composer {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 8px 10px;
+    gap: 8px;
+    padding: 10px 14px;
     border-top: 1px solid var(--border, #e5e5ea);
     background: var(--surface, #fff);
 }
 
 .msgr-composer-input {
     flex: 1;
-    padding: 8px 12px;
+    padding: 11px 18px;
     border-radius: 999px;
     border: 1px solid var(--border, #e5e5ea);
     background: var(--bg, #f7f7fa);
-    font-size: 13px;
+    font-size: 15px;
     min-width: 0;
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.msgr-composer-input:focus {
+    border-color: var(--primary, #5b4cf5);
+    background: #fff;
+    outline: none;
 }
 
 .msgr-send-btn {
     border: none;
     background: linear-gradient(135deg, var(--primary, #5b4cf5), #7c6ff8);
     color: #fff;
-    width: 30px;
-    height: 30px;
+    width: 38px;
+    height: 38px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -352,13 +363,13 @@
 }
 
 .msgr-send-btn svg {
-    width: 14px;
-    height: 14px;
+    width: 17px;
+    height: 17px;
 }
 
 .msgr-like-btn {
     background: linear-gradient(135deg, #4f9dff, #2f7ff0);
-    font-size: 14px;
+    font-size: 18px;
     box-shadow: 0 2px 6px rgba(47, 127, 240, 0.3);
 }
 
@@ -612,33 +623,69 @@
 
 @media (max-width: 640px) {
     .msgr-dock {
-        right: 16px;
-        bottom: 16px;
-        left: 16px;
-        gap: 8px;
-        max-width: calc(100vw - 32px);
-        overflow-x: auto;
+        right: 14px;
+        bottom: 14px;
+        z-index: 900;
     }
 
     .msgr-window {
-        width: calc(100vw - 24px);
-        max-width: 300px;
-        height: 360px;
+        position: fixed !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 75vh !important;
+        max-height: calc(100dvh - 70px) !important;
+        border-radius: 16px 16px 0 0 !important;
+        box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.22) !important;
+        z-index: 1000;
+    }
+
+    .msgr-window.minimized {
+        height: 48px !important;
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        width: 100% !important;
+        border-radius: 12px 12px 0 0 !important;
     }
 
     .msgr-panel {
-        width: calc(100vw - 32px);
+        position: fixed !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        max-width: 100vw !important;
+        height: 75vh !important;
+        max-height: calc(100dvh - 70px) !important;
+        border-radius: 16px 16px 0 0 !important;
+        box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.22) !important;
+        margin-bottom: 0 !important;
+        z-index: 1000;
     }
 }
 
 /* ===== Dedicated /messages page ===== */
+.msgr-page-container {
+    height: calc(100vh - 68px);
+    overflow: hidden;
+    padding: 0;
+}
+
 .msgr-page {
     display: grid;
-    grid-template-columns: 280px 1fr;
-    height: calc(100vh - 68px);
-    max-height: calc(100vh - 68px);
+    grid-template-columns: 360px 1fr;
+    height: 100%;
+    max-height: 100%;
     overflow: hidden;
     border-top: 1px solid var(--border, #e5e5ea);
+}
+
+.msgr-page.has-drawer {
+    grid-template-columns: 360px 1fr 340px;
 }
 
 .msgr-page-sidebar {
@@ -648,22 +695,96 @@
     height: 100%;
     min-height: 0;
     overflow: hidden;
+    background: var(--surface, #fff);
 }
 
 .msgr-page-list {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 6px;
+    padding: 8px;
 }
 
 .msgr-page-head {
-    padding: 12px 14px 4px;
+    padding: 18px 20px 8px;
 }
 
 .msgr-page-head h2 {
-    font-size: 18px;
+    font-size: 24px;
+    font-weight: 700;
     margin: 0;
+    letter-spacing: -0.01em;
+}
+
+.msgr-page-sidebar .msgr-panel-search {
+    padding: 8px 18px 6px;
+}
+
+.msgr-page-sidebar .msgr-panel-search input {
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: 10px;
+    border: 1px solid var(--border, #e5e5ea);
+    background: var(--bg, #f7f7fa);
+    font-size: 14.5px;
+    box-sizing: border-box;
+    transition: all 0.15s ease;
+}
+
+.msgr-page-sidebar .msgr-panel-search input:focus {
+    background: #fff;
+    border-color: var(--primary, #5b4cf5);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(91, 76, 245, 0.12);
+}
+
+.msgr-page-sidebar .msgr-panel-tabs {
+    padding: 6px 18px 10px;
+    gap: 8px;
+}
+
+.msgr-page-sidebar .msgr-panel-tabs button {
+    padding: 7px 16px;
+    border-radius: 999px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.msgr-page-sidebar .msgr-convo-item {
+    padding: 12px 16px;
+    gap: 13px;
+    border-radius: 10px;
+    margin-bottom: 2px;
+}
+
+.msgr-page-sidebar .msgr-convo-top {
+    font-size: 15px;
+    margin-bottom: 2px;
+}
+
+.msgr-page-sidebar .msgr-convo-top b {
+    font-size: 15.5px;
+    font-weight: 600;
+}
+
+.msgr-page-sidebar .msgr-convo-top span {
+    font-size: 12.5px;
+    color: var(--muted, #888);
+}
+
+.msgr-page-sidebar .msgr-convo-sub {
+    font-size: 14px;
+    color: var(--muted, #777);
+    line-height: 1.4;
+}
+
+.msgr-page-sidebar .msgr-unread-dot {
+    min-width: 22px;
+    height: 22px;
+    font-size: 12px;
+    font-weight: 700;
 }
 
 .msgr-page-main {
@@ -679,28 +800,137 @@
     background: var(--surface, #fff);
     color: inherit;
     border-bottom: 1px solid var(--border, #e5e5ea);
-    padding: 10px 16px;
+    padding: 14px 24px;
     flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.msgr-page-chat-head .msgr-window-head-txt b {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
 }
 
 .msgr-page-chat-head .msgr-window-head-txt span {
     color: var(--muted, #888);
+    font-size: 13px;
     opacity: 1;
 }
 
 .msgr-page-chat-head .msgr-icon-btn {
     color: var(--muted, #666);
+    width: 38px;
+    height: 38px;
+    font-size: 19px;
+    border-radius: 8px;
+    transition: all 0.15s ease;
 }
 
 .msgr-page-chat-head .msgr-icon-btn:hover {
     background: var(--hover, rgba(0, 0, 0, 0.06));
+    color: var(--text, #111);
+}
+
+.msgr-back-btn {
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--ink, #111);
+    padding: 6px 10px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s ease;
+}
+
+.msgr-back-btn:hover,
+.msgr-back-btn:active {
+    background: var(--hover, rgba(0, 0, 0, 0.08));
+}
+
+.msgr-job-bar {
+    background: linear-gradient(to right, rgba(108, 76, 255, 0.08), rgba(6, 182, 212, 0.08));
+    border-bottom: 1px solid var(--border, #e5e5ea);
+    padding: 10px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 13.5px;
+    flex-shrink: 0;
+}
+
+.msgr-job-bar .chip {
+    font-size: 12px;
+    padding: 2px 8px;
+}
+
+.msgr-job-bar .btn {
+    font-size: 12.5px;
+    padding: 4px 12px;
+}
+
+.msgr-safety-banner {
+    background: rgba(234, 179, 8, 0.08);
+    border-bottom: 1px solid rgba(234, 179, 8, 0.2);
+    padding: 8px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 12.5px;
+    color: var(--ink, #111);
+    flex-shrink: 0;
+}
+
+.msgr-empty-chat-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 24px;
+    text-align: center;
+    color: var(--ink-soft, #777);
+}
+
+.msgr-empty-chat-state h3 {
+    font-size: 20px;
+    font-weight: 700;
 }
 
 .msgr-page-chat-body {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 14px 18px;
+    padding: 20px 28px;
+    gap: 14px;
+}
+
+.msgr-page-chat-body .msgr-msg {
+    max-width: 72%;
+    padding: 12px 18px;
+    font-size: 15.5px;
+    line-height: 1.55;
+    border-radius: 18px;
+}
+
+.msgr-page-chat-body .msgr-msg.them {
+    border-bottom-left-radius: 4px;
+}
+
+.msgr-page-chat-body .msgr-msg.me {
+    border-bottom-right-radius: 4px;
+}
+
+.msgr-page-chat-body .msgr-msg time {
+    font-size: 11.5px;
+    margin-top: 4px;
 }
 
 .msgr-page-chat-foot {
@@ -710,11 +940,200 @@
 }
 
 .msgr-page-chat-foot .msgr-composer {
-    padding: 8px 14px 12px;
+    padding: 12px 24px 16px;
+    gap: 10px;
 }
 
-@media (max-width: 900px) {
+.msgr-page-chat-foot .msgr-composer-input {
+    padding: 12px 20px;
+    font-size: 15.5px;
+    border-radius: 999px;
+}
+
+.msgr-page-chat-foot .msgr-composer .msgr-icon-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 21px;
+    border-radius: 50%;
+}
+
+.msgr-page-chat-foot .msgr-send-btn {
+    width: 40px;
+    height: 40px;
+}
+
+.msgr-page-chat-foot .msgr-send-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.msgr-page-chat-foot .msgr-like-btn {
+    font-size: 20px;
+}
+
+/* Info Drawer */
+.msgr-drawer-wrap {
+    border-left: 1px solid var(--border, #e5e5ea);
+    background: var(--surface, #fff);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.msgr-drawer-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    padding: 18px;
+    box-sizing: border-box;
+    overflow-y: auto;
+}
+
+/* Mobile & Tablet Responsive Media Query */
+@media (max-width: 768px) {
+    .msgr-page-container {
+        height: calc(100dvh - 56px);
+    }
+
     .msgr-page {
+        display: flex;
+        flex-direction: column;
         grid-template-columns: 1fr !important;
+        height: 100%;
+        max-height: 100%;
+    }
+
+    /* Master-Detail State: Nếu chưa chọn chat => Hiện sidebar danh sách */
+    .msgr-page.no-active-chat .msgr-page-sidebar {
+        display: flex !important;
+        width: 100%;
+        height: 100%;
+        border-right: none;
+    }
+
+    .msgr-page.no-active-chat .msgr-page-main {
+        display: none !important;
+    }
+
+    /* Master-Detail State: Nếu đang có active chat => Hiện main chat, ẩn sidebar */
+    .msgr-page.has-active-chat .msgr-page-sidebar {
+        display: none !important;
+    }
+
+    .msgr-page.has-active-chat .msgr-page-main {
+        display: flex !important;
+        width: 100%;
+        height: 100%;
+    }
+
+    .msgr-page-chat-head {
+        padding: 8px 12px;
+    }
+
+    .msgr-page-chat-body {
+        padding: 10px 12px;
+    }
+
+    .msgr-page-chat-foot .msgr-composer {
+        padding: 6px 10px 10px;
+    }
+
+    .msgr-composer-input {
+        font-size: 16px !important; /* Ngăn iOS Safari tự động zoom trang khi focus */
+        padding: 8px 12px;
+    }
+
+    .msgr-composer .msgr-icon-btn {
+        width: 36px;
+        height: 36px;
+        font-size: 18px;
+    }
+
+    .msgr-send-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    .msgr-send-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    .msgr-like-btn {
+        font-size: 18px;
+    }
+
+    .msgr-msg {
+        max-width: 90% !important;
+    }
+
+    /* Overlay Info Drawer trên mobile */
+    .msgr-drawer-wrap.is-mobile-drawer {
+        position: fixed;
+        inset: 0;
+        z-index: 1100;
+        display: flex;
+        justify-content: flex-end;
+        background: transparent;
+        border-left: none;
+        overflow: hidden;
+    }
+
+    .msgr-drawer-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(2px);
+        z-index: 1101;
+        animation: msgr-fade-in 0.2s ease;
+    }
+
+    .msgr-drawer-wrap.is-mobile-drawer .msgr-drawer-panel {
+        position: relative;
+        z-index: 1102;
+        width: 86%;
+        max-width: 320px;
+        height: 100%;
+        background: var(--surface, #fff);
+        box-shadow: -6px 0 26px rgba(0, 0, 0, 0.25);
+        animation: msgr-slide-left 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        padding: 16px;
+    }
+
+    .msgr-drawer-header-mobile {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid var(--border, #e5e5ea);
+    }
+
+    .msgr-drawer-header-mobile h3 {
+        font-size: 15px;
+        margin: 0;
+        font-weight: 600;
+    }
+}
+
+@keyframes msgr-fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes msgr-slide-left {
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(0);
     }
 }

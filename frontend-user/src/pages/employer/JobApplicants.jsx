@@ -12,6 +12,7 @@ import { slugify } from '../../data/companies';
 import { getJobApplicants } from '../../api/applicationApi';
 import { getJobById, extendDeadline } from '../../api/jobApi';
 import { getJobDeliverables } from '../../api/deliverableApi';
+import { getJobReviews } from '../../api/reviewApi';
 import { downloadCandidateCv, downloadJobAttachment } from '../../utils/fileDownloader';
 import '../../styles/account-settings.css';
 
@@ -79,7 +80,7 @@ const CANNED_TEMPLATES = [
 
 export default function JobApplicants() {
   const { jobId } = useParams();
-  const { state, deleteJob, cancelJob, reopenJob, openChatWithPerson } = useStore();
+  const { state, deleteJob, cancelJob, reopenJob, openChatWithPerson, startConversationWithUser, sendChatMessage } = useStore();
   const { openModal } = useModal();
   const confirm = useConfirm();
   const navigate = useNavigate();
@@ -90,6 +91,7 @@ export default function JobApplicants() {
   const [apiApplicants, setApiApplicants] = useState([]);
   const [apiJob, setApiJob] = useState(null);
   const [apiDeliverables, setApiDeliverables] = useState([]);
+  const [reviewsSummary, setReviewsSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [viewStudentModal, setViewStudentModal] = useState(null);
   const [cannedModalApplicant, setCannedModalApplicant] = useState(null);
@@ -148,10 +150,11 @@ export default function JobApplicants() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [applicantsRes, jobRes, deliverablesRes] = await Promise.allSettled([
+      const [applicantsRes, jobRes, deliverablesRes, reviewsRes] = await Promise.allSettled([
         getJobApplicants(jobId),
         getJobById(jobId),
         getJobDeliverables(jobId),
+        getJobReviews(jobId),
       ]);
       if (jobRes.status === 'fulfilled' && jobRes.value) {
         setApiJob(jobRes.value);
@@ -163,6 +166,9 @@ export default function JobApplicants() {
       if (deliverablesRes.status === 'fulfilled' && deliverablesRes.value) {
         const delivs = Array.isArray(deliverablesRes.value) ? deliverablesRes.value : [];
         setApiDeliverables(delivs);
+      }
+      if (reviewsRes.status === 'fulfilled' && reviewsRes.value) {
+        setReviewsSummary(reviewsRes.value);
       }
     } catch (e) {
       console.error('Lỗi khi tải ứng viên:', e);
@@ -395,14 +401,48 @@ export default function JobApplicants() {
 
                 {/* Đánh giá sinh viên khi hoàn thành */}
                 {job.status === 'completed' && job.hiredApplicant && (
-                  <button
-                    className="btn btn-lime btn-sm"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                    onClick={() => openModal('review', { jobTitle: job.title, withName: job.hiredApplicant, direction: 'toStudent', dashJobId: job.id })}
-                    title="Viết đánh giá và nhận xét chất lượng công việc cho sinh viên"
-                  >
-                    Đánh giá sinh viên
-                  </button>
+                  reviewsSummary?.hasReviewed ? (
+                    <button
+                      className="btn btn-outline btn-sm"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        color: '#059669',
+                        borderColor: '#10b981',
+                        background: '#ecfdf5',
+                        fontWeight: 600
+                      }}
+                      onClick={() => openModal('review', {
+                        jobTitle: job.title,
+                        withName: job.hiredApplicant,
+                        direction: 'toStudent',
+                        dashJobId: job.id,
+                        jobId: job.id,
+                        existingReview: reviewsSummary?.myReview
+                      })}
+                      title="Xem lại đánh giá bạn đã gửi cho sinh viên này"
+                    >
+                      <Icon name="star" width="14" height="14" style={{ fill: '#eab308', stroke: '#eab308' }} />
+                      Đã đánh giá ({reviewsSummary?.myReview?.stars || 5}★)
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-lime btn-sm"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                      onClick={() => openModal('review', {
+                        jobTitle: job.title,
+                        withName: job.hiredApplicant,
+                        direction: 'toStudent',
+                        dashJobId: job.id,
+                        jobId: job.id,
+                        onReviewed: refreshJobData
+                      })}
+                      title="Viết đánh giá và nhận xét chất lượng công việc cho sinh viên"
+                    >
+                      Đánh giá sinh viên
+                    </button>
+                  )
                 )}
 
                 {/* Gia hạn thời gian khi đang thực hiện */}
@@ -608,6 +648,81 @@ export default function JobApplicants() {
                   </div>
                 </details>
               )}
+            </div>
+          )}
+
+          {/* Reviews List for Completed Job */}
+          {job.status === 'completed' && reviewsSummary?.reviews?.length > 0 && (
+            <div className="dash-panel dash-panel-pad" style={{ marginBottom: 24, border: '1px solid #cbd5e1' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h3 style={{ margin: 0, fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Icon name="star" width="18" height="18" style={{ fill: '#eab308', stroke: '#eab308' }} />
+                  Đánh giá & Nhận xét chất lượng công việc ({reviewsSummary.reviews.length})
+                </h3>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {reviewsSummary.reviews.map((rev) => (
+                  <div
+                    key={rev.id}
+                    style={{
+                      background: rev.isFromEmployer ? '#f8fafc' : '#f0fdf4',
+                      border: `1px solid ${rev.isFromEmployer ? '#e2e8f0' : '#bbf7d0'}`,
+                      borderRadius: 10,
+                      padding: '14px 16px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <Avatar src={rev.reviewerAvatar} name={rev.reviewerName} size="sm" />
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>
+                            {rev.reviewerName}
+                            <span style={{
+                              marginLeft: 8,
+                              fontSize: 11,
+                              fontWeight: 600,
+                              padding: '2px 8px',
+                              borderRadius: 12,
+                              background: rev.isFromEmployer ? '#e2e8f0' : '#dcfce7',
+                              color: rev.isFromEmployer ? '#475569' : '#166534'
+                            }}>
+                              {rev.isFromEmployer ? 'Nhà tuyển dụng' : 'Sinh viên thực hiện'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                            {rev.createdAt ? new Date(rev.createdAt).toLocaleString('vi-VN') : ''}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Icon
+                            key={s}
+                            name="star"
+                            width="16"
+                            height="16"
+                            style={{
+                              fill: s <= rev.stars ? '#eab308' : '#e2e8f0',
+                              stroke: s <= rev.stars ? '#eab308' : '#cbd5e1'
+                            }}
+                          />
+                        ))}
+                        <span style={{ marginLeft: 6, fontWeight: 700, fontSize: 13, color: '#ca8a04' }}>
+                          {rev.stars}.0
+                        </span>
+                      </div>
+                    </div>
+
+                    {rev.comment && (
+                      <p style={{ margin: '8px 0 0', fontSize: 13.5, color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                        "{rev.comment}"
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -896,7 +1011,19 @@ export default function JobApplicants() {
                           <button
                             className="reject"
                             title="Nhắn tin trao đổi"
-                            onClick={() => openChatWithPerson(a.name)}
+                            onClick={async () => {
+                              if (a.studentId) {
+                                try {
+                                  const res = await startConversationWithUser(a.studentId, jobId);
+                                  if (res?.id) {
+                                    return;
+                                  }
+                                } catch (err) {
+                                  console.warn('Lỗi startConversationWithUser:', err);
+                                }
+                              }
+                              openChatWithPerson(a.name);
+                            }}
                           >
                             <Icon name="chat" />
                           </button>
@@ -966,9 +1093,23 @@ export default function JobApplicants() {
           applicant={cannedModalApplicant}
           jobTitle={job.title}
           onClose={() => setCannedModalApplicant(null)}
-          onSend={(msg) => {
+          onSend={async (msg) => {
+            const applicant = cannedModalApplicant;
             setCannedModalApplicant(null);
-            openChatWithPerson(cannedModalApplicant.name, msg);
+            if (applicant?.studentId) {
+              try {
+                const res = await startConversationWithUser(applicant.studentId, jobId);
+                if (res?.id) {
+                  if (msg) {
+                    await sendChatMessage(res.id, { text: msg });
+                  }
+                  return;
+                }
+              } catch (err) {
+                console.warn('Lỗi startConversationWithUser:', err);
+              }
+            }
+            openChatWithPerson(applicant?.name, msg);
           }}
         />
       )}
@@ -1063,10 +1204,20 @@ export default function JobApplicants() {
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
             <button
               className="btn btn-outline"
-              onClick={() => {
-                const name = viewStudentModal.name;
+              onClick={async () => {
+                const student = viewStudentModal;
                 setViewStudentModal(null);
-                openChatWithPerson(name);
+                if (student?.studentId) {
+                  try {
+                    const res = await startConversationWithUser(student.studentId, jobId);
+                    if (res?.id) {
+                      return;
+                    }
+                  } catch (err) {
+                    console.warn('Lỗi startConversationWithUser:', err);
+                  }
+                }
+                openChatWithPerson(student?.name);
               }}
             >
               Nhắn tin

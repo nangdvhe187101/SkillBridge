@@ -151,6 +151,8 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
 }
 
 builder.Services.AddScoped<SkillBridge.Application.Interfaces.Payments.IPaymentRealtimeNotifier, SkillBridge.API.Services.SignalRPaymentRealtimeService>();
+builder.Services.AddScoped<SkillBridge.Application.Interfaces.Chat.IChatRealtimeNotifier, SkillBridge.API.Services.SignalRChatRealtimeService>();
+builder.Services.AddSingleton<SkillBridge.Application.Interfaces.Chat.IUserPresenceService, SkillBridge.Infrastructure.Services.Chat.UserPresenceService>();
 builder.Services.AddHttpClient();
 
 builder.Services.AddControllers()
@@ -309,20 +311,21 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<SkillBridge.API.Hubs.PaymentHub>("/hubs/payment");
+app.MapHub<SkillBridge.API.Hubs.ChatHub>("/hubs/chat");
 
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
+    var logger = services.GetRequiredService<ILogger<Program>>();
     try
     {
         var dbContext = services.GetRequiredService<SkillBridge.Infrastructure.Data.SkillBridgeDbContext>();
-        var logger = services.GetRequiredService<ILogger<Program>>();
         await SkillBridge.Infrastructure.Data.DbInitializer.SeedAdminAsync(dbContext, app.Configuration, logger);
+        await SkillBridge.Infrastructure.Data.DbInitializer.EnsureChatSchemaAsync(dbContext, logger);
     }
     catch (Exception ex)
     {
-        var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Lỗi xảy ra trong quá trình khởi tạo dữ liệu Admin.");
+        logger.LogError(ex, "Lỗi xảy ra trong quá trình khởi tạo dữ liệu Admin và Schema.");
     }
 }
 

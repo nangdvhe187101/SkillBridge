@@ -178,16 +178,22 @@ public class R2StorageService : IStorageService
 
         var normalized = trimmed.Replace('\\', '/').TrimStart('/');
 
-        // Hỗ trợ backward-compatibility: nếu bản ghi cũ đã lưu Full URL (http:// hoặc https://), trả về nguyên bản
+        // Hỗ trợ backward-compatibility: nếu bản ghi cũ đã lưu Full URL (http:// hoặc https://)
         if (trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
             trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
         {
+            if (trimmed.Contains(".r2.dev/", StringComparison.OrdinalIgnoreCase))
+            {
+                var idx = trimmed.IndexOf(".r2.dev/", StringComparison.OrdinalIgnoreCase);
+                var key = trimmed.Substring(idx + 8).TrimStart('/');
+                return $"/api/storage/file?key={Uri.EscapeDataString(key)}";
+            }
             return trimmed;
         }
 
-        if (string.IsNullOrWhiteSpace(_publicBaseUrl))
+        if (string.IsNullOrWhiteSpace(_publicBaseUrl) || _publicBaseUrl.Contains(".r2.dev", StringComparison.OrdinalIgnoreCase))
         {
-            return trimmed;
+            return $"/api/storage/file?key={Uri.EscapeDataString(normalized)}";
         }
 
         return $"{_publicBaseUrl.TrimEnd('/')}/{normalized}";

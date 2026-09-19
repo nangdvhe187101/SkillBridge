@@ -276,6 +276,11 @@ public partial class SkillBridgeDbContext : DbContext
 
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+            entity.Property(e => e.IsReadOnly).HasDefaultValue(false);
+            entity.Property(e => e.IsArchivedUserA).HasDefaultValue(false);
+            entity.Property(e => e.IsArchivedUserB).HasDefaultValue(false);
+            entity.Property(e => e.RequestStatus).HasMaxLength(20).HasDefaultValue("active");
+
             entity.HasOne(d => d.Job).WithMany(p => p.Conversations).HasConstraintName("fk_conversations_job");
 
             entity.HasOne(d => d.UserA).WithMany(p => p.ConversationUserAs)
@@ -285,6 +290,12 @@ public partial class SkillBridgeDbContext : DbContext
             entity.HasOne(d => d.UserB).WithMany(p => p.ConversationUserBs)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("fk_conversations_userb");
+
+            entity.HasOne(d => d.RequestInitiatedByUser)
+                .WithMany()
+                .HasForeignKey(d => d.RequestInitiatedBy)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_conversations_requester");
         });
 
         modelBuilder.Entity<CvFile>(entity =>
