@@ -11,6 +11,7 @@ using SkillBridge.Application.DTOs.Payments;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Services.Payments;
+using SkillBridge.Infrastructure.Services.Security;
 using Xunit;
 
 namespace SkillBridge.Tests.Payments;
@@ -18,18 +19,21 @@ namespace SkillBridge.Tests.Payments;
 public class WithdrawalServiceTests
 {
     private readonly Mock<ILogger<WithdrawalService>> _loggerMock = new();
-    private readonly IConfiguration _config;
+    private readonly IEncryptionKeyProvider _keyProvider;
+    private const string EncryptionKey = "12345678901234567890123456789012";
 
     public WithdrawalServiceTests()
     {
         var inMemorySettings = new Dictionary<string, string?>
         {
-            { "Encryption:Key", "12345678901234567890123456789012" } // 32 chars for AES
+            { "Encryption:Key", EncryptionKey }
         };
 
-        _config = new ConfigurationBuilder()
+        var config = new ConfigurationBuilder()
             .AddInMemoryCollection(inMemorySettings)
             .Build();
+
+        _keyProvider = new ConfigurationEncryptionKeyProvider(config);
     }
 
     private SkillBridgeDbContext CreateInMemoryDbContext()
@@ -39,6 +43,11 @@ public class WithdrawalServiceTests
             .Options;
 
         return new SkillBridgeDbContext(options);
+    }
+
+    private WithdrawalService CreateService(SkillBridgeDbContext dbContext, IEncryptionKeyProvider? keyProvider = null)
+    {
+        return new WithdrawalService(dbContext, keyProvider ?? _keyProvider, _loggerMock.Object);
     }
 
     private static User CreateValidUser(int id, string email, string name = "Test User")
@@ -59,7 +68,7 @@ public class WithdrawalServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new WithdrawalService(dbContext, _config, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var dto = new CreateWithdrawalDto { Amount = 30000m };
 
@@ -75,11 +84,19 @@ public class WithdrawalServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new WithdrawalService(dbContext, _config, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 10;
         dbContext.Users.Add(CreateValidUser(userId, "u10@test.com"));
-        dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 200000m, IsBankVerified = false });
+        dbContext.Wallets.Add(new Wallet
+        {
+            UserId = userId,
+            Balance = 200000m,
+            IsBankVerified = false,
+            BankName = "Techcombank",
+            AccountNumber = "1903333333",
+            AccountHolder = "NGUYEN VAN A"
+        });
         await dbContext.SaveChangesAsync();
 
         var dto = new CreateWithdrawalDto { Amount = 100000m };
@@ -96,7 +113,7 @@ public class WithdrawalServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new WithdrawalService(dbContext, _config, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 11;
         dbContext.Users.Add(CreateValidUser(userId, "u11@test.com"));
@@ -125,7 +142,7 @@ public class WithdrawalServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new WithdrawalService(dbContext, _config, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 12;
         dbContext.Users.Add(CreateValidUser(userId, "u12@test.com", "Nguyen Van B"));
@@ -168,7 +185,7 @@ public class WithdrawalServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new WithdrawalService(dbContext, _config, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 13;
         var adminUserId = 99;
@@ -220,7 +237,7 @@ public class WithdrawalServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new WithdrawalService(dbContext, _config, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 14;
         var adminUserId = 98;
@@ -266,7 +283,7 @@ public class WithdrawalServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new WithdrawalService(dbContext, _config, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         var userId = 15;
         var adminUserId = 88;
@@ -329,12 +346,64 @@ public class WithdrawalServiceTests
     {
         // Arrange
         using var dbContext = CreateInMemoryDbContext();
-        var service = new WithdrawalService(dbContext, _config, _loggerMock.Object);
+        var service = CreateService(dbContext);
 
         // Act & Assert
         var ex = await Assert.ThrowsAsync<BusinessException>(() =>
             service.RejectWithdrawalAsync(1, 104, new AdminRejectWithdrawalDto { Reason = "   " }));
 
         Assert.Contains("lý do từ chối", ex.Message);
+    }
+
+    [Fact]
+    public async Task GetAdminListAsync_ShouldMarkDecryptError_WhenDecryptedAccountIsCorrupted()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = CreateService(dbContext);
+
+        var userId = 20;
+        dbContext.Users.Add(CreateValidUser(userId, "u20@test.com", "Corrupted User"));
+
+        // Encrypted with another key -> Decryption with current key produces garbage
+        var wrongKey = "99999999999999999999999999999999";
+        var encryptedWithWrongKey = EncryptionHelper.Encrypt("0123456789", wrongKey);
+
+        var bankAccount = new BankAccount
+        {
+            Id = 20,
+            UserId = userId,
+            BankName = "Vietcombank",
+            AccountNumberEncrypted = encryptedWithWrongKey,
+            AccountNumberMask = "****6789",
+            AccountHolderName = "CORRUPTED USER",
+            IsVerified = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.BankAccounts.Add(bankAccount);
+
+        var request = new WithdrawalRequest
+        {
+            Id = 201,
+            UserId = userId,
+            BankAccountId = 20,
+            Amount = 100000m,
+            Status = "pending",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.WithdrawalRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await service.GetAdminListAsync("pending", 1, 10);
+
+        // Assert
+        Assert.NotNull(result);
+        var item = Assert.Single(result.Items);
+        Assert.True(item.DecryptError, "DecryptError should be true when STK is corrupted");
+        Assert.Null(item.AccountNumberFull);
+        Assert.Equal(bankAccount.AccountNumberMask, item.AccountNumberMask);
     }
 }

@@ -17,8 +17,12 @@ import Icon from '../../components/Icon';
 const TX_CONFIG = {
   topup: { icon: 'arrow-down-left', label: 'Nạp tiền', color: '#16a34a', bg: 'rgba(22, 163, 74, 0.12)' },
   withdraw: { icon: 'arrow-up-right', label: 'Rút tiền', color: '#ea580c', bg: 'rgba(234, 88, 12, 0.12)' },
+  withdraw_hold: { icon: 'arrow-up-right', label: 'Rút tiền', color: '#ea580c', bg: 'rgba(234, 88, 12, 0.12)' },
+  withdraw_refund: { icon: 'arrow-down-left', label: 'Hoàn tiền rút', color: '#16a34a', bg: 'rgba(22, 163, 74, 0.12)' },
+  withdraw_fee: { icon: 'receipt', label: 'Phí rút tiền', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)' },
   escrow_release: { icon: 'check', label: 'Giải ngân', color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)' },
   escrow_hold: { icon: 'lock', label: 'Ký quỹ Escrow', color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.12)' },
+  escrow_refund: { icon: 'arrow-down-left', label: 'Hoàn tiền ký quỹ', color: '#10b981', bg: 'rgba(16, 185, 129, 0.12)' },
   insurance_payout: { icon: 'shield-check', label: 'Bồi thường BH', color: '#06b6d4', bg: 'rgba(6, 182, 212, 0.12)' },
   subscription: { icon: 'crown', label: 'Gói đặc quyền', color: '#eab308', bg: 'rgba(234, 179, 8, 0.12)' },
   commission: { icon: 'receipt', label: 'Phí nền tảng', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)' },
@@ -155,6 +159,9 @@ export default function Wallet() {
       list = list.filter((t) => t.type !== 'commission');
     }
     if (txFilter === 'all') return list;
+    if (txFilter === 'withdraw') {
+      return list.filter((t) => t.type === 'withdraw' || t.type === 'withdraw_hold' || t.type === 'withdraw_refund' || t.type === 'withdraw_fee');
+    }
     return list.filter((t) => t.type === txFilter);
   }, [state.transactions, txFilter, isEmployer]);
 

@@ -16,6 +16,7 @@ using SkillBridge.Application.Interfaces.Media;
 using SkillBridge.Application.Interfaces.Payments;
 using SkillBridge.Application.Interfaces.Users;
 using SkillBridge.Application.Interfaces.Notifications;
+using System.Data;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 
@@ -410,7 +411,7 @@ public class DeliverableService : IDeliverableService
         var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
         return await executionStrategy.ExecuteAsync(async () =>
         {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
 
             // Khóa hàng Job bằng SELECT ... FOR UPDATE bên trong transaction để chống race condition (double click / duplicate review request)
             var currentJob = await GetJobWithLockAsync(jobId, cancellationToken);
@@ -907,11 +908,14 @@ public class DeliverableService : IDeliverableService
 
     private async Task<Job?> GetJobWithLockAsync(int jobId, CancellationToken ct = default)
     {
-        if (_dbContext.Database.IsRelational())
+        if (_dbContext.Database.IsMySql())
         {
-            return await _dbContext.Jobs
-                .FromSqlRaw("SELECT * FROM jobs WHERE id = {0} FOR UPDATE", jobId)
-                .SingleOrDefaultAsync(ct);
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM jobs WHERE id = {0} FOR UPDATE", new object[] { jobId }, ct);
+            var tracked = _dbContext.ChangeTracker.Entries<Job>().FirstOrDefault(e => e.Entity.Id == jobId);
+            if (tracked?.State == EntityState.Unchanged)
+            {
+                await tracked.ReloadAsync(ct);
+            }
         }
         return await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
     }

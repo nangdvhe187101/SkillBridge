@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Payments;
@@ -18,16 +18,25 @@ public class WithdrawalService : IWithdrawalService
 {
     private readonly SkillBridgeDbContext _dbContext;
     private readonly ILogger<WithdrawalService> _logger;
-    private readonly string _encryptionKey;
+    private readonly IEncryptionKeyProvider _keyProvider;
 
     public WithdrawalService(
         SkillBridgeDbContext dbContext,
-        IConfiguration config,
+        IEncryptionKeyProvider keyProvider,
         ILogger<WithdrawalService> logger)
     {
         _dbContext = dbContext;
         _logger = logger;
-        _encryptionKey = config["Encryption:Key"] ?? string.Empty;
+        _keyProvider = keyProvider;
+    }
+
+    private static string FitLabel(string s, int max = 255) => s.Length <= max ? s : s[..(max - 1)] + "…";
+
+    private static string? CleanText(string? s, int max)
+    {
+        if (string.IsNullOrWhiteSpace(s)) return null;
+        var t = new string(s.Where(c => !char.IsControl(c)).ToArray()).Trim();
+        return t.Length > max ? t[..max] : t;
     }
 
     public async Task<WithdrawalResponseDto> RequestWithdrawalAsync(
@@ -47,68 +56,83 @@ public class WithdrawalService : IWithdrawalService
             throw new BusinessException($"Số tiền rút tối thiểu là {minWithdrawAmount:N0}đ.");
         }
 
-        // BẢO MẬT: Kiểm tra tài khoản ngân hàng đã được xác thực
-        var bankAccount = await _dbContext.BankAccounts
-            .FirstOrDefaultAsync(b => b.UserId == userId && b.IsVerified, ct);
+        // Lấy khóa mã hóa trước khi mở transaction
+        var encryptionKey = _keyProvider.GetKey();
 
-        if (bankAccount == null)
-        {
-            var walletCheck = await _dbContext.Wallets.AsNoTracking().FirstOrDefaultAsync(w => w.UserId == userId, ct);
-            if (walletCheck == null || !walletCheck.IsBankVerified)
-            {
-                throw new BusinessException("Bạn chưa liên kết tài khoản ngân hàng hoặc tài khoản chưa được Quản trị viên phê duyệt xác thực. Vui lòng gửi hồ sơ xác thực tại trang Ví trước khi rút tiền.");
-            }
-
-            // Đồng bộ bản ghi BankAccount từ Wallet đã verified
-            bankAccount = new BankAccount
-            {
-                UserId = userId,
-                BankName = walletCheck.BankName ?? "Ngân hàng",
-                AccountNumberEncrypted = EncryptionHelper.Encrypt(walletCheck.AccountNumber ?? "", _encryptionKey),
-                AccountNumberMask = EncryptionHelper.MaskAccountNumber(walletCheck.AccountNumber ?? ""),
-                AccountHolderName = walletCheck.AccountHolder ?? "CHỦ TÀI KHOẢN",
-                IsVerified = true,
-                IsDefault = true,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-            await _dbContext.BankAccounts.AddAsync(bankAccount, ct);
-            await _dbContext.SaveChangesAsync(ct);
-        }
-
-        // Thực thi giao dịch trừ tiền ví an toàn với khóa hàng FOR UPDATE
         if (_dbContext.Database.IsRelational())
         {
             var strategy = _dbContext.Database.CreateExecutionStrategy();
             return await strategy.ExecuteAsync(async () =>
             {
-                await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
-                var result = await RequestWithdrawalInternalAsync(userId, bankAccount, dto.Amount, ipAddress, ct);
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+                var result = await RequestWithdrawalInternalAsync(userId, dto.Amount, encryptionKey, ipAddress, ct);
                 await transaction.CommitAsync(ct);
                 return result;
             });
         }
 
-        return await RequestWithdrawalInternalAsync(userId, bankAccount, dto.Amount, ipAddress, ct);
+        return await RequestWithdrawalInternalAsync(userId, dto.Amount, encryptionKey, ipAddress, ct);
     }
 
     private async Task<WithdrawalResponseDto> RequestWithdrawalInternalAsync(
         int userId,
-        BankAccount bankAccount,
         decimal amount,
+        string encryptionKey,
         string? ipAddress,
         CancellationToken ct)
     {
-        await GetWalletWithLockAsync(userId, ct);
-
-        var wallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
-        if (wallet == null || wallet.Balance < amount)
+        var wallet = await GetWalletWithLockAsync(userId, ct);
+        if (wallet == null || !wallet.IsBankVerified || string.IsNullOrWhiteSpace(wallet.AccountNumber) || string.IsNullOrWhiteSpace(wallet.BankName))
         {
-            var currentBalance = wallet?.Balance ?? 0m;
-            throw new BusinessException($"Số dư khả dụng ({currentBalance:N0}đ) không đủ để rút số tiền {amount:N0}đ.");
+            throw new BusinessException("Bạn chưa liên kết tài khoản ngân hàng hoặc tài khoản chưa được Quản trị viên phê duyệt xác thực. Vui lòng gửi hồ sơ xác thực tại trang Ví trước khi rút tiền.");
         }
 
-        // Pha 1: Trừ số dư ví ngay lập tức để chống gian lận tiêu lặp (double-spending)
+        if (wallet.Balance < amount)
+        {
+            throw new BusinessException($"Số dư khả dụng ({wallet.Balance:N0}đ) không đủ để rút số tiền {amount:N0}đ.");
+        }
+
+        // Đồng bộ BankAccount khớp ví hiện tại
+        var userAccounts = await _dbContext.BankAccounts.Where(b => b.UserId == userId).ToListAsync(ct);
+        var matchedAccount = BankAccountMatcher.Find(userAccounts, wallet.BankName, wallet.AccountNumber, encryptionKey);
+
+        if (matchedAccount == null)
+        {
+            foreach (var acc in userAccounts)
+            {
+                acc.IsDefault = false;
+                acc.IsVerified = false;
+            }
+
+            matchedAccount = new BankAccount
+            {
+                UserId = userId,
+                BankName = wallet.BankName,
+                AccountNumberEncrypted = EncryptionHelper.Encrypt(wallet.AccountNumber, encryptionKey),
+                AccountNumberMask = EncryptionHelper.MaskAccountNumber(wallet.AccountNumber),
+                AccountHolderName = wallet.AccountHolder ?? "CHỦ TÀI KHOẢN",
+                IsVerified = true,
+                IsDefault = true,
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            };
+            await _dbContext.BankAccounts.AddAsync(matchedAccount, ct);
+            await _dbContext.SaveChangesAsync(ct);
+        }
+        else
+        {
+            foreach (var acc in userAccounts.Where(a => a.Id != matchedAccount.Id))
+            {
+                acc.IsDefault = false;
+                acc.IsVerified = false;
+            }
+            matchedAccount.IsDefault = true;
+            matchedAccount.IsVerified = true;
+            matchedAccount.UpdatedAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync(ct);
+        }
+
+        // Trừ số dư ví ngay lập tức để chống double-spending
         wallet.Balance -= amount;
 
         var now = DateTime.UtcNow;
@@ -116,7 +140,7 @@ public class WithdrawalService : IWithdrawalService
         {
             UserId = userId,
             Type = "withdraw_hold",
-            Label = $"Yêu cầu rút tiền về {bankAccount.BankName} · {bankAccount.AccountNumberMask} (Đang chờ Admin duyệt)",
+            Label = FitLabel($"Yêu cầu rút tiền về {matchedAccount.BankName} · {matchedAccount.AccountNumberMask} (Đang chờ Admin duyệt)"),
             Amount = amount,
             Sign = -1,
             CreatedAt = now
@@ -127,7 +151,7 @@ public class WithdrawalService : IWithdrawalService
         var request = new WithdrawalRequest
         {
             UserId = userId,
-            BankAccountId = bankAccount.Id,
+            BankAccountId = matchedAccount.Id,
             Amount = amount,
             Fee = 0,
             NetAmount = amount,
@@ -141,9 +165,9 @@ public class WithdrawalService : IWithdrawalService
         await _dbContext.SaveChangesAsync(ct);
 
         _logger.LogInformation("Người dùng {UserId} đã tạo yêu cầu rút tiền #{RequestId} số tiền {Amount:N0}đ về {BankName} {Mask}",
-            userId, request.Id, amount, bankAccount.BankName, bankAccount.AccountNumberMask);
+            userId, request.Id, amount, matchedAccount.BankName, matchedAccount.AccountNumberMask);
 
-        return MapToDto(request, bankAccount);
+        return MapToDto(request, matchedAccount);
     }
 
     public async Task<WithdrawalResponseDto> ApproveWithdrawalAsync(
@@ -152,6 +176,32 @@ public class WithdrawalService : IWithdrawalService
         AdminApproveWithdrawalDto? dto = null,
         CancellationToken ct = default)
     {
+        if (_dbContext.Database.IsRelational())
+        {
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+                var result = await ApproveWithdrawalInternalAsync(adminUserId, withdrawalId, dto, ct);
+                await transaction.CommitAsync(ct);
+                return result;
+            });
+        }
+
+        return await ApproveWithdrawalInternalAsync(adminUserId, withdrawalId, dto, ct);
+    }
+
+    private async Task<WithdrawalResponseDto> ApproveWithdrawalInternalAsync(
+        int adminUserId,
+        int withdrawalId,
+        AdminApproveWithdrawalDto? dto,
+        CancellationToken ct)
+    {
+        if (_dbContext.Database.IsMySql())
+        {
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM withdrawal_requests WHERE id = {0} FOR UPDATE", new object[] { withdrawalId }, ct);
+        }
+
         var request = await _dbContext.WithdrawalRequests
             .Include(r => r.BankAccount)
             .Include(r => r.Transaction)
@@ -175,9 +225,12 @@ public class WithdrawalService : IWithdrawalService
         request.ProcessedAt = now;
         request.UpdatedAt = now;
 
+        var cleanNote = CleanText(dto?.Note, 80);
+        var refText = cleanNote != null ? $" - Mã UNC: {cleanNote}" : "";
+
         if (request.Transaction != null)
         {
-            request.Transaction.Label = $"Rút tiền về {request.BankAccount.BankName} · {request.BankAccount.AccountNumberMask} (Thành công)";
+            request.Transaction.Label = FitLabel($"Rút tiền về {request.BankAccount.BankName} · {request.BankAccount.AccountNumberMask} (Thành công{refText})");
         }
 
         await _dbContext.SaveChangesAsync(ct);
@@ -199,6 +252,32 @@ public class WithdrawalService : IWithdrawalService
             throw new BusinessException("Vui lòng cung cấp lý do từ chối yêu cầu rút tiền.");
         }
 
+        if (_dbContext.Database.IsRelational())
+        {
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+                var result = await RejectWithdrawalInternalAsync(adminUserId, withdrawalId, dto.Reason, ct);
+                await transaction.CommitAsync(ct);
+                return result;
+            });
+        }
+
+        return await RejectWithdrawalInternalAsync(adminUserId, withdrawalId, dto.Reason, ct);
+    }
+
+    private async Task<WithdrawalResponseDto> RejectWithdrawalInternalAsync(
+        int adminUserId,
+        int withdrawalId,
+        string rawReason,
+        CancellationToken ct)
+    {
+        if (_dbContext.Database.IsMySql())
+        {
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM withdrawal_requests WHERE id = {0} FOR UPDATE", new object[] { withdrawalId }, ct);
+        }
+
         var request = await _dbContext.WithdrawalRequests
             .Include(r => r.BankAccount)
             .FirstOrDefaultAsync(r => r.Id == withdrawalId, ct);
@@ -213,33 +292,12 @@ public class WithdrawalService : IWithdrawalService
             throw new BusinessException($"Chỉ có thể từ chối yêu cầu rút tiền đang ở trạng thái Chờ duyệt. Trạng thái hiện tại: {request.Status}.");
         }
 
-        if (_dbContext.Database.IsRelational())
-        {
-            var strategy = _dbContext.Database.CreateExecutionStrategy();
-            return await strategy.ExecuteAsync(async () =>
-            {
-                await using var transaction = await _dbContext.Database.BeginTransactionAsync(ct);
-                var result = await RejectWithdrawalInternalAsync(adminUserId, request, dto.Reason.Trim(), ct);
-                await transaction.CommitAsync(ct);
-                return result;
-            });
-        }
-
-        return await RejectWithdrawalInternalAsync(adminUserId, request, dto.Reason.Trim(), ct);
-    }
-
-    private async Task<WithdrawalResponseDto> RejectWithdrawalInternalAsync(
-        int adminUserId,
-        WithdrawalRequest request,
-        string reason,
-        CancellationToken ct)
-    {
+        var cleanReason = CleanText(rawReason, 150) ?? "Thông tin không hợp lệ";
         var adminMemberId = await EnsureAdminMemberIdAsync(adminUserId, ct);
         var now = DateTime.UtcNow;
 
         // Khóa hàng ví và hoàn tiền lại cho người dùng
-        await GetWalletWithLockAsync(request.UserId, ct);
-        var wallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == request.UserId, ct);
+        var wallet = await GetWalletWithLockAsync(request.UserId, ct);
 
         if (wallet != null)
         {
@@ -258,7 +316,7 @@ public class WithdrawalService : IWithdrawalService
         {
             UserId = request.UserId,
             Type = "withdraw_refund",
-            Label = $"Hoàn tiền yêu cầu rút #{request.Id} bị từ chối: {reason}",
+            Label = FitLabel($"Hoàn tiền yêu cầu rút #{request.Id} bị từ chối: {cleanReason}"),
             Amount = request.Amount,
             Sign = 1,
             ReferenceId = request.Id,
@@ -267,7 +325,7 @@ public class WithdrawalService : IWithdrawalService
         await _dbContext.Transactions.AddAsync(refundTx, ct);
 
         request.Status = "rejected";
-        request.RejectReason = reason;
+        request.RejectReason = cleanReason;
         request.ProcessedBy = adminMemberId;
         request.ProcessedAt = now;
         request.UpdatedAt = now;
@@ -275,7 +333,7 @@ public class WithdrawalService : IWithdrawalService
         await _dbContext.SaveChangesAsync(ct);
 
         _logger.LogInformation("Admin {AdminMemberId} đã từ chối yêu cầu rút #{RequestId} ({Amount:N0}đ), hoàn tiền về ví User {UserId}. Lý do: {Reason}",
-            adminMemberId, request.Id, request.Amount, request.UserId, reason);
+            adminMemberId, request.Id, request.Amount, request.UserId, cleanReason);
 
         return MapToDto(request, request.BankAccount);
     }
@@ -295,23 +353,31 @@ public class WithdrawalService : IWithdrawalService
             .Where(r => r.UserId == userId);
 
         var totalCount = await query.CountAsync(ct);
+
         var items = await query
             .OrderByDescending(r => r.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
+            .Select(r => MapToDto(r, r.BankAccount))
             .ToListAsync(ct);
 
         return new WithdrawalPagedResultDto<WithdrawalResponseDto>
         {
-            Items = items.Select(r => MapToDto(r, r.BankAccount)).ToList(),
+            Items = items,
             TotalCount = totalCount,
             Page = page,
             PageSize = pageSize
         };
     }
 
+    public Task<WithdrawalPagedResultDto<AdminWithdrawalItemDto>> GetAdminWithdrawalsAsync(
+        string? status = null,
+        int page = 1,
+        int pageSize = 20,
+        CancellationToken ct = default) => GetAdminListAsync(status, page, pageSize, ct);
+
     public async Task<WithdrawalPagedResultDto<AdminWithdrawalItemDto>> GetAdminListAsync(
-        string? status,
+        string? status = null,
         int page = 1,
         int pageSize = 20,
         CancellationToken ct = default)
@@ -321,34 +387,48 @@ public class WithdrawalService : IWithdrawalService
 
         var query = _dbContext.WithdrawalRequests
             .AsNoTracking()
-            .Include(r => r.User)
             .Include(r => r.BankAccount)
+            .Include(r => r.User)
             .AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(status))
+        if (!string.IsNullOrWhiteSpace(status) && status.ToLowerInvariant() != "all")
         {
-            var cleanStatus = status.Trim().ToLowerInvariant();
-            query = query.Where(r => r.Status == cleanStatus);
+            var normalizedStatus = status.Trim().ToLowerInvariant();
+            query = query.Where(r => r.Status == normalizedStatus);
         }
 
         var totalCount = await query.CountAsync(ct);
-        var items = await query
+
+        var rawList = await query
             .OrderByDescending(r => r.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);
 
-        var resultItems = items.Select(r =>
+        // Lấy key 1 lần ngoài vòng lặp
+        var key = _keyProvider.GetKey();
+
+        var items = rawList.Select(r =>
         {
             string? fullAccount = null;
-            if (!string.IsNullOrWhiteSpace(r.BankAccount?.AccountNumberEncrypted) && !string.IsNullOrWhiteSpace(_encryptionKey))
+            bool decryptError = false;
+
+            if (r.BankAccount != null && !string.IsNullOrWhiteSpace(r.BankAccount.AccountNumberEncrypted))
             {
                 try
                 {
-                    fullAccount = EncryptionHelper.Decrypt(r.BankAccount.AccountNumberEncrypted, _encryptionKey);
+                    fullAccount = EncryptionHelper.Decrypt(r.BankAccount.AccountNumberEncrypted, key);
+                    if (string.IsNullOrWhiteSpace(fullAccount)
+                        || fullAccount.Any(c => c is < '0' or > '9')
+                        || (r.BankAccount.AccountNumberMask.Length >= 4 && !fullAccount.EndsWith(r.BankAccount.AccountNumberMask[^4..])))
+                    {
+                        decryptError = true;
+                        fullAccount = null;
+                    }
                 }
                 catch
                 {
+                    decryptError = true;
                     fullAccount = null;
                 }
             }
@@ -357,11 +437,12 @@ public class WithdrawalService : IWithdrawalService
             {
                 Id = r.Id,
                 UserId = r.UserId,
-                UserName = r.User?.FullName ?? "Unknown",
-                UserEmail = r.User?.Email ?? "Unknown",
+                UserName = r.User?.FullName ?? "N/A",
+                UserEmail = r.User?.Email ?? "N/A",
                 BankName = r.BankAccount?.BankName ?? "Ngân hàng",
                 AccountNumberMask = r.BankAccount?.AccountNumberMask ?? "******",
                 AccountNumberFull = fullAccount,
+                DecryptError = decryptError,
                 AccountHolderName = r.BankAccount?.AccountHolderName ?? "CHỦ TÀI KHOẢN",
                 Amount = r.Amount,
                 Fee = r.Fee,
@@ -375,7 +456,7 @@ public class WithdrawalService : IWithdrawalService
 
         return new WithdrawalPagedResultDto<AdminWithdrawalItemDto>
         {
-            Items = resultItems,
+            Items = items,
             TotalCount = totalCount,
             Page = page,
             PageSize = pageSize
@@ -403,9 +484,14 @@ public class WithdrawalService : IWithdrawalService
 
     private async Task<Wallet?> GetWalletWithLockAsync(int userId, CancellationToken ct)
     {
-        if (_dbContext.Database.IsRelational())
+        if (_dbContext.Database.IsMySql())
         {
             await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { userId }, ct);
+            var tracked = _dbContext.ChangeTracker.Entries<Wallet>().FirstOrDefault(e => e.Entity.UserId == userId);
+            if (tracked?.State == EntityState.Unchanged)
+            {
+                await tracked.ReloadAsync(ct);
+            }
         }
         return await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
     }

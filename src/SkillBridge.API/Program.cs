@@ -153,6 +153,7 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
 builder.Services.AddScoped<SkillBridge.Application.Interfaces.Payments.IPaymentRealtimeNotifier, SkillBridge.API.Services.SignalRPaymentRealtimeService>();
 builder.Services.AddScoped<SkillBridge.Application.Interfaces.Chat.IChatRealtimeNotifier, SkillBridge.API.Services.SignalRChatRealtimeService>();
 builder.Services.AddSingleton<SkillBridge.Application.Interfaces.Chat.IUserPresenceService, SkillBridge.Infrastructure.Services.Chat.UserPresenceService>();
+builder.Services.AddSingleton<SkillBridge.Application.Common.IEncryptionKeyProvider, SkillBridge.Infrastructure.Services.Security.ConfigurationEncryptionKeyProvider>();
 builder.Services.AddHttpClient();
 
 builder.Services.AddControllers()
@@ -278,6 +279,29 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(optio
 });
 
 var app = builder.Build();
+
+if (!app.Environment.IsDevelopment())
+{
+    var encKey = app.Configuration["Encryption:Key"];
+    if (string.IsNullOrWhiteSpace(encKey) || encKey.Length < 16)
+    {
+        throw new InvalidOperationException("CRITICAL: 'Encryption:Key' must be configured and at least 16 characters in non-development environments.");
+    }
+
+    var sepayKey = app.Configuration["SePay:ApiKey"];
+    if (string.IsNullOrWhiteSpace(sepayKey))
+    {
+        throw new InvalidOperationException("CRITICAL: 'SePay:ApiKey' must be configured in non-development environments.");
+    }
+
+    var vnpaySecret = app.Configuration["VNPay:HashSecret"];
+    if (!string.IsNullOrWhiteSpace(vnpaySecret) &&
+        (vnpaySecret.Equals("9VNJ2F3H29N7K5Z65Q7OQQQ1Q0Z88K4N", StringComparison.OrdinalIgnoreCase) ||
+         vnpaySecret.Contains("REPLACE_WITH_YOUR_KEY", StringComparison.OrdinalIgnoreCase)))
+    {
+        throw new InvalidOperationException("CRITICAL: Default or dummy VNPay HashSecret detected in non-development environment.");
+    }
+}
 
 app.UseForwardedHeaders();
 

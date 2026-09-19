@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Payments;
 using SkillBridge.Application.Interfaces.Payments;
+using System.Data;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 
@@ -236,12 +237,21 @@ public class PaymentService : IPaymentService
 
         return await executionStrategy.ExecuteAsync(async () =>
         {
-            await using var tx = await _dbContext.Database.BeginTransactionAsync(ct);
+            await using var tx = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
 
             // Row-level lock on PaymentOrder
+            if (_dbContext.Database.IsMySql())
+            {
+                await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM payment_orders WHERE order_code = {0} FOR UPDATE", new object[] { orderCode }, ct);
+                var trackedOrder = _dbContext.ChangeTracker.Entries<PaymentOrder>().FirstOrDefault(e => e.Entity.OrderCode == orderCode);
+                if (trackedOrder?.State == EntityState.Unchanged)
+                {
+                    await trackedOrder.ReloadAsync(ct);
+                }
+            }
+
             var order = await _dbContext.PaymentOrders
-                .FromSqlRaw("SELECT * FROM payment_orders WHERE order_code = {0} FOR UPDATE", orderCode)
-                .SingleOrDefaultAsync(ct);
+                .FirstOrDefaultAsync(o => o.OrderCode == orderCode, ct);
 
             if (order == null)
             {
@@ -271,9 +281,18 @@ public class PaymentService : IPaymentService
             order.RawWebhookPayload = rawPayload;
 
             // Row-level lock on Wallet
+            if (_dbContext.Database.IsMySql())
+            {
+                await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { order.UserId }, ct);
+                var trackedWallet = _dbContext.ChangeTracker.Entries<Wallet>().FirstOrDefault(e => e.Entity.UserId == order.UserId);
+                if (trackedWallet?.State == EntityState.Unchanged)
+                {
+                    await trackedWallet.ReloadAsync(ct);
+                }
+            }
+
             var wallet = await _dbContext.Wallets
-                .FromSqlRaw("SELECT * FROM wallets WHERE user_id = {0} FOR UPDATE", order.UserId)
-                .SingleOrDefaultAsync(ct);
+                .FirstOrDefaultAsync(w => w.UserId == order.UserId, ct);
 
             if (wallet == null)
             {

@@ -34,7 +34,8 @@ public class BankVerificationServiceTests
 
     private BankVerificationService CreateService(SkillBridgeDbContext dbContext, IConfiguration? config = null)
     {
-        return new BankVerificationService(dbContext, _loggerMock.Object, config ?? CreateTestConfig());
+        var keyProvider = new SkillBridge.Infrastructure.Services.Security.ConfigurationEncryptionKeyProvider(config ?? CreateTestConfig());
+        return new BankVerificationService(dbContext, _loggerMock.Object, keyProvider);
     }
 
     private SkillBridgeDbContext CreateInMemoryDbContext()

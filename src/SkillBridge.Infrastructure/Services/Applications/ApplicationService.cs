@@ -13,6 +13,7 @@ using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Application.Interfaces.Payments;
 using SkillBridge.Application.Interfaces.Users;
 using SkillBridge.Application.Interfaces.Notifications;
+using System.Data;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
@@ -273,7 +274,7 @@ public class ApplicationService : IApplicationService
         var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
         return await executionStrategy.ExecuteAsync(async () =>
         {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
             try
             {
                 // Khóa hàng Job bằng SELECT ... FOR UPDATE bên trong transaction để chống race condition (double-hire / duplicate request)
@@ -388,7 +389,7 @@ public class ApplicationService : IApplicationService
         var strategy = _dbContext.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
             try
             {
                 // Khóa hàng Job bằng SELECT ... FOR UPDATE ngay từ đầu để chống race condition (double cancel / duplicate refund)
@@ -558,11 +559,14 @@ public class ApplicationService : IApplicationService
 
     private async Task<Job?> GetJobWithLockAsync(int jobId, CancellationToken ct = default)
     {
-        if (_dbContext.Database.IsRelational())
+        if (_dbContext.Database.IsMySql())
         {
-            return await _dbContext.Jobs
-                .FromSqlRaw("SELECT * FROM jobs WHERE id = {0} FOR UPDATE", jobId)
-                .SingleOrDefaultAsync(ct);
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM jobs WHERE id = {0} FOR UPDATE", new object[] { jobId }, ct);
+            var tracked = _dbContext.ChangeTracker.Entries<Job>().FirstOrDefault(e => e.Entity.Id == jobId);
+            if (tracked?.State == EntityState.Unchanged)
+            {
+                await tracked.ReloadAsync(ct);
+            }
         }
         return await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
     }

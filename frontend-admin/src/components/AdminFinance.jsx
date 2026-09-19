@@ -220,6 +220,13 @@ export default function AdminFinance() {
                       <td>
                         <div style={{ fontWeight: 600 }}>{w.bankName}</div>
                         <div style={{ fontSize: 12.5, fontFamily: 'monospace' }}>STK: {w.bankAccountNumber}</div>
+                        {w.decryptError && (
+                          <div style={{ marginTop: 2 }}>
+                            <span style={{ fontSize: 11, background: '#fee2e2', color: '#991b1b', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
+                              ⚠️ Lỗi giải mã STK
+                            </span>
+                          </div>
+                        )}
                         <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Chủ TK: {w.bankAccountHolder}</div>
                       </td>
                       <td style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
@@ -248,6 +255,8 @@ export default function AdminFinance() {
                             <button
                               type="button"
                               className="btn btn-primary btn-sm"
+                              disabled={w.decryptError}
+                              title={w.decryptError ? 'Không thể duyệt vì STK bị lỗi giải mã' : 'Duyệt chi'}
                               onClick={() => {
                                 setActionModal({ type: 'approve', item: w });
                                 setActionNote('');

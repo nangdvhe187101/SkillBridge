@@ -129,6 +129,7 @@ builder.Services.Scan(scan => scan
     .WithScopedLifetime());
 
 builder.Services.AddScoped<SkillBridge.Application.Interfaces.Payments.IPaymentRealtimeNotifier, SkillBridge.AdminAPI.Services.NullPaymentRealtimeNotifier>();
+builder.Services.AddSingleton<SkillBridge.Application.Common.IEncryptionKeyProvider, SkillBridge.Infrastructure.Services.Security.ConfigurationEncryptionKeyProvider>();
 builder.Services.AddHttpClient();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
@@ -193,6 +194,15 @@ builder.WebHost.ConfigureKestrel(serverOptions =>
 });
 
 var app = builder.Build();
+
+if (!app.Environment.IsDevelopment())
+{
+    var encKey = app.Configuration["Encryption:Key"];
+    if (string.IsNullOrWhiteSpace(encKey) || encKey.Length < 16)
+    {
+        throw new InvalidOperationException("CRITICAL: 'Encryption:Key' must be configured and at least 16 characters in non-development environments.");
+    }
+}
 
 app.UseForwardedHeaders();
 app.UseMiddleware<SkillBridge.AdminAPI.Middleware.ExceptionHandlingMiddleware>();

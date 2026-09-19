@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Payments;
 using SkillBridge.Application.Interfaces.Payments;
+using System.Data;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 
@@ -72,7 +73,7 @@ public class SubscriptionService : ISubscriptionService
             var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
             return await executionStrategy.ExecuteAsync(async () =>
             {
-                await using var tx = await _dbContext.Database.BeginTransactionAsync(cancellationToken);
+                await using var tx = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
                 var result = await ExecutePurchaseInternalAsync(userId, planName, amount, cancellationToken);
                 await tx.CommitAsync(cancellationToken);
                 return result;
@@ -192,11 +193,14 @@ public class SubscriptionService : ISubscriptionService
 
     private async Task<Wallet?> GetWalletWithLockAsync(int userId, CancellationToken ct)
     {
-        if (_dbContext.Database.IsRelational())
+        if (_dbContext.Database.IsMySql())
         {
-            return await _dbContext.Wallets
-                .FromSqlRaw("SELECT * FROM wallets WHERE user_id = {0} FOR UPDATE", userId)
-                .SingleOrDefaultAsync(ct);
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { userId }, ct);
+            var tracked = _dbContext.ChangeTracker.Entries<Wallet>().FirstOrDefault(e => e.Entity.UserId == userId);
+            if (tracked?.State == EntityState.Unchanged)
+            {
+                await tracked.ReloadAsync(ct);
+            }
         }
         return await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
     }

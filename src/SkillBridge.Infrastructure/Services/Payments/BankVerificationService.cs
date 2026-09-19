@@ -15,24 +15,35 @@ using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using ZXing.SkiaSharp;
 
+using System.Collections.Generic;
+using System.Data;
+using SkillBridge.Infrastructure.Services.Security;
+
 namespace SkillBridge.Infrastructure.Services.Payments;
 
 public class BankVerificationService : IBankVerificationService
 {
     private readonly SkillBridgeDbContext _dbContext;
     private readonly ILogger<BankVerificationService> _logger;
-    private readonly string _encryptionKey;
+    private readonly IEncryptionKeyProvider _keyProvider;
+
+    public BankVerificationService(
+        SkillBridgeDbContext dbContext,
+        ILogger<BankVerificationService> logger,
+        IEncryptionKeyProvider keyProvider)
+    {
+        _dbContext = dbContext;
+        _logger = logger;
+        _keyProvider = keyProvider;
+        _keyProvider.GetKey();
+    }
 
     public BankVerificationService(
         SkillBridgeDbContext dbContext,
         ILogger<BankVerificationService> logger,
         IConfiguration? configuration = null)
+        : this(dbContext, logger, new ConfigurationEncryptionKeyProvider(configuration ?? new ConfigurationBuilder().Build()))
     {
-        _dbContext = dbContext;
-        _logger = logger;
-        _encryptionKey = configuration?["Encryption:Key"]
-            ?? Environment.GetEnvironmentVariable("ENCRYPTION_KEY")
-            ?? throw new InvalidOperationException("Encryption:Key chưa được cấu hình. Không cho phép dùng khóa mặc định trong source code.");
     }
 
     public async Task<BankVerificationResponseDto> CreateRequestAsync(int userId, CreateBankVerificationDto dto, string? ipAddress = null, CancellationToken ct = default)
@@ -66,12 +77,12 @@ public class BankVerificationService : IBankVerificationService
 
         // Chống Race Condition (TOCTOU): sử dụng transaction + row lock nếu là relational DB
         var hasRelational = _dbContext.Database.IsRelational();
-        await using var transaction = hasRelational ? await _dbContext.Database.BeginTransactionAsync(ct) : null;
+        await using var transaction = hasRelational ? await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct) : null;
 
         if (hasRelational)
         {
             // Lock ví của user để tuần tự hóa các request đồng thời của cùng 1 user
-            await _dbContext.Wallets.FromSqlRaw("SELECT * FROM wallets WHERE user_id = {0} FOR UPDATE", userId).FirstOrDefaultAsync(ct);
+            await GetWalletWithLockAsync(userId, ct);
         }
 
         // Rule 1: 1 user chỉ có tối đa 1 record pending tại 1 thời điểm
@@ -109,7 +120,7 @@ public class BankVerificationService : IBankVerificationService
             wallet.IsBankVerified = false;
         }
 
-        var encryptedAccount = EncryptionHelper.Encrypt(cleanAccount, _encryptionKey);
+        var encryptedAccount = EncryptionHelper.Encrypt(cleanAccount, _keyProvider.GetKey());
         var mask = EncryptionHelper.MaskAccountNumber(cleanAccount);
 
         var request = new BankVerificationRequest
@@ -293,7 +304,7 @@ public class BankVerificationService : IBankVerificationService
         }
 
         // Giải mã STK cho màn hình chi tiết admin
-        var plainAccount = EncryptionHelper.Decrypt(request.AccountNumber, _encryptionKey);
+        var plainAccount = EncryptionHelper.Decrypt(request.AccountNumber, _keyProvider.GetKey());
 
         // Sinh mới mã QR chuẩn VietQR cho admin quét bằng app ngân hàng
         string? qrBase64 = null;
@@ -362,6 +373,32 @@ public class BankVerificationService : IBankVerificationService
             throw new BusinessException("Vui lòng nhập tên chủ tài khoản đọc được từ app ngân hàng (BankReturnedName).");
         }
 
+        if (_dbContext.Database.IsRelational())
+        {
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+                var result = await ApproveRequestInternalAsync(adminUserId, requestId, dto, ct);
+                await transaction.CommitAsync(ct);
+                return result;
+            });
+        }
+
+        return await ApproveRequestInternalAsync(adminUserId, requestId, dto, ct);
+    }
+
+    private async Task<BankVerificationResponseDto> ApproveRequestInternalAsync(
+        int adminUserId,
+        int requestId,
+        AdminApproveBankVerificationDto dto,
+        CancellationToken ct)
+    {
+        if (_dbContext.Database.IsMySql())
+        {
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM bank_verification_requests WHERE id = {0} FOR UPDATE", new object[] { requestId }, ct);
+        }
+
         var request = await _dbContext.BankVerificationRequests
             .Include(r => r.User)
             .FirstOrDefaultAsync(r => r.Id == requestId, ct);
@@ -375,6 +412,9 @@ public class BankVerificationService : IBankVerificationService
         {
             throw new BusinessException("Chỉ có thể duyệt yêu cầu đang ở trạng thái chờ duyệt (Pending).");
         }
+
+        // Thứ tự khóa nhất quán: request -> ví -> bank_accounts
+        var wallet = await GetWalletWithLockAsync(request.UserId, ct);
 
         var adminMemberId = await EnsureAdminMemberIdAsync(adminUserId, ct);
         var cleanReturnedName = dto.BankReturnedName.Trim().ToUpper();
@@ -417,8 +457,9 @@ public class BankVerificationService : IBankVerificationService
         }
 
         // Cập nhật ví user: IsBankVerified = true
-        var plainAccount = EncryptionHelper.Decrypt(request.AccountNumber, _encryptionKey);
-        var wallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == request.UserId, ct);
+        var key = _keyProvider.GetKey();
+        var plainAccount = EncryptionHelper.Decrypt(request.AccountNumber, key);
+
         if (wallet == null)
         {
             wallet = new Wallet
@@ -436,13 +477,19 @@ public class BankVerificationService : IBankVerificationService
         wallet.IsBankVerified = true;
         wallet.BankLinkedAt = request.ReviewedAt;
 
-        // Đồng bộ bản ghi BankAccount nếu có
-        var bankAccount = await _dbContext.BankAccounts
-            .FirstOrDefaultAsync(b => b.UserId == request.UserId && b.AccountNumberMask == request.AccountNumberMask, ct);
+        // Đồng bộ bản ghi BankAccount an toàn bằng BankAccountMatcher (so khớp số tài khoản thực)
+        var userAccounts = await _dbContext.BankAccounts.Where(b => b.UserId == request.UserId).ToListAsync(ct);
+        var matchedAccount = BankAccountMatcher.Find(userAccounts, request.BankName, plainAccount, key);
 
-        if (bankAccount == null)
+        if (matchedAccount == null)
         {
-            bankAccount = new BankAccount
+            foreach (var acc in userAccounts)
+            {
+                acc.IsDefault = false;
+                acc.IsVerified = false;
+            }
+
+            matchedAccount = new BankAccount
             {
                 UserId = request.UserId,
                 BankName = request.BankName,
@@ -455,14 +502,20 @@ public class BankVerificationService : IBankVerificationService
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
-            await _dbContext.BankAccounts.AddAsync(bankAccount, ct);
+            await _dbContext.BankAccounts.AddAsync(matchedAccount, ct);
         }
         else
         {
-            bankAccount.IsVerified = true;
-            bankAccount.VerifiedAt = request.ReviewedAt;
-            bankAccount.AccountHolderName = cleanReturnedName;
-            bankAccount.UpdatedAt = DateTime.UtcNow;
+            foreach (var acc in userAccounts.Where(a => a.Id != matchedAccount.Id))
+            {
+                acc.IsDefault = false;
+                acc.IsVerified = false;
+            }
+            matchedAccount.IsDefault = true;
+            matchedAccount.IsVerified = true;
+            matchedAccount.VerifiedAt = request.ReviewedAt;
+            matchedAccount.AccountHolderName = cleanReturnedName;
+            matchedAccount.UpdatedAt = DateTime.UtcNow;
         }
 
         await _dbContext.SaveChangesAsync(ct);
@@ -473,11 +526,47 @@ public class BankVerificationService : IBankVerificationService
         return MapToResponseDto(request);
     }
 
+    private async Task<Wallet?> GetWalletWithLockAsync(int userId, CancellationToken ct)
+    {
+        if (_dbContext.Database.IsMySql())
+        {
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { userId }, ct);
+            var tracked = _dbContext.ChangeTracker.Entries<Wallet>().FirstOrDefault(e => e.Entity.UserId == userId);
+            if (tracked?.State == EntityState.Unchanged)
+            {
+                await tracked.ReloadAsync(ct);
+            }
+        }
+        return await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
+    }
+
     public async Task<BankVerificationResponseDto> RejectRequestAsync(int adminUserId, int requestId, AdminRejectBankVerificationDto dto, CancellationToken ct = default)
     {
         if (dto == null || string.IsNullOrWhiteSpace(dto.RejectionReason))
         {
             throw new BusinessException("Vui lòng cung cấp lý do từ chối yêu cầu xác thực.");
+        }
+
+        if (_dbContext.Database.IsRelational())
+        {
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var tx = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+                var result = await RejectRequestInternalAsync(adminUserId, requestId, dto, ct);
+                await tx.CommitAsync(ct);
+                return result;
+            });
+        }
+
+        return await RejectRequestInternalAsync(adminUserId, requestId, dto, ct);
+    }
+
+    private async Task<BankVerificationResponseDto> RejectRequestInternalAsync(int adminUserId, int requestId, AdminRejectBankVerificationDto dto, CancellationToken ct)
+    {
+        if (_dbContext.Database.IsMySql())
+        {
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM bank_verification_requests WHERE id = {0} FOR UPDATE", new object[] { requestId }, ct);
         }
 
         var request = await _dbContext.BankVerificationRequests

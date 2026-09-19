@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace SkillBridge.Application.DTOs.Payments;
 
@@ -33,6 +34,7 @@ public class AdminWithdrawalItemDto
     public string BankName { get; set; } = string.Empty;
     public string AccountNumberMask { get; set; } = string.Empty;
     public string? AccountNumberFull { get; set; } // Hỗ trợ Admin đối soát chuyển khoản
+    public bool DecryptError { get; set; }
     public string AccountHolderName { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public decimal Fee { get; set; }
@@ -45,11 +47,14 @@ public class AdminWithdrawalItemDto
 
 public class AdminRejectWithdrawalDto
 {
+    [Required]
+    [MaxLength(200)]
     public string Reason { get; set; } = string.Empty;
 }
 
 public class AdminApproveWithdrawalDto
 {
+    [MaxLength(200)]
     public string? Note { get; set; }
 }
 

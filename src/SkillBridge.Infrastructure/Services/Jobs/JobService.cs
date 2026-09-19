@@ -11,6 +11,7 @@ using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Application.Interfaces.Payments;
 using SkillBridge.Application.Interfaces.Users;
 using SkillBridge.Application.Interfaces.Notifications;
+using System.Data;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
@@ -156,7 +157,7 @@ public class JobService : IJobService
         var strategy = _dbContext.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+            await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted);
             try
             {
                 // Khóa hàng Job bằng SELECT ... FOR UPDATE bên trong transaction để chống race condition (double cancel / duplicate refund request)
@@ -570,9 +571,14 @@ public class JobService : IJobService
 
     private async Task<Job?> GetJobWithLockAsync(int jobId)
     {
-        if (_dbContext.Database.IsRelational())
+        if (_dbContext.Database.IsMySql())
         {
-            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM jobs WHERE id = {0} FOR UPDATE", jobId);
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM jobs WHERE id = {0} FOR UPDATE", new object[] { jobId });
+            var tracked = _dbContext.ChangeTracker.Entries<Job>().FirstOrDefault(e => e.Entity.Id == jobId);
+            if (tracked?.State == EntityState.Unchanged)
+            {
+                await tracked.ReloadAsync();
+            }
         }
         return await _jobRepository.GetByIdAsync(jobId);
     }

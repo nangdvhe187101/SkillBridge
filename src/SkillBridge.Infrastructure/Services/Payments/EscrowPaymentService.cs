@@ -28,6 +28,11 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (amount <= 0) return;
 
+        if (_dbContext.Database.IsRelational() && _dbContext.Database.CurrentTransaction == null)
+        {
+            throw new InvalidOperationException("Escrow operation must be executed within an active transaction.");
+        }
+
         // Khóa hàng ví employer để chống lost-update khi có giao dịch nạp tiền/ký quỹ đồng thời
         var employerWallet = await GetWalletWithLockAsync(employerId, cancellationToken);
 
@@ -58,6 +63,11 @@ public class EscrowPaymentService : IEscrowPaymentService
     public async Task ReleaseEscrowAsync(int studentId, int employerId, int jobId, string jobTitle, decimal amount, CancellationToken cancellationToken = default)
     {
         if (amount <= 0) return;
+
+        if (_dbContext.Database.IsRelational() && _dbContext.Database.CurrentTransaction == null)
+        {
+            throw new InvalidOperationException("Escrow operation must be executed within an active transaction.");
+        }
 
         // Khóa hàng Job để chống race condition giải ngân kép (double-release)
         await GetJobWithLockAsync(jobId, cancellationToken);
@@ -203,6 +213,11 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (amount <= 0) return;
 
+        if (_dbContext.Database.IsRelational() && _dbContext.Database.CurrentTransaction == null)
+        {
+            throw new InvalidOperationException("Escrow operation must be executed within an active transaction.");
+        }
+
         // Khóa hàng Job để chống race condition hoàn tiền kép (double-refund)
         await GetJobWithLockAsync(jobId, cancellationToken);
 
@@ -277,18 +292,28 @@ public class EscrowPaymentService : IEscrowPaymentService
 
     private async Task<Wallet?> GetWalletWithLockAsync(int userId, CancellationToken ct)
     {
-        if (_dbContext.Database.IsRelational())
+        if (_dbContext.Database.IsMySql())
         {
             await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { userId }, ct);
+            var tracked = _dbContext.ChangeTracker.Entries<Wallet>().FirstOrDefault(e => e.Entity.UserId == userId);
+            if (tracked?.State == EntityState.Unchanged)
+            {
+                await tracked.ReloadAsync(ct);
+            }
         }
         return await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
     }
 
     private async Task<Job?> GetJobWithLockAsync(int jobId, CancellationToken ct)
     {
-        if (_dbContext.Database.IsRelational())
+        if (_dbContext.Database.IsMySql())
         {
             await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM jobs WHERE id = {0} FOR UPDATE", new object[] { jobId }, ct);
+            var tracked = _dbContext.ChangeTracker.Entries<Job>().FirstOrDefault(e => e.Entity.Id == jobId);
+            if (tracked?.State == EntityState.Unchanged)
+            {
+                await tracked.ReloadAsync(ct);
+            }
         }
         return await _dbContext.Jobs.FirstOrDefaultAsync(j => j.Id == jobId, ct);
     }
