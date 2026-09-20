@@ -35,15 +35,6 @@ public class BankVerificationService : IBankVerificationService
         _dbContext = dbContext;
         _logger = logger;
         _keyProvider = keyProvider;
-        _keyProvider.GetKey();
-    }
-
-    public BankVerificationService(
-        SkillBridgeDbContext dbContext,
-        ILogger<BankVerificationService> logger,
-        IConfiguration? configuration = null)
-        : this(dbContext, logger, new ConfigurationEncryptionKeyProvider(configuration ?? new ConfigurationBuilder().Build()))
-    {
     }
 
     public async Task<BankVerificationResponseDto> CreateRequestAsync(int userId, CreateBankVerificationDto dto, string? ipAddress = null, CancellationToken ct = default)

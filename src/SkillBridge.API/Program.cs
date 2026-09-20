@@ -282,10 +282,18 @@ var app = builder.Build();
 
 if (!app.Environment.IsDevelopment())
 {
-    var encKey = app.Configuration["Encryption:Key"];
-    if (string.IsNullOrWhiteSpace(encKey) || encKey.Length < 16)
+    try
     {
-        throw new InvalidOperationException("CRITICAL: 'Encryption:Key' must be configured and at least 16 characters in non-development environments.");
+        var keyProvider = app.Services.GetRequiredService<SkillBridge.Application.Common.IEncryptionKeyProvider>();
+        var encKey = keyProvider.GetKey();
+        if (string.IsNullOrWhiteSpace(encKey) || encKey.Length < 16)
+        {
+            throw new InvalidOperationException("'Encryption:Key' (hoặc biến môi trường ENCRYPTION_KEY) phải có ít nhất 16 ký tự trong môi trường production/non-development.");
+        }
+    }
+    catch (InvalidOperationException ex)
+    {
+        throw new InvalidOperationException("CRITICAL: " + ex.Message);
     }
 
     var sepayKey = app.Configuration["SePay:ApiKey"];
@@ -297,9 +305,26 @@ if (!app.Environment.IsDevelopment())
     var vnpaySecret = app.Configuration["VNPay:HashSecret"];
     if (!string.IsNullOrWhiteSpace(vnpaySecret) &&
         (vnpaySecret.Equals("9VNJ2F3H29N7K5Z65Q7OQQQ1Q0Z88K4N", StringComparison.OrdinalIgnoreCase) ||
+         vnpaySecret.Equals("TESTSECRETKEYVNPAY0000000000000", StringComparison.OrdinalIgnoreCase) ||
          vnpaySecret.Contains("REPLACE_WITH_YOUR_KEY", StringComparison.OrdinalIgnoreCase)))
     {
         throw new InvalidOperationException("CRITICAL: Default or dummy VNPay HashSecret detected in non-development environment.");
+    }
+}
+else
+{
+    try
+    {
+        var keyProvider = app.Services.GetRequiredService<SkillBridge.Application.Common.IEncryptionKeyProvider>();
+        var devKey = keyProvider.GetKey();
+        if (string.IsNullOrWhiteSpace(devKey) || devKey.Length < 16)
+        {
+            app.Logger.LogWarning("CẢNH BÁO: 'Encryption:Key' (hoặc biến môi trường ENCRYPTION_KEY) chưa được thiết lập hoặc ngắn hơn 16 ký tự. Các tính năng mã hóa tài khoản ngân hàng sẽ bị lỗi khi thực thi.");
+        }
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "CẢNH BÁO: 'Encryption:Key' (hoặc biến môi trường ENCRYPTION_KEY) chưa được cấu hình trong môi trường Development.");
     }
 }
 

@@ -219,7 +219,9 @@ export default function AdminFinance() {
                       </td>
                       <td>
                         <div style={{ fontWeight: 600 }}>{w.bankName}</div>
-                        <div style={{ fontSize: 12.5, fontFamily: 'monospace' }}>STK: {w.bankAccountNumber}</div>
+                        <div style={{ fontSize: 12.5, fontFamily: 'monospace' }}>
+                          STK: {w.accountNumberFull ?? w.accountNumberMask ?? '—'}
+                        </div>
                         {w.decryptError && (
                           <div style={{ marginTop: 2 }}>
                             <span style={{ fontSize: 11, background: '#fee2e2', color: '#991b1b', padding: '1px 6px', borderRadius: 4, fontWeight: 700 }}>
@@ -227,7 +229,9 @@ export default function AdminFinance() {
                             </span>
                           </div>
                         )}
-                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Chủ TK: {w.bankAccountHolder}</div>
+                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                          Chủ TK: {w.accountHolderName || '—'}
+                        </div>
                       </td>
                       <td style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
                         {w.createdAt ? new Date(w.createdAt).toLocaleString('vi-VN') : '—'}
@@ -255,8 +259,8 @@ export default function AdminFinance() {
                             <button
                               type="button"
                               className="btn btn-primary btn-sm"
-                              disabled={w.decryptError}
-                              title={w.decryptError ? 'Không thể duyệt vì STK bị lỗi giải mã' : 'Duyệt chi'}
+                              disabled={w.decryptError || !w.accountNumberFull}
+                              title={w.decryptError ? 'Không thể duyệt vì STK bị lỗi giải mã' : (!w.accountNumberFull ? 'Không thể duyệt vì thiếu STK đầy đủ' : 'Duyệt chi')}
                               onClick={() => {
                                 setActionModal({ type: 'approve', item: w });
                                 setActionNote('');
@@ -294,7 +298,7 @@ export default function AdminFinance() {
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            background: 'rgba(0, 0, 0, 0.45)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -317,7 +321,7 @@ export default function AdminFinance() {
             </h3>
             <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
               {actionModal.type === 'approve'
-                ? `Bạn đang chuẩn bị duyệt yêu cầu rút ${fmtVND(actionModal.item.amount)} cho ${actionModal.item.userName} (${actionModal.item.bankName} - ${actionModal.item.bankAccountNumber}). Hãy đảm bảo lệnh chuyển khoản ngân hàng đã được thực hiện.`
+                ? `Bạn đang chuẩn bị duyệt yêu cầu rút ${fmtVND(actionModal.item.amount)} cho ${actionModal.item.userName} (${actionModal.item.bankName} - STK: ${actionModal.item.accountNumberFull || `${actionModal.item.accountNumberMask || '—'} (CẢNH BÁO: Chỉ có số mặt nạ)`} | Chủ TK: ${actionModal.item.accountHolderName || '—'}). Hãy đảm bảo lệnh chuyển khoản ngân hàng đã được thực hiện.`
                 : `Khi từ chối, số tiền ${fmtVND(actionModal.item.amount)} sẽ được tự động hoàn lại 100% vào ví của ${actionModal.item.userName}.`}
             </p>
 

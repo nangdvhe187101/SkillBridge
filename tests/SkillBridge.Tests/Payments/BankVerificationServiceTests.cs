@@ -528,13 +528,43 @@ public class BankVerificationServiceTests
     }
 
     [Fact]
-    public void Constructor_WithoutEncryptionKey_ShouldThrowInvalidOperationException()
+    public async Task Service_WithoutEncryptionKey_ShouldThrowWhenKeyIsNeeded()
     {
-        using var dbContext = CreateInMemoryDbContext();
-        var emptyConfig = CreateTestConfig(null);
+        var savedEnv = Environment.GetEnvironmentVariable("ENCRYPTION_KEY");
+        try
+        {
+            Environment.SetEnvironmentVariable("ENCRYPTION_KEY", null);
 
-        Assert.Throws<InvalidOperationException>(() =>
-            new BankVerificationService(dbContext, _loggerMock.Object, emptyConfig));
+            using var dbContext = CreateInMemoryDbContext();
+            var emptyConfig = CreateTestConfig(null);
+            var keyProvider = new SkillBridge.Infrastructure.Services.Security.ConfigurationEncryptionKeyProvider(emptyConfig);
+
+            // 1. Khẳng định provider ném InvalidOperationException khi gọi GetKey() mà thiếu key
+            Assert.Throws<InvalidOperationException>(() => keyProvider.GetKey());
+
+            // 2. Khẳng định khởi tạo service thành công (lazy evaluation, không crash khi chưa dùng key)
+            var service = new BankVerificationService(dbContext, _loggerMock.Object, keyProvider);
+            Assert.NotNull(service);
+
+            // 3. Khẳng định hàm nghiệp vụ cần mã hóa (CreateRequestAsync) sẽ ném InvalidOperationException khi thiếu key
+            var user = new User { Id = 888, FullName = "Test User", Email = "test@test.com", PasswordHash = "x", RoleId = 2, AccountStatus = "active", KycStatus = "verified" };
+            dbContext.Users.Add(user);
+            await dbContext.SaveChangesAsync();
+
+            var dto = new CreateBankVerificationDto
+            {
+                BankName = "MB Bank",
+                BankCode = "970422",
+                AccountNumber = "0987654321"
+            };
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                service.CreateRequestAsync(888, dto));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ENCRYPTION_KEY", savedEnv);
+        }
     }
 
     [Fact]
