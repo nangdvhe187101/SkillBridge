@@ -89,6 +89,37 @@ public class ChatPresenceAndReportTests
     }
 
     [Fact]
+    public async Task UserPresenceService_RemoveAndAddInterleaved_ShouldNotEraseReconnectedUser()
+    {
+        // Ca kiểm thử race condition (page refresh):
+        // Mỗi vòng lặp mô phỏng một lần refresh trang: kết nối mới (conn-new-N) thêm vào
+        // đồng thời kết nối cũ (conn-old-N) bị xóa — cả hai dùng connId riêng biệt.
+        // Sau khi cả hai xong, IsUserOnline(userId) phải trả về true vì conn-new-N vẫn còn.
+        const int iterations = 100;
+        var userId = 777;
+
+        var tasks = Enumerable.Range(0, iterations).Select(i => Task.Run(async () =>
+        {
+            var presence = new UserPresenceService(); // mỗi iteration dùng instance riêng, tránh ô nhiễm chéo
+            var oldConn = $"conn-old-{i}";
+            var newConn = $"conn-new-{i}";
+
+            presence.AddConnection(userId, oldConn);
+
+            // Cả hai chạy song song, mô phỏng AddConnection và RemoveConnection đồng thời
+            var t1 = Task.Run(() => presence.AddConnection(userId, newConn));
+            var t2 = Task.Run(() => presence.RemoveConnection(userId, oldConn));
+            await Task.WhenAll(t1, t2);
+
+            // Sau cả hai: conn-new vẫn còn → user phải online
+            Assert.True(presence.IsUserOnline(userId),
+                $"[Iteration {i}] User phải online vì conn-new-{i} vẫn còn sau khi conn-old-{i} bị xóa");
+        })).ToList();
+
+        await Task.WhenAll(tasks);
+    }
+
+    [Fact]
     public async Task ReportConversationAsync_ValidReport_ShouldCreatePendingReport()
     {
         using var db = CreateInMemoryDbContext();

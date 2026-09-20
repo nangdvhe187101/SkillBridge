@@ -867,7 +867,7 @@ function reducer(state, action) {
         if (isMine) {
           const tempIndex = c.messages.findIndex(
             (m) => String(m.id).startsWith('temp-') &&
-                   ((m.text && m.text === newMsg.text) || (m.fileUrl && m.fileUrl === newMsg.fileUrl) || m.type === newMsg.type)
+                   ((m.text && m.text === newMsg.text) || (m.fileUrl && m.fileUrl === newMsg.fileUrl))
           );
           if (tempIndex !== -1) {
             nextMessages = [...c.messages];
@@ -1277,17 +1277,23 @@ export function StoreProvider({ children }) {
   }, [state.conversations]);
 
   const refreshingConvRef = useRef(false);
-  const triggerRefreshConversations = useCallback(async (tab = 'chat') => {
+  const triggerRefreshConversations = useCallback(async () => {
     if (refreshingConvRef.current) return;
     refreshingConvRef.current = true;
     try {
-      await refreshConversations(tab);
+      // Lấy cả hai tab đồng thời để không bao giờ xóa mất danh sách "Yêu cầu"
+      const [chat, req] = await Promise.all([
+        chatApi.getConversations('chat').catch(() => []),
+        chatApi.getConversations('request').catch(() => []),
+      ]);
+      const merged = [...(Array.isArray(chat) ? chat : []), ...(Array.isArray(req) ? req : [])];
+      dispatch({ type: 'SET_CONVERSATIONS', conversations: merged });
     } finally {
       setTimeout(() => {
         refreshingConvRef.current = false;
       }, 500);
     }
-  }, [refreshConversations]);
+  }, []);
 
   const joinConversation = useCallback((id) => {
     if (id && realtimeRef.current?.joinConversation) {
@@ -1323,8 +1329,14 @@ export function StoreProvider({ children }) {
       onConversationUpdated: () => {
         triggerRefreshConversations();
       },
-      onConversationRead: ({ conversationId }) => {
-        dispatch({ type: 'CONVERSATION_READ_SYNC', payload: { conversationId } });
+      onConversationRead: ({ conversationId, readerUserId }) => {
+        const myId = state.currentUser?.id;
+        if (myId && String(readerUserId) === String(myId)) {
+          // Đồng bộ nhiều thiết bị của chính mình: đặt unread = 0
+          dispatch({ type: 'CONVERSATION_READ_SYNC', payload: { conversationId } });
+        }
+        // Ngược lại: đối tác vừa đọc → không xóa badge của mình
+        // (có thể sau này thêm trạng thái "đã xem" cho tin nhắn)
       },
       onUserStatusChanged: ({ userId, isOnline }) => {
         dispatch({ type: 'USER_STATUS_CHANGED', payload: { userId, isOnline } });
@@ -1343,7 +1355,7 @@ export function StoreProvider({ children }) {
       realtimeRef.current = null;
       realtime.stop();
     };
-  }, [state.currentUser, state.isInitializing, refreshConversations, triggerRefreshConversations]);
+  }, [state.currentUser, state.isInitializing, refreshConversations, triggerRefreshConversations]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tải danh mục và danh sách công việc công khai (không cần đăng nhập)
   useEffect(() => {

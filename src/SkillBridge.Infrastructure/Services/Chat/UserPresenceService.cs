@@ -77,12 +77,11 @@ public class UserPresenceService : IUserPresenceService
                 if (connections.Count == 0)
                 {
                     justBecameOffline = true;
+                    // Xóa đúng entry (so khớp giá trị) ngay trong lock để tránh race condition:
+                    // Nếu một kết nối mới được thêm vào cùng HashSet sau khi giải phóng lock
+                    // thì TryRemove theo key sẽ xóa nhầm user đó khỏi danh sách online.
+                    _onlineUsers.TryRemove(new KeyValuePair<int, HashSet<string>>(userId, connections));
                 }
-            }
-
-            if (justBecameOffline)
-            {
-                _onlineUsers.TryRemove(userId, out _);
             }
         }
 
