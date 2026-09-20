@@ -114,3 +114,18 @@ export async function declineMessageRequest(conversationId) {
     method: 'POST',
   });
 }
+
+/**
+ * Gửi báo cáo vi phạm phòng chat tới Ban Quản trị
+ * @param {number|string} conversationId
+ * @param {object} payload
+ * @param {string} payload.reason
+ * @param {string} [payload.description]
+ */
+export async function reportConversation(conversationId, { reason, description } = {}) {
+  return apiFetch(`/conversations/${conversationId}/report`, {
+    method: 'POST',
+    body: JSON.stringify({ reason, description }),
+  });
+}
+

@@ -449,7 +449,7 @@ public class ChatService : IChatService
             if (!isPendingRequestViewer)
             {
                 var otherUserId = isUserA ? conversation.UserBId : conversation.UserAId;
-                await _realtimeNotifier.NotifyConversationReadAsync(otherUserId, conversationId, currentUserId, ct);
+                await _realtimeNotifier.NotifyConversationReadAsync(conversationId, currentUserId, otherUserId, ct);
             }
         }
     }
@@ -508,7 +508,7 @@ public class ChatService : IChatService
 
         // Thông báo qua SignalR cho cả hai bên
         var otherUserId = (conversation.UserAId == currentUserId) ? conversation.UserBId : conversation.UserAId;
-        await _realtimeNotifier.NotifyConversationReadAsync(otherUserId, conversationId, currentUserId, ct);
+        await _realtimeNotifier.NotifyConversationReadAsync(conversationId, currentUserId, otherUserId, ct);
     }
 
     /**
@@ -590,6 +590,56 @@ public class ChatService : IChatService
             ContentType = contentType,
             FileSize = fileSize
         };
+    }
+
+    /**
+     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-011
+     */
+    public async Task ReportConversationAsync(
+        int currentUserId,
+        int conversationId,
+        ReportConversationRequestDto request,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new BusinessException("Lý do báo cáo không được để trống.");
+        }
+
+        var conversation = await _dbContext.Conversations
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == conversationId, ct);
+
+        if (conversation == null)
+        {
+            throw new KeyNotFoundException("Không tìm thấy cuộc hội thoại.");
+        }
+
+        // Chống IDOR: Chỉ người tham gia hội thoại mới có quyền gửi báo cáo
+        if (conversation.UserAId != currentUserId && conversation.UserBId != currentUserId)
+        {
+            _logger.LogWarning("User {UserId} cố gắng báo cáo trái phép hội thoại {ConversationId}", currentUserId, conversationId);
+            throw new UnauthorizedAccessException("Bạn không có quyền báo cáo cuộc hội thoại này.");
+        }
+
+        var targetUserId = (conversation.UserAId == currentUserId) ? conversation.UserBId : conversation.UserAId;
+
+        var report = new Report
+        {
+            ReporterId = currentUserId,
+            TargetUserId = targetUserId,
+            TargetJobId = conversation.JobId,
+            Reason = request.Reason.Trim(),
+            Description = request.Description?.Trim(),
+            Status = "pending",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.Reports.Add(report);
+        await _dbContext.SaveChangesAsync(ct);
+
+        _logger.LogInformation("Người dùng {ReporterId} đã gửi báo cáo vi phạm đối với người dùng {TargetUserId} trong hội thoại {ConversationId}",
+            currentUserId, targetUserId, conversationId);
     }
 
     private static void EnforceJobLifecycleState(Conversation conversation)

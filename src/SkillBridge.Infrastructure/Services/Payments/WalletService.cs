@@ -242,18 +242,4 @@ public class WalletService : IWalletService
 
         return await GetMyWalletAsync(userId, cancellationToken);
     }
-
-    private async Task<Wallet?> GetWalletWithLockAsync(int userId, CancellationToken ct)
-    {
-        if (_dbContext.Database.IsMySql())
-        {
-            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { userId }, ct);
-            var tracked = _dbContext.ChangeTracker.Entries<Wallet>().FirstOrDefault(e => e.Entity.UserId == userId);
-            if (tracked?.State == EntityState.Unchanged)
-            {
-                await tracked.ReloadAsync(ct);
-            }
-        }
-        return await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == userId, ct);
-    }
 }

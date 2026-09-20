@@ -215,7 +215,7 @@ export default function ChatComposer({ onSend, blocked, onUnblock, conversationI
         }
     };
 
-    const sendLike = () => onSend({ type: 'like' });
+    const sendLike = () => onSend({ type: 'like', text: '👍' });
 
     if (isReadOnly) {
         return (

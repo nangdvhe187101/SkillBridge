@@ -859,7 +859,26 @@ function reducer(state, action) {
         if (c.id !== conversationId) return c;
         found = true;
         const exists = c.messages.some((m) => m.id === newMsg.id);
-        const nextMessages = exists ? c.messages : [...c.messages, newMsg];
+        if (exists) return c;
+
+        // Nếu là tin nhắn của chính mình vừa được echo từ SignalR về
+        // và đang có tin nhắn optimistic temp- trùng nội dung / attachment
+        let nextMessages;
+        if (isMine) {
+          const tempIndex = c.messages.findIndex(
+            (m) => String(m.id).startsWith('temp-') &&
+                   ((m.text && m.text === newMsg.text) || (m.fileUrl && m.fileUrl === newMsg.fileUrl) || m.type === newMsg.type)
+          );
+          if (tempIndex !== -1) {
+            nextMessages = [...c.messages];
+            nextMessages[tempIndex] = newMsg;
+          } else {
+            nextMessages = [...c.messages, newMsg];
+          }
+        } else {
+          nextMessages = [...c.messages, newMsg];
+        }
+
         return {
           ...c,
           messages: nextMessages,
@@ -876,6 +895,25 @@ function reducer(state, action) {
       const activeConvo = updatedList.find((c) => c.id === conversationId);
       const rest = updatedList.filter((c) => c.id !== conversationId);
       return { ...state, conversations: [activeConvo, ...rest] };
+    }
+
+    case 'REPLACE_TEMP_MESSAGE': {
+      const { conversationId, tempId, message } = action.payload;
+      const conversations = (state.conversations || []).map((c) => {
+        if (String(c.id) !== String(conversationId)) return c;
+        const alreadyHasRealId = c.messages.some((m) => m.id === message.id);
+        if (alreadyHasRealId) {
+          return {
+            ...c,
+            messages: c.messages.filter((m) => m.id !== tempId),
+          };
+        }
+        return {
+          ...c,
+          messages: c.messages.map((m) => (m.id === tempId ? { ...m, ...message } : m)),
+        };
+      });
+      return { ...state, conversations };
     }
 
     case 'CONVERSATION_READ_SYNC': {
@@ -1232,6 +1270,37 @@ export function StoreProvider({ children }) {
     }
   }, [refreshConversations, showToast]);
 
+  const realtimeRef = useRef(null);
+  const conversationsRef = useRef(state.conversations);
+  useEffect(() => {
+    conversationsRef.current = state.conversations;
+  }, [state.conversations]);
+
+  const refreshingConvRef = useRef(false);
+  const triggerRefreshConversations = useCallback(async (tab = 'chat') => {
+    if (refreshingConvRef.current) return;
+    refreshingConvRef.current = true;
+    try {
+      await refreshConversations(tab);
+    } finally {
+      setTimeout(() => {
+        refreshingConvRef.current = false;
+      }, 500);
+    }
+  }, [refreshConversations]);
+
+  const joinConversation = useCallback((id) => {
+    if (id && realtimeRef.current?.joinConversation) {
+      realtimeRef.current.joinConversation(id);
+    }
+  }, []);
+
+  const leaveConversation = useCallback((id) => {
+    if (id && realtimeRef.current?.leaveConversation) {
+      realtimeRef.current.leaveConversation(id);
+    }
+  }, []);
+
   // Kết nối và lắng nghe SignalR Chat realtime
   useEffect(() => {
     if (state.isInitializing || !state.currentUser) {
@@ -1244,9 +1313,15 @@ export function StoreProvider({ children }) {
     const realtime = connectChatRealtime({
       onReceiveMessage: (message) => {
         dispatch({ type: 'RECEIVE_REALTIME_MESSAGE', message });
+        const exists = (conversationsRef.current || []).some(
+          (c) => String(c.id) === String(message.conversationId)
+        );
+        if (!exists) {
+          triggerRefreshConversations();
+        }
       },
       onConversationUpdated: () => {
-        refreshConversations();
+        triggerRefreshConversations();
       },
       onConversationRead: ({ conversationId }) => {
         dispatch({ type: 'CONVERSATION_READ_SYNC', payload: { conversationId } });
@@ -1258,14 +1333,17 @@ export function StoreProvider({ children }) {
         dispatch({ type: 'ONLINE_USERS_SYNC', payload: { onlineUserIds } });
       },
       onReconnected: () => {
-        refreshConversations();
+        triggerRefreshConversations();
       },
     });
 
+    realtimeRef.current = realtime;
+
     return () => {
+      realtimeRef.current = null;
       realtime.stop();
     };
-  }, [state.currentUser, state.isInitializing, refreshConversations]);
+  }, [state.currentUser, state.isInitializing, refreshConversations, triggerRefreshConversations]);
 
   // Tải danh mục và danh sách công việc công khai (không cần đăng nhập)
   useEffect(() => {
@@ -1689,6 +1767,8 @@ export function StoreProvider({ children }) {
           console.warn(`Lỗi đánh dấu đã đọc hội thoại ${id}:`, err);
         }
       },
+      joinConversation,
+      leaveConversation,
       sendChatMessage: async (id, message) => {
         let targetConvId = id;
         const conv = (state.conversations || []).find((c) => String(c.id) === String(id));
@@ -1718,6 +1798,17 @@ export function StoreProvider({ children }) {
               attachmentUrl: message.fileUrl || message.attachmentUrl,
               attachmentType: message.type,
             });
+            if (sent?.id) {
+              const formattedSent = mapChatMessageFromApi({ ...sent, isMine: true });
+              dispatch({
+                type: 'REPLACE_TEMP_MESSAGE',
+                payload: {
+                  conversationId: targetConvId,
+                  tempId,
+                  message: formattedSent,
+                },
+              });
+            }
             return sent;
           } catch (err) {
             showToast(err?.message || 'Không thể gửi tin nhắn. Vui lòng thử lại.', 'warning');
@@ -1756,7 +1847,6 @@ export function StoreProvider({ children }) {
           showToast(err?.message || 'Không thể từ chối yêu cầu.', 'warning');
         }
       },
-      refreshConversations,
       login: async (email, password) => {
         const result = await loginApi(email, password);
         setAccessToken(result.token);
@@ -1835,7 +1925,7 @@ export function StoreProvider({ children }) {
     act.toggleSaveJob = act.toggleSaveJobAsync;
     return act;
   },
-  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, refreshWallet, state.cvFiles, state.myApplications, refreshNotifications, refreshConversations, fetchConversationMessages, startConversationWithUser]
+  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, refreshWallet, state.cvFiles, state.myApplications, refreshNotifications, refreshConversations, fetchConversationMessages, startConversationWithUser, joinConversation, leaveConversation]
 );
 
   const value = useMemo(() => ({ state, dispatch, showToast, ...actions }), [state, actions, showToast]);

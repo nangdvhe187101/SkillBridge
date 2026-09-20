@@ -77,4 +77,13 @@ public interface IChatService
         string contentType,
         long fileSize,
         CancellationToken ct = default);
+
+    /**
+     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-011
+     */
+    Task ReportConversationAsync(
+        int currentUserId,
+        int conversationId,
+        ReportConversationRequestDto request,
+        CancellationToken ct = default);
 }

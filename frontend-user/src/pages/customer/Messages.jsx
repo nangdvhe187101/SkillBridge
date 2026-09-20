@@ -6,10 +6,11 @@ import ChatBubble from '../../components/messenger/ChatBubble';
 import ChatComposer from '../../components/messenger/ChatComposer';
 import ChatHeaderMenu from '../../components/messenger/ChatHeaderMenu';
 import { downloadJobAttachment } from '../../utils/fileDownloader';
+import * as chatApi from '../../api/chatApi';
 import '../../styles/messenger.css';
 
 export default function Messages() {
-    const { state, sendChatMessage, markConversationRead, toggleConvFlag, fetchConversationMessages, refreshConversations, acceptMessageRequest, declineMessageRequest } = useStore();
+    const { state, sendChatMessage, markConversationRead, toggleConvFlag, fetchConversationMessages, refreshConversations, acceptMessageRequest, declineMessageRequest, joinConversation, leaveConversation, showToast } = useStore();
     const { conversations } = state;
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
@@ -54,12 +55,39 @@ export default function Messages() {
 
     const active = conversations.find((c) => String(c.id) === String(activeId)) || null;
 
+    const [reportModalOpen, setReportModalOpen] = useState(false);
+    const [reportReason, setReportReason] = useState('Quấy rối / Đe dọa / Ngôn từ thù địch');
+    const [reportDesc, setReportDesc] = useState('');
+    const [submittingReport, setSubmittingReport] = useState(false);
+
+    const handleSendReport = async () => {
+        if (!active?.id) return;
+        setSubmittingReport(true);
+        try {
+            await chatApi.reportConversation(active.id, {
+                reason: reportReason,
+                description: reportDesc.trim() || undefined
+            });
+            showToast('Đã gửi báo cáo vi phạm tới Ban Quản trị xét duyệt.', 'check');
+            setReportModalOpen(false);
+            setReportDesc('');
+        } catch (err) {
+            showToast(err?.message || 'Không thể gửi báo cáo vi phạm. Vui lòng thử lại.', 'warning');
+        } finally {
+            setSubmittingReport(false);
+        }
+    };
+
     useEffect(() => {
         if (activeId) {
             fetchConversationMessages(activeId);
             markConversationRead(activeId);
+            joinConversation(activeId);
+            return () => {
+                leaveConversation(activeId);
+            };
         }
-    }, [activeId, fetchConversationMessages, markConversationRead]);
+    }, [activeId, fetchConversationMessages, markConversationRead, joinConversation, leaveConversation]);
 
     useEffect(() => {
         if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
@@ -489,7 +517,7 @@ export default function Messages() {
                                 <button
                                     className="btn btn-outline btn-sm"
                                     style={{ width: '100%', fontSize: 13, padding: '8px 12px', color: 'var(--coral)', borderColor: 'var(--coral)' }}
-                                    onClick={() => alert(`Đã gửi báo cáo vi phạm phòng chat của ${active.name} tới đội ngũ Quản trị viên.`)}
+                                    onClick={() => setReportModalOpen(true)}
                                 >
                                     🚩 Báo cáo vi phạm
                                 </button>
@@ -498,6 +526,63 @@ export default function Messages() {
                     </div>
                 )}
             </div>
+
+            {reportModalOpen && (
+                <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16 }}>
+                    <div className="modal-card" style={{ background: '#fff', borderRadius: 12, maxWidth: 480, width: '100%', padding: 24, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, color: 'var(--text-main, #1e293b)' }}>🚩 Báo cáo vi phạm</h3>
+                            <button onClick={() => setReportModalOpen(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#64748b' }}>✕</button>
+                        </div>
+                        <p style={{ fontSize: 13.5, color: '#64748b', marginBottom: 14 }}>
+                            Báo cáo cuộc hội thoại với <b>{active?.name}</b> tới Ban Quản trị. Chúng tôi sẽ kiểm tra lịch sử chat và xử lý nghiêm các trường hợp vi phạm quy định cộng đồng.
+                        </p>
+                        <div style={{ marginBottom: 14 }}>
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6, color: '#334155' }}>Lý do báo cáo *</label>
+                            <select
+                                value={reportReason}
+                                onChange={(e) => setReportReason(e.target.value)}
+                                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13.5, background: '#fff' }}
+                            >
+                                <option value="Quấy rối / Đe dọa / Ngôn từ thù địch">Quấy rối / Đe dọa / Ngôn từ thù địch</option>
+                                <option value="Gian lận / Yêu cầu thanh toán ngoài sàn">Gian lận / Yêu cầu thanh toán ngoài sàn</option>
+                                <option value="Spam / Quảng cáo trái phép">Spam / Quảng cáo trái phép</option>
+                                <option value="Nội dung phản cảm / Độc hại">Nội dung phản cảm / Độc hại</option>
+                                <option value="Khác">Lý do khác</option>
+                            </select>
+                        </div>
+                        <div style={{ marginBottom: 20 }}>
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6, color: '#334155' }}>Mô tả chi tiết (tuỳ chọn)</label>
+                            <textarea
+                                rows={3}
+                                value={reportDesc}
+                                onChange={(e) => setReportDesc(e.target.value)}
+                                placeholder="Cung cấp thêm thông tin vi phạm để Admin xử lý nhanh chóng..."
+                                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13.5, resize: 'vertical', boxSizing: 'border-box' }}
+                            />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                            <button
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                disabled={submittingReport}
+                                onClick={() => setReportModalOpen(false)}
+                            >
+                                Huỷ bỏ
+                            </button>
+                            <button
+                                type="button"
+                                className="btn btn-sm"
+                                style={{ background: 'var(--coral, #ef4444)', color: '#fff', border: 'none' }}
+                                disabled={submittingReport}
+                                onClick={handleSendReport}
+                            >
+                                {submittingReport ? 'Đang gửi...' : 'Gửi báo cáo'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

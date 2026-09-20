@@ -8,7 +8,7 @@ import ChatHeaderMenu from './ChatHeaderMenu';
 import '../../styles/messenger.css';
 
 function ChatWindow({ conv, onClose }) {
-    const { sendChatMessage, toggleConvFlag, fetchConversationMessages } = useStore();
+    const { sendChatMessage, toggleConvFlag, fetchConversationMessages, joinConversation, leaveConversation } = useStore();
     const [menuOpen, setMenuOpen] = useState(false);
     const [minimized, setMinimized] = useState(false);
     const bodyRef = useRef(null);
@@ -16,10 +16,16 @@ function ChatWindow({ conv, onClose }) {
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (conv?.id && (!conv.messages || conv.messages.length === 0)) {
-            fetchConversationMessages(conv.id);
+        if (conv?.id) {
+            joinConversation(conv.id);
+            if (!conv.messages || conv.messages.length === 0) {
+                fetchConversationMessages(conv.id);
+            }
+            return () => {
+                leaveConversation(conv.id);
+            };
         }
-    }, [conv?.id, fetchConversationMessages]);
+    }, [conv?.id, fetchConversationMessages, joinConversation, leaveConversation]);
 
     useEffect(() => {
         if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight;

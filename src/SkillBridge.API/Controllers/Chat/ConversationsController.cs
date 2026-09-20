@@ -163,4 +163,19 @@ public class ConversationsController : ControllerBase
 
         return Ok(result);
     }
+
+    /// <summary>
+    /// Báo cáo vi phạm đối với cuộc hội thoại
+    /// </summary>
+    [HttpPost("{id:int}/report")]
+    [EnableRateLimiting("ResourceCreationPolicy")]
+    public async Task<IActionResult> ReportConversation(
+        [FromRoute] int id,
+        [FromBody] ReportConversationRequestDto request,
+        CancellationToken cancellationToken = default)
+    {
+        var userId = User.GetRequiredUserId();
+        await _chatService.ReportConversationAsync(userId, id, request, cancellationToken);
+        return Ok(new { success = true, message = "Báo cáo vi phạm đã được gửi tới Ban Quản trị thành công." });
+    }
 }

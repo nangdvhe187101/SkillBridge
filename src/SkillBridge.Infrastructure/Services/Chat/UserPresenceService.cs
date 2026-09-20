@@ -12,16 +12,30 @@ public class UserPresenceService : IUserPresenceService
 
     public bool IsUserOnline(int userId)
     {
-        return _onlineUsers.TryGetValue(userId, out var connections) && connections.Count > 0;
+        if (_onlineUsers.TryGetValue(userId, out var connections))
+        {
+            lock (connections)
+            {
+                return connections.Count > 0;
+            }
+        }
+        return false;
     }
 
     public IReadOnlyCollection<int> GetOnlineUserIds()
     {
-        return _onlineUsers
-            .Where(kv => kv.Value.Count > 0)
-            .Select(kv => kv.Key)
-            .ToList()
-            .AsReadOnly();
+        var result = new List<int>();
+        foreach (var kv in _onlineUsers)
+        {
+            lock (kv.Value)
+            {
+                if (kv.Value.Count > 0)
+                {
+                    result.Add(kv.Key);
+                }
+            }
+        }
+        return result.AsReadOnly();
     }
 
     public bool AddConnection(int userId, string connectionId)
