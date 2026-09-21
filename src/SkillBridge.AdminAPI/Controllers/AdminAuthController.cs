@@ -64,7 +64,7 @@ public class AdminAuthController : ControllerBase
         }
         catch (BusinessException ex)
         {
-            _logger.LogWarning("Admin login failed for {Email}: {Message}", dto.Email, ex.Message);
+            _logger.LogWarning(ex, "Admin login failed for {Email}: {Message}", dto.Email, ex.Message);
             return Unauthorized(new { message = "Email hoặc mật khẩu không đúng" });
         }
     }

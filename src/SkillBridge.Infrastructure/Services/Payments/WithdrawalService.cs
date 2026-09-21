@@ -391,7 +391,7 @@ public class WithdrawalService : IWithdrawalService
             .Include(r => r.User)
             .AsQueryable();
 
-        if (!string.IsNullOrWhiteSpace(status) && status.ToLowerInvariant() != "all")
+        if (!string.IsNullOrWhiteSpace(status) && !string.Equals(status.Trim(), "all", StringComparison.OrdinalIgnoreCase))
         {
             var normalizedStatus = status.Trim().ToLowerInvariant();
             query = query.Where(r => r.Status == normalizedStatus);
