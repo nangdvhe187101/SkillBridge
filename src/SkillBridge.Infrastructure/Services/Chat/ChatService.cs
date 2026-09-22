@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using MySqlConnector;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Chat;
 using SkillBridge.Application.DTOs.Jobs;
@@ -43,19 +44,12 @@ public class ChatService : IChatService
         _logger = logger;
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-001
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-004
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-010
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-012
-     */
     public async Task<List<ConversationDto>> GetConversationsAsync(int currentUserId, string? tab = null, CancellationToken ct = default)
     {
         var query = _dbContext.Conversations
             .AsNoTracking()
             .Where(c => c.UserAId == currentUserId || c.UserBId == currentUserId);
 
-        // Lọc bỏ các hội thoại đã lưu trữ (Archived) của người dùng hiện tại
         query = query.Where(c => (c.UserAId == currentUserId && !c.IsArchivedUserA) ||
                                  (c.UserBId == currentUserId && !c.IsArchivedUserB));
 
@@ -90,7 +84,6 @@ public class ChatService : IChatService
             .Distinct()
             .ToList();
 
-        // Lấy thống kê đánh giá thật của các đối tác
         var reviewsData = await _dbContext.Reviews
             .AsNoTracking()
             .Where(r => otherUserIds.Contains(r.RevieweeId))
@@ -105,7 +98,6 @@ public class ChatService : IChatService
 
         var reviewDict = reviewsData.ToDictionary(r => r.UserId, r => (Avg: Math.Round(r.AvgRating, 1), Count: r.Count));
 
-        // Lấy tin nhắn cuối cùng của từng hội thoại để hiển thị preview
         var lastMessages = await _dbContext.ChatMessages
             .AsNoTracking()
             .Where(m => conversationIds.Contains(m.ConversationId))
@@ -130,11 +122,6 @@ public class ChatService : IChatService
         return result;
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-001
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-004
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-008
-     */
     public async Task<PagedResult<ChatMessageDto>> GetMessagesAsync(int currentUserId, int conversationId, int page, int pageSize, CancellationToken ct = default)
     {
         if (page < 1) page = 1;
@@ -194,11 +181,6 @@ public class ChatService : IChatService
         };
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-002
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-007
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-012
-     */
     public async Task<ConversationDto> GetOrCreateConversationAsync(int currentUserId, StartConversationRequestDto request, CancellationToken ct = default)
     {
         if (request.TargetUserId == currentUserId)
@@ -215,23 +197,45 @@ public class ChatService : IChatService
             throw new KeyNotFoundException("Không tìm thấy người dùng đối phương.");
         }
 
+        // Fix #3: Validate JobId phải thuộc về job do 1 trong 2 người đăng.
+        // Không yêu cầu người kia phải là hired/accepted applicant vì sinh viên được phép
+        // nhắn hỏi NTD trước khi ứng tuyển (tính năng "Nhắn tin với nhà tuyển dụng" trên JobDetail).
+        Job? jobForValidation = null;
         if (request.JobId.HasValue)
         {
-            var jobExists = await _dbContext.Jobs.AnyAsync(j => j.Id == request.JobId.Value, ct);
-            if (!jobExists)
+            jobForValidation = await _dbContext.Jobs
+                .AsNoTracking()
+                .FirstOrDefaultAsync(j => j.Id == request.JobId.Value, ct);
+
+            if (jobForValidation == null)
             {
                 throw new KeyNotFoundException("Công việc liên quan không tồn tại.");
             }
+
+            // Ít nhất một trong hai người phải là Employer của job.
+            if (jobForValidation.EmployerId != currentUserId && jobForValidation.EmployerId != request.TargetUserId)
+            {
+                _logger.LogWarning(
+                    "User {UserId} cố gắng gắn JobId {JobId} không liên quan vào hội thoại với User {TargetId}",
+                    currentUserId, request.JobId.Value, request.TargetUserId);
+                throw new BusinessException("Công việc được cung cấp không liên quan đến cuộc hội thoại giữa hai người dùng này.");
+            }
         }
 
-        // Tìm kiếm cuộc hội thoại đã tồn tại giữa hai người (có xét JobId)
+        // Chuẩn hoá thứ tự UserA/UserB theo Id tăng dần để unique index (UserAId, UserBId, JobId)
+        // hoạt động đúng bất kể ai là người khởi tạo hội thoại.
+        var (normalizedUserAId, normalizedUserBId) = currentUserId < request.TargetUserId
+            ? (currentUserId, request.TargetUserId)
+            : (request.TargetUserId, currentUserId);
+
+        // Tìm kiếm cuộc hội thoại đã tồn tại giữa hai người (đã chuẩn hoá thứ tự, có xét JobId)
         var conversation = await _dbContext.Conversations
             .Include(c => c.UserA).ThenInclude(u => u.Role)
             .Include(c => c.UserB).ThenInclude(u => u.Role)
             .Include(c => c.Job)
             .FirstOrDefaultAsync(c =>
-                ((c.UserAId == currentUserId && c.UserBId == request.TargetUserId) ||
-                 (c.UserAId == request.TargetUserId && c.UserBId == currentUserId)) &&
+                c.UserAId == normalizedUserAId &&
+                c.UserBId == normalizedUserBId &&
                 c.JobId == request.JobId, ct);
 
         if (conversation == null)
@@ -242,12 +246,11 @@ public class ChatService : IChatService
             // Nếu hai người đã có quan hệ việc làm (Job in_progress / completed, hoặc đơn accepted) -> active.
             // Ngược lại -> pending.
             var hasActiveWorkRelationship = false;
-            if (request.JobId.HasValue)
+            if (jobForValidation != null)
             {
-                var relatedJob = await _dbContext.Jobs.AsNoTracking().FirstOrDefaultAsync(j => j.Id == request.JobId.Value, ct);
-                if (relatedJob != null &&
-                    (relatedJob.HiredApplicantId == currentUserId || relatedJob.HiredApplicantId == request.TargetUserId ||
-                     relatedJob.EmployerId == currentUserId || relatedJob.EmployerId == request.TargetUserId))
+                // Tái dùng job đã fetch ở bước validate — tránh query lặp.
+                if (jobForValidation.HiredApplicantId == currentUserId || jobForValidation.HiredApplicantId == request.TargetUserId ||
+                    jobForValidation.EmployerId == currentUserId || jobForValidation.EmployerId == request.TargetUserId)
                 {
                     hasActiveWorkRelationship = true;
                 }
@@ -264,8 +267,8 @@ public class ChatService : IChatService
 
             conversation = new Conversation
             {
-                UserAId = currentUserId,
-                UserBId = request.TargetUserId,
+                UserAId = normalizedUserAId,
+                UserBId = normalizedUserBId,
                 JobId = request.JobId,
                 UnreadCountUserA = 0,
                 UnreadCountUserB = 0,
@@ -276,17 +279,44 @@ public class ChatService : IChatService
             };
 
             _dbContext.Conversations.Add(conversation);
-            await _dbContext.SaveChangesAsync(ct);
-
-            await _dbContext.Entry(conversation).Reference(c => c.UserA).Query().Include(u => u.Role).LoadAsync(ct);
-            await _dbContext.Entry(conversation).Reference(c => c.UserB).Query().Include(u => u.Role).LoadAsync(ct);
-            if (conversation.JobId.HasValue)
+            try
             {
-                await _dbContext.Entry(conversation).Reference(c => c.Job).LoadAsync(ct);
+                await _dbContext.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException ex) when (IsDuplicateKeyError(ex, "uq_conversations_pair_job"))
+            {
+                // Fix #2: Race condition — hai request đồng thời cùng tạo hội thoại giữa 2 người.
+                // Detach entity vừa thêm và đọc lại bản ghi đã tồn tại từ DB.
+                _dbContext.Entry(conversation).State = EntityState.Detached;
+                _logger.LogWarning(ex,
+                    "Race condition: hội thoại giữa User {UserAId} và User {UserBId} (JobId={JobId}) đã tồn tại. Đọc lại bản ghi hiện có.",
+                    normalizedUserAId, normalizedUserBId, request.JobId);
+
+                conversation = await _dbContext.Conversations
+                    .Include(c => c.UserA).ThenInclude(u => u.Role)
+                    .Include(c => c.UserB).ThenInclude(u => u.Role)
+                    .Include(c => c.Job)
+                    .FirstOrDefaultAsync(c =>
+                        c.UserAId == normalizedUserAId &&
+                        c.UserBId == normalizedUserBId &&
+                        c.JobId == request.JobId, ct)
+                    ?? throw new InvalidOperationException(
+                        "Không thể tạo hoặc tìm lại cuộc hội thoại sau xung đột khoá.");
+            }
+
+            if (conversation.Id > 0)
+            {
+                if (conversation.UserA == null)
+                    await _dbContext.Entry(conversation).Reference(c => c.UserA).Query().Include(u => u.Role).LoadAsync(ct);
+                if (conversation.UserB == null)
+                    await _dbContext.Entry(conversation).Reference(c => c.UserB).Query().Include(u => u.Role).LoadAsync(ct);
+                if (conversation.JobId.HasValue && conversation.Job == null)
+                    await _dbContext.Entry(conversation).Reference(c => c.Job).LoadAsync(ct);
             }
         }
 
-        var otherUser = (conversation.UserAId == currentUserId) ? conversation.UserB : conversation.UserA;
+        var otherUser = ((conversation.UserAId == currentUserId) ? conversation.UserB : conversation.UserA)
+            ?? throw new InvalidOperationException("Navigation property UserA/UserB chưa được load cho conversation.");
 
         var reviewsData = await _dbContext.Reviews
             .AsNoTracking()
@@ -302,14 +332,6 @@ public class ChatService : IChatService
         return MapToDto(conversation, currentUserId, reviewsData != null ? Math.Round(reviewsData.AvgRating, 1) : null, reviewsData?.Count ?? 0, null);
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-001
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-003
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-006
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-008
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-009
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-010
-     */
     public async Task<ChatMessageDto> SendMessageAsync(int currentUserId, int conversationId, SendMessageRequestDto request, CancellationToken ct = default)
     {
         var conversation = await _dbContext.Conversations
@@ -365,7 +387,6 @@ public class ChatService : IChatService
 
         _dbContext.ChatMessages.Add(message);
 
-        // Cập nhật LastMessageAt và unread count cho người nhận
         conversation.LastMessageAt = now;
         var isUserA = (conversation.UserAId == currentUserId);
         var receiverUserId = isUserA ? conversation.UserBId : conversation.UserAId;
@@ -406,17 +427,11 @@ public class ChatService : IChatService
             IsMine = true
         };
 
-        // Phát sự kiện SignalR tới người nhận
         await _realtimeNotifier.NotifyNewMessageAsync(conversationId, receiverUserId, messageDto, ct);
 
         return messageDto;
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-001
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-005
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-013
-     */
     public async Task MarkAsReadAsync(int currentUserId, int conversationId, CancellationToken ct = default)
     {
         var conversation = await _dbContext.Conversations
@@ -454,9 +469,6 @@ public class ChatService : IChatService
         }
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-010
-     */
     public async Task ToggleArchiveConversationAsync(int currentUserId, int conversationId, bool archive, CancellationToken ct = default)
     {
         var conversation = await _dbContext.Conversations
@@ -484,10 +496,6 @@ public class ChatService : IChatService
         await _dbContext.SaveChangesAsync(ct);
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-012
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-013
-     */
     public async Task AcceptMessageRequestAsync(int currentUserId, int conversationId, CancellationToken ct = default)
     {
         var conversation = await _dbContext.Conversations
@@ -498,22 +506,31 @@ public class ChatService : IChatService
             throw new KeyNotFoundException("Không tìm thấy cuộc hội thoại.");
         }
 
+        // Fix #1a: Chống IDOR — chỉ thành viên hội thoại mới được xử lý.
         if (conversation.UserAId != currentUserId && conversation.UserBId != currentUserId)
         {
             throw new UnauthorizedAccessException("Bạn không có quyền xử lý yêu cầu này.");
         }
 
+        // Fix #1b: Chỉ người NHẬN yêu cầu mới được Accept — người gửi không được tự accept.
+        if (conversation.RequestInitiatedBy == currentUserId)
+        {
+            throw new UnauthorizedAccessException("Bạn không thể tự chấp nhận yêu cầu nhắn tin của chính mình.");
+        }
+
+        // Fix #1c: Idempotency guard — chỉ xử lý được khi conversation thực sự đang ở trạng thái pending.
+        if (conversation.RequestStatus != "pending")
+        {
+            throw new BusinessException("Yêu cầu nhắn tin này không ở trạng thái chờ xử lý.");
+        }
+
         conversation.RequestStatus = "active";
         await _dbContext.SaveChangesAsync(ct);
 
-        // Thông báo qua SignalR cho cả hai bên
         var otherUserId = (conversation.UserAId == currentUserId) ? conversation.UserBId : conversation.UserAId;
         await _realtimeNotifier.NotifyConversationReadAsync(conversationId, currentUserId, otherUserId, ct);
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-012
-     */
     public async Task DeclineMessageRequestAsync(int currentUserId, int conversationId, CancellationToken ct = default)
     {
         var conversation = await _dbContext.Conversations
@@ -524,24 +541,32 @@ public class ChatService : IChatService
             throw new KeyNotFoundException("Không tìm thấy cuộc hội thoại.");
         }
 
+        // Fix #1a: Chống IDOR — chỉ thành viên hội thoại mới được xử lý.
         if (conversation.UserAId != currentUserId && conversation.UserBId != currentUserId)
         {
             throw new UnauthorizedAccessException("Bạn không có quyền xử lý yêu cầu này.");
         }
 
+        // Fix #1b: Chỉ người NHẬN yêu cầu mới được Decline — người gửi không được tự decline.
+        if (conversation.RequestInitiatedBy == currentUserId)
+        {
+            throw new UnauthorizedAccessException("Bạn không thể tự từ chối yêu cầu nhắn tin của chính mình.");
+        }
+
+        // Fix #1c: Idempotency guard — chỉ xử lý được khi conversation thực sự đang ở trạng thái pending.
+        if (conversation.RequestStatus != "pending")
+        {
+            throw new BusinessException("Yêu cầu nhắn tin này không ở trạng thái chờ xử lý.");
+        }
+
         conversation.RequestStatus = "declined";
+        // Tự lưu trữ phía người decline để hội thoại ẩn khỏi danh sách của họ.
         if (conversation.UserAId == currentUserId) conversation.IsArchivedUserA = true;
         else conversation.IsArchivedUserB = true;
 
         await _dbContext.SaveChangesAsync(ct);
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-003
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-006
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-008
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-009
-     */
     public async Task<ChatMessageAttachmentDto> UploadAttachmentAsync(
         int currentUserId,
         int conversationId,
@@ -592,9 +617,6 @@ public class ChatService : IChatService
         };
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-011
-     */
     public async Task ReportConversationAsync(
         int currentUserId,
         int conversationId,
@@ -642,6 +664,17 @@ public class ChatService : IChatService
             currentUserId, targetUserId, conversationId);
     }
 
+    /// <summary>
+    /// Kiểm tra DbUpdateException có phải lỗi trùng khoá (MySQL 1062) trên constraint chỉ định không.
+    /// Dùng để xử lý race condition thay vì để exception leo lên controller.
+    /// </summary>
+    private static bool IsDuplicateKeyError(DbUpdateException ex, string constraintName)
+    {
+        return ex.InnerException is MySqlException mysqlEx
+            && mysqlEx.Number == 1062
+            && mysqlEx.Message.Contains(constraintName, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void EnforceJobLifecycleState(Conversation conversation)
     {
         if (conversation.Job == null) return;
@@ -687,7 +720,6 @@ public class ChatService : IChatService
                 : (!string.IsNullOrEmpty(lastMsg.AttachmentUrl) ? "[Tệp đính kèm]" : null);
         }
 
-        // Tính toán trạng thái Vòng đời Job (REQ-CHAT-008 & REQ-CHAT-009)
         bool isReadOnly = false;
         string? readOnlyReason = null;
         string? bannerMsg = null;

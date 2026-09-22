@@ -155,7 +155,6 @@ public class EscrowPaymentService : IEscrowPaymentService
         };
         await _dbContext.Transactions.AddAsync(escrowReleaseTx, cancellationToken);
 
-        // Ghi nhận giao dịch phí hoa hồng nền tảng nếu có
         if (commissionAmount > 0)
         {
             var commissionTx = new Transaction

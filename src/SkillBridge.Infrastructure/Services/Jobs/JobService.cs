@@ -351,7 +351,6 @@ public class JobService : IJobService
         job.UpdatedAt = DateTime.UtcNow;
         await _jobRepository.UpdateJobAsync(job);
 
-        // Gửi thông báo cho sinh viên đang được thuê
         if (job.HiredApplicantId.HasValue)
         {
             await _notificationService.SendAsync(
@@ -391,13 +390,11 @@ public class JobService : IJobService
             throw new BusinessException("Công việc này đã hoàn tất thanh toán và có biên nhận tài chính hợp lệ. Để bảo đảm tính minh bạch và chứng từ kế toán, công việc không thể bị xóa.");
         }
 
-        // Lấy danh sách file attachments trước khi xóa Job
         var attachmentUrls = await _dbContext.JobAttachments
             .Where(a => a.JobId == jobId)
             .Select(a => a.FileUrl)
             .ToListAsync();
 
-        // Lấy danh sách file deliverables trước khi xóa Job
         var deliverableFiles = await _dbContext.JobDeliverables
             .Where(d => d.JobId == jobId)
             .Select(d => new { d.PreviewFileUrl, d.FinalFileUrl })
@@ -405,7 +402,6 @@ public class JobService : IJobService
 
         await _jobRepository.DeleteJobAsync(job);
 
-        // Dọn dẹp các tệp đính kèm vật lý trên Cloudflare R2 sau khi xóa record
         foreach (var fileUrl in attachmentUrls)
         {
             var fileKey = StorageKeyHelper.ExtractKey(fileUrl);
@@ -423,7 +419,6 @@ public class JobService : IJobService
             }
         }
 
-        // Dọn dẹp các tệp deliverables vật lý trên Cloudflare R2 sau khi xóa record
         var cleanedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var d in deliverableFiles)
         {

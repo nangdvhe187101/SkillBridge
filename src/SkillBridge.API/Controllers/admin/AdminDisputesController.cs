@@ -23,9 +23,6 @@ public class AdminDisputesController : ControllerBase
         _disputeService = disputeService;
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-011
-     */
     [HttpGet("{disputeId:int}/chat-evidence")]
     public async Task<IActionResult> GetChatEvidence([FromRoute] int disputeId, CancellationToken ct)
     {

@@ -308,7 +308,6 @@ public class ApplicationService : IApplicationService
 
                 var durationDays = request?.Days.HasValue == true && request.Days.Value > 0 ? request.Days.Value : initialDurationDays;
 
-                // Cập nhật trạng thái công việc
                 currentJob.HiredApplicantId = currentApp.StudentId;
                 currentJob.EscrowAmount = currentJob.Budget;
                 currentJob.Status = "in_progress";
@@ -317,7 +316,6 @@ public class ApplicationService : IApplicationService
                 currentJob.DeadlineOverdueSentAt = null;
                 currentJob.UpdatedAt = DateTime.UtcNow;
 
-                // Cập nhật trạng thái ứng viên được chọn
                 currentApp.Status = "hired";
                 currentApp.UpdatedAt = DateTime.UtcNow;
 
@@ -334,7 +332,6 @@ public class ApplicationService : IApplicationService
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                // Gửi thông báo trúng tuyển cho sinh viên sau khi commit thành công
                 try
                 {
                     await _notificationService.SendAsync(
@@ -448,7 +445,6 @@ public class ApplicationService : IApplicationService
                         10,
                         $"Sinh viên hủy việc đang làm tại Job #{jobId}. Lý do: {reason ?? "Không có lý do"}");
 
-                    // Cập nhật trạng thái open và hoàn tiền ký quỹ an toàn trên row Job đã khóa
                     job.Status = "open";
                     job.HiredApplicantId = null;
                     job.DeadlineAt = null;
@@ -508,7 +504,6 @@ public class ApplicationService : IApplicationService
                     }
                 }
 
-                // Cập nhật Application của sinh viên sang cancelled
                 application.Status = "cancelled";
                 application.UpdatedAt = DateTime.UtcNow;
                 _dbContext.Applications.Update(application);

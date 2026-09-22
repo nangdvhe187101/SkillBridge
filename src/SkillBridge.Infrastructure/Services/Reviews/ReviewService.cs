@@ -95,7 +95,6 @@ public class ReviewService : IReviewService
 
         _dbContext.Reviews.Add(review);
 
-        // Cập nhật điểm uy tín cho đối phương
         var reviewee = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == revieweeId, cancellationToken);
         if (reviewee != null)
         {
@@ -118,7 +117,6 @@ public class ReviewService : IReviewService
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        // Gửi thông báo realtime đến đối phương
         try
         {
             var reviewer = await _dbContext.Users.FindAsync(new object[] { reviewerId }, cancellationToken);

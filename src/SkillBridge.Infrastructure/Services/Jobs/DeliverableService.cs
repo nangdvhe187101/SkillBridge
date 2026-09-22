@@ -339,7 +339,6 @@ public class DeliverableService : IDeliverableService
             throw new BusinessException("Không thể hoàn tất nộp sản phẩm do xung đột phiên bản. Vui lòng thử lại.");
         }
 
-        // Gửi thông báo cho Nhà tuyển dụng sau khi lưu deliverable thành công
         try
         {
             await _notificationService.SendAsync(
@@ -376,7 +375,6 @@ public class DeliverableService : IDeliverableService
             }
         }
 
-        // Load lại với quan hệ
         var created = await _dbContext.JobDeliverables
             .Include(d => d.Student)
             .Include(d => d.DeliverableFeedbacks)
@@ -478,12 +476,10 @@ public class DeliverableService : IDeliverableService
             }
             else if (normalizedStatus == "accepted")
             {
-                // Cập nhật trạng thái Job sang completed và giải phóng EscrowAmount (đã giải ngân xong cho sinh viên)
                 currentJob.Status = "completed";
                 currentJob.EscrowAmount = null;
                 currentJob.UpdatedAt = DateTime.UtcNow;
 
-                // Cập nhật Application của sinh viên sang completed
                 var application = await _dbContext.Applications
                     .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == currentDeliverable.StudentId, cancellationToken);
                 if (application != null)
@@ -539,7 +535,6 @@ public class DeliverableService : IDeliverableService
                 computedCommission = Math.Round(currentJob.Budget * commissionRate);
                 computedNetPayout = currentJob.Budget - computedCommission.Value;
 
-                // Ghi nhận giải ngân Escrow thực tế vào Transaction ledger & cập nhật ví sinh viên (qua IEscrowPaymentService)
                 if (currentJob.Budget > 0)
                 {
                     await _escrowPaymentService.ReleaseEscrowAsync(
