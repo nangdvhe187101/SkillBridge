@@ -169,7 +169,7 @@ public class JobServiceCancelTests
             StudentId = studentId,
             Version = 1,
             FileName = "banner.png",
-            Status = "submitted",
+            Status = "draft",
             FileType = "image",
             PreviewFileUrl = "https://r2.skillbridge.vn/deliverables/watermark-1.jpg",
             FinalFileUrl = "https://r2.skillbridge.vn/deliverables/final-1.jpg"
@@ -218,5 +218,53 @@ public class JobServiceCancelTests
 
         // 7. Job repo CancelJobAsync called
         _jobRepoMock.Verify(r => r.CancelJobAsync(job), Times.Once);
+    }
+
+    [Fact]
+    public async Task CancelJobAsync_WhenHasSubmittedDeliverable_ShouldThrowBusinessException()
+    {
+        // Arrange: Job đang in_progress nhưng sinh viên đã submit sản phẩm (Deliverable Status = submitted)
+        using var dbContext = CreateInMemoryDbContext();
+        var employerId = 10;
+        var studentId = 20;
+        var jobId = 101;
+
+        var job = new Job
+        {
+            Id = jobId,
+            EmployerId = employerId,
+            Title = "Dịch tài liệu",
+            Status = "in_progress",
+            Budget = 800000m,
+            HiredApplicantId = studentId
+        };
+        _jobRepoMock.Setup(r => r.GetByIdAsync(jobId)).ReturnsAsync(job);
+
+        var del = new JobDeliverable
+        {
+            Id = 1,
+            JobId = jobId,
+            StudentId = studentId,
+            Version = 1,
+            FileName = "translation.pdf",
+            Status = "submitted",
+            FileType = "pdf"
+        };
+        dbContext.JobDeliverables.Add(del);
+        await dbContext.SaveChangesAsync();
+
+        var service = new JobService(
+            _jobRepoMock.Object,
+            _categoryRepoMock.Object,
+            dbContext,
+            _storageMock.Object,
+            _escrowMock.Object,
+            _reliabilityMock.Object,
+            _notificationMock.Object,
+            _loggerMock.Object);
+
+        // Act & Assert: Phải chặn việc NTD hủy job khi có deliverable đã nộp
+        var ex = await Assert.ThrowsAsync<BusinessException>(() => service.CancelJobAsync(employerId, jobId));
+        Assert.Contains("sinh viên đã nộp sản phẩm bàn giao", ex.Message);
     }
 }

@@ -135,6 +135,7 @@ public class PaymentTests
     [InlineData("Nap tien vi SkillBridge SB20260912120000188", "SB20260912120000188")]
     [InlineData("sb20260912120000188 chuyen khoan", "SB20260912120000188")]
     [InlineData("GD 99999 noi dung SB20260912120000188 tai VCB", "SB20260912120000188")]
+    [InlineData("Nap tien vi SkillBridge SB202609121200001234567890", "SB202609121200001234567890")]
     public void SePay_ExtractOrderCode_ShouldParseVariousBankNarratives(string narrative, string expectedCode)
     {
         // Arrange

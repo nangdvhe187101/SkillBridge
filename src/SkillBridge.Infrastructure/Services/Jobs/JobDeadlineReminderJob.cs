@@ -67,7 +67,7 @@ public class JobDeadlineReminderJob : BackgroundService
 
         var now = DateTime.UtcNow;
         var threshold = now.AddHours(12);
-        var allowedStatuses = new[] { "in_progress", "submitted", "revision_requested" };
+        var allowedStatuses = new[] { "in_progress", "revision_requested" };
 
         var candidateJobs = await db.Jobs
             .Include(j => j.Employer)

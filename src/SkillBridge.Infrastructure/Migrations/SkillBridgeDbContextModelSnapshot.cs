@@ -628,6 +628,24 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasColumnName("created_at")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<bool>("IsArchivedUserA")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_archived_user_a");
+
+                    b.Property<bool>("IsArchivedUserB")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_archived_user_b");
+
+                    b.Property<bool>("IsReadOnly")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_read_only");
+
                     b.Property<int?>("JobId")
                         .HasColumnType("int")
                         .HasColumnName("job_id");
@@ -635,6 +653,23 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Property<DateTime?>("LastMessageAt")
                         .HasColumnType("datetime")
                         .HasColumnName("last_message_at");
+
+                    b.Property<string>("ReadOnlyReason")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("read_only_reason");
+
+                    b.Property<int?>("RequestInitiatedBy")
+                        .HasColumnType("int")
+                        .HasColumnName("request_initiated_by");
+
+                    b.Property<string>("RequestStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasDefaultValue("active")
+                        .HasColumnName("request_status");
 
                     b.Property<int>("UnreadCountUserA")
                         .HasColumnType("int")
@@ -655,11 +690,21 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.HasKey("Id")
                         .HasName("PRIMARY");
 
+                    b.HasIndex("RequestInitiatedBy");
+
+                    b.HasIndex("UserAId", "UserBId", "JobId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_conversations_pair_job");
+
                     b.HasIndex(new[] { "JobId" }, "fk_conversations_job");
 
                     b.HasIndex(new[] { "UserAId" }, "fk_conversations_usera");
 
                     b.HasIndex(new[] { "UserBId" }, "fk_conversations_userb");
+
+                    b.HasIndex(new[] { "UserAId", "RequestStatus", "IsArchivedUserA", "LastMessageAt" }, "idx_conversations_user_a_tab");
+
+                    b.HasIndex(new[] { "UserBId", "RequestStatus", "IsArchivedUserB", "LastMessageAt" }, "idx_conversations_user_b_tab");
 
                     b.ToTable("conversations");
                 });
@@ -2978,6 +3023,12 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasForeignKey("JobId")
                         .HasConstraintName("fk_conversations_job");
 
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "RequestInitiatedByUser")
+                        .WithMany()
+                        .HasForeignKey("RequestInitiatedBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_conversations_requester");
+
                     b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "UserA")
                         .WithMany("ConversationUserAs")
                         .HasForeignKey("UserAId")
@@ -2991,6 +3042,8 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasConstraintName("fk_conversations_userb");
 
                     b.Navigation("Job");
+
+                    b.Navigation("RequestInitiatedByUser");
 
                     b.Navigation("UserA");
 

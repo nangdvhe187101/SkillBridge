@@ -25,9 +25,6 @@ public class DisputeService : IDisputeService
         _logger = logger;
     }
 
-    /**
-     * @ears .sdd/features/feat-chat-messaging/SPEC.md#REQ-CHAT-011
-     */
     public async Task<DisputeChatEvidenceDto> GetChatEvidenceAsync(int adminUserId, int disputeId, CancellationToken ct = default)
     {
         var dispute = await _dbContext.Disputes
