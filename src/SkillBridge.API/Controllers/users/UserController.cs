@@ -64,4 +64,13 @@ public class UserController : ControllerBase
             fileKey = result.FileKey
         });
     }
+
+    [HttpGet("{id:int}/public-profile")]
+    [AllowAnonymous]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> GetPublicProfile(int id)
+    {
+        var profile = await _userService.GetPublicStudentProfileAsync(id);
+        return Ok(profile);
+    }
 }

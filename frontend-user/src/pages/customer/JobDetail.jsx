@@ -254,9 +254,9 @@ export default function JobDetail() {
   const [studentDeliverable, setStudentDeliverable] = useState(null);
   const [studentFeedbackList, setStudentFeedbackList] = useState([]);
 
-  const isStudentHired = isStudent && myApp && ['hired', 'submitted', 'revision_requested', 'completed'].includes(myApp.status);
+  const isStudentHired = isStudent && myApp && ['hired', 'submitted', 'revision_requested', 'disputed', 'completed'].includes(myApp.status);
   const currentWorkStatus = myApp ? (myApp.jobStatus || (myApp.status === 'hired' ? 'in_progress' : myApp.status)) : (dashJob?.status);
-  const showWorkArea = (dashJob && ['in_progress', 'submitted', 'revision_requested', 'completed', 'cancelled'].includes(dashJob.status) && !!dashJob.hiredApplicant) || isStudentHired;
+  const showWorkArea = (dashJob && ['in_progress', 'submitted', 'revision_requested', 'disputed', 'completed', 'cancelled'].includes(dashJob.status) && !!dashJob.hiredApplicant) || isStudentHired;
 
   useEffect(() => {
     if (isStudentHired && jobId) {
@@ -677,8 +677,8 @@ export default function JobDetail() {
                     {(state.savedJobIds || []).includes(jobId) ? 'Đã lưu vào yêu thích' : 'Lưu công việc'}
                   </button>
                   <button className="btn btn-outline btn-block" style={{ color: 'var(--coral)', borderColor: 'var(--coral)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
-                    onClick={() => openModal('report', { withName: j.emp })}>
-                    <Icon name="flag" width="15" height="15" /> Báo cáo nhà tuyển dụng
+                    onClick={() => openModal('report', { withName: j.emp, targetUserId: apiJob?.employerId, jobId: j.id, jobTitle: j.title })}>
+                    <Icon name="flag" width="15" height="15" /> Báo cáo tin đăng / Nhà tuyển dụng
                   </button>
                 </div>
               )}

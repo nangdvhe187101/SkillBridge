@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import Icon from './Icon';
 import Avatar from './Avatar';
@@ -13,7 +13,19 @@ export default function TopNav() {
   const { state, markAllNotifRead, markNotifRead, refreshNotifications, logout } = useStore();
   const unreadCount = state.notifications.filter((n) => !n.read).length;
   const unreadMsgCount = (state.conversations || []).reduce((sum, c) => sum + c.unread, 0);
+  const [notifFilter, setNotifFilter] = useState('all'); // 'all' | 'contract' | 'finance' | 'unread'
   const navigate = useNavigate();
+
+  const filteredNotifs = useMemo(() => {
+    return (state.notifications || []).filter((n) => {
+      if (notifFilter === 'unread') return !n.read;
+      const isFinance = ['wallet', 'card', 'money'].includes(n.icon) || /(nạp|rút|tiền|ký quỹ|escrow|bồi thường|thanh toán|số dư)/i.test(n.text);
+      if (notifFilter === 'finance') return isFinance;
+      const isContract = ['star', 'clock', 'shield', 'check', 'file'].includes(n.icon) || /(bàn giao|sửa đổi|khiếu nại|gia hạn|ứng tuyển|tuyển dụng|hợp đồng|nghiệm thu|đánh giá)/i.test(n.text);
+      if (notifFilter === 'contract') return isContract;
+      return true;
+    });
+  }, [state.notifications, notifFilter]);
   const notifWrapRef = useRef(null);
   const userMenuWrapRef = useRef(null);
   const userMenuCloseTimer = useRef(null);
@@ -193,31 +205,106 @@ export default function TopNav() {
                 {unreadCount > 0 && <span className="notif-dot">{unreadCount}</span>}
               </button>
 
-              <div className={'notif-panel' + (notifOpen ? ' open' : '')}>
-                <div className="notif-panel-head">
-                  <h4>Thông báo</h4>
-                  <button onClick={markAllNotifRead}>Đánh dấu đã đọc</button>
+              <div className={'notif-panel' + (notifOpen ? ' open' : '')} style={{ width: 360, maxWidth: '92vw' }}>
+                <div className="notif-panel-head" style={{ padding: '12px 16px 8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8 }}>
+                    <h4 style={{ margin: 0, fontSize: 14.5, fontWeight: 700 }}>Thông báo ({state.notifications.length})</h4>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={markAllNotifRead}
+                        style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0 }}
+                      >
+                        Đánh dấu đã đọc
+                      </button>
+                    )}
+                  </div>
+                  {/* Category Filter Tabs */}
+                  <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+                    {[
+                      { id: 'all', label: 'Tất cả' },
+                      { id: 'contract', label: 'Hợp đồng' },
+                      { id: 'finance', label: 'Tài chính' },
+                      { id: 'unread', label: `Chưa đọc (${unreadCount})` }
+                    ].map((tab) => (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        onClick={() => setNotifFilter(tab.id)}
+                        style={{
+                          fontSize: 11.5,
+                          padding: '3px 8px',
+                          borderRadius: 6,
+                          border: notifFilter === tab.id ? '1px solid var(--primary)' : '1px solid var(--border)',
+                          background: notifFilter === tab.id ? 'rgba(99, 102, 241, 0.1)' : 'var(--surface)',
+                          color: notifFilter === tab.id ? 'var(--primary)' : 'var(--ink-soft)',
+                          fontWeight: notifFilter === tab.id ? 700 : 500,
+                          cursor: 'pointer',
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div>
-                  {state.notifications.length === 0 ? (
-                    <div className="adm-empty">Không có thông báo.</div>
+
+                <div style={{ maxHeight: 380, overflowY: 'auto' }}>
+                  {filteredNotifs.length === 0 ? (
+                    <div className="adm-empty" style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--ink-soft)', fontSize: 13 }}>
+                      Không có thông báo nào trong mục này.
+                    </div>
                   ) : (
-                    state.notifications.map((n) => (
-                      <div key={n.id} className={'notif-item' + (n.read ? '' : ' unread')}
-                        role="button" tabIndex={0}
-                        onClick={() => handleNotifClick(n)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') handleNotifClick(n); }}>
-                        <div className="notif-ic">
-                          {n.icon && /\p{Extended_Pictographic}/u.test(n.icon) ? (
-                            <span style={{ fontSize: 16, lineHeight: 1 }}>{n.icon}</span>
-                          ) : (
-                            <Icon name={n.icon || 'bell'} style={{ width: 16, height: 16, color: 'var(--primary)' }} />
-                          )}
+                    filteredNotifs.map((n) => {
+                      const isFinance = ['wallet', 'card', 'money'].includes(n.icon) || /(nạp|rút|tiền|ký quỹ|escrow|bồi thường|thanh toán|số dư)/i.test(n.text);
+                      const isStar = n.icon === 'star' || /(đánh giá|sao)/i.test(n.text);
+                      const icColor = isFinance ? '#16a34a' : (isStar ? '#eab308' : 'var(--primary)');
+                      const icBg = isFinance ? 'rgba(22, 163, 74, 0.12)' : (isStar ? 'rgba(234, 179, 8, 0.12)' : 'rgba(99, 102, 241, 0.12)');
+
+                      return (
+                        <div
+                          key={n.id}
+                          className={'notif-item' + (n.read ? '' : ' unread')}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => handleNotifClick(n)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleNotifClick(n); }}
+                          style={{
+                            padding: '10px 14px',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 12,
+                            borderBottom: '1px solid var(--border)',
+                            background: n.read ? 'transparent' : 'rgba(99, 102, 241, 0.04)',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <div
+                            className="notif-ic"
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 8,
+                              background: icBg,
+                              color: icColor,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              marginTop: 2
+                            }}
+                          >
+                            <Icon name={n.icon || 'bell'} style={{ width: 16, height: 16 }} />
+                          </div>
+                          <div className="notif-txt" style={{ flex: 1, minWidth: 0 }}>
+                            <p style={{ margin: '0 0 4px', fontSize: 13, color: 'var(--ink)', lineHeight: 1.45, fontWeight: n.read ? 400 : 600 }}>
+                              {n.text}
+                            </p>
+                            <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>{n.time}</span>
+                          </div>
+                          {n.link && <Icon name="chevright" className="notif-chev" style={{ width: 14, height: 14, color: 'var(--ink-soft)', marginTop: 8 }} />}
                         </div>
-                        <div className="notif-txt"><p>{n.text}</p><span>{n.time}</span></div>
-                        {n.link && <Icon name="chevright" className="notif-chev" />}
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

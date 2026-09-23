@@ -20,3 +20,8 @@ export async function uploadAvatar(file) {
         body: formData,
     });
 }
+
+export async function getPublicStudentProfile(studentId) {
+    return apiFetch(`/users/public/${studentId}`, { method: 'GET' });
+}
+

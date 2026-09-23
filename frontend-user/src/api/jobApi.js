@@ -106,3 +106,63 @@ export async function extendDeadline(jobId, newDeadlineAt, reason = '') {
         body: JSON.stringify({ newDeadlineAt, reason }),
     });
 }
+
+const EXTENSION_STORAGE_PREFIX = 'sb_deadline_ext_';
+
+/**
+ * Sinh viên gửi đề xuất xin gia hạn deadline
+ */
+export async function requestDeadlineExtension(jobId, { additionalDays, reason, currentDeadline }) {
+    const baseDate = currentDeadline ? new Date(currentDeadline) : new Date();
+    const newDeadline = new Date(baseDate.getTime() + additionalDays * 24 * 60 * 60 * 1000);
+    const reqData = {
+        jobId: Number(jobId),
+        additionalDays,
+        reason,
+        requestedAt: new Date().toISOString(),
+        currentDeadline: baseDate.toISOString(),
+        proposedDeadline: newDeadline.toISOString(),
+        status: 'pending' // 'pending' | 'accepted' | 'rejected'
+    };
+    try {
+        localStorage.setItem(`${EXTENSION_STORAGE_PREFIX}${jobId}`, JSON.stringify(reqData));
+    } catch {}
+    return reqData;
+}
+
+/**
+ * Lấy thông tin yêu cầu gia hạn đang chờ của job
+ */
+export function getDeadlineExtensionRequest(jobId) {
+    try {
+        const item = localStorage.getItem(`${EXTENSION_STORAGE_PREFIX}${jobId}`);
+        return item ? JSON.parse(item) : null;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * NTD phê duyệt hoặc từ chối yêu cầu gia hạn
+ */
+export async function respondDeadlineExtension(jobId, { accepted, rejectionReason = '' }) {
+    const currentReq = getDeadlineExtensionRequest(jobId);
+    if (!currentReq) return null;
+
+    if (accepted) {
+        // Gọi API backend thật để cập nhật deadline cho Job
+        await extendDeadline(jobId, currentReq.proposedDeadline, currentReq.reason);
+        currentReq.status = 'accepted';
+        currentReq.acceptedAt = new Date().toISOString();
+    } else {
+        currentReq.status = 'rejected';
+        currentReq.rejectionReason = rejectionReason || 'Nhà tuyển dụng không đồng ý gia hạn';
+        currentReq.rejectedAt = new Date().toISOString();
+    }
+
+    try {
+        localStorage.setItem(`${EXTENSION_STORAGE_PREFIX}${jobId}`, JSON.stringify(currentReq));
+    } catch {}
+    return currentReq;
+}
+

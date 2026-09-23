@@ -552,6 +552,63 @@ public class ApplicationService : IApplicationService
         });
     }
 
+    public async Task RejectApplicationAsync(int employerId, int jobId, int applicationId, string? reason = null)
+    {
+        var job = await _dbContext.Jobs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(j => j.Id == jobId);
+
+        if (job == null)
+        {
+            throw new BusinessException("Công việc không tồn tại.");
+        }
+
+        if (job.EmployerId != employerId)
+        {
+            throw new BusinessException("Bạn không có quyền thao tác trên tin tuyển dụng này.");
+        }
+
+        var application = await _dbContext.Applications
+            .FirstOrDefaultAsync(a => a.Id == applicationId && a.JobId == jobId);
+
+        if (application == null)
+        {
+            throw new BusinessException("Không tìm thấy hồ sơ ứng tuyển này.");
+        }
+
+        if (application.Status == "rejected")
+        {
+            return;
+        }
+
+        if (application.Status == "hired" || application.Status == "completed")
+        {
+            throw new BusinessException("Không thể từ chối ứng viên đã được thuê hoặc đã hoàn thành công việc.");
+        }
+
+        application.Status = "rejected";
+        application.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync();
+
+        try
+        {
+            var msg = string.IsNullOrWhiteSpace(reason)
+                ? $"Nhà tuyển dụng đã xem xét hồ sơ của bạn cho công việc \"{job.Title}\" và chưa phù hợp ở thời điểm hiện tại. Chúc bạn may mắn ở các cơ hội tiếp theo!"
+                : $"Hồ sơ của bạn cho công việc \"{job.Title}\" chưa phù hợp: {reason}";
+
+            await _notificationService.SendAsync(
+                application.StudentId,
+                "ℹ️",
+                msg,
+                $"/jobs/{job.Id}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Không thể gửi thông báo từ chối ứng viên cho Student {StudentId} Job #{JobId}.", application.StudentId, jobId);
+        }
+    }
+
     private async Task<Job?> GetJobWithLockAsync(int jobId, CancellationToken ct = default)
     {
         if (_dbContext.Database.IsMySql())

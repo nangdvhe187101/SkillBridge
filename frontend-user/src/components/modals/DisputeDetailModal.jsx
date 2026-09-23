@@ -3,7 +3,7 @@ import ModalShell from './ModalShell';
 import Icon from '../Icon';
 import { fmtVND } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
-import { getDisputeDetail, addDisputeEvidence } from '../../api/disputeApi';
+import { getDisputeDetail, addDisputeEvidence, getMyDisputes } from '../../api/disputeApi';
 
 function formatCountdown(deadlineStr) {
   if (!deadlineStr) return null;
@@ -17,7 +17,7 @@ function formatCountdown(deadlineStr) {
 }
 
 export default function DisputeDetailModal({ disputeId, onClose, onRefresh }) {
-  const { toast } = useToast();
+  const { showToast } = useToast();
   const [dispute, setDispute] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submittingEvidence, setSubmittingEvidence] = useState(false);
@@ -28,10 +28,26 @@ export default function DisputeDetailModal({ disputeId, onClose, onRefresh }) {
   const loadData = async () => {
     try {
       setLoading(true);
-      const data = await getDisputeDetail(disputeId);
+      let targetId = Number(disputeId);
+      let data = null;
+      try {
+        data = await getDisputeDetail(targetId);
+      } catch {
+        // Fallback: Nếu disputeId là jobId, tra cứu từ danh sách my disputes
+        const myDisputes = await getMyDisputes();
+        const matched = (myDisputes || []).find(
+          (d) => Number(d.id) === targetId || Number(d.jobId) === targetId
+        );
+        if (matched) {
+          targetId = matched.id;
+          data = await getDisputeDetail(matched.id);
+        } else {
+          throw new Error('Không tìm thấy thông tin hồ sơ khiếu nại.');
+        }
+      }
       setDispute(data);
     } catch (err) {
-      toast.error?.(err?.message || 'Không thể tải chi tiết hồ sơ khiếu nại.') || alert(err?.message);
+      showToast?.(err?.message || 'Không thể tải chi tiết hồ sơ khiếu nại.', 'x');
       onClose();
     } finally {
       setLoading(false);
@@ -45,7 +61,7 @@ export default function DisputeDetailModal({ disputeId, onClose, onRefresh }) {
   const handleAddEvidence = async (e) => {
     e.preventDefault();
     if (!newFile) {
-      toast.error?.('Vui lòng chọn tệp chứng cứ.') || alert('Vui lòng chọn tệp.');
+      showToast?.('Vui lòng chọn tệp chứng cứ.', 'warning');
       return;
     }
 
@@ -55,15 +71,16 @@ export default function DisputeDetailModal({ disputeId, onClose, onRefresh }) {
       formData.append('file', newFile);
       formData.append('description', newDesc.trim() || 'Tệp chứng cứ bổ sung');
 
-      await addDisputeEvidence(disputeId, formData);
-      toast.success?.('Đã nộp thêm bằng chứng thành công!') || alert('Nộp chứng cứ thành công!');
+      const targetDisputeId = dispute?.id || disputeId;
+      await addDisputeEvidence(targetDisputeId, formData);
+      showToast?.('Đã nộp thêm bằng chứng thành công!', 'check');
       setNewFile(null);
       setNewDesc('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       await loadData();
       onRefresh?.();
     } catch (err) {
-      toast.error?.(err?.message || 'Không thể nộp chứng cứ bổ sung.') || alert(err?.message);
+      showToast?.(err?.message || 'Không thể nộp chứng cứ bổ sung.', 'x');
     } finally {
       setSubmittingEvidence(false);
     }

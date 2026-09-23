@@ -15,7 +15,7 @@ const DEFAULT_REASONS = [
 ];
 
 export default function DisputeModal({ job, deliverableId, onClose, onSuccess }) {
-  const { toast } = useToast();
+  const { showToast } = useToast();
   const [selectedReason, setSelectedReason] = useState(DEFAULT_REASONS[0]);
   const [customReason, setCustomReason] = useState('');
   const [files, setFiles] = useState([]);
@@ -26,7 +26,7 @@ export default function DisputeModal({ job, deliverableId, onClose, onSuccess })
   const handleFileChange = (newFiles) => {
     const validFiles = Array.from(newFiles).filter(f => f.size <= 25 * 1024 * 1024);
     if (validFiles.length < newFiles.length) {
-      toast.warning?.('Một số tệp vượt quá 25MB đã được loại bỏ.') || alert('Một số tệp vượt quá 25MB.');
+      showToast?.('Một số tệp vượt quá 25MB đã được loại bỏ.', 'warning');
     }
     setFiles(prev => [...prev, ...validFiles].slice(0, 5));
   };
@@ -58,11 +58,11 @@ export default function DisputeModal({ job, deliverableId, onClose, onSuccess })
     e.preventDefault();
     const finalReason = selectedReason === 'Lý do khác' ? customReason.trim() : selectedReason;
     if (!finalReason) {
-      toast.error?.('Vui lòng chọn hoặc nhập lý do khiếu nại.') || alert('Vui lòng nhập lý do khiếu nại.');
+      showToast?.('Vui lòng chọn hoặc nhập lý do khiếu nại.', 'warning');
       return;
     }
     if (finalReason.length < 10) {
-      toast.error?.('Lý do khiếu nại cần chi tiết tối thiểu 10 ký tự.') || alert('Lý do tối thiểu 10 ký tự.');
+      showToast?.('Lý do khiếu nại cần chi tiết tối thiểu 10 ký tự.', 'warning');
       return;
     }
 
@@ -79,12 +79,12 @@ export default function DisputeModal({ job, deliverableId, onClose, onSuccess })
       });
 
       const res = await createDispute(formData);
-      toast.success?.('Đã tạo hồ sơ khiếu nại thành công. Vụ việc đã được chuyển đến Ban Trọng tài.') || alert('Tạo khiếu nại thành công.');
+      showToast?.('Đã tạo hồ sơ khiếu nại thành công. Vụ việc đã được chuyển đến Ban Trọng tài.', 'check');
       onSuccess?.(res);
       onClose();
     } catch (err) {
       const errMsg = err?.message || 'Không thể tạo khiếu nại. Vui lòng thử lại sau.';
-      toast.error?.(errMsg) || alert(errMsg);
+      showToast?.(errMsg, 'x');
     } finally {
       setLoading(false);
     }

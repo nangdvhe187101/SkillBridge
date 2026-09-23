@@ -1,12 +1,15 @@
 import { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon';
+import Avatar from '../../components/Avatar';
 import ModalShell from '../../components/modals/ModalShell';
 import { useStore } from '../../context/StoreContext';
+import { useModal } from '../../context/ModalContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { downloadCandidateCv } from '../../utils/fileDownloader';
 import { uploadAvatar } from '../../api/userApi';
+import { getKycStatus } from '../../api/kycApi';
 
 function tierFromScore(score) {
   if (score >= 90) return 'gold';
@@ -41,25 +44,26 @@ export default function Profile() {
   const portfolioInputRef = useRef();
   const avatarInputRef = useRef();
 
-  const isEmployer = state.role === 'employer';
   const rawAvatarUrl = state.currentUser?.avatarUrl || null;
-  const resolveAvatarUrl = (url) => {
-    if (!url) return null;
-    if (url.startsWith('http://') || url.startsWith('https://')) return url;
-    return `${API_URL}/storage/file?key=${encodeURIComponent(url)}`;
-  };
-  const avatarUrl = resolveAvatarUrl(rawAvatarUrl);
-  const [avatarError, setAvatarError] = useState(false);
+  const { openModal } = useModal();
+  const [kycData, setKycData] = useState(null);
   const [selectedPf, setSelectedPf] = useState(null);
+
+  const fetchKyc = async () => {
+    try {
+      const res = await getKycStatus();
+      setKycData(res);
+    } catch { }
+  };
+
+  useEffect(() => {
+    fetchKyc();
+  }, []);
 
   useEffect(() => {
     // Dọn dẹp key avatarUrl cũ không phân biệt tài khoản trong localStorage
     localStorage.removeItem('avatarUrl');
   }, []);
-
-  useEffect(() => {
-    setAvatarError(false);
-  }, [avatarUrl]);
 
   const tier = tierFromScore(state.myReliability);
   const completedJobs = state.myApplications.filter((a) => a.status === 'completed').length;
@@ -74,7 +78,6 @@ export default function Profile() {
     try {
       showToast('Đang tải lên ảnh đại diện...', 'hourglass');
       const res = await uploadAvatar(f);
-      setAvatarError(false);
       if (dispatch) {
         dispatch({ type: 'UPDATE_PROFILE', patch: { avatarUrl: res.avatarUrl } });
       } else if (updateProfile) {
@@ -135,13 +138,6 @@ export default function Profile() {
               style={{
                 cursor: 'pointer',
                 position: 'relative',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 32,
-                fontWeight: 700,
-                color: '#fff',
-                backgroundColor: isEmployer ? '#0284c7' : '#7c3aed',
                 borderRadius: '22px',
                 width: 88,
                 height: 88,
@@ -151,26 +147,12 @@ export default function Profile() {
               title="Bấm để đổi ảnh đại diện"
               onClick={() => avatarInputRef.current?.click()}
             >
-              {avatarUrl && !avatarError ? (
-                <img
-                  src={avatarUrl}
-                  alt={currentName}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={(e) => {
-                    if (!e.currentTarget.dataset.retried && rawAvatarUrl) {
-                      e.currentTarget.dataset.retried = 'true';
-                      const key = rawAvatarUrl.includes('avatars/')
-                        ? rawAvatarUrl.substring(rawAvatarUrl.indexOf('avatars/'))
-                        : rawAvatarUrl;
-                      e.currentTarget.src = `${API_URL}/storage/file?key=${encodeURIComponent(key)}`;
-                      return;
-                    }
-                    setAvatarError(true);
-                  }}
-                />
-              ) : (
-                <span>{currentName.charAt(0).toUpperCase()}</span>
-              )}
+              <Avatar
+                src={rawAvatarUrl}
+                name={currentName}
+                fontSize={32}
+                style={{ width: '100%', height: '100%', borderRadius: '22px' }}
+              />
               <div
                 style={{
                   position: 'absolute',
@@ -200,12 +182,32 @@ export default function Profile() {
               <div className="ph-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
                   <Icon name={state.role === 'employer' ? 'building' : 'graduation'} style={{ width: 14, height: 14 }} />
-                  <span>{state.role === 'employer' ? 'Nhà tuyển dụng · SkillBridge' : 'Sinh viên ĐH FPT TP.HCM'}</span>
+                  <span>{kycData?.school || (state.role === 'employer' ? 'Nhà tuyển dụng · SkillBridge' : 'Sinh viên SkillBridge')}</span>
                 </span>
-                <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Icon name="check" style={{ width: 11, height: 11 }} />
-                  <span>Đã xác thực eKYC</span>
-                </span>
+                {kycData?.kycStatus === 'verified' && (
+                  <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="check" style={{ width: 11, height: 11 }} />
+                    <span>Đã xác thực eKYC</span>
+                  </span>
+                )}
+                {kycData?.kycStatus === 'pending' && (
+                  <span className="chip" style={{ fontSize: 11, padding: '2px 8px', background: 'rgba(59, 130, 246, 0.2)', color: '#93c5fd', borderColor: 'rgba(59, 130, 246, 0.4)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="clock" style={{ width: 11, height: 11 }} />
+                    <span>eKYC đang duyệt</span>
+                  </span>
+                )}
+                {(!kycData || kycData.kycStatus === 'unverified' || kycData.kycStatus === 'rejected' || kycData.kycStatus === 'expired') && (
+                  <button
+                    type="button"
+                    onClick={() => openModal?.('kyc', { onSubmitted: fetchKyc })}
+                    className="chip"
+                    style={{ fontSize: 11, padding: '2px 8px', background: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5', borderColor: 'rgba(239, 68, 68, 0.4)', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'pointer', border: '1px solid' }}
+                    title="Bấm để xác thực thẻ sinh viên ngay"
+                  >
+                    <Icon name="alert-circle" style={{ width: 11, height: 11 }} />
+                    <span>Chưa xác minh · Bấm để eKYC</span>
+                  </button>
+                )}
               </div>
               <div className="ph-meta" style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <span className="chip" style={{ background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.2)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -226,7 +228,7 @@ export default function Profile() {
               </div>
             </div>
 
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, position: 'relative', zIndex: 1 }}>
+            <div className="ph-actions">
               <button className="btn btn-outline btn-sm" style={{ background: 'rgba(255,255,255,.1)', color: '#fff', borderColor: 'rgba(255,255,255,.3)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 onClick={() => navigate('/settings')}>
                 <Icon name="settings" style={{ width: 14, height: 14 }} />
@@ -433,12 +435,12 @@ export default function Profile() {
                         fontSize: 12.5
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1, marginRight: 8 }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 32, height: 32, borderRadius: 8, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', flexShrink: 0 }}>
                           <Icon name="file-text" style={{ width: 18, height: 18 }} />
                         </div>
-                        <div>
-                          <b style={{ display: 'block', fontSize: 13 }}>{cv.label || cv.name}</b>
+                        <div style={{ minWidth: 0 }}>
+                          <b style={{ display: 'block', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cv.label || cv.name}</b>
                           <div style={{ fontSize: 11, color: 'var(--ink-soft)', display: 'flex', gap: 6, alignItems: 'center', marginTop: 2 }}>
                             <span className="chip" style={{ fontSize: 10, padding: '1px 6px' }}>{cv.category}</span>
                             <span>{cv.size}</span>
@@ -446,7 +448,7 @@ export default function Profile() {
                         </div>
                       </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                         <button
                           className="btn btn-outline btn-sm"
                           style={{ fontSize: 11, padding: '2px 8px' }}

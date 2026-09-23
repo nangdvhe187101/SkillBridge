@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
+import Avatar from '../../components/Avatar';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { companiesSeed, slugify } from '../../data/companies';
@@ -76,7 +77,12 @@ export default function CompanyProfile() {
 
         {/* Company Header */}
         <div className="cprofile-header">
-          <div className="cprofile-logo">{company.name.trim().charAt(0).toUpperCase()}</div>
+          <Avatar
+            src={company.logo || company.avatar || company.avatarUrl}
+            name={company.name}
+            fontSize={32}
+            style={{ width: 88, height: 88, borderRadius: '18px' }}
+          />
           <div className="cprofile-head-main">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <h1 style={{ margin: 0 }}>{company.name}</h1>

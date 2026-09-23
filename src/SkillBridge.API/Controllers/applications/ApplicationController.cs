@@ -77,4 +77,17 @@ public class ApplicationController : ControllerBase
         await _applicationService.CancelOrWithdrawApplicationAsync(studentId, jobId, request?.Reason);
         return Ok(new { message = "Đã hủy đơn/việc thành công." });
     }
+
+    [Authorize(Policy = "RequireEmployerRole")]
+    [HttpPost("jobs/{jobId:int}/applications/{applicationId:int}/reject")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> RejectApplicant(
+        int jobId,
+        int applicationId,
+        [FromBody] RejectApplicantRequest? request = null)
+    {
+        var employerId = User.GetRequiredUserId();
+        await _applicationService.RejectApplicationAsync(employerId, jobId, applicationId, request?.Reason);
+        return Ok(new { message = "Đã từ chối hồ sơ ứng tuyển." });
+    }
 }

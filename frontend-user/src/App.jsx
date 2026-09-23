@@ -114,6 +114,12 @@ export default function App() {
           <Route path="/settings/profile" element={
             <ProtectedRoute><AccountSettings forcedTab="profile" /></ProtectedRoute>
           } />
+          <Route path="/settings/kyc" element={
+            <ProtectedRoute><AccountSettings forcedTab="kyc" /></ProtectedRoute>
+          } />
+          <Route path="/settings/verification" element={
+            <ProtectedRoute><AccountSettings forcedTab="kyc" /></ProtectedRoute>
+          } />
           <Route path="/settings/cv" element={
             <ProtectedRoute><AccountSettings forcedTab="cv_manager" /></ProtectedRoute>
           } />

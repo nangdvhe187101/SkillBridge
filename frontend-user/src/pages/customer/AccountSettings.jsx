@@ -4,11 +4,11 @@ import { useStore } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { uploadAvatar } from '../../api/userApi';
 import { getMyCvFiles, uploadCvFile, deleteCv } from '../../api/cvApi';
+import { getKycStatus, submitKyc } from '../../api/kycApi';
 import { downloadCandidateCv } from '../../utils/fileDownloader';
 import Icon from '../../components/Icon';
+import Avatar from '../../components/Avatar';
 import '../../styles/account-settings.css';
-
-const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
 
 const PHONE_REGEX = /^0\d{9}$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -51,8 +51,6 @@ function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
         }
     };
 
-    const initial = (currentUser?.fullName || 'U').trim().charAt(0).toUpperCase();
-
     return (
         <div className="acct-avatar-card">
             <input
@@ -67,24 +65,13 @@ function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
                 onClick={() => !uploading && fileInputRef.current?.click()}
                 title="Bấm để đổi ảnh đại diện"
             >
-                {currentUser?.avatarUrl ? (
-                    <img
-                        src={currentUser.avatarUrl.startsWith('http') ? currentUser.avatarUrl : `${API_URL}/storage/file?key=${encodeURIComponent(currentUser.avatarUrl)}`}
-                        alt="Avatar"
-                        className="acct-avatar-img"
-                        onError={(e) => {
-                            if (!e.currentTarget.dataset.retried && currentUser.avatarUrl) {
-                                e.currentTarget.dataset.retried = 'true';
-                                const key = currentUser.avatarUrl.includes('avatars/')
-                                    ? currentUser.avatarUrl.substring(currentUser.avatarUrl.indexOf('avatars/'))
-                                    : currentUser.avatarUrl;
-                                e.currentTarget.src = `${API_URL}/storage/file?key=${encodeURIComponent(key)}`;
-                            }
-                        }}
-                    />
-                ) : (
-                    <div className="acct-avatar-placeholder">{initial}</div>
-                )}
+                <Avatar
+                    src={currentUser?.avatarUrl}
+                    name={currentUser?.fullName || 'User'}
+                    className="acct-avatar-img"
+                    fontSize={28}
+                    style={{ width: '100%', height: '100%', borderRadius: '50%' }}
+                />
                 <div className="acct-avatar-overlay">
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <Icon name={uploading ? 'hourglass' : 'camera'} width="14" height="14" />
@@ -650,6 +637,565 @@ function PasswordTab({ changePassword, logout }) {
     );
 }
 
+// 5. KYC & Verification Tab
+const CURRENT_YEAR = new Date().getFullYear();
+const GRAD_YEARS = Array.from({ length: 7 }, (_, i) => CURRENT_YEAR + i);
+
+function KycVerificationTab({ isEmployer, currentUser }) {
+    const { addToast } = useToast();
+    const [kycData, setKycData] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showReapplyForm, setShowReapplyForm] = useState(false);
+
+    // Form fields
+    const [school, setSchool] = useState('');
+    const [studentId, setStudentId] = useState('');
+    const [gradYear, setGradYear] = useState(CURRENT_YEAR + 2);
+    const [companyName, setCompanyName] = useState('');
+    const [taxCode, setTaxCode] = useState('');
+    const [files, setFiles] = useState([]);
+    const [previews, setPreviews] = useState([]);
+    const [errorMsg, setErrorMsg] = useState('');
+    const fileInputRef = useRef(null);
+
+    const loadKyc = async () => {
+        try {
+            setLoading(true);
+            const res = await getKycStatus();
+            setKycData(res);
+            if (res.school) setSchool(res.school);
+            if (res.studentIdNumber) setStudentId(res.studentIdNumber);
+            if (res.graduationYear) setGradYear(res.graduationYear);
+            if (res.companyName) setCompanyName(res.companyName);
+            if (res.taxCode) setTaxCode(res.taxCode);
+        } catch (err) {
+            console.error('Lỗi khi tải thông tin eKYC:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        loadKyc();
+    }, []);
+
+    const handleFileChange = (e) => {
+        const selected = Array.from(e.target.files || []);
+        addFiles(selected);
+    };
+
+    const addFiles = (selectedFiles) => {
+        setErrorMsg('');
+        const validFiles = [];
+        const newPreviews = [...previews];
+
+        for (const file of selectedFiles) {
+            if (files.length + validFiles.length >= 3) {
+                setErrorMsg('Chỉ được chọn tối đa 3 ảnh/tệp giấy tờ.');
+                break;
+            }
+            if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.type)) {
+                setErrorMsg(`Tệp "${file.name}" không hợp lệ. Vui lòng chọn ảnh JPG, PNG hoặc PDF.`);
+                continue;
+            }
+            if (file.size > 10 * 1024 * 1024) {
+                setErrorMsg(`Tệp "${file.name}" quá lớn (> 10MB).`);
+                continue;
+            }
+            validFiles.push(file);
+            if (file.type.startsWith('image/')) {
+                newPreviews.push({
+                    name: file.name,
+                    url: URL.createObjectURL(file),
+                    size: (file.size / 1024).toFixed(0) + ' KB'
+                });
+            } else {
+                newPreviews.push({
+                    name: file.name,
+                    url: null,
+                    size: (file.size / 1024).toFixed(0) + ' KB',
+                    isPdf: true
+                });
+            }
+        }
+        setFiles((prev) => [...prev, ...validFiles]);
+        setPreviews(newPreviews);
+    };
+
+    const handleRemoveFile = (index) => {
+        setFiles((prev) => prev.filter((_, i) => i !== index));
+        setPreviews((prev) => {
+            const item = prev[index];
+            if (item?.url) URL.revokeObjectURL(item.url);
+            return prev.filter((_, i) => i !== index);
+        });
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setErrorMsg('');
+
+        if (files.length === 0) {
+            setErrorMsg('Vui lòng tải lên ít nhất một ảnh Thẻ sinh viên hoặc Giấy phép kinh doanh.');
+            return;
+        }
+
+        if (!isEmployer) {
+            if (!school.trim()) {
+                setErrorMsg('Vui lòng nhập tên trường Đại học / Cao đẳng bạn đang theo học.');
+                return;
+            }
+            if (!studentId.trim()) {
+                setErrorMsg('Vui lòng nhập Mã số sinh viên (MSSV) in trên thẻ.');
+                return;
+            }
+        } else {
+            if (!companyName.trim()) {
+                setErrorMsg('Vui lòng nhập Tên pháp lý của doanh nghiệp.');
+                return;
+            }
+        }
+
+        try {
+            setIsSubmitting(true);
+            const formData = new FormData();
+            formData.append('DocumentType', isEmployer ? 'business_license' : 'student_card');
+
+            if (!isEmployer) {
+                formData.append('School', school.trim());
+                formData.append('StudentIdNumber', studentId.trim());
+                formData.append('GraduationYear', gradYear);
+            } else {
+                formData.append('CompanyName', companyName.trim());
+                formData.append('TaxCode', taxCode.trim());
+            }
+
+            for (const file of files) {
+                formData.append('files', file);
+            }
+
+            await submitKyc(formData);
+            addToast('Gửi hồ sơ xác minh thành công! Hồ sơ của bạn đang được xét duyệt.', 'check');
+            setShowReapplyForm(false);
+            setFiles([]);
+            setPreviews([]);
+            await loadKyc();
+        } catch (err) {
+            console.error('Lỗi khi nộp eKYC:', err);
+            setErrorMsg(err.message || 'Không thể gửi hồ sơ, vui lòng kiểm tra lại kết nối mạng.');
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    if (loading) {
+        return (
+            <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--ink-soft)' }}>
+                <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" style={{ width: 24, height: 24, borderWidth: 2, marginRight: 8 }}></span>
+                <span>Đang tải thông tin xác minh danh tính...</span>
+            </div>
+        );
+    }
+
+    const status = kycData?.kycStatus || 'unverified';
+    const isVerified = status === 'verified';
+    const isPending = status === 'pending';
+    const isRejected = status === 'rejected';
+    const isExpired = status === 'expired';
+    const shouldShowForm = status === 'unverified' || showReapplyForm;
+
+    return (
+        <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+                <div>
+                    <h1 className="acct-content-title" style={{ margin: 0 }}>
+                        {isEmployer ? 'Xác minh Pháp nhân Doanh nghiệp' : 'Xác minh eKYC Thẻ Sinh viên'}
+                    </h1>
+                    <p style={{ margin: '4px 0 0', fontSize: 13.5, color: 'var(--ink-soft)' }}>
+                        {isEmployer
+                            ? 'Xác thực Giấy phép kinh doanh để nhận Tick xanh và xây dựng niềm tin với nhân tài sinh viên.'
+                            : 'Chứng thực tư cách sinh viên đang theo học để hưởng trọn quyền lợi và tích lũy điểm uy tín.'}
+                    </p>
+                </div>
+
+                {isVerified && (
+                    <span className="chip" style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#059669', border: '1px solid rgba(16, 185, 129, 0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 13, fontWeight: 600 }}>
+                        <Icon name="shield-check" width="16" height="16" /> Đã xác thực chính thức
+                    </span>
+                )}
+                {isPending && (
+                    <span className="chip" style={{ background: 'rgba(59, 130, 246, 0.12)', color: '#2563eb', border: '1px solid rgba(59, 130, 246, 0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 13, fontWeight: 600 }}>
+                        <Icon name="clock" width="16" height="16" /> Đang chờ xét duyệt
+                    </span>
+                )}
+                {isRejected && (
+                    <span className="chip" style={{ background: 'rgba(239, 68, 68, 0.12)', color: '#dc2626', border: '1px solid rgba(239, 68, 68, 0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 13, fontWeight: 600 }}>
+                        <Icon name="alert-circle" width="16" height="16" /> Cần nộp lại hồ sơ
+                    </span>
+                )}
+                {isExpired && (
+                    <span className="chip" style={{ background: 'rgba(245, 158, 11, 0.12)', color: '#d97706', border: '1px solid rgba(245, 158, 11, 0.3)', display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', fontSize: 13, fontWeight: 600 }}>
+                        <Icon name="alert-triangle" width="16" height="16" /> Thẻ sinh viên hết hạn
+                    </span>
+                )}
+            </div>
+
+            {/* BANNER 1: VERIFIED */}
+            {isVerified && !shouldShowForm && (
+                <div className="acct-section" style={{ borderLeft: '4px solid #10b981', background: 'linear-gradient(to right, rgba(16, 185, 129, 0.05), transparent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(16, 185, 129, 0.15)', color: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Icon name="shield-check" width="24" height="24" />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <h3 style={{ margin: '0 0 6px', fontSize: 16, color: '#065f46' }}>
+                                Hồ sơ đã được Ban Quản trị phê duyệt
+                            </h3>
+                            <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--ink)' }}>
+                                Tài khoản của bạn đã được gắn <b>Huy hiệu Tick xanh</b>, tăng hạn mức rút tiền và được ưu tiên tuyển dụng trên nền tảng.
+                            </p>
+
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', marginBottom: 14 }}>
+                                <div>
+                                    <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Trường đào tạo</div>
+                                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{kycData.school || '—'}</div>
+                                </div>
+                                {kycData.studentIdNumber && (
+                                    <div>
+                                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Mã số sinh viên (MSSV)</div>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{kycData.studentIdNumber}</div>
+                                    </div>
+                                )}
+                                {kycData.graduationYear && (
+                                    <div>
+                                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Niên khóa tốt nghiệp dự kiến</div>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>Năm {kycData.graduationYear}</div>
+                                    </div>
+                                )}
+                                {kycData.kycExpiresAt && (
+                                    <div>
+                                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Hạn hiệu lực thẻ sinh viên</div>
+                                        <div style={{ fontSize: 14, fontWeight: 600, color: '#059669' }}>
+                                            Đến {new Date(kycData.kycExpiresAt).toLocaleDateString('vi-VN')}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {kycData.documents?.length > 0 && (
+                                <div>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)', marginBottom: 6 }}>Giấy tờ đã xác thực:</div>
+                                    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                                        {kycData.documents.map((doc) => (
+                                            <a
+                                                key={doc.id}
+                                                href={doc.fileUrl}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="btn btn-outline btn-sm"
+                                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                                            >
+                                                <Icon name="file-text" width="14" height="14" />
+                                                <span>{doc.fileName}</span>
+                                            </a>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* BANNER 2: PENDING */}
+            {isPending && !shouldShowForm && (
+                <div className="acct-section" style={{ borderLeft: '4px solid #3b82f6', background: 'linear-gradient(to right, rgba(59, 130, 246, 0.05), transparent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(59, 130, 246, 0.15)', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Icon name="clock" width="24" height="24" />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <h3 style={{ margin: '0 0 6px', fontSize: 16, color: '#1d4ed8' }}>
+                                Hồ sơ đang được thẩm định
+                            </h3>
+                            <p style={{ margin: '0 0 12px', fontSize: 13.5, color: 'var(--ink)' }}>
+                                Ban Quản trị SkillBridge đang đối soát thông tin Thẻ sinh viên / Giấy phép của bạn. Thời gian xét duyệt thường trong vòng <b>2 - 24 giờ</b>.
+                            </p>
+                            <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
+                                Trường: <b>{kycData.school || '—'}</b> {kycData.studentIdNumber && <>| MSSV: <b>{kycData.studentIdNumber}</b></>} {kycData.graduationYear && <>| Tốt nghiệp: <b>Năm {kycData.graduationYear}</b></>}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* BANNER 3: REJECTED */}
+            {isRejected && !shouldShowForm && (
+                <div className="acct-section" style={{ borderLeft: '4px solid #ef4444', background: 'linear-gradient(to right, rgba(239, 68, 68, 0.05), transparent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(239, 68, 68, 0.15)', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Icon name="alert-circle" width="24" height="24" />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <h3 style={{ margin: '0 0 6px', fontSize: 16, color: '#b91c1c' }}>
+                                Hồ sơ xác minh chưa được phê duyệt
+                            </h3>
+                            <p style={{ margin: '0 0 12px', fontSize: 13.5, color: 'var(--ink)' }}>
+                                Lý do từ chối: <b>{kycData.kycRejectionReason || 'Hình ảnh mờ hoặc thông tin thẻ sinh viên không khớp.'}</b>
+                            </p>
+                            <button
+                                className="btn btn-primary btn-sm"
+                                onClick={() => setShowReapplyForm(true)}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                            >
+                                <Icon name="refresh" width="14" height="14" /> Nộp lại hồ sơ xác minh
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* BANNER 4: EXPIRED */}
+            {isExpired && !shouldShowForm && (
+                <div className="acct-section" style={{ borderLeft: '4px solid #f59e0b', background: 'linear-gradient(to right, rgba(245, 158, 11, 0.05), transparent)' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(245, 158, 11, 0.15)', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <Icon name="alert-triangle" width="24" height="24" />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                            <h3 style={{ margin: '0 0 6px', fontSize: 16, color: '#b45309' }}>
+                                Thẻ sinh viên đã hết hạn niên khóa
+                            </h3>
+                            <p style={{ margin: '0 0 12px', fontSize: 13.5, color: 'var(--ink)' }}>
+                                Thẻ sinh viên của bạn đã hết hạn theo niên khóa {kycData.graduationYear}. Vui lòng nộp Giấy chứng nhận gia hạn sinh viên hoặc chuyển đổi sang tài khoản Freelancer.
+                            </p>
+                            <button
+                                className="btn btn-primary btn-sm"
+                                onClick={() => setShowReapplyForm(true)}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                            >
+                                <Icon name="upload" width="14" height="14" /> Cập nhật Thẻ sinh viên mới
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* FORM NỘP HỒ SƠ */}
+            {shouldShowForm && (
+                <div className="acct-section">
+                    <h3 style={{ margin: '0 0 14px', fontSize: 16 }}>
+                        {isEmployer ? 'Biểu mẫu nộp Giấy phép kinh doanh' : 'Biểu mẫu nộp Thẻ sinh viên'}
+                    </h3>
+
+                    {errorMsg && (
+                        <div className="field-error acct-error" style={{ marginBottom: 14 }}>
+                            {errorMsg}
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSubmit}>
+                        {!isEmployer ? (
+                            <>
+                                <div className="acct-field-row">
+                                    <div className="acct-field" style={{ flex: 1 }}>
+                                        <label>Trường Đại học / Cao đẳng <span style={{ color: '#ef4444' }}>*</span></label>
+                                        <input
+                                            type="text"
+                                            placeholder="Ví dụ: Đại học FPT, ĐH Bách Khoa, ĐH Kinh Tế..."
+                                            value={school}
+                                            onChange={(e) => setSchool(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="acct-field-row" style={{ marginTop: 12 }}>
+                                    <div className="acct-field" style={{ flex: 1 }}>
+                                        <label>Mã số sinh viên (MSSV) <span style={{ color: '#ef4444' }}>*</span></label>
+                                        <input
+                                            type="text"
+                                            placeholder="Ví dụ: HE187101, 2022001..."
+                                            value={studentId}
+                                            onChange={(e) => setStudentId(e.target.value)}
+                                            required
+                                        />
+                                        <div className="acct-hint">Mã số in trên thẻ sinh viên của bạn.</div>
+                                    </div>
+
+                                    <div className="acct-field" style={{ flex: 1 }}>
+                                        <label>Năm tốt nghiệp dự kiến <span style={{ color: '#ef4444' }}>*</span></label>
+                                        <select
+                                            value={gradYear}
+                                            onChange={(e) => setGradYear(Number(e.target.value))}
+                                            style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)', background: '#fff', fontSize: 14 }}
+                                        >
+                                            {GRAD_YEARS.map((y) => (
+                                                <option key={y} value={y}>Năm {y}</option>
+                                            ))}
+                                        </select>
+                                        <div className="acct-hint">Căn cứ để tính thời hạn hiệu lực thẻ sinh viên.</div>
+                                    </div>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="acct-field-row">
+                                    <div className="acct-field" style={{ flex: 1 }}>
+                                        <label>Tên pháp lý Doanh nghiệp <span style={{ color: '#ef4444' }}>*</span></label>
+                                        <input
+                                            type="text"
+                                            placeholder="Ví dụ: Công ty TNHH Sáng Tạo Mới"
+                                            value={companyName}
+                                            onChange={(e) => setCompanyName(e.target.value)}
+                                            required
+                                        />
+                                    </div>
+                                    <div className="acct-field" style={{ flex: 1 }}>
+                                        <label>Mã số thuế (MST)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Ví dụ: 0108899888"
+                                            value={taxCode}
+                                            onChange={(e) => setTaxCode(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* Vùng tải tệp */}
+                        <div style={{ marginTop: 16 }}>
+                            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--ink)', marginBottom: 6 }}>
+                                {isEmployer ? 'Ảnh Giấy phép kinh doanh (GPKD)' : 'Ảnh Thẻ sinh viên (Mặt trước & Mặt sau)'} <span style={{ color: '#ef4444' }}>*</span>
+                            </label>
+                            <div
+                                onClick={() => fileInputRef.current?.click()}
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    addFiles(Array.from(e.dataTransfer.files || []));
+                                }}
+                                style={{
+                                    border: '2px dashed var(--border, #cbd5e1)',
+                                    borderRadius: 10,
+                                    padding: '24px 16px',
+                                    textAlign: 'center',
+                                    background: 'var(--surface-sunken, #f8fafc)',
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                }}
+                            >
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                                    multiple
+                                    onChange={handleFileChange}
+                                    style={{ display: 'none' }}
+                                />
+                                <Icon name="upload" style={{ width: 28, height: 28, color: '#64748b', marginBottom: 6 }} />
+                                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', marginBottom: 4 }}>
+                                    Bấm để chọn tệp hoặc kéo thả ảnh vào đây
+                                </div>
+                                <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                                    Định dạng JPG, PNG, WEBP, PDF (tối đa 3 tệp, tối đa 10MB/tệp)
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Danh sách ảnh xem trước */}
+                        {previews.length > 0 && (
+                            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
+                                {previews.map((p, idx) => (
+                                    <div
+                                        key={idx}
+                                        style={{
+                                            position: 'relative',
+                                            width: 100,
+                                            height: 100,
+                                            borderRadius: 8,
+                                            border: '1px solid var(--border, #cbd5e1)',
+                                            overflow: 'hidden',
+                                            background: '#000'
+                                        }}
+                                    >
+                                        {p.url ? (
+                                            <img src={p.url} alt={p.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                        ) : (
+                                            <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 11, padding: 4, textAlign: 'center' }}>
+                                                <Icon name="file-text" style={{ width: 24, height: 24, marginBottom: 4 }} />
+                                                <span>PDF</span>
+                                            </div>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleRemoveFile(idx);
+                                            }}
+                                            style={{
+                                                position: 'absolute',
+                                                top: 4,
+                                                right: 4,
+                                                background: 'rgba(0,0,0,0.6)',
+                                                color: '#fff',
+                                                border: 'none',
+                                                borderRadius: '50%',
+                                                width: 22,
+                                                height: 22,
+                                                cursor: 'pointer',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                fontSize: 12
+                                            }}
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+                            {showReapplyForm && (
+                                <button
+                                    type="button"
+                                    className="btn btn-outline"
+                                    onClick={() => setShowReapplyForm(false)}
+                                    disabled={isSubmitting}
+                                >
+                                    Đóng biểu mẫu
+                                </button>
+                            )}
+                            <button
+                                type="submit"
+                                className="btn btn-primary"
+                                disabled={isSubmitting}
+                                style={{ minWidth: 140, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" style={{ width: 14, height: 14, borderWidth: 2 }}></span>
+                                        <span>Đang gửi hồ sơ...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Icon name="check" width="16" height="16" />
+                                        <span>Gửi hồ sơ xét duyệt</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
+        </>
+    );
+}
+
 // Main Component
 export default function AccountSettings({ forcedTab }) {
     const { state, updateProfile, changePassword, logout } = useStore();
@@ -663,10 +1209,12 @@ export default function AccountSettings({ forcedTab }) {
     const tabs = isEmployer
         ? [
             { id: 'profile', path: '/settings/profile', label: 'Thông tin Doanh nghiệp', icon: 'building' },
+            { id: 'kyc', path: '/settings/kyc', label: 'Xác minh Doanh nghiệp', icon: 'shield-check' },
             { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: 'key' },
         ]
         : [
             { id: 'profile', path: '/settings/profile', label: 'Thông tin Sinh viên', icon: 'graduation' },
+            { id: 'kyc', path: '/settings/kyc', label: 'Xác minh Thẻ sinh viên', icon: 'shield-check' },
             { id: 'cv_manager', path: '/settings/cv', label: 'Quản lý CV & Hồ sơ', icon: 'file-text' },
             { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: 'key' },
         ];
@@ -674,6 +1222,7 @@ export default function AccountSettings({ forcedTab }) {
     const tab = useMemo(() => {
         if (forcedTab) return forcedTab;
         const p = location.pathname;
+        if (p === '/settings/kyc' || p === '/account/kyc' || p === '/settings/verification') return 'kyc';
         if (p === '/settings/cv' || p === '/account/cv') return 'cv_manager';
         if (p === '/settings/password' || p === '/settings/security' || p === '/account/security') return 'password';
         return 'profile';
@@ -735,6 +1284,13 @@ export default function AccountSettings({ forcedTab }) {
                                     onAvatarUpdated={handleAvatarUpdated}
                                 />
                             )
+                        )}
+
+                        {tab === 'kyc' && (
+                            <KycVerificationTab
+                                isEmployer={isEmployer}
+                                currentUser={safeUser}
+                            />
                         )}
 
                         {tab === 'cv_manager' && !isEmployer && (

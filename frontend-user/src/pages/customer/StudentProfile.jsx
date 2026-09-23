@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
+import Avatar from '../../components/Avatar';
 import ModalShell from '../../components/modals/ModalShell';
 import { useStore } from '../../context/StoreContext';
 import { studentsSeed } from '../../data/studentDirectory';
@@ -53,9 +54,12 @@ export default function StudentProfile() {
             <Icon name="chevleft" style={{ width: 14, height: 14 }} /> Quay lại
           </a>
           <div className="ph-row">
-            <div className="ph-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Space Grotesk', sans-serif", fontWeight: 700, fontSize: 32, color: '#fff' }}>
-              {student.name.trim().charAt(0).toUpperCase()}
-            </div>
+            <Avatar
+              src={student.avatar || student.avatarUrl}
+              name={student.name}
+              fontSize={32}
+              style={{ width: 88, height: 88, borderRadius: '22px' }}
+            />
             <div>
               <div className="ph-name">
                 {student.name}

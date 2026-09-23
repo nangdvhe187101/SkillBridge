@@ -18,4 +18,6 @@ public interface IUserService
         string fileName,
         string contentType,
         CancellationToken cancellationToken = default);
+
+    Task<UserPublicProfileDto> GetPublicStudentProfileAsync(int studentId, CancellationToken cancellationToken = default);
 }

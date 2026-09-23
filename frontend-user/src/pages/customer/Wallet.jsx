@@ -33,7 +33,7 @@ import { VIETNAM_BANKS } from '../../constants/banks';
 import { removeVietnameseTones } from '../../services/vietqrService';
 
 export default function Wallet() {
-  const { state, updateBankAccount, showToast, refreshWallet } = useStore();
+  const { state, updateBankAccount, showToast, refreshWallet, refreshDisputes } = useStore();
   const { openModal } = useModal();
   const navigate = useNavigate();
 
@@ -41,7 +41,10 @@ export default function Wallet() {
     if (typeof refreshWallet === 'function') {
       refreshWallet();
     }
-  }, [refreshWallet]);
+    if (typeof refreshDisputes === 'function') {
+      refreshDisputes();
+    }
+  }, [refreshWallet, refreshDisputes]);
 
   // Pending payment order state (Resume pending payment)
   const [pendingOrder, setPendingOrder] = useState(null);
@@ -944,40 +947,72 @@ Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
                 Gửi khiếu nại bồi thường
               </button>
 
-              <h4 style={{ marginTop: 20, marginBottom: 10 }}>Hồ sơ khiếu nại của bạn</h4>
-              {state.claims.length === 0 ? (
+              <h4 style={{ marginTop: 20, marginBottom: 10 }}>Hồ sơ khiếu nại & Tranh chấp ({((state.disputes && state.disputes.length > 0) ? state.disputes : state.claims).length})</h4>
+              {((state.disputes && state.disputes.length > 0) ? state.disputes : state.claims).length === 0 ? (
                 <div className="empty-state">Bạn chưa gửi khiếu nại nào.</div>
               ) : (
-                state.claims.map((c) => (
-                  <div
-                    className="tx-row"
-                    key={c.id}
-                    style={{ cursor: 'pointer', borderRadius: 8, padding: '8px' }}
-                    onClick={() => setClaimModal(c)}
-                    title="Bấm để xem tiến độ khiếu nại"
-                  >
-                    <div className="tx-ic" style={{ background: 'rgba(6, 182, 212, 0.12)', color: '#06b6d4', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon name="shield-check" width="17" height="17" />
+                ((state.disputes && state.disputes.length > 0) ? state.disputes : state.claims).map((c) => {
+                  const isDisputeDto = Boolean(c.reason !== undefined && c.filedAt);
+                  const statusMap = {
+                    pending: { label: 'Chờ đối chất (72h)', color: '#d97706', bg: 'rgba(245, 158, 11, 0.12)' },
+                    in_arbitration: { label: 'Trọng tài đang xử lý', color: '#6366f1', bg: 'rgba(99, 102, 241, 0.12)' },
+                    resolved: { label: 'Đã phân xử', color: '#16a34a', bg: 'rgba(34, 197, 94, 0.12)' },
+                    closed: { label: 'Đã đóng', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)' },
+                    rejected: { label: 'Đã bác bỏ', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)' }
+                  };
+                  const statusInfo = statusMap[c.status] || {
+                    label: c.statusLabel || (c.status === 'approved' ? 'Đã bồi thường' : 'Đang xử lý'),
+                    color: '#d97706',
+                    bg: 'rgba(245, 158, 11, 0.12)'
+                  };
+
+                  return (
+                    <div
+                      className="tx-row"
+                      key={c.id}
+                      style={{ cursor: 'pointer', borderRadius: 8, padding: '10px 12px', marginBottom: 8, border: '1px solid var(--border)' }}
+                      onClick={() => {
+                        if (isDisputeDto) {
+                          openModal('disputeDetail', { disputeId: c.id, onRefresh: refreshDisputes });
+                        } else {
+                          setClaimModal(c);
+                        }
+                      }}
+                      title="Bấm để xem chi tiết hồ sơ khiếu nại & nộp chứng cứ"
+                    >
+                      <div className="tx-ic" style={{ background: statusInfo.bg, color: statusInfo.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Icon name="shield-check" width="17" height="17" />
+                      </div>
+                      <div className="tx-main" style={{ minWidth: 0, flex: 1 }}>
+                        <b style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          #{c.id} · {c.jobTitle}
+                        </b>
+                        <span style={{ fontSize: 11.5, color: 'var(--ink-soft)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {c.reason || c.desc}
+                        </span>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
+                        <span
+                          className="chip"
+                          style={{
+                            fontSize: 11,
+                            padding: '2px 8px',
+                            background: statusInfo.bg,
+                            color: statusInfo.color,
+                            borderColor: statusInfo.color
+                          }}
+                        >
+                          {statusInfo.label}
+                        </span>
+                        {(c.payoutAmount > 0 || c.payout > 0) && (
+                          <div className="tx-amt pos" style={{ fontSize: 12, marginTop: 2 }}>
+                            +{fmtVND(c.payoutAmount || c.payout)}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="tx-main">
-                      <b>{c.jobTitle}</b>
-                      <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>{c.desc}</span>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <span
-                        className="chip"
-                        style={{
-                          fontSize: 11,
-                          background: c.status === 'approved' || c.status === 'resolved' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(234, 179, 8, 0.1)',
-                          color: c.status === 'approved' || c.status === 'resolved' ? '#16a34a' : '#d97706'
-                        }}
-                      >
-                        {c.statusLabel || (c.status === 'approved' ? 'Đã bồi thường' : 'Chờ duyệt')}
-                      </span>
-                      {c.payout > 0 && <div className="tx-amt pos" style={{ fontSize: 12, marginTop: 2 }}>+{fmtVND(c.payout)}</div>}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
 

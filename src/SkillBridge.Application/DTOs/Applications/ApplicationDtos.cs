@@ -14,6 +14,11 @@ public class CancelApplicationRequest
     public string? Reason { get; set; }
 }
 
+public class RejectApplicantRequest
+{
+    public string? Reason { get; set; }
+}
+
 public class JobApplicationResponseDto
 {
     public int Id { get; set; }

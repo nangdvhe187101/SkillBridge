@@ -171,6 +171,73 @@ public class UserService : IUserService
         return uploadResult;
     }
 
+    public async Task<UserPublicProfileDto> GetPublicStudentProfileAsync(int studentId, CancellationToken cancellationToken = default)
+    {
+        var user = await _dbContext.Users
+            .Include(u => u.Role)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Id == studentId, cancellationToken);
+
+        if (user == null)
+        {
+            throw new BusinessException("Không tìm thấy thông tin sinh viên này.");
+        }
+
+        var completedJobs = await _dbContext.Applications
+            .CountAsync(a => a.StudentId == studentId && a.Status == "completed", cancellationToken);
+
+        var reviews = await _dbContext.Reviews
+            .Include(r => r.Reviewer)
+            .Include(r => r.Job)
+            .Where(r => r.RevieweeId == studentId)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(10)
+            .AsNoTracking()
+            .ToListAsync(cancellationToken);
+
+        var avgRating = reviews.Count > 0
+            ? Math.Round(reviews.Average(r => r.Stars), 1)
+            : 5.0;
+
+        var cvCategories = await _dbContext.CvFiles
+            .Include(c => c.Category)
+            .Where(c => c.StudentId == studentId && c.Category != null)
+            .Select(c => c.Category!.Name)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var skills = cvCategories.Count > 0
+            ? cvCategories
+            : new List<string> { "Kỹ năng chuyên môn", "Giao tiếp & Làm việc nhóm", "Đúng hạn deadline" };
+
+        return new UserPublicProfileDto
+        {
+            Id = user.Id,
+            FullName = user.FullName,
+            AvatarUrl = _storageService.GetPublicUrl(user.AvatarUrl),
+            School = user.School ?? "Đại học / Cao đẳng",
+            Bio = user.CompanyDescription ?? "Sinh viên nhiệt huyết, cam kết chất lượng sản phẩm và tiến độ hoàn thành đúng hạn trên SkillBridge.",
+            RoleCode = user.Role?.Name ?? "student",
+            ReliabilityScore = user.ReliabilityScore,
+            CompletedJobsCount = Math.Max(completedJobs, user.JobsDoneCount),
+            AverageRating = avgRating,
+            TotalReviewsCount = reviews.Count,
+            IsKycVerified = string.Equals(user.KycStatus, "verified", StringComparison.OrdinalIgnoreCase),
+            GraduationYear = null,
+            Skills = skills,
+            Reviews = reviews.Select(r => new UserReviewItemDto
+            {
+                Id = r.Id,
+                ReviewerName = r.Reviewer?.FullName ?? "Nhà tuyển dụng",
+                ReviewerAvatarUrl = _storageService.GetPublicUrl(r.Reviewer?.AvatarUrl),
+                JobTitle = r.Job?.Title ?? "Dự án đã hoàn thành",
+                Stars = r.Stars,
+                Comment = r.Comment,
+                CreatedAt = r.CreatedAt
+            }).ToList()
+        };
+    }
+
     private UserProfileDto MapToProfileDto(Data.Entities.User user)
     {
         return new UserProfileDto
