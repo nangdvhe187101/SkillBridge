@@ -14,6 +14,8 @@ import { getJobById, extendDeadline } from '../../api/jobApi';
 import { getJobDeliverables } from '../../api/deliverableApi';
 import { getJobReviews } from '../../api/reviewApi';
 import { downloadCandidateCv, downloadJobAttachment } from '../../utils/fileDownloader';
+import DisputeModal from '../../components/modals/DisputeModal';
+import DisputeDetailModal from '../../components/modals/DisputeDetailModal';
 import '../../styles/account-settings.css';
 
 const STATUS_LABEL = {
@@ -22,6 +24,7 @@ const STATUS_LABEL = {
   in_progress: 'Đang thực hiện',
   submitted: 'Chờ xác nhận bàn giao',
   revision_requested: 'Đang chờ SV sửa lại',
+  disputed: 'Đang khiếu nại',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
 };
@@ -96,6 +99,8 @@ export default function JobApplicants() {
   const [viewStudentModal, setViewStudentModal] = useState(null);
   const [cannedModalApplicant, setCannedModalApplicant] = useState(null);
   const [extendDeadlineModalOpen, setExtendDeadlineModalOpen] = useState(false);
+  const [disputeModalOpen, setDisputeModalOpen] = useState(false);
+  const [disputeDetailModalOpen, setDisputeDetailModalOpen] = useState(false);
 
   // Shortlisted candidates stored in localStorage for persistence
   const [shortlistedIds, setShortlistedIds] = useState(() => {
@@ -476,13 +481,37 @@ export default function JobApplicants() {
                 )}
 
                 {wasEscrowed ? (
-                  <button
-                    className="btn btn-outline btn-sm"
-                    style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
-                    onClick={handleCancel}
-                  >
-                    Hủy việc & Hoàn tiền
-                  </button>
+                  <>
+                    {job.status !== 'disputed' && (
+                      <button
+                        className="btn btn-outline btn-sm"
+                        style={{ color: '#d97706', borderColor: '#fcd34d', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}
+                        onClick={() => setDisputeModalOpen(true)}
+                        title="Khiếu nại và chuyển vụ việc lên Ban Trọng tài phân xử"
+                      >
+                        <span>⚖️</span> Khiếu nại công việc
+                      </button>
+                    )}
+                    {job.status === 'disputed' && (
+                      <button
+                        className="btn btn-primary btn-sm"
+                        style={{ background: '#d97706', borderColor: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 700 }}
+                        onClick={() => setDisputeDetailModalOpen(true)}
+                        title="Xem hồ sơ tranh chấp & nộp bằng chứng trong 72h"
+                      >
+                        <span>⚖️</span> Hồ sơ tranh chấp
+                      </button>
+                    )}
+                    {job.status !== 'disputed' && (
+                      <button
+                        className="btn btn-outline btn-sm"
+                        style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
+                        onClick={handleCancel}
+                      >
+                        Hủy việc & Hoàn tiền
+                      </button>
+                    )}
+                  </>
                 ) : job.status === 'open' ? (
                   <button
                     className="btn btn-outline btn-sm"
@@ -504,6 +533,51 @@ export default function JobApplicants() {
                 )}
               </div>
             </div>
+
+            {/* Dispute Warning Banner for Employer */}
+            {job.status === 'disputed' && (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.12) 100%)',
+                border: '1.5px solid rgba(245, 158, 11, 0.4)',
+                borderRadius: 12,
+                padding: '16px 20px',
+                marginTop: 18,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 14
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 260 }}>
+                  <span style={{ fontSize: 26 }}>⚖️</span>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#b45309' }}>
+                      Công việc đang có hồ sơ khiếu nại tại Ban Trọng tài SkillBridge
+                    </div>
+                    <div style={{ fontSize: 13, color: '#92400e', marginTop: 2, lineHeight: 1.5 }}>
+                      Quỹ tiền ký quỹ Escrow ({fmtVND(job.escrowAmount || job.budget)}) đang được bảo vệ an toàn. Cả hai bên có thời hạn 72 giờ để cung cấp tài liệu, hình ảnh đối chiếu trước khi Trọng tài viên phân xử.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{
+                    background: '#d97706',
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    border: 'none',
+                    padding: '8px 18px',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(217, 119, 6, 0.3)'
+                  }}
+                  onClick={() => setDisputeDetailModalOpen(true)}
+                >
+                  Xem hồ sơ & Bằng chứng
+                </button>
+              </div>
+            )}
 
             {/* Inline Job Content & Requirements Details */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginTop: 18 }}>
@@ -1250,6 +1324,17 @@ export default function JobApplicants() {
           </div>
         </ModalShell>
       )}
+
+      {/* Modal Tranh Chấp & Khiếu Nại Cho NTD */}
+      <EmployerDisputeModals
+        job={job}
+        apiDeliverables={apiDeliverables}
+        disputeModalOpen={disputeModalOpen}
+        setDisputeModalOpen={setDisputeModalOpen}
+        disputeDetailModalOpen={disputeDetailModalOpen}
+        setDisputeDetailModalOpen={setDisputeDetailModalOpen}
+        loadData={loadData}
+      />
     </div>
   );
 }
@@ -1418,5 +1503,32 @@ function ExtendDeadlineModal({ job, onClose, onExtend }) {
         </button>
       </div>
     </ModalShell>
+  );
+}
+
+{/* MODAL MỞ KHIẾU NẠI & TRANH CHẤP CHO NTD */}
+// eslint-disable-next-line no-unused-vars
+export function EmployerDisputeModals({ job, apiDeliverables, disputeModalOpen, setDisputeModalOpen, disputeDetailModalOpen, setDisputeDetailModalOpen, loadData }) {
+  return (
+    <>
+      {disputeModalOpen && (
+        <DisputeModal
+          job={job}
+          deliverableId={apiDeliverables?.[0]?.id}
+          onClose={() => setDisputeModalOpen(false)}
+          onSuccess={() => {
+            loadData?.();
+            setDisputeModalOpen(false);
+          }}
+        />
+      )}
+      {disputeDetailModalOpen && (
+        <DisputeDetailModal
+          disputeId={job.disputeId || job.id}
+          onClose={() => setDisputeDetailModalOpen(false)}
+          onRefresh={loadData}
+        />
+      )}
+    </>
   );
 }

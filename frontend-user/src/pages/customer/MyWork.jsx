@@ -9,6 +9,8 @@ import { getJobDeliverables } from '../../api/deliverableApi';
 import { getJobById } from '../../api/jobApi';
 import { downloadJobAttachment, downloadDeliverableFile } from '../../utils/fileDownloader';
 import { DeliverablePreview } from '../../components/modals/DeliverableModals';
+import DisputeModal from '../../components/modals/DisputeModal';
+import DisputeDetailModal from '../../components/modals/DisputeDetailModal';
 import Icon from '../../components/Icon';
 
 function formatDateTime(ts) {
@@ -100,6 +102,7 @@ const APP_STATUS_LABEL = {
   rejected: 'Chưa phù hợp',
   submitted: 'Đã nộp bàn giao',
   revision_requested: 'Cần sửa đổi',
+  disputed: 'Đang khiếu nại',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
 };
@@ -128,6 +131,8 @@ export default function MyWork() {
   const [cancelModalJob, setCancelModalJob] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
+  const [disputeModalJob, setDisputeModalJob] = useState(null);
+  const [disputeDetailModalId, setDisputeDetailModalId] = useState(null);
   const appsPageSize = 6;
 
   // Làm mới danh sách ứng tuyển khi vào trang
@@ -140,8 +145,8 @@ export default function MyWork() {
   // Lọc các ứng tuyển đang trong giai đoạn làm việc thực tế
   const activeApps = useMemo(() => {
     return (state.myApplications || []).filter((a) =>
-      ['hired', 'submitted', 'revision_requested'].includes(a.status) ||
-      ['in_progress', 'submitted', 'revision_requested'].includes(a.jobStatus)
+      ['hired', 'submitted', 'revision_requested', 'disputed'].includes(a.status) ||
+      ['in_progress', 'submitted', 'revision_requested', 'disputed'].includes(a.jobStatus)
     );
   }, [state.myApplications]);
 
@@ -656,7 +661,8 @@ export default function MyWork() {
                   const isSubmitted = j.status === 'submitted';
                   const isRevision = j.status === 'revision_requested';
                   const isCompleted = j.status === 'completed';
-                  const isInProgress = !isSubmitted && !isRevision && !isCompleted;
+                  const isDisputed = j.status === 'disputed';
+                  const isInProgress = !isSubmitted && !isRevision && !isCompleted && !isDisputed;
                   const empName = j.emp || 'Nhà tuyển dụng';
                   const targetJobId = j.jobId || j.id;
                   const urgency = getDeadlineUrgency(j.deadlineAt);
@@ -668,7 +674,7 @@ export default function MyWork() {
                       style={{
                         background: '#ffffff',
                         borderRadius: 16,
-                        border: isRevision ? '2px solid #fda4af' : '1px solid #e2e8f0',
+                        border: isDisputed ? '2px solid #f59e0b' : (isRevision ? '2px solid #fda4af' : '1px solid #e2e8f0'),
                         boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
                         overflow: 'hidden',
                         transition: 'transform 0.2s, box-shadow 0.2s'
@@ -676,7 +682,7 @@ export default function MyWork() {
                     >
                       {/* Top status header */}
                       <div style={{
-                        background: isRevision ? '#fff1f2' : (isSubmitted ? '#f0fdf4' : '#f8fafc'),
+                        background: isDisputed ? '#fffbeb' : (isRevision ? '#fff1f2' : (isSubmitted ? '#f0fdf4' : '#f8fafc')),
                         padding: '12px 24px',
                         borderBottom: '1px solid #e2e8f0',
                         display: 'flex',
@@ -709,6 +715,11 @@ export default function MyWork() {
                         </div>
 
                         <div>
+                          {isDisputed && (
+                            <span style={{ background: '#d97706', color: '#fff', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20 }}>
+                              ⚖️ Đang khiếu nại (Trọng tài xử lý)
+                            </span>
+                          )}
                           {isRevision && (
                             <span style={{ background: '#f43f5e', color: '#fff', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20 }}>
                               Yêu cầu sửa đổi (Lượt {(j.revisionCount || 0) + 1}/{j.revisionLimit || 2})
@@ -1391,6 +1402,47 @@ export default function MyWork() {
                           </div>
                         ) : null}
 
+                        {isDisputed && (
+                          <div style={{
+                            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.12) 100%)',
+                            border: '1.5px solid rgba(245, 158, 11, 0.4)',
+                            borderRadius: 14,
+                            padding: '16px 20px',
+                            margin: '16px 0 12px'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <span style={{ fontSize: 24 }}>⚖️</span>
+                                <div>
+                                  <div style={{ fontSize: 14, fontWeight: 700, color: '#b45309' }}>
+                                    Vụ việc đang được Ban Trọng tài SkillBridge thụ lý
+                                  </div>
+                                  <div style={{ fontSize: 12.5, color: '#92400e', marginTop: 2 }}>
+                                    Tiền ký quỹ Escrow đang được phong tỏa bảo vệ quyền lợi hai bên. Bấm vào hồ sơ để xem chi tiết hoặc nộp bổ sung chứng cứ trong hạn 72 giờ.
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-sm"
+                                style={{
+                                  background: '#d97706',
+                                  color: '#ffffff',
+                                  fontWeight: 700,
+                                  border: 'none',
+                                  padding: '7px 16px',
+                                  borderRadius: 8,
+                                  cursor: 'pointer',
+                                  boxShadow: '0 2px 6px rgba(217, 119, 6, 0.3)'
+                                }}
+                                onClick={() => setDisputeDetailModalId(j.disputeId || j.jobId)}
+                              >
+                                Xem hồ sơ tranh chấp
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Action buttons */}
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
                           {isRevision && (
@@ -1495,6 +1547,28 @@ export default function MyWork() {
                           >
                             <Icon name="eye" width={13} height={13} /> Xem chi tiết tin
                           </button>
+
+                          {['in_progress', 'submitted', 'revision_requested'].includes(j.status) && (
+                            <button
+                              className="btn btn-outline"
+                              style={{ color: '#d97706', borderColor: '#fcd34d', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                              onClick={() => setDisputeModalJob(j)}
+                              title="Mở hồ sơ khiếu nại gửi lên Ban Trọng tài SkillBridge"
+                            >
+                              <span>⚖️</span> Khiếu nại công việc
+                            </button>
+                          )}
+
+                          {j.status === 'disputed' && (
+                            <button
+                              className="btn btn-primary"
+                              style={{ background: '#d97706', borderColor: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+                              onClick={() => setDisputeDetailModalId(j.disputeId || j.jobId)}
+                              title="Xem chi tiết hồ sơ tranh chấp & nộp bằng chứng trong 72h"
+                            >
+                              <span>⚖️</span> Xem hồ sơ tranh chấp
+                            </button>
+                          )}
 
                           <button
                             className="btn btn-outline"
@@ -1771,6 +1845,28 @@ export default function MyWork() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL MỞ KHIẾU NẠI (DISPUTE MODAL) */}
+      {disputeModalJob && (
+        <DisputeModal
+          job={disputeModalJob}
+          deliverableId={disputeModalJob.deliverable?.id}
+          onClose={() => setDisputeModalJob(null)}
+          onSuccess={() => {
+            refreshMyApplications?.();
+            setDisputeModalJob(null);
+          }}
+        />
+      )}
+
+      {/* MODAL XEM HỒ SƠ TRANH CHẤP & NỘP CHỨNG CỨ 72H */}
+      {disputeDetailModalId && (
+        <DisputeDetailModal
+          disputeId={disputeDetailModalId}
+          onClose={() => setDisputeDetailModalId(null)}
+          onRefresh={() => refreshMyApplications?.()}
+        />
       )}
     </div>
   );
