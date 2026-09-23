@@ -690,7 +690,7 @@ public class ChatService : IChatService
         // REQ-CHAT-008: Grace Period 30 ngày cho Job completed
         if (status == "completed")
         {
-            var completedAt = conversation.Job.AutoReleaseAt ?? conversation.Job.DeadlineAt ?? conversation.CreatedAt;
+            var completedAt = conversation.Job.AutoReleaseAt ?? conversation.Job.UpdatedAt;
             var gracePeriodExpiresAt = completedAt.AddDays(30);
 
             if (DateTime.UtcNow > gracePeriodExpiresAt)
@@ -736,7 +736,7 @@ public class ChatService : IChatService
             }
             else if (jobStatus == "completed")
             {
-                var completedAt = c.Job.AutoReleaseAt ?? c.Job.DeadlineAt ?? c.CreatedAt;
+                var completedAt = c.Job.AutoReleaseAt ?? c.Job.UpdatedAt;
                 graceExpiresAt = completedAt.AddDays(30);
 
                 if (DateTime.UtcNow > graceExpiresAt)

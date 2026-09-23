@@ -207,6 +207,19 @@ public class EscrowPaymentTests
         var jobId = 505;
         var jobBudget = 400000m;
 
+        // Seed escrow_hold transaction to reflect valid held funds
+        dbContext.Transactions.Add(new Transaction
+        {
+            UserId = employerId,
+            Type = "escrow_hold",
+            Label = "Ký quỹ Job #505",
+            Amount = jobBudget,
+            ReferenceId = jobId,
+            Sign = -1,
+            CreatedAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
         // First refund succeeds
         await service.RefundEscrowAsync(employerId, jobId, "Job 505", jobBudget, "Hủy lần 1");
         await dbContext.SaveChangesAsync();
@@ -372,5 +385,25 @@ public class EscrowPaymentTests
         var employerCommissionTx = await dbContext.Transactions
             .FirstOrDefaultAsync(t => t.UserId == employerId && t.Type == "commission");
         Assert.Null(employerCommissionTx);
+    }
+
+    [Fact]
+    public async Task RefundEscrowAsync_WhenNoEscrowHold_ShouldThrowBusinessException()
+    {
+        // Arrange: Job chưa từng ký quỹ (không có transaction escrow_hold nào)
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new EscrowPaymentService(dbContext, _loggerMock.Object);
+
+        var employerId = 99;
+        var jobId = 888;
+        var refundAmount = 500000m;
+
+        // Act & Assert: Phải từ chối hoàn tiền để ngăn ngừa lỗ hổng sinh tiền từ hư không
+        var ex = await Assert.ThrowsAsync<BusinessException>(async () =>
+        {
+            await service.RefundEscrowAsync(employerId, jobId, "Test Job", refundAmount, "Job Cancelled");
+        });
+
+        Assert.Contains("chưa từng được ký quỹ", ex.Message);
     }
 }

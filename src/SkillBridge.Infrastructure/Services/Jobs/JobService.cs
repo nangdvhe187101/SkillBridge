@@ -183,7 +183,9 @@ public class JobService : IJobService
                 }
 
                 // BẢO VỆ SINH VIÊN: Chặn NTD tự ý hủy Job khi sinh viên đã nộp sản phẩm bàn giao
-                if (job.Status == "submitted")
+                var hasSubmittedDeliverable = await _dbContext.JobDeliverables
+                    .AnyAsync(d => d.JobId == jobId && d.Status == "submitted");
+                if (job.Status == "submitted" || hasSubmittedDeliverable)
                 {
                     throw new BusinessException("Không thể hủy công việc khi sinh viên đã nộp sản phẩm bàn giao. Vui lòng nghiệm thu sản phẩm hoặc mở khiếu nại/tranh chấp nếu có vấn đề.");
                 }

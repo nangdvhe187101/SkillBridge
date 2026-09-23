@@ -237,24 +237,18 @@ public class EscrowPaymentService : IEscrowPaymentService
             .Where(t => t.Type == "escrow_refund" && t.ReferenceId == jobId && t.UserId == employerId)
             .SumAsync(t => (decimal?)t.Amount, cancellationToken) ?? 0m;
 
-        if (totalHeld > 0)
+        if (totalHeld <= 0)
         {
-            var remainingEscrow = totalHeld - totalRefunded;
-            if (remainingEscrow <= 0 || amount > remainingEscrow)
-            {
-                _logger.LogWarning("Phát hiện yêu cầu hoàn tiền vượt số dư ký quỹ Job #{JobId}, EmployerId={EmployerId}. Held: {Held}, Refunded: {Refunded}, Request: {Amount}",
-                    jobId, employerId, totalHeld, totalRefunded, amount);
-                throw new BusinessException($"Công việc #{jobId} đã được hoàn tiền ký quỹ trước đó (Số dư ký quỹ khả dụng còn lại: {Math.Max(0, remainingEscrow):N0}đ).");
-            }
+            _logger.LogWarning("Từ chối hoàn tiền: Không tìm thấy giao dịch ký quỹ hợp lệ cho Job #{JobId}, EmployerId={EmployerId}.", jobId, employerId);
+            throw new BusinessException($"Công việc #{jobId} chưa từng được ký quỹ hoặc không có số dư ký quỹ để hoàn trả.");
         }
-        else
+
+        var remainingEscrow = totalHeld - totalRefunded;
+        if (remainingEscrow <= 0 || amount > remainingEscrow)
         {
-            // Khi không có bản ghi escrow_hold (môi trường test hoặc legacy): chặn nếu đã có bản ghi refund trước đó
-            if (totalRefunded > 0)
-            {
-                _logger.LogWarning("Phát hiện yêu cầu hoàn tiền trùng lặp cho Job #{JobId}, EmployerId={EmployerId}.", jobId, employerId);
-                throw new BusinessException($"Công việc #{jobId} đã được hoàn tiền ký quỹ trước đó.");
-            }
+            _logger.LogWarning("Phát hiện yêu cầu hoàn tiền vượt số dư ký quỹ Job #{JobId}, EmployerId={EmployerId}. Held: {Held}, Refunded: {Refunded}, Request: {Amount}",
+                jobId, employerId, totalHeld, totalRefunded, amount);
+            throw new BusinessException($"Công việc #{jobId} đã được hoàn tiền ký quỹ trước đó (Số dư ký quỹ khả dụng còn lại: {Math.Max(0, remainingEscrow):N0}đ).");
         }
 
         var refundTx = new Transaction
@@ -293,7 +287,7 @@ public class EscrowPaymentService : IEscrowPaymentService
     {
         if (_dbContext.Database.IsMySql())
         {
-            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { userId }, ct);
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT user_id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { userId }, ct);
             var tracked = _dbContext.ChangeTracker.Entries<Wallet>().FirstOrDefault(e => e.Entity.UserId == userId);
             if (tracked?.State == EntityState.Unchanged)
             {

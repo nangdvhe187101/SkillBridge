@@ -17,7 +17,7 @@ public class SePayGatewayService : ISePayGatewayService
 
     private readonly IConfiguration _config;
     private readonly ILogger<SePayGatewayService> _logger;
-    private static readonly Regex OrderCodeRegex = new(@"\b(SB\d{14,24})\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex OrderCodeRegex = new(@"\b(SB\d{14,32})\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public SePayGatewayService(IConfiguration config, ILogger<SePayGatewayService> logger)
     {

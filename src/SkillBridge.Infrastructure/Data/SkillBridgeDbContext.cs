@@ -296,6 +296,13 @@ public partial class SkillBridgeDbContext : DbContext
                 .HasForeignKey(d => d.RequestInitiatedBy)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_conversations_requester");
+
+            // Fix #2: Unique constraint ngăn race condition tạo 2 conversation trùng giữa cùng 1 cặp user+job.
+            // UserAId luôn được chuẩn hoá là min(userId) và UserBId là max(userId) ở tầng application
+            // (GetOrCreateConversationAsync) nên index một chiều là đủ.
+            entity.HasIndex(e => new { e.UserAId, e.UserBId, e.JobId })
+                .IsUnique()
+                .HasDatabaseName("uq_conversations_pair_job");
         });
 
         modelBuilder.Entity<CvFile>(entity =>

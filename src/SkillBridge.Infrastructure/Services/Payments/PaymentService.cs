@@ -283,7 +283,7 @@ public class PaymentService : IPaymentService
             // Row-level lock on Wallet
             if (_dbContext.Database.IsMySql())
             {
-                await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { order.UserId }, ct);
+                await _dbContext.Database.ExecuteSqlRawAsync("SELECT user_id FROM wallets WHERE user_id = {0} FOR UPDATE", new object[] { order.UserId }, ct);
                 var trackedWallet = _dbContext.ChangeTracker.Entries<Wallet>().FirstOrDefault(e => e.Entity.UserId == order.UserId);
                 if (trackedWallet?.State == EntityState.Unchanged)
                 {

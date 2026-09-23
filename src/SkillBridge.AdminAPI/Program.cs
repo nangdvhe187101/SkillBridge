@@ -129,6 +129,8 @@ builder.Services.Scan(scan => scan
     .WithScopedLifetime());
 
 builder.Services.AddScoped<SkillBridge.Application.Interfaces.Payments.IPaymentRealtimeNotifier, SkillBridge.AdminAPI.Services.NullPaymentRealtimeNotifier>();
+builder.Services.AddScoped<SkillBridge.Application.Interfaces.Chat.IChatRealtimeNotifier, SkillBridge.AdminAPI.Services.NullChatRealtimeNotifier>();
+builder.Services.AddSingleton<SkillBridge.Application.Interfaces.Chat.IUserPresenceService, SkillBridge.Infrastructure.Services.Chat.UserPresenceService>();
 builder.Services.AddSingleton<SkillBridge.Application.Common.IEncryptionKeyProvider, SkillBridge.Infrastructure.Services.Security.ConfigurationEncryptionKeyProvider>();
 builder.Services.AddHttpClient();
 builder.Services.AddControllers();

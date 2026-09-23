@@ -247,7 +247,7 @@ public class R2StorageService : IStorageService
                 Key = fileKey
             };
 
-            var response = await _s3Client.GetObjectAsync(getRequest, cancellationToken);
+            using var response = await _s3Client.GetObjectAsync(getRequest, cancellationToken);
             var memoryStream = new MemoryStream();
             await response.ResponseStream.CopyToAsync(memoryStream, cancellationToken);
             memoryStream.Position = 0;
