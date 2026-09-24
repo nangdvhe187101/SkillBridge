@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -335,6 +336,27 @@ public class DisputeService : IDisputeService
     {
         if (request == null) throw new ArgumentNullException(nameof(request));
 
+        if (_dbContext.Database.IsRelational())
+        {
+            var strategy = _dbContext.Database.CreateExecutionStrategy();
+            return await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
+                var result = await ResolveDisputeInternalAsync(adminUserId, disputeId, request, ct);
+                await transaction.CommitAsync(ct);
+
+                await SendResolutionNotificationsAsync(result, request.AdminNote, ct);
+                return result;
+            });
+        }
+
+        var res = await ResolveDisputeInternalAsync(adminUserId, disputeId, request, ct);
+        await SendResolutionNotificationsAsync(res, request.AdminNote, ct);
+        return res;
+    }
+
+    private async Task<DisputeDto> ResolveDisputeInternalAsync(int adminUserId, int disputeId, ResolveDisputeRequest request, CancellationToken ct)
+    {
         var dispute = await _dbContext.Disputes
             .Include(d => d.Job)
             .FirstOrDefaultAsync(d => d.Id == disputeId, ct);
@@ -486,10 +508,17 @@ public class DisputeService : IDisputeService
         _logger.LogInformation("Trọng tài đã giải quyết Dispute #{DisputeId}: Decision={Decision}, StudentPayout={StudentPayout}, EmployerRefund={EmployerRefund}",
             dispute.Id, decision, studentPayout, employerRefund);
 
-        // Gửi thông báo kết quả cho cả hai bên
+        return await MapToDisputeDtoAsync(dispute, ct);
+    }
+
+    private async Task SendResolutionNotificationsAsync(DisputeDto dispute, string? adminNote, CancellationToken ct)
+    {
         try
         {
-            var noteMsg = string.IsNullOrWhiteSpace(request.AdminNote) ? string.Empty : $"\nLý do: {request.AdminNote}";
+            var noteMsg = string.IsNullOrWhiteSpace(adminNote) ? string.Empty : $"\nLý do: {adminNote}";
+            var studentPayout = dispute.PayoutAmount ?? 0m;
+            var employerRefund = dispute.Amount - studentPayout;
+
             await _notificationService.SendAsync(
                 dispute.StudentId,
                 "⚖️",
@@ -508,8 +537,6 @@ public class DisputeService : IDisputeService
         {
             _logger.LogWarning(ex, "Lỗi khi gửi thông báo phán quyết cho các bên trong Dispute #{DisputeId}", dispute.Id);
         }
-
-        return await MapToDisputeDtoAsync(dispute, ct);
     }
 
     public async Task<DisputeChatEvidenceDto> GetChatEvidenceAsync(int adminUserId, int disputeId, CancellationToken ct = default)

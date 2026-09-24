@@ -218,4 +218,72 @@ public class WalletServiceTests
         await Assert.ThrowsAsync<SkillBridge.Application.Common.BusinessException>(() =>
             service.UpdateBankAccountAsync(16, request));
     }
+
+    [Fact]
+    public async Task GetMyWalletAsync_RoleBasedCommission_StudentWithMaster_ShouldHave3PercentRate()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new WalletService(dbContext, _loggerMock.Object);
+
+        var userId = 25;
+        var role = new Role { Id = 1, Code = "student", Name = "Sinh viên", Type = "user", IsActive = true };
+        dbContext.Roles.Add(role);
+        dbContext.Users.Add(new User { Id = userId, RoleId = 1, Role = role, FullName = "SV Master", Email = "svmaster@test.com", PasswordHash = "x", AccountStatus = "active", KycStatus = "verified" });
+        dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 100000m });
+
+        dbContext.Subscriptions.Add(new Subscription
+        {
+            UserId = userId,
+            PlanName = "Master Talent",
+            Status = "active",
+            AmountPaid = 99000m,
+            RenewalDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(15)),
+            StartedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await service.GetMyWalletAsync(userId);
+
+        // Assert
+        Assert.Equal(0.03m, result.EffectiveCommissionRate);
+        Assert.Equal("master", result.Badge);
+        Assert.Equal(SkillBridge.Application.Common.PaymentConstants.PlanStuMaster, result.ActivePlanCode);
+    }
+
+    [Fact]
+    public async Task GetMyWalletAsync_RoleBasedCommission_EmployerWithVip_ShouldHave5PercentRate()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new WalletService(dbContext, _loggerMock.Object);
+
+        var userId = 26;
+        var role = new Role { Id = 2, Code = "employer", Name = "Nhà tuyển dụng", Type = "user", IsActive = true };
+        dbContext.Roles.Add(role);
+        dbContext.Users.Add(new User { Id = userId, RoleId = 2, Role = role, FullName = "NTD VIP", Email = "ntdvip@test.com", PasswordHash = "x", AccountStatus = "active", KycStatus = "verified" });
+        dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 200000m });
+
+        dbContext.Subscriptions.Add(new Subscription
+        {
+            UserId = userId,
+            PlanName = "VIP Business Suite",
+            Status = "active",
+            AmountPaid = 149000m,
+            RenewalDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(20)),
+            StartedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await service.GetMyWalletAsync(userId);
+
+        // Assert
+        Assert.Equal(0.05m, result.EffectiveCommissionRate);
+        Assert.Equal("vip", result.Badge);
+        Assert.True(result.HasVipSubscription);
+    }
 }

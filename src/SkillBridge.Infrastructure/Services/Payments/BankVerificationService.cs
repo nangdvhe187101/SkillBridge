@@ -72,8 +72,8 @@ public class BankVerificationService : IBankVerificationService
 
         if (hasRelational)
         {
-            // Lock ví của user để tuần tự hóa các request đồng thời của cùng 1 user
-            await GetWalletWithLockAsync(userId, ct);
+            // Lock bản ghi user để tuần tự hóa các request đồng thời của cùng 1 user (đảm bảo hàng tồn tại 100% kể cả khi chưa có ví)
+            await LockUserRowAsync(userId, ct);
         }
 
         // Rule 1: 1 user chỉ có tối đa 1 record pending tại 1 thời điểm
@@ -515,6 +515,14 @@ public class BankVerificationService : IBankVerificationService
             adminMemberId, requestId, request.UserId, request.BankName, request.AccountNumberMask);
 
         return MapToResponseDto(request);
+    }
+
+    private async Task LockUserRowAsync(int userId, CancellationToken ct)
+    {
+        if (_dbContext.Database.IsMySql())
+        {
+            await _dbContext.Database.ExecuteSqlRawAsync("SELECT id FROM users WHERE id = {0} FOR UPDATE", new object[] { userId }, ct);
+        }
     }
 
     private async Task<Wallet?> GetWalletWithLockAsync(int userId, CancellationToken ct)

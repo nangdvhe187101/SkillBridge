@@ -33,6 +33,9 @@ public class SubscriptionTests
         var service = new SubscriptionService(dbContext, _loggerMock.Object);
 
         var userId = 1;
+        var role = new Role { Id = 2, Code = "employer", Name = "Nhà tuyển dụng", Type = "user", IsActive = true };
+        dbContext.Roles.Add(role);
+        dbContext.Users.Add(new User { Id = userId, RoleId = role.Id, Role = role, FullName = "NTD Test", Email = "ntd@test.com", PasswordHash = "x", AccountStatus = "active", KycStatus = "verified" });
         dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 50000m });
         await dbContext.SaveChangesAsync();
 
@@ -60,6 +63,12 @@ public class SubscriptionTests
         var service = new SubscriptionService(dbContext, _loggerMock.Object);
 
         var userId = 100;
+        var isEmp = planType.StartsWith("EMP_");
+        var roleCode = isEmp ? "employer" : "student";
+        var roleId = isEmp ? 2 : 1;
+        var role = new Role { Id = roleId, Code = roleCode, Name = roleCode, Type = "user", IsActive = true };
+        dbContext.Roles.Add(role);
+        dbContext.Users.Add(new User { Id = userId, RoleId = role.Id, Role = role, FullName = "User Test", Email = "user@test.com", PasswordHash = "x", AccountStatus = "active", KycStatus = "verified" });
         dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 500000m });
         await dbContext.SaveChangesAsync();
 
@@ -88,6 +97,52 @@ public class SubscriptionTests
     }
 
     [Fact]
+    public async Task PurchaseSubscription_StudentBuyingEmployerPlan_ShouldThrowBusinessException()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new SubscriptionService(dbContext, _loggerMock.Object);
+
+        var userId = 105;
+        var studentRole = new Role { Id = 1, Code = "student", Name = "Sinh viên", Type = "user", IsActive = true };
+        dbContext.Roles.Add(studentRole);
+        dbContext.Users.Add(new User { Id = userId, RoleId = studentRole.Id, Role = studentRole, FullName = "Sinh viên Test", Email = "sv@test.com", PasswordHash = "x", AccountStatus = "active", KycStatus = "verified" });
+        dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 500000m });
+        await dbContext.SaveChangesAsync();
+
+        var request = new PurchaseSubscriptionRequest { PlanType = "EMP_VIP" };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.PurchaseSubscriptionAsync(userId, request));
+
+        Assert.Contains("chỉ dành riêng cho Nhà tuyển dụng", ex.Message);
+    }
+
+    [Fact]
+    public async Task PurchaseSubscription_EmployerBuyingStudentPlan_ShouldThrowBusinessException()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = new SubscriptionService(dbContext, _loggerMock.Object);
+
+        var userId = 106;
+        var empRole = new Role { Id = 2, Code = "employer", Name = "Nhà tuyển dụng", Type = "user", IsActive = true };
+        dbContext.Roles.Add(empRole);
+        dbContext.Users.Add(new User { Id = userId, RoleId = empRole.Id, Role = empRole, FullName = "NTD Test", Email = "emp@test.com", PasswordHash = "x", AccountStatus = "active", KycStatus = "verified" });
+        dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 500000m });
+        await dbContext.SaveChangesAsync();
+
+        var request = new PurchaseSubscriptionRequest { PlanType = "STU_MASTER" };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.PurchaseSubscriptionAsync(userId, request));
+
+        Assert.Contains("chỉ dành riêng cho Sinh viên", ex.Message);
+    }
+
+    [Fact]
     public async Task PurchaseSubscription_SamePlanRenewal_ShouldExtendExistingRenewalDateByOneMonth()
     {
         // Arrange
@@ -95,6 +150,9 @@ public class SubscriptionTests
         var service = new SubscriptionService(dbContext, _loggerMock.Object);
 
         var userId = 200;
+        var role = new Role { Id = 2, Code = "employer", Name = "Nhà tuyển dụng", Type = "user", IsActive = true };
+        dbContext.Roles.Add(role);
+        dbContext.Users.Add(new User { Id = userId, RoleId = role.Id, Role = role, FullName = "NTD Test", Email = "ntd@test.com", PasswordHash = "x", AccountStatus = "active", KycStatus = "verified" });
         dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 300000m });
 
         var initialRenewalDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(20));
@@ -135,6 +193,9 @@ public class SubscriptionTests
         var service = new SubscriptionService(dbContext, _loggerMock.Object);
 
         var userId = 300;
+        var role = new Role { Id = 1, Code = "student", Name = "Sinh viên", Type = "user", IsActive = true };
+        dbContext.Roles.Add(role);
+        dbContext.Users.Add(new User { Id = userId, RoleId = role.Id, Role = role, FullName = "Sinh viên Test", Email = "sv@test.com", PasswordHash = "x", AccountStatus = "active", KycStatus = "verified" });
         dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 300000m });
 
         dbContext.Subscriptions.Add(new Subscription
@@ -177,6 +238,9 @@ public class SubscriptionTests
         var service = new SubscriptionService(dbContext, _loggerMock.Object);
 
         var userId = 400;
+        var role = new Role { Id = 1, Code = "student", Name = "Sinh viên", Type = "user", IsActive = true };
+        dbContext.Roles.Add(role);
+        dbContext.Users.Add(new User { Id = userId, RoleId = role.Id, Role = role, FullName = "Sinh viên Test", Email = "sv@test.com", PasswordHash = "x", AccountStatus = "active", KycStatus = "verified" });
         dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 500000m });
 
         dbContext.Subscriptions.Add(new Subscription

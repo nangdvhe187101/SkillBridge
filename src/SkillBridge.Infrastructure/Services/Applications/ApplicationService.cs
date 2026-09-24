@@ -429,7 +429,19 @@ public class ApplicationService : IApplicationService
                     throw new BusinessException("Công việc này đã bị hủy trước đó.");
                 }
 
-                var isJobInProgress = new[] { "in_progress", "submitted", "revision_requested" }.Contains(job.Status);
+                // BẢO VỆ TÍNH TOÀN VẸN BÀN GIAO: Chặn sinh viên tự ý hủy việc khi đã nộp sản phẩm bàn giao đang chờ duyệt
+                if (isHiredForThisJob)
+                {
+                    var hasSubmittedDeliverables = job.Status == "submitted" ||
+                        await _dbContext.JobDeliverables.AnyAsync(d => d.JobId == jobId && d.StudentId == studentId && d.Status == "submitted");
+
+                    if (hasSubmittedDeliverables)
+                    {
+                        throw new BusinessException("Bạn đã nộp sản phẩm bàn giao và đang chờ nhà tuyển dụng nghiệm thu. Không thể rút đơn hoặc hủy việc lúc này (nếu có tranh chấp, vui lòng tạo hồ sơ khiếu nại).");
+                    }
+                }
+
+                var isJobInProgress = new[] { "in_progress", "revision_requested" }.Contains(job.Status);
                 var isHiredOrInProgress = isHiredForThisJob && isJobInProgress;
                 var filesToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 int? notifyEmployerId = null;

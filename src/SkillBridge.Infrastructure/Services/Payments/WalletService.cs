@@ -98,6 +98,12 @@ public class WalletService : IWalletService
             .OrderByDescending(s => s.UpdatedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
+        var userRoleCode = await _dbContext.Users
+            .Where(u => u.Id == userId)
+            .Select(u => u.Role.Code)
+            .FirstOrDefaultAsync(cancellationToken);
+        userRoleCode = userRoleCode?.ToLowerInvariant();
+
         string? planCode = null;
         string? planName = activeSub?.PlanName;
         DateTime? expiresAt = activeSub?.RenewalDate.HasValue == true
@@ -109,41 +115,50 @@ public class WalletService : IWalletService
         if (activeSub != null)
         {
             var pName = activeSub.PlanName;
-            if (pName.Contains(PaymentConstants.MasterPlanKeyword, StringComparison.OrdinalIgnoreCase))
+            if (userRoleCode == "employer")
             {
-                planCode = PaymentConstants.PlanStuMaster;
-                effectiveCommissionRate = PaymentConstants.MasterCommissionRate; // 3%
-                badge = "master";
+                if (pName.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    planCode = PaymentConstants.PlanEmpVip;
+                    effectiveCommissionRate = PaymentConstants.ProOrVipCommissionRate; // 5%
+                    badge = "vip";
+                }
+                else if (pName.Contains(PaymentConstants.GrowthPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    planCode = PaymentConstants.PlanEmpGrowth;
+                    badge = "growth";
+                }
+                else if (pName.Contains(PaymentConstants.StarterPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    planCode = PaymentConstants.PlanEmpStarter;
+                    badge = "verified";
+                }
             }
-            else if (pName.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase))
+            else
             {
-                planCode = PaymentConstants.PlanEmpVip;
-                effectiveCommissionRate = PaymentConstants.ProOrVipCommissionRate; // 5%
-                badge = "vip";
-            }
-            else if (pName.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase))
-            {
-                planCode = PaymentConstants.PlanStuPro;
-                effectiveCommissionRate = PaymentConstants.ProOrVipCommissionRate; // 5%
-                badge = "pro";
-            }
-            else if (pName.Contains(PaymentConstants.GrowthPlanKeyword, StringComparison.OrdinalIgnoreCase))
-            {
-                planCode = PaymentConstants.PlanEmpGrowth;
-                badge = "growth";
-            }
-            else if (pName.Contains(PaymentConstants.StarterPlanKeyword, StringComparison.OrdinalIgnoreCase))
-            {
-                if (pName.Contains("Student", StringComparison.OrdinalIgnoreCase))
+                // Mặc định hoặc sinh viên
+                if (pName.Contains(PaymentConstants.MasterPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    planCode = PaymentConstants.PlanStuMaster;
+                    effectiveCommissionRate = PaymentConstants.MasterCommissionRate; // 3%
+                    badge = "master";
+                }
+                else if (pName.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                {
+                    planCode = PaymentConstants.PlanStuPro;
+                    effectiveCommissionRate = PaymentConstants.ProOrVipCommissionRate; // 5%
+                    badge = "pro";
+                }
+                else if (pName.Contains(PaymentConstants.StarterPlanKeyword, StringComparison.OrdinalIgnoreCase))
                 {
                     planCode = PaymentConstants.PlanStuStarter;
                     effectiveCommissionRate = PaymentConstants.StarterCommissionRate; // 8%
                     badge = "starter";
                 }
-                else
+                else if (pName.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase))
                 {
-                    planCode = PaymentConstants.PlanEmpStarter;
-                    badge = "verified";
+                    planCode = PaymentConstants.PlanEmpVip;
+                    badge = "vip";
                 }
             }
         }
@@ -155,8 +170,8 @@ public class WalletService : IWalletService
             EscrowLocked = escrowLocked,
             Transactions = txs,
             Receipts = receipts,
-            HasVipSubscription = activeSub?.PlanName.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase) == true,
-            HasProSubscription = activeSub?.PlanName.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase) == true,
+            HasVipSubscription = userRoleCode == "employer" && activeSub?.PlanName.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase) == true,
+            HasProSubscription = userRoleCode != "employer" && activeSub?.PlanName.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase) == true,
             ActivePlanCode = planCode,
             ActivePlanName = planName,
             SubscriptionExpiresAt = expiresAt,

@@ -68,6 +68,41 @@ public class SubscriptionService : ISubscriptionService
             throw new BusinessException($"Gói đăng ký '{request.PlanType}' không hợp lệ.");
         }
 
+        // Kiểm tra tính tương thích giữa vai trò tài khoản và gói dịch vụ
+        var user = await _dbContext.Users
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
+
+        if (user == null)
+        {
+            throw new BusinessException("Không tìm thấy thông tin tài khoản người dùng.");
+        }
+
+        var roleCode = user.Role?.Code?.ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(roleCode) && user.RoleId > 0)
+        {
+            var role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Id == user.RoleId, cancellationToken);
+            roleCode = role?.Code?.ToLowerInvariant();
+        }
+
+        bool isEmployerPlan = planName == PaymentConstants.PlanNameEmpVip ||
+                              planName == PaymentConstants.PlanNameEmpGrowth ||
+                              planName == PaymentConstants.PlanNameEmpStarter;
+
+        bool isStudentPlan = planName == PaymentConstants.PlanNameStuMaster ||
+                             planName == PaymentConstants.PlanNameStuPro ||
+                             planName == PaymentConstants.PlanNameStuStarter;
+
+        if (isEmployerPlan && roleCode != "employer" && roleCode != "admin" && roleCode != "super_admin")
+        {
+            throw new BusinessException($"Gói '{planName}' chỉ dành riêng cho Nhà tuyển dụng. Tài khoản của bạn không thể đăng ký gói này.");
+        }
+
+        if (isStudentPlan && roleCode != "student" && roleCode != "admin" && roleCode != "super_admin")
+        {
+            throw new BusinessException($"Gói '{planName}' chỉ dành riêng cho Sinh viên / Freelancer. Tài khoản của bạn không thể đăng ký gói này.");
+        }
+
         if (_dbContext.Database.IsRelational())
         {
             var executionStrategy = _dbContext.Database.CreateExecutionStrategy();
