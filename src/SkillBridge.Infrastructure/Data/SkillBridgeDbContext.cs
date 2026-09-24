@@ -110,6 +110,7 @@ public partial class SkillBridgeDbContext : DbContext
     public virtual DbSet<WithdrawalRequest> WithdrawalRequests { get; set; }
     public virtual DbSet<PaymentOrder> PaymentOrders { get; set; }
     public virtual DbSet<WebhookLog> WebhookLogs { get; set; }
+    public virtual DbSet<SubscriptionPlanConfig> SubscriptionPlanConfigs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

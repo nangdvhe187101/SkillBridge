@@ -181,4 +181,213 @@ public static class DbInitializer
             logger?.LogWarning(ex, "DbInitializer: Lỗi cập nhật schema bảng conversations.");
         }
     }
+
+    public static async Task EnsureSubscriptionPlansSchemaAndSeedAsync(SkillBridgeDbContext context, ILogger? logger = null)
+    {
+        try
+        {
+            // 1. Tạo bảng nếu chưa tồn tại
+            await context.Database.ExecuteSqlRawAsync(@"
+                CREATE TABLE IF NOT EXISTS `subscription_plan_configs` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `code` VARCHAR(50) NOT NULL UNIQUE,
+                    `target_role` VARCHAR(20) NOT NULL,
+                    `name` VARCHAR(100) NOT NULL,
+                    `tagline` VARCHAR(255) NULL,
+                    `badge_text` VARCHAR(50) NULL,
+                    `price` DECIMAL(12, 2) NOT NULL DEFAULT 0,
+                    `price_sub` VARCHAR(100) NULL,
+                    `commission_rate` DECIMAL(5, 4) NOT NULL,
+                    `tier_rank` INT NOT NULL DEFAULT 0,
+                    `max_active_jobs` INT NULL,
+                    `max_weekly_applications` INT NULL,
+                    `max_cv_files` INT NOT NULL DEFAULT 5,
+                    `default_revision_limit` INT NOT NULL DEFAULT 2,
+                    `free_featured_pins` INT NOT NULL DEFAULT 0,
+                    `free_direct_invites` INT NOT NULL DEFAULT 0,
+                    `features_json` TEXT NOT NULL,
+                    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                    `is_popular` TINYINT(1) NOT NULL DEFAULT 0,
+                    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+            ");
+
+            // 2. Kiểm tra nếu chưa có dữ liệu thì nạp sẵn 8 gói chuẩn
+            var count = await context.SubscriptionPlanConfigs.CountAsync();
+            if (count == 0)
+            {
+                var seedPlans = new List<SubscriptionPlanConfig>
+                {
+                    // === SINH VIÊN ===
+                    new SubscriptionPlanConfig
+                    {
+                        Code = "FREE_STUDENT",
+                        TargetRole = "student",
+                        Name = "Sinh Viên Cơ Bản",
+                        Tagline = "Khởi đầu không rủi ro",
+                        BadgeText = "Miễn phí",
+                        Price = 0,
+                        PriceSub = "Dành cho người mới",
+                        CommissionRate = 0.1000m,
+                        TierRank = 0,
+                        MaxWeeklyApplications = 5,
+                        MaxCvFiles = 1,
+                        DefaultRevisionLimit = 2,
+                        FreeFeaturedPins = 0,
+                        FreeDirectInvites = 0,
+                        FeaturesJson = "[\"Phí sàn tiêu chuẩn: 10%\", \"5 đơn ứng tuyển / tuần\", \"Hồ sơ 1 bản CV cơ bản\", \"Bảo vệ quỹ tương hỗ an toàn\", \"Rút tiền tiêu chuẩn 24 – 48h\"]",
+                        IsActive = true,
+                        IsPopular = false
+                    },
+                    new SubscriptionPlanConfig
+                    {
+                        Code = "STU_STARTER",
+                        TargetRole = "student",
+                        Name = "Sinh Viên Tích Cực",
+                        Tagline = "Gấp 3 cơ hội nhận việc",
+                        BadgeText = "Khởi đầu",
+                        Price = 29000,
+                        PriceSub = "Chỉ 1.000đ / ngày",
+                        CommissionRate = 0.0800m,
+                        TierRank = 1,
+                        MaxWeeklyApplications = 15,
+                        MaxCvFiles = 3,
+                        DefaultRevisionLimit = 2,
+                        FreeFeaturedPins = 0,
+                        FreeDirectInvites = 0,
+                        FeaturesJson = "[\"Phí sàn giảm còn 8% (tiết kiệm ngay)\", \"15 đơn nộp hồ sơ / tuần\", \"Quản lý 3 CV chuyên ngành\", \"Huy hiệu Tích Cực\", \"Rút tiền ưu tiên trong 12h\"]",
+                        IsActive = true,
+                        IsPopular = false
+                    },
+                    new SubscriptionPlanConfig
+                    {
+                        Code = "STU_PRO",
+                        TargetRole = "student",
+                        Name = "Freelance Pro",
+                        Tagline = "Lựa chọn bứt phá thu nhập",
+                        BadgeText = "Phổ biến",
+                        Price = 49000,
+                        PriceSub = "Tiết kiệm 50% phí sàn",
+                        CommissionRate = 0.0500m,
+                        TierRank = 2,
+                        MaxWeeklyApplications = null, // Vô hạn
+                        MaxCvFiles = 5,
+                        DefaultRevisionLimit = 2,
+                        FreeFeaturedPins = 0,
+                        FreeDirectInvites = 0,
+                        FeaturesJson = "[\"Phí sàn siêu ưu đãi chỉ 5%\", \"Không giới hạn lượt nộp hồ sơ\", \"Ưu tiên Top 50% danh sách ứng viên\", \"Huy hiệu PRO\", \"Rút tiền siêu tốc trong 1 – 2h\"]",
+                        IsActive = true,
+                        IsPopular = true
+                    },
+                    new SubscriptionPlanConfig
+                    {
+                        Code = "STU_MASTER",
+                        TargetRole = "student",
+                        Name = "Master Talent",
+                        Tagline = "Thu nhập tối đa · Đặc quyền VIP",
+                        BadgeText = "VIP",
+                        Price = 99000,
+                        PriceSub = "Thu hồi vốn sau 1 dự án",
+                        CommissionRate = 0.0300m,
+                        TierRank = 3,
+                        MaxWeeklyApplications = null, // Vô hạn
+                        MaxCvFiles = 5,
+                        DefaultRevisionLimit = 2,
+                        FreeFeaturedPins = 0,
+                        FreeDirectInvites = 0,
+                        FeaturesJson = "[\"Phí sàn thấp nhất: Duy nhất 3%\", \"Ghim đơn Top 1 có viền sáng hút mắt\", \"Huy hiệu VIP Talent\", \"Đặc quyền ưu tiên phỏng vấn\", \"Rút tiền tức thì 24/7 (5 – 15 phút)\"]",
+                        IsActive = true,
+                        IsPopular = false
+                    },
+
+                    // === NHÀ TUYỂN DỤNG ===
+                    new SubscriptionPlanConfig
+                    {
+                        Code = "FREE_EMPLOYER",
+                        TargetRole = "employer",
+                        Name = "NTD Cơ Bản",
+                        Tagline = "Tuyển dụng an toàn 100%",
+                        BadgeText = "Miễn phí",
+                        Price = 0,
+                        PriceSub = "Cho nhu cầu tuyển việc lẻ",
+                        CommissionRate = 0.1000m,
+                        TierRank = 0,
+                        MaxActiveJobs = 1,
+                        DefaultRevisionLimit = 2,
+                        FreeFeaturedPins = 0,
+                        FreeDirectInvites = 0,
+                        FeaturesJson = "[\"01 tin tuyển dụng chạy đồng thời\", \"Tối đa 2 lần yêu cầu chỉnh sửa\", \"Ký quỹ Escrow an toàn 100%\", \"Nghiệm thu 0đ phí sàn\", \"Hỗ trợ tranh chấp cơ bản\"]",
+                        IsActive = true,
+                        IsPopular = false
+                    },
+                    new SubscriptionPlanConfig
+                    {
+                        Code = "EMP_STARTER",
+                        TargetRole = "employer",
+                        Name = "Tuyển Dụng Nhanh",
+                        Tagline = "Tăng tốc chốt nhân sự",
+                        BadgeText = "Tuyển nhanh",
+                        Price = 49000,
+                        PriceSub = "Dành cho Shop & Cá nhân",
+                        CommissionRate = 0.1000m,
+                        TierRank = 1,
+                        MaxActiveJobs = 3,
+                        DefaultRevisionLimit = 3,
+                        FreeFeaturedPins = 1,
+                        FreeDirectInvites = 0,
+                        FeaturesJson = "[\"Tối đa 3 tin tuyển dụng đồng thời\", \"Tặng 1 lượt Ghim tin Hot (48h)\", \"Huy hiệu Đã xác thực\", \"Tăng lên 3 lần yêu cầu sửa bài\", \"Báo ứng viên mới tức thì qua App\"]",
+                        IsActive = true,
+                        IsPopular = false
+                    },
+                    new SubscriptionPlanConfig
+                    {
+                        Code = "EMP_GROWTH",
+                        TargetRole = "employer",
+                        Name = "Doanh Nghiệp Tiêu Chuẩn",
+                        Tagline = "Chủ động săn sinh viên giỏi",
+                        BadgeText = "Tăng trưởng",
+                        Price = 89000,
+                        PriceSub = "Cho Startup & Agency",
+                        CommissionRate = 0.1000m,
+                        TierRank = 2,
+                        MaxActiveJobs = 7,
+                        DefaultRevisionLimit = 4,
+                        FreeFeaturedPins = 3,
+                        FreeDirectInvites = 10,
+                        FeaturesJson = "[\"Tối đa 7 tin tuyển dụng đồng thời\", \"Tặng 3 lượt Ghim tin nổi bật\", \"Mở khóa Danh bạ Sinh viên\", \"Tặng 10 lượt mời làm việc trực tiếp\", \"Sửa bài 4 lần · Hỗ trợ ưu tiên trong 12h\"]",
+                        IsActive = true,
+                        IsPopular = false
+                    },
+                    new SubscriptionPlanConfig
+                    {
+                        Code = "EMP_VIP",
+                        TargetRole = "employer",
+                        Name = "VIP Business Suite",
+                        Tagline = "Đặc quyền hút nhân tài số 1",
+                        BadgeText = "Khuyên dùng",
+                        Price = 149000,
+                        PriceSub = "Giải pháp tuyển dụng VIP",
+                        CommissionRate = 0.0500m, // SV làm cho VIP chỉ chịu 5%
+                        TierRank = 3,
+                        MaxActiveJobs = null, // Vô hạn
+                        DefaultRevisionLimit = 5,
+                        FreeFeaturedPins = 5,
+                        FreeDirectInvites = 25,
+                        FeaturesJson = "[\"Đăng tin KHÔNG GIỚI HẠN\", \"Tặng 5 Ghim Hot + nhãn Tuyển Gấp\", \"SV làm việc chỉ chịu 5% phí sàn\", \"Tặng 25 lượt mời ứng viên VIP\", \"Huy hiệu VIP\"]",
+                        IsActive = true,
+                        IsPopular = true
+                    }
+                };
+
+                await context.SubscriptionPlanConfigs.AddRangeAsync(seedPlans);
+                await context.SaveChangesAsync();
+                logger?.LogInformation("DbInitializer: Đã khởi tạo thành công 8 gói cấu hình SubscriptionPlanConfig mặc định.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "DbInitializer: Lỗi cập nhật schema bảng subscription_plan_configs.");
+        }
+    }
 }
