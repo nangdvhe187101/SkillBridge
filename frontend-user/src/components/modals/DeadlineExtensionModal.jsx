@@ -27,7 +27,16 @@ function formatDateTime(d) {
 
 export default function DeadlineExtensionModal({ job, onClose, onSuccess }) {
   const { showToast } = useToast();
-  const [days, setDays] = useState(3);
+  const maxAllowedDays = useMemo(() => {
+    if (!job?.deadlineAt) return 14;
+    const start = job?.postedAt ? new Date(job.postedAt) : new Date();
+    const end = new Date(job.deadlineAt);
+    const diffDays = (end.getTime() - start.getTime()) / (24 * 3600 * 1000);
+    const half = Math.floor((diffDays > 0 ? diffDays : 7) * 0.5);
+    return Math.min(14, Math.max(1, half));
+  }, [job]);
+
+  const [days, setDays] = useState(() => Math.min(3, maxAllowedDays));
   const [selectedQuickReason, setSelectedQuickReason] = useState(QUICK_REASONS[0]);
   const [customReason, setCustomReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -36,6 +45,15 @@ export default function DeadlineExtensionModal({ job, onClose, onSuccess }) {
   const proposedDeadline = useMemo(() => {
     return new Date(currentDeadline.getTime() + days * 24 * 60 * 60 * 1000);
   }, [currentDeadline, days]);
+
+  const dayOptions = useMemo(() => {
+    const base = [1, 2, 3, 5, 7, 10, 14].filter(d => d <= maxAllowedDays);
+    if (!base.includes(maxAllowedDays)) {
+      base.push(maxAllowedDays);
+      base.sort((a, b) => a - b);
+    }
+    return base;
+  }, [maxAllowedDays]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -50,8 +68,8 @@ export default function DeadlineExtensionModal({ job, onClose, onSuccess }) {
       setSubmitting(true);
       const res = await requestDeadlineExtension(job.id || job.jobId, {
         additionalDays: days,
-        reason: finalReason,
-        currentDeadline: job?.deadlineAt
+        reasonCategory: selectedQuickReason === 'Lý do khác' ? 'Khác' : selectedQuickReason,
+        reason: finalReason
       });
       showToast('Đã gửi đề xuất xin gia hạn deadline tới Nhà tuyển dụng!', 'check');
       onSuccess?.(res);
@@ -124,10 +142,10 @@ export default function DeadlineExtensionModal({ job, onClose, onSuccess }) {
           {/* Days Selection Chips */}
           <div style={{ marginBottom: '18px' }}>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, color: 'var(--ink)', marginBottom: '8px' }}>
-              Chọn số ngày xin gia hạn thêm:
+              Chọn số ngày xin gia hạn thêm (tối đa {maxAllowedDays} ngày theo quy định):
             </label>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {[1, 2, 3, 5, 7].map((d) => (
+              {dayOptions.map((d) => (
                 <button
                   key={d}
                   type="button"

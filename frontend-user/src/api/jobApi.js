@@ -107,62 +107,70 @@ export async function extendDeadline(jobId, newDeadlineAt, reason = '') {
     });
 }
 
-const EXTENSION_STORAGE_PREFIX = 'sb_deadline_ext_';
-
 /**
  * Sinh viên gửi đề xuất xin gia hạn deadline
  */
-export async function requestDeadlineExtension(jobId, { additionalDays, reason, currentDeadline }) {
-    const baseDate = currentDeadline ? new Date(currentDeadline) : new Date();
-    const newDeadline = new Date(baseDate.getTime() + additionalDays * 24 * 60 * 60 * 1000);
-    const reqData = {
-        jobId: Number(jobId),
-        additionalDays,
-        reason,
-        requestedAt: new Date().toISOString(),
-        currentDeadline: baseDate.toISOString(),
-        proposedDeadline: newDeadline.toISOString(),
-        status: 'pending' // 'pending' | 'accepted' | 'rejected'
-    };
-    try {
-        localStorage.setItem(`${EXTENSION_STORAGE_PREFIX}${jobId}`, JSON.stringify(reqData));
-    } catch {}
-    return reqData;
+export async function requestDeadlineExtension(jobId, { additionalDays, reasonCategory = 'Khác', reason }) {
+    return apiFetch(`/jobs/${jobId}/deadline-extensions`, {
+        method: 'POST',
+        body: JSON.stringify({
+            additionalDays: Number(additionalDays),
+            reasonCategory: reasonCategory || 'Yêu cầu phát sinh',
+            detailReason: reason
+        }),
+    });
 }
 
 /**
  * Lấy thông tin yêu cầu gia hạn đang chờ của job
  */
-export function getDeadlineExtensionRequest(jobId) {
+export async function getDeadlineExtensionRequest(jobId) {
     try {
-        const item = localStorage.getItem(`${EXTENSION_STORAGE_PREFIX}${jobId}`);
-        return item ? JSON.parse(item) : null;
+        return await apiFetch(`/jobs/${jobId}/deadline-extensions/active`);
     } catch {
         return null;
     }
 }
 
 /**
+ * Lấy lịch sử tất cả các lần xin gia hạn của job
+ */
+export async function getDeadlineExtensionHistory(jobId) {
+    try {
+        return await apiFetch(`/jobs/${jobId}/deadline-extensions/history`);
+    } catch {
+        return [];
+    }
+}
+
+/**
  * NTD phê duyệt hoặc từ chối yêu cầu gia hạn
  */
-export async function respondDeadlineExtension(jobId, { accepted, rejectionReason = '' }) {
-    const currentReq = getDeadlineExtensionRequest(jobId);
-    if (!currentReq) return null;
-
-    if (accepted) {
-        // Gọi API backend thật để cập nhật deadline cho Job
-        await extendDeadline(jobId, currentReq.proposedDeadline, currentReq.reason);
-        currentReq.status = 'accepted';
-        currentReq.acceptedAt = new Date().toISOString();
-    } else {
-        currentReq.status = 'rejected';
-        currentReq.rejectionReason = rejectionReason || 'Nhà tuyển dụng không đồng ý gia hạn';
-        currentReq.rejectedAt = new Date().toISOString();
+export async function respondDeadlineExtension(jobId, opts) {
+    let extId = opts?.extensionId;
+    if (!extId) {
+        const active = await getDeadlineExtensionRequest(jobId);
+        extId = active?.id;
+    }
+    if (!extId) {
+        throw new Error('Không tìm thấy yêu cầu gia hạn đang chờ phản hồi.');
     }
 
-    try {
-        localStorage.setItem(`${EXTENSION_STORAGE_PREFIX}${jobId}`, JSON.stringify(currentReq));
-    } catch {}
-    return currentReq;
+    return apiFetch(`/jobs/${jobId}/deadline-extensions/${extId}/respond`, {
+        method: 'POST',
+        body: JSON.stringify({
+            action: opts.accepted ? 'accept' : 'reject',
+            rejectionReason: opts.rejectionReason || ''
+        }),
+    });
+}
+
+/**
+ * Sinh viên thu hồi yêu cầu gia hạn
+ */
+export async function cancelDeadlineExtension(jobId, extensionId) {
+    return apiFetch(`/jobs/${jobId}/deadline-extensions/${extensionId}/cancel`, {
+        method: 'POST',
+    });
 }
 

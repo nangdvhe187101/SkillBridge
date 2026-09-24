@@ -147,6 +147,14 @@ export default function JobDetail() {
 
   const availableCvList = state.cvFiles || [];
 
+  const sortedCvList = useMemo(() => {
+    return [...availableCvList].sort((a, b) => {
+      const matchA = a.category === j?.cat || a.categoryId === j?.categoryId ? 1 : 0;
+      const matchB = b.category === j?.cat || b.categoryId === j?.categoryId ? 1 : 0;
+      return matchB - matchA;
+    });
+  }, [availableCvList, j?.cat, j?.categoryId]);
+
   let applyLabel = 'Ứng tuyển ngay';
   let applyDisabled = false;
 
@@ -188,6 +196,7 @@ export default function JobDetail() {
     const cvList = state.cvFiles || [];
     if (cvList.length === 0) {
       setUploadLabel(`CV_${state.currentUser.fullName ? state.currentUser.fullName.replace(/\s+/g, '') : 'UngTuyen'}_${j.cat || 'ChuyenMon'}`);
+      setUploadCategory(j.categoryId ? String(j.categoryId) : '');
       setUploadCvModalOpen(true);
     } else {
       const defaultCv = cvList.find((c) => c.category === j.cat || c.categoryId === j.categoryId) || cvList[0];
@@ -212,14 +221,21 @@ export default function JobDetail() {
     setIsSubmitting(true);
     try {
       const fileName = uploadFile.name;
-      const catObj = (state.categories || []).find(c => String(c.id) === String(uploadCategory)) ||
-                     (state.categories || []).find(c => c.name === j.cat);
+      let targetCategoryId = null;
+      if (uploadCategory) {
+        targetCategoryId = parseInt(uploadCategory, 10);
+      } else if (j?.categoryId) {
+        targetCategoryId = j.categoryId;
+      } else {
+        const catObj = (state.categories || []).find(c => c.name === j?.cat);
+        targetCategoryId = catObj?.id || (state.categories?.[0]?.id || 1);
+      }
 
       const createdCv = await uploadCvAsync({
         file: uploadFile,
         fileName: fileName,
         label: (uploadLabel && uploadLabel.trim()) || fileName,
-        categoryId: catObj?.id || (state.categories?.[0]?.id || 1),
+        categoryId: targetCategoryId,
         fileSize: uploadFile.size
       });
 
@@ -842,7 +858,7 @@ export default function JobDetail() {
           </p>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 240, overflowY: 'auto', marginBottom: 14 }}>
-            {availableCvList.map((cv) => {
+            {sortedCvList.map((cv) => {
               const isSelected = selectedCvId === cv.id;
               const isMatch = cv.category === j.cat || cv.categoryId === j.categoryId;
 

@@ -92,6 +92,31 @@ public class JobDeadlineReminderJob : BackgroundService
             // 1. Kiểm tra mốc quá hạn (Overdue)
             if (now >= deadline && job.DeadlineOverdueSentAt == null)
             {
+                // @ears .sdd/features/feat-job-deadline-extension/SPEC.md#REQ-EXT-005: Tạm hoãn phạt/báo quá hạn khi có đơn gia hạn đang pending
+                var hasPendingExtension = await db.JobDeadlineExtensions
+                    .AnyAsync(e => e.JobId == job.Id && e.Status == "pending", ct);
+
+                if (hasPendingExtension)
+                {
+                    if (job.Employer != null)
+                    {
+                        try
+                        {
+                            await notificationService.SendAsync(
+                                job.Employer.Id,
+                                "⏱️",
+                                $"Công việc \"{job.Title}\" đã đến hạn nhưng đang có yêu cầu xin gia hạn deadline từ sinh viên chờ bạn phê duyệt. Vui lòng phản hồi sớm.",
+                                $"/employer/jobs/{job.Id}",
+                                ct);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Không thể gửi nhắc nhở duyệt gia hạn cho NTD {EmployerId} Job #{JobId}.", job.Employer.Id, job.Id);
+                        }
+                    }
+                    continue;
+                }
+
                 // Gửi thông báo & email cho sinh viên
                 if (job.HiredApplicant != null)
                 {

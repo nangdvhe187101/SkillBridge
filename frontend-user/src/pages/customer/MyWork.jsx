@@ -6,7 +6,7 @@ import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import { useToast } from '../../context/ToastContext';
 import { getJobDeliverables } from '../../api/deliverableApi';
-import { getJobById, getDeadlineExtensionRequest } from '../../api/jobApi';
+import { getJobById, getDeadlineExtensionRequest, cancelDeadlineExtension } from '../../api/jobApi';
 import { getJobReviews } from '../../api/reviewApi';
 import { downloadJobAttachment, downloadDeliverableFile } from '../../utils/fileDownloader';
 import { DeliverablePreview } from '../../components/modals/DeliverableModals';
@@ -135,6 +135,8 @@ export default function MyWork() {
   const [isCancelling, setIsCancelling] = useState(false);
   const [disputeModalJob, setDisputeModalJob] = useState(null);
   const [disputeDetailModalId, setDisputeDetailModalId] = useState(null);
+  const [extensionRefreshTrigger, setExtensionRefreshTrigger] = useState(0);
+  const [extensionsMap, setExtensionsMap] = useState({});
   const appsPageSize = 6;
 
   // Làm mới danh sách ứng tuyển & khiếu nại khi vào trang
@@ -156,6 +158,48 @@ export default function MyWork() {
       }
     } catch {}
   }, []);
+
+  // Tải trạng thái yêu cầu gia hạn deadline đang chờ cho các công việc của sinh viên
+  useEffect(() => {
+    let isMounted = true;
+    const candidateJobs = (state?.myApplications || [])
+      .map(a => a.jobId || a.job?.id)
+      .filter(Boolean);
+
+    if (candidateJobs.length === 0) return;
+
+    Promise.all(
+      candidateJobs.map(async (jid) => {
+        try {
+          const ext = await getDeadlineExtensionRequest(jid);
+          return { jid, ext };
+        } catch {
+          return { jid, ext: null };
+        }
+      })
+    ).then((results) => {
+      if (isMounted) {
+        const map = {};
+        results.forEach(r => {
+          if (r.ext) map[r.jid] = r.ext;
+        });
+        setExtensionsMap(map);
+      }
+    });
+
+    return () => { isMounted = false; };
+  }, [state?.myApplications, extensionRefreshTrigger]);
+
+  const handleCancelExtension = async (targetJobId, extId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn thu hồi đề xuất gia hạn deadline này không?')) return;
+    try {
+      await cancelDeadlineExtension(targetJobId, extId);
+      showToast?.('Đã thu hồi đề xuất gia hạn thành công.', 'check');
+      setExtensionRefreshTrigger(t => t + 1);
+    } catch (err) {
+      showToast?.(err.message || 'Không thể thu hồi yêu cầu gia hạn.', 'x');
+    }
+  };
 
   // Lọc các ứng tuyển đang trong giai đoạn làm việc thực tế
   const activeApps = useMemo(() => {
@@ -1457,7 +1501,7 @@ export default function MyWork() {
 
                         {/* Extension Request Status Banner */}
                         {(() => {
-                          const ext = getDeadlineExtensionRequest(targetJobId);
+                          const ext = extensionsMap[targetJobId];
                           if (!ext) return null;
                           if (ext.status === 'pending') {
                             return (
@@ -1469,12 +1513,23 @@ export default function MyWork() {
                                 margin: '12px 0 8px',
                                 display: 'flex',
                                 alignItems: 'center',
+                                justifyContent: 'space-between',
                                 gap: 10
                               }}>
-                                <span style={{ fontSize: 20 }}>🕒</span>
-                                <div style={{ fontSize: 12.5, color: '#4338ca' }}>
-                                  <strong>Đề xuất gia hạn (+{ext.additionalDays} ngày):</strong> Đang chờ Nhà tuyển dụng phê duyệt. (Lý do: "{ext.reason}")
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                                  <span style={{ fontSize: 20 }}>🕒</span>
+                                  <div style={{ fontSize: 12.5, color: '#4338ca' }}>
+                                    <strong>Đề xuất gia hạn (+{ext.additionalDays} ngày):</strong> Đang chờ Nhà tuyển dụng phê duyệt. (Lý do: "{ext.detailReason || ext.reason}")
+                                  </div>
                                 </div>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline btn-sm"
+                                  style={{ fontSize: 11.5, padding: '4px 10px', color: '#6366f1', borderColor: '#c7d2fe' }}
+                                  onClick={() => handleCancelExtension(targetJobId, ext.id)}
+                                >
+                                  Thu hồi
+                                </button>
                               </div>
                             );
                           }
