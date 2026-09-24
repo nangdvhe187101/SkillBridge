@@ -12,6 +12,7 @@ import Profile from './pages/customer/Profile';
 import CompanyProfile from './pages/customer/CompanyProfile';
 import StudentProfile from './pages/customer/StudentProfile';
 import Pricing from './pages/customer/Pricing';
+import Talents from './pages/customer/Talents';
 import Dashboard from './pages/employer/Dashboard';
 import JobApplicants from './pages/employer/JobApplicants';
 import Wallet from './pages/customer/Wallet';
@@ -43,6 +44,8 @@ export default function App() {
           <Route path="/jobs/:id" element={<JobDetail />} />
           <Route path="/company/:slug" element={<CompanyProfile />} />
           <Route path="/u/:slug" element={<StudentProfile />} />
+          <Route path="/student/:slug" element={<StudentProfile />} />
+          <Route path="/talents" element={<Talents />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
@@ -129,6 +132,9 @@ export default function App() {
           <Route path="/settings/security" element={
             <ProtectedRoute><AccountSettings forcedTab="password" /></ProtectedRoute>
           } />
+
+          {/* Catch-all 404 fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>
