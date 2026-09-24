@@ -21,3 +21,10 @@ export async function uploadCvFile(formData) {
 export async function deleteCv(id) {
     return apiFetch(`/cv-files/${id}`, { method: 'DELETE' });
 }
+
+export async function updateCv(id, data) {
+    return apiFetch(`/cv-files/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+    });
+}

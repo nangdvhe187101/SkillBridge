@@ -68,6 +68,16 @@ public class CvController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPut("{id:int}")]
+    [Authorize(Policy = "RequireStudentRole")]
+    [EnableRateLimiting("ResourceCreationPolicy")]
+    public async Task<IActionResult> UpdateCv(int id, [FromBody] UpdateCvRequest request)
+    {
+        var studentId = User.GetRequiredUserId();
+        var result = await _cvService.UpdateCvAsync(studentId, id, request);
+        return Ok(result);
+    }
+
     [HttpDelete("{id:int}")]
     [Authorize(Policy = "RequireStudentRole")]
     [EnableRateLimiting("ResourceCreationPolicy")]
