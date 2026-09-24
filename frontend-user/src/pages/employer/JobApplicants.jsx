@@ -4,9 +4,11 @@ import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
 import ModalShell from '../../components/modals/ModalShell';
 import DashboardSidebar from '../../components/DashboardSidebar';
+import UserTierBadge from '../../components/common/UserTierBadge';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import { useConfirm } from '../../context/ConfirmContext';
+import { useToast } from '../../context/ToastContext';
 import { DeliverablePreview } from '../../components/modals/DeliverableModals';
 import { slugify } from '../../data/companies';
 import { getJobApplicants, rejectApplication } from '../../api/applicationApi';
@@ -88,6 +90,7 @@ export default function JobApplicants() {
   const { state, deleteJob, cancelJob, reopenJob, openChatWithPerson, startConversationWithUser, sendChatMessage } = useStore();
   const { openModal } = useModal();
   const confirm = useConfirm();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const [applicantFilter, setApplicantFilter] = useState('all'); // 'all' | 'pending' | 'shortlisted' | 'hired' | 'rejected'
@@ -126,28 +129,52 @@ export default function JobApplicants() {
     }
   };
 
-  const pendingExtensionReq = useMemo(() => {
-    const r = getDeadlineExtensionRequest(jobId);
-    return (r && r.status === 'pending') ? r : null;
+  const [pendingExtensionReq, setPendingExtensionReq] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (jobId) {
+      getDeadlineExtensionRequest(jobId)
+        .then((req) => {
+          if (isMounted) setPendingExtensionReq((req && req.status === 'pending') ? req : null);
+        })
+        .catch(() => {
+          if (isMounted) setPendingExtensionReq(null);
+        });
+    }
+    return () => { isMounted = false; };
   }, [jobId, extTrigger]);
 
   const handleAcceptExtension = async () => {
+    if (!pendingExtensionReq) return;
     try {
-      await respondDeadlineExtension(jobId, { accepted: true });
+      await respondDeadlineExtension(jobId, { extensionId: pendingExtensionReq.id, accepted: true });
+      showToast?.('Đã chấp thuận gia hạn deadline thành công!', 'check');
       setExtTrigger((t) => t + 1);
       await loadData();
     } catch (err) {
       console.error('Lỗi khi chấp thuận gia hạn:', err);
+      showToast?.(err.message || 'Lỗi khi chấp thuận gia hạn deadline.', 'x');
     }
   };
 
   const handleRejectExtension = async () => {
+    if (!pendingExtensionReq) return;
+    const reason = prompt('Nhập lý do từ chối gia hạn:', 'Tiến độ dự án đang rất gấp, không thể dời deadline thêm.');
+    if (reason === null) return;
+
     try {
-      await respondDeadlineExtension(jobId, { accepted: false, rejectionReason: 'Nhà tuyển dụng chưa thể sắp xếp gia hạn vào lúc này.' });
+      await respondDeadlineExtension(jobId, {
+        extensionId: pendingExtensionReq.id,
+        accepted: false,
+        rejectionReason: reason.trim() || 'Nhà tuyển dụng chưa thể sắp xếp gia hạn vào lúc này.'
+      });
+      showToast?.('Đã từ chối đề xuất gia hạn deadline.', 'check');
       setExtTrigger((t) => t + 1);
       await loadData();
     } catch (err) {
       console.error('Lỗi khi từ chối gia hạn:', err);
+      showToast?.(err.message || 'Lỗi khi từ chối gia hạn deadline.', 'x');
     }
   };
 
@@ -261,6 +288,9 @@ export default function JobApplicants() {
       cvLabel: a.cvLabel,
       isHired: a.status === 'hired' || (job?.hiredApplicantId && a.studentId === job.hiredApplicantId) || job?.hiredApplicant === a.studentName || job?.hiredApplicant === a.name,
       rejected: a.status === 'rejected',
+      studentPlanCode: a.studentPlanCode,
+      studentPlanTier: a.studentPlanTier ?? 0,
+      isTopPinned: Boolean(a.isTopPinned || a.studentPlanTier === 3),
     }));
   }, [apiApplicants, job]);
 
@@ -649,7 +679,7 @@ export default function JobApplicants() {
                       Sinh viên đề xuất xin gia hạn thời hạn hoàn thành (+{pendingExtensionReq.additionalDays} ngày)
                     </div>
                     <div style={{ fontSize: 13, color: 'var(--ink)', marginTop: 3 }}>
-                      Hạn đề xuất mới: <strong>{new Date(pendingExtensionReq.proposedDeadline).toLocaleString('vi-VN')}</strong> · Lý do: "<em>{pendingExtensionReq.reason}</em>"
+                      Hạn đề xuất mới: <strong>{new Date(pendingExtensionReq.proposedDeadline).toLocaleString('vi-VN')}</strong> · Lý do ({pendingExtensionReq.reasonCategory || 'Đề xuất'}): "<em>{pendingExtensionReq.detailReason || pendingExtensionReq.reason}</em>"
                     </div>
                   </div>
                 </div>
@@ -1114,6 +1144,8 @@ export default function JobApplicants() {
                 const isHiredOne = a.isHired;
                 const isLocked = hasHired && !isHiredOne;
                 const isShortlisted = shortlistedIds.includes(a.id || a.name);
+                const isMasterPinned = Boolean(a.isTopPinned || a.studentPlanTier === 3);
+                const isProTalent = a.studentPlanTier === 2;
 
                 return (
                   <div
@@ -1124,9 +1156,29 @@ export default function JobApplicants() {
                       alignItems: 'stretch',
                       gap: 14,
                       opacity: isLocked ? 0.5 : 1,
-                      borderBottom: '1px solid var(--border)',
+                      border: isMasterPinned
+                        ? '2px solid rgba(236, 72, 153, 0.65)'
+                        : isProTalent
+                          ? '1.5px solid rgba(99, 102, 241, 0.45)'
+                          : 'none',
+                      borderBottom: (isMasterPinned || isProTalent) ? undefined : '1px solid var(--border)',
+                      borderRadius: (isMasterPinned || isProTalent) ? 14 : 0,
+                      margin: (isMasterPinned || isProTalent) ? '10px 0' : 0,
+                      boxShadow: isMasterPinned
+                        ? '0 6px 20px rgba(236, 72, 153, 0.15)'
+                        : isProTalent
+                          ? '0 4px 14px rgba(99, 102, 241, 0.1)'
+                          : 'none',
                       padding: '18px 20px',
-                      background: isHiredOne ? 'rgba(74, 222, 128, 0.04)' : isShortlisted ? 'rgba(234, 179, 8, 0.03)' : 'transparent',
+                      background: isHiredOne
+                        ? 'rgba(74, 222, 128, 0.04)'
+                        : isMasterPinned
+                          ? 'linear-gradient(180deg, rgba(236, 72, 153, 0.04) 0%, var(--surface) 100%)'
+                          : isProTalent
+                            ? 'linear-gradient(180deg, rgba(99, 102, 241, 0.03) 0%, var(--surface) 100%)'
+                            : isShortlisted
+                              ? 'rgba(234, 179, 8, 0.03)'
+                              : 'transparent',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
@@ -1141,7 +1193,47 @@ export default function JobApplicants() {
                             >
                               {a.name}
                             </b>
-                            {tierIconEl(a.tier)}
+                            {a.studentPlanCode ? (
+                              <UserTierBadge planCode={a.studentPlanCode} userRole="student" variant="pill" size="sm" />
+                            ) : (
+                              tierIconEl(a.tier)
+                            )}
+                            {isMasterPinned && (
+                              <span
+                                style={{
+                                  padding: '3px 10px',
+                                  fontSize: 10.5,
+                                  fontWeight: 800,
+                                  borderRadius: 999,
+                                  background: 'linear-gradient(135deg, #ec4899, #8b5cf6, #06b6d4)',
+                                  color: '#fff',
+                                  boxShadow: '0 2px 8px rgba(236, 72, 153, 0.35)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4
+                                }}
+                              >
+                                ★ GHIM TOP 1 VIP
+                              </span>
+                            )}
+                            {isProTalent && !isMasterPinned && (
+                              <span
+                                style={{
+                                  padding: '3px 8px',
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                  borderRadius: 999,
+                                  background: 'rgba(99, 102, 241, 0.12)',
+                                  color: '#4f46e5',
+                                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 3
+                                }}
+                              >
+                                ⚡ PRO TALENT
+                              </span>
+                            )}
                             {isHiredOne && (
                               <span className="chip chip-lime" style={{ padding: '2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                                 <Icon name="check" width={11} height={11} /> Đã thuê

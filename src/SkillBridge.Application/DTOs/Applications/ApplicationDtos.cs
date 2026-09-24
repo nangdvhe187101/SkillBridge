@@ -59,6 +59,9 @@ public class ApplicantItemDto
     public string? CoverLetter { get; set; }
     public string Status { get; set; } = null!;
     public DateTime AppliedAt { get; set; }
+    public string? StudentPlanCode { get; set; }
+    public int StudentPlanTier { get; set; } = 0;
+    public bool IsTopPinned { get; set; } = false;
 }
 
 public class HireApplicantRequest
