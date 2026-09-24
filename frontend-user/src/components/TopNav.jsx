@@ -4,6 +4,7 @@ import Icon from './Icon';
 import Avatar from './Avatar';
 import { useTheme } from '../context/ThemeContext';
 import { useStore, fmtVND } from '../context/StoreContext';
+import UserTierBadge from './common/UserTierBadge';
 
 export default function TopNav() {
   const [notifOpen, setNotifOpen] = useState(false);
@@ -32,6 +33,7 @@ export default function TopNav() {
   const isLoggedIn = !!state.currentUser;
   const isStudent = state.currentUser?.roleCode === 'student';
   const isEmployer = state.currentUser?.roleCode === 'employer';
+  const userPlanCode = state.activePlanCode || (state.vipBusiness ? 'EMP_VIP' : (state.subscriptionPro ? 'STU_PRO' : 'FREE'));
 
   useEffect(() => {
     if (!notifOpen) return;
@@ -123,7 +125,10 @@ export default function TopNav() {
                   style={{ width: 40, height: 40, borderRadius: '50%' }}
                 />
                 <div style={{ flex: 1, overflow: 'hidden' }}>
-                  <div style={{ fontWeight: 800, fontSize: 14, color: 'var(--ink)' }}>{state.currentUser.fullName}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 800, fontSize: 14, color: 'var(--ink)' }}>{state.currentUser.fullName}</span>
+                    <UserTierBadge planCode={userPlanCode} userRole={state.currentUser?.roleCode} variant="icon-only" size="sm" />
+                  </div>
                   <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <Icon name={isStudent ? 'graduation' : (isEmployer ? 'building' : 'shield-check')} width="12" height="12" />
                     <span>{isStudent ? 'Sinh viên Freelancer' : (isEmployer ? 'Nhà tuyển dụng' : 'Quản trị viên')}</span>
@@ -136,6 +141,9 @@ export default function TopNav() {
 
           <NavLink to="/" className={linkClass} end onClick={() => setNavOpen(false)}>Trang chủ</NavLink>
           <NavLink to="/jobs" className={linkClass} onClick={() => setNavOpen(false)}>Tìm việc</NavLink>
+          {!isStudent && (
+            <NavLink to="/talents" className={linkClass} onClick={() => setNavOpen(false)}>Tìm sinh viên</NavLink>
+          )}
           {isStudent && (
             <NavLink to="/mywork" className={linkClass} onClick={() => setNavOpen(false)}>Việc của tôi</NavLink>
           )}
@@ -340,22 +348,31 @@ export default function TopNav() {
                     fontSize={12}
                     style={{ width: 24, height: 24, borderRadius: '50%' }}
                   />
-                  Xin chào, {state.currentUser.fullName} <span className="nav-more-caret">▾</span>
+                  <span>Xin chào, {state.currentUser.fullName}</span>
+                  <UserTierBadge planCode={userPlanCode} userRole={state.currentUser?.roleCode} variant="icon-only" size="sm" />
+                  <span className="nav-more-caret">▾</span>
                 </button>
                 <div
                   className={'nav-more-panel' + (userMenuOpen ? ' open' : '')}
-                  style={{ left: 'auto', right: 0, minWidth: 220 }}
+                  style={{ left: 'auto', right: 0, minWidth: 265 }}
                 >
-                  <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--border)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid var(--border)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 12 }}>
                     <Avatar
                       src={state.currentUser.avatarUrl}
                       name={state.currentUser.fullName}
-                      fontSize={14}
-                      style={{ width: 34, height: 34, borderRadius: '50%' }}
+                      fontSize={15}
+                      style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0 }}
                     />
-                    <div style={{ overflow: 'hidden' }}>
-                      <div style={{ fontWeight: 700, fontSize: 13.5, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{state.currentUser.fullName}</div>
-                      <div style={{ fontSize: 12, color: 'var(--muted, #888)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{state.currentUser.email}</div>
+                    <div style={{ overflow: 'hidden', flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--ink)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        {state.currentUser.fullName}
+                      </div>
+                      <div style={{ margin: '3px 0 4px' }}>
+                        <UserTierBadge planCode={userPlanCode} userRole={state.currentUser?.roleCode} variant="pill" size="sm" expiresAt={state.subscriptionExpiresAt} onManageClick={() => goFromUserMenu('/pricing')} showPopover={false} />
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                        {state.currentUser.email}
+                      </div>
                     </div>
                   </div>
                   <NavLink to="/profile" className="nav-more-link" onClick={() => goFromUserMenu('/profile')} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
