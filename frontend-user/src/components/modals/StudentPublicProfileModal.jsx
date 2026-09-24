@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ModalShell from './ModalShell';
 import Icon from '../Icon';
+import UserTierBadge from '../common/UserTierBadge';
 import { getPublicStudentProfile } from '../../api/userApi';
 
 export default function StudentPublicProfileModal({ isOpen, onClose, studentId, onReport }) {
@@ -103,6 +104,12 @@ export default function StudentPublicProfileModal({ isOpen, onClose, studentId, 
                                         <h3 style={{ margin: 0, fontSize: '1.35rem', fontWeight: 700, color: 'var(--text-color, #1e293b)' }}>
                                             {profile.fullName}
                                         </h3>
+                                        <UserTierBadge
+                                            planCode={profile.activePlanCode || (profile.reliabilityScore >= 95 ? 'STU_MASTER' : (profile.reliabilityScore >= 85 ? 'STU_PRO' : 'STU_STARTER'))}
+                                            userRole="student"
+                                            variant="pill"
+                                            size="sm"
+                                        />
                                         {profile.isKycVerified && (
                                             <span style={{
                                                 display: 'inline-flex',

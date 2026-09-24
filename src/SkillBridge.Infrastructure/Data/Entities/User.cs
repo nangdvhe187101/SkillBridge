@@ -228,4 +228,7 @@ public partial class User
 
     [InverseProperty("User")]
     public virtual ICollection<BankVerificationRequest> BankVerificationRequests { get; set; } = new List<BankVerificationRequest>();
+
+    [InverseProperty("Student")]
+    public virtual ICollection<JobDeadlineExtension> StudentDeadlineExtensions { get; set; } = new List<JobDeadlineExtension>();
 }

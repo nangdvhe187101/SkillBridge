@@ -2,12 +2,15 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
+import { useConfirm } from '../../context/ConfirmContext';
 import { uploadAvatar } from '../../api/userApi';
-import { getMyCvFiles, uploadCvFile, deleteCv } from '../../api/cvApi';
+import { getMyCvFiles, uploadCvFile, deleteCv, updateCv } from '../../api/cvApi';
+import { getCategories } from '../../api/jobApi';
 import { getKycStatus, submitKyc } from '../../api/kycApi';
 import { downloadCandidateCv } from '../../utils/fileDownloader';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
+import ModalShell from '../../components/modals/ModalShell';
 import '../../styles/account-settings.css';
 
 const PHONE_REGEX = /^0\d{9}$/;
@@ -377,11 +380,32 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
 // 3. CV & Storage Manager Tab (Student)
 function CvManagerTab() {
     const { addToast } = useToast();
+    const confirm = useConfirm();
     const [cvList, setCvList] = useState([]);
+    const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
-    const [label, setLabel] = useState('');
+    const [updating, setUpdating] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
     const fileInputRef = useRef(null);
+
+    // State cho Modal Upload
+    const [uploadModalOpen, setUploadModalOpen] = useState(false);
+    const [pendingFile, setPendingFile] = useState(null);
+    const [uploadForm, setUploadForm] = useState({
+        label: '',
+        categoryId: '',
+        isSearchable: true,
+    });
+
+    // State cho Modal Edit
+    const [editModalOpen, setEditModalOpen] = useState(false);
+    const [editingCv, setEditingCv] = useState(null);
+    const [editForm, setEditForm] = useState({
+        label: '',
+        categoryId: '',
+        isSearchable: true,
+    });
 
     const loadCvs = async () => {
         try {
@@ -395,50 +419,181 @@ function CvManagerTab() {
         }
     };
 
+    const loadCategories = async () => {
+        try {
+            const data = await getCategories();
+            setCategories(Array.isArray(data) ? data : []);
+        } catch (err) {
+            console.error('Lỗi lấy danh mục ngành nghề:', err);
+        }
+    };
+
     useEffect(() => {
         loadCvs();
+        loadCategories();
     }, []);
 
-    const handleUpload = async (e) => {
-        const file = e.target.files?.[0];
+    const processSelectedFile = (file) => {
         if (!file) return;
+
+        if (cvList.length >= 5) {
+            addToast('Bạn đã đạt giới hạn tối đa 5 bản CV trong hồ sơ. Vui lòng xóa bớt CV không còn sử dụng để tải lên bản mới.', 'error');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
 
         const allowedExts = ['pdf', 'doc', 'docx'];
         const ext = file.name.split('.').pop()?.toLowerCase();
         if (!allowedExts.includes(ext)) {
             addToast('Định dạng CV không hợp lệ. Vui lòng chọn file .pdf, .doc hoặc .docx.', 'error');
+            if (fileInputRef.current) fileInputRef.current.value = '';
             return;
         }
 
         if (file.size > 10 * 1024 * 1024) {
-            addToast('Dung lượng CV vượt quá giới hạn (tối đa 10MB).', 'error');
+            addToast('Dung lượng CV vượt quá giới hạn (tối đa 10 MB).', 'error');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
+        // Tự gợi ý label theo tên file
+        const cleanBaseName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+        setPendingFile(file);
+        setUploadForm({
+            label: cleanBaseName || 'CV Ứng tuyển',
+            categoryId: categories.length > 0 ? categories[0].id : '',
+            isSearchable: true,
+        });
+        setUploadModalOpen(true);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+
+    // 1. Khi chọn file từ máy bằng input
+    const handleFileSelected = (e) => {
+        const file = e.target.files?.[0];
+        processSelectedFile(file);
+    };
+
+    // Drag and Drop handlers
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (cvList.length < 5) {
+            setIsDragging(true);
+        }
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        if (cvList.length >= 5) {
+            addToast('Bạn đã đạt giới hạn tối đa 5 bản CV trong hồ sơ. Vui lòng xóa bớt CV không còn sử dụng để tải lên bản mới.', 'error');
+            return;
+        }
+        const file = e.dataTransfer?.files?.[0];
+        if (file) {
+            processSelectedFile(file);
+        }
+    };
+
+    const handleTriggerAddCv = () => {
+        if (cvList.length >= 5) {
+            addToast('Bạn đã đạt giới hạn tối đa 5 bản CV trong hồ sơ. Vui lòng xóa bớt CV không còn sử dụng để tải lên bản mới.', 'error');
+            return;
+        }
+        fileInputRef.current?.click();
+    };
+
+    // 2. Submit Upload sau khi đã chọn ngành và nhãn
+    const handleUploadSubmit = async (e) => {
+        e.preventDefault();
+        if (!pendingFile) {
+            addToast('Chưa chọn file CV.', 'error');
+            return;
+        }
+
+        if (!uploadForm.categoryId) {
+            addToast('Vui lòng chọn ngành nghề phù hợp cho CV.', 'error');
             return;
         }
 
         const formData = new FormData();
-        formData.append('file', file);
-        if (label.trim()) {
-            formData.append('label', label.trim());
+        formData.append('file', pendingFile);
+        formData.append('categoryId', uploadForm.categoryId);
+        if (uploadForm.label.trim()) {
+            formData.append('label', uploadForm.label.trim());
         }
 
         setUploading(true);
         try {
             await uploadCvFile(formData);
-            addToast('Tải lên CV thành công!', 'success');
-            setLabel('');
+            addToast('Tải lên và phân loại CV thành công!', 'success');
+            setUploadModalOpen(false);
+            setPendingFile(null);
             await loadCvs();
         } catch (err) {
             addToast(err?.message || 'Không thể tải lên CV.', 'error');
         } finally {
             setUploading(false);
-            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    // 3. Mở Modal Chỉnh sửa CV
+    const handleOpenEdit = (cv) => {
+        setEditingCv(cv);
+        setEditForm({
+            label: cv.label || cv.fileName,
+            categoryId: cv.categoryId || (categories.length > 0 ? categories[0].id : ''),
+            isSearchable: cv.isSearchable ?? true,
+        });
+        setEditModalOpen(true);
+    };
+
+    // 4. Submit Cập nhật CV
+    const handleEditSubmit = async (e) => {
+        e.preventDefault();
+        if (!editingCv) return;
+
+        if (!editForm.categoryId) {
+            addToast('Vui lòng chọn ngành nghề phù hợp cho CV.', 'error');
+            return;
+        }
+
+        setUpdating(true);
+        try {
+            const updated = await updateCv(editingCv.id, {
+                label: editForm.label.trim(),
+                categoryId: parseInt(editForm.categoryId, 10),
+                isSearchable: editForm.isSearchable,
+            });
+            addToast('Cập nhật thông tin CV thành công!', 'success');
+            setEditModalOpen(false);
+            setEditingCv(null);
+            setCvList((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+        } catch (err) {
+            addToast(err?.message || 'Không thể cập nhật CV.', 'error');
+        } finally {
+            setUpdating(false);
         }
     };
 
     const handleDelete = async (id, fileName) => {
-        if (!window.confirm(`Bạn có chắc chắn muốn xóa "${fileName}"?`)) {
-            return;
-        }
+        const confirmed = await confirm(
+            `Bạn có chắc chắn muốn xóa bản CV "${fileName}"? Sau khi xóa, bạn sẽ không thể hoàn tác thao tác này.`,
+            {
+                danger: true,
+                confirmLabel: 'Xóa CV',
+                cancelLabel: 'Hủy'
+            }
+        );
+        if (!confirmed) return;
 
         try {
             await deleteCv(id);
@@ -457,78 +612,202 @@ function CvManagerTab() {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     };
 
+    const quotaPercentage = Math.min(100, (cvList.length / 5) * 100);
+    const quotaColor = cvList.length >= 5 ? 'var(--coral, #f43f5e)' : cvList.length === 4 ? '#f59e0b' : 'var(--primary, #6c4cff)';
+
     return (
         <>
             <h1 className="acct-content-title">Quản lý CV & Hồ sơ</h1>
 
             <div className="acct-section" style={{ paddingTop: 0 }}>
                 <p className="acct-section-desc">
-                    Tải lên các bản CV chuyên ngành của bạn để ứng tuyển nhanh chóng vào các công việc. Mọi file được bảo mật và lưu trữ an toàn.
+                    Tải lên các bản CV chuyên ngành của bạn để ứng tuyển nhanh chóng vào các công việc. Phân loại chính xác ngành nghề giúp nhà tuyển dụng dễ dàng tìm thấy bạn.
                 </p>
+
+                {/* Quota Meter Bar */}
+                <div style={{ background: 'var(--surface-2, rgba(0,0,0,0.03))', padding: '14px 18px', borderRadius: 12, border: '1px solid var(--border)', marginBottom: 20 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 13 }}>
+                        <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                            <Icon name="folder" width="16" height="16" style={{ color: quotaColor }} />
+                            Hạn mức lưu trữ CV cá nhân
+                        </span>
+                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: quotaColor, fontSize: 13.5 }}>
+                            {cvList.length} / 5 bản CV
+                        </span>
+                    </div>
+                    <div style={{ height: 6, width: '100%', background: 'var(--border)', borderRadius: 999, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${quotaPercentage}%`, background: quotaColor, transition: 'width 0.3s ease, background 0.3s ease' }} />
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted, #666)', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                        <span>Mỗi sinh viên được quản lý tối đa 5 bản CV chuyên môn.</span>
+                        {cvList.length >= 5 && <span style={{ color: 'var(--coral)', fontWeight: 600 }}>Đã dùng hết 100% dung lượng</span>}
+                    </div>
+                </div>
 
                 <input
                     type="file"
                     ref={fileInputRef}
                     style={{ display: 'none' }}
                     accept=".pdf,.doc,.docx"
-                    onChange={handleUpload}
+                    onChange={handleFileSelected}
+                    aria-label="Chọn file CV từ máy tính"
                 />
 
                 <div
                     className="cv-dropzone"
-                    onClick={() => !uploading && fileInputRef.current?.click()}
+                    role="button"
+                    tabIndex={cvList.length >= 5 ? -1 : 0}
+                    onClick={() => !uploading && handleTriggerAddCv()}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            if (!uploading) handleTriggerAddCv();
+                        }
+                    }}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    style={{
+                        cursor: cvList.length >= 5 ? 'not-allowed' : 'pointer',
+                        opacity: cvList.length >= 5 ? 0.75 : 1,
+                        border: isDragging ? '2px dashed var(--primary, #6c4cff)' : undefined,
+                        background: isDragging ? 'rgba(108, 76, 255, 0.05)' : undefined,
+                        transition: 'border-color 0.2s ease, background 0.2s ease'
+                    }}
+                    aria-label="Kéo thả hoặc nhấn để chọn file CV tải lên"
                 >
-                    <div style={{ marginBottom: 10, color: 'var(--primary)' }}>
-                        <Icon name="file-text" width="40" height="40" />
+                    <div style={{ marginBottom: 10, color: isDragging ? 'var(--primary)' : 'var(--primary)' }}>
+                        <Icon name="upload-cloud" width="42" height="42" />
                     </div>
                     <h3 style={{ fontSize: 16, margin: '0 0 6px' }}>
-                        {uploading ? 'Đang tải file lên...' : 'Nhấn để chọn file CV tải lên'}
+                        {uploading
+                            ? 'Đang xử lý tải lên…'
+                            : isDragging
+                            ? 'Thả file CV vào đây để tiếp tục'
+                            : cvList.length >= 5
+                            ? 'Đã đạt hạn mức tối đa 5 bản CV'
+                            : 'Kéo & thả file CV vào đây hoặc nhấn để chọn file'}
                     </h3>
                     <p style={{ fontSize: 12.5, color: 'var(--muted, #666)', margin: 0 }}>
-                        Định dạng hỗ trợ: PDF, DOC, DOCX (Tối đa 10MB)
+                        {cvList.length >= 5
+                            ? 'Vui lòng xóa bớt CV không còn sử dụng để thêm bản mới.'
+                            : 'Định dạng hỗ trợ: PDF, DOC, DOCX (Tối đa 10 MB). Bạn sẽ được chọn ngành nghề và đặt nhãn sau khi chọn file.'}
                     </p>
                 </div>
             </div>
 
             <div className="acct-section">
-                <h3 className="acct-section-title">Danh sách CV của bạn ({cvList.length})</h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <h3 className="acct-section-title" style={{ margin: 0 }}>
+                            Danh sách CV của bạn ({cvList.length}/5)
+                        </h3>
+                        {cvList.length >= 5 && (
+                            <span className="chip" style={{ fontSize: 11, padding: '2px 8px', color: 'var(--coral)', background: 'rgba(244,63,94,0.1)', fontWeight: 600 }}>
+                                Đã đạt giới hạn 5 CV
+                            </span>
+                        )}
+                    </div>
+                    <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: cvList.length >= 5 ? 0.6 : 1 }}
+                        onClick={handleTriggerAddCv}
+                        aria-label="Thêm CV mới"
+                    >
+                        <Icon name="plus" width="14" height="14" /> Thêm CV mới
+                    </button>
+                </div>
 
                 {loading ? (
-                    <div style={{ padding: 20, textAlign: 'center', color: 'var(--muted)' }}>Đang tải danh sách CV...</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                        {[1, 2].map((i) => (
+                            <div key={i} style={{ padding: '16px 20px', border: '1px solid var(--border)', borderRadius: 12, background: 'var(--surface-2, rgba(0,0,0,0.02))', display: 'flex', alignItems: 'center', gap: 14 }}>
+                                <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--border)', opacity: 0.5 }} />
+                                <div style={{ flex: 1 }}>
+                                    <div style={{ height: 16, width: '40%', background: 'var(--border)', borderRadius: 4, marginBottom: 8, opacity: 0.5 }} />
+                                    <div style={{ height: 12, width: '60%', background: 'var(--border)', borderRadius: 4, opacity: 0.3 }} />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 ) : cvList.length === 0 ? (
-                    <div style={{ padding: 30, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 12, color: 'var(--muted)' }}>
-                        Bạn chưa tải lên CV nào. Hãy nhấn vào ô phía trên để tải CV đầu tiên!
+                    <div style={{ padding: 36, textAlign: 'center', border: '1px dashed var(--border)', borderRadius: 12, color: 'var(--muted)' }}>
+                        <div style={{ marginBottom: 10, color: 'var(--muted)' }}>
+                            <Icon name="file-text" width="36" height="36" />
+                        </div>
+                        <p style={{ margin: 0, fontSize: 13.5 }}>
+                            Bạn chưa tải lên CV nào. Hãy kéo thả file vào ô phía trên hoặc nhấn nút "Thêm CV mới" để tạo CV chuyên ngành đầu tiên!
+                        </p>
                     </div>
                 ) : (
                     <div className="cv-list">
                         {cvList.map((cv) => (
-                            <div className="cv-item-card" key={cv.id}>
-                                <div className="cv-item-left">
-                                    <div className="cv-item-icon" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-                                        <Icon name="file-text" width="20" height="20" />
+                            <div className="cv-item-card" key={cv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', border: '1px solid var(--border)', borderRadius: 12, marginBottom: 12, background: 'var(--surface, #fff)' }}>
+                                <div className="cv-item-left" style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: 1, marginRight: 12 }}>
+                                    <div className="cv-item-icon" style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0 }}>
+                                        <Icon name="file-text" width="22" height="22" />
                                     </div>
-                                    <div className="cv-item-meta">
-                                        <b>{cv.label || cv.fileName}</b>
-                                        <div className="cv-item-sub">
-                                            <span>{cv.fileName}</span>
+                                    <div className="cv-item-meta" style={{ minWidth: 0 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                            <b style={{ fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cv.label || cv.fileName}</b>
+                                            {cv.categoryName ? (
+                                                <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px', fontWeight: 600 }}>
+                                                    {cv.categoryName}
+                                                </span>
+                                            ) : (
+                                                <span className="chip" style={{ fontSize: 11, padding: '2px 8px', color: 'var(--coral)', background: 'rgba(244,63,94,0.1)' }}>
+                                                    Chưa phân ngành
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="cv-item-sub" style={{ fontSize: 12.5, color: 'var(--muted, #666)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>{cv.fileName}</span>
                                             <span>•</span>
                                             <span>{formatBytes(cv.fileSize)}</span>
-                                            {cv.categoryName && (
+                                            {cv.uploadedAt && (
                                                 <>
                                                     <span>•</span>
-                                                    <span className="chip chip-lime" style={{ fontSize: 10, padding: '1px 6px' }}>{cv.categoryName}</span>
+                                                    <span>Ngày tải: {new Date(cv.uploadedAt).toLocaleDateString('vi-VN')}</span>
+                                                </>
+                                            )}
+                                            {cv.isSearchable ? (
+                                                <>
+                                                    <span>•</span>
+                                                    <span style={{ color: 'var(--primary)', fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                                        <Icon name="search" width="12" height="12" /> Cho phép tìm kiếm
+                                                    </span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <span>•</span>
+                                                    <span style={{ color: 'var(--muted)', fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                                        <Icon name="lock" width="12" height="12" /> Chỉ dùng ứng tuyển
+                                                    </span>
                                                 </>
                                             )}
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="cv-item-actions">
+                                <div className="cv-item-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                    <button
+                                        type="button"
+                                        className="btn btn-outline btn-sm"
+                                        style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                                        onClick={() => handleOpenEdit(cv)}
+                                        title="Chỉnh sửa ngành nghề và tên nhãn"
+                                        aria-label={`Chỉnh sửa thông tin CV ${cv.label || cv.fileName}`}
+                                    >
+                                        <Icon name="edit" width="13" height="13" /> Sửa
+                                    </button>
                                     <button
                                         type="button"
                                         className="btn btn-outline btn-sm"
                                         style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}
                                         onClick={() => downloadCandidateCv(cv.id, cv.fileName)}
+                                        title="Xem hoặc tải về máy"
+                                        aria-label={`Xem hoặc tải CV ${cv.label || cv.fileName}`}
                                     >
                                         <Icon name="eye" width="13" height="13" /> Xem / Tải
                                     </button>
@@ -537,6 +816,8 @@ function CvManagerTab() {
                                         className="btn btn-outline btn-sm"
                                         style={{ color: 'var(--coral, #f43f5e)', borderColor: 'var(--coral, #f43f5e)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}
                                         onClick={() => handleDelete(cv.id, cv.fileName)}
+                                        title="Xóa CV khỏi hồ sơ"
+                                        aria-label={`Xóa CV ${cv.label || cv.fileName}`}
                                     >
                                         <Icon name="trash" width="13" height="13" /> Xóa
                                     </button>
@@ -546,6 +827,191 @@ function CvManagerTab() {
                     </div>
                 )}
             </div>
+
+            {/* Modal Upload & Cấu hình Ngành Nghề CV */}
+            {uploadModalOpen && (
+                <ModalShell onClose={() => !uploading && setUploadModalOpen(false)}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0 }}>
+                            <Icon name="file-text" width="22" height="22" />
+                        </div>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: 18 }}>Cấu hình & Tải lên CV mới</h3>
+                            <span style={{ fontSize: 13, color: 'var(--muted, #666)' }}>
+                                Phân loại ngành nghề giúp hồ sơ của bạn tiếp cận đúng nhà tuyển dụng.
+                            </span>
+                        </div>
+                    </div>
+
+                    <form onSubmit={handleUploadSubmit}>
+                        <div style={{ background: 'var(--bg, #f8f9fa)', padding: '10px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
+                            <b>File đã chọn:</b> {pendingFile?.name} ({formatBytes(pendingFile?.size)})
+                        </div>
+
+                        <div style={{ marginBottom: 14 }}>
+                            <label htmlFor="upload-cv-category" style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                                Ngành nghề / Lĩnh vực chuyên môn <span style={{ color: 'var(--coral)' }}>*</span>
+                            </label>
+                            <select
+                                id="upload-cv-category"
+                                value={uploadForm.categoryId}
+                                onChange={(e) => setUploadForm({ ...uploadForm, categoryId: e.target.value })}
+                                required
+                                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13.5 }}
+                            >
+                                <option value="" disabled>-- Vui lòng chọn ngành nghề --</option>
+                                {categories.map((cat) => (
+                                    <option key={cat.id} value={cat.id}>
+                                        {cat.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div style={{ marginBottom: 14 }}>
+                            <label htmlFor="upload-cv-label" style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                                Nhãn CV / Vị trí hướng tới <span style={{ color: 'var(--coral)' }}>*</span>
+                            </label>
+                            <input
+                                id="upload-cv-label"
+                                type="text"
+                                value={uploadForm.label}
+                                onChange={(e) => setUploadForm({ ...uploadForm, label: e.target.value })}
+                                placeholder="VD: CV Lập trình Web Frontend, CV Content Creator…"
+                                required
+                                maxLength={100}
+                                autoComplete="off"
+                                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13.5 }}
+                            />
+                            <span style={{ display: 'block', fontSize: 11.5, color: 'var(--muted, #666)', marginTop: 4 }}>
+                                Tên phân biệt giữa các bản CV của bạn (Ví dụ: CV React, CV Node.js).
+                            </span>
+                        </div>
+
+                        <div style={{ marginBottom: 18 }}>
+                            <label htmlFor="upload-cv-searchable" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13.5 }}>
+                                <input
+                                    id="upload-cv-searchable"
+                                    type="checkbox"
+                                    checked={uploadForm.isSearchable}
+                                    onChange={(e) => setUploadForm({ ...uploadForm, isSearchable: e.target.checked })}
+                                />
+                                <span>Cho phép nhà tuyển dụng tìm thấy CV này khi tìm kiếm ứng viên theo ngành</span>
+                            </label>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                            <button
+                                type="button"
+                                className="btn btn-outline"
+                                onClick={() => setUploadModalOpen(false)}
+                                disabled={uploading}
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                type="submit"
+                                className="btn btn-primary"
+                                disabled={uploading}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                            >
+                                {uploading ? 'Đang tải lên…' : 'Xác nhận tải lên'}
+                            </button>
+                        </div>
+                    </form>
+                </ModalShell>
+            )}
+
+            {/* Modal Chỉnh Sửa CV Hiện Có */}
+            {editModalOpen && editingCv && (
+                <ModalShell onClose={() => !updating && setEditModalOpen(false)}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                        <div style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0 }}>
+                            <Icon name="edit" width="22" height="22" />
+                        </div>
+                        <div>
+                            <h3 style={{ margin: 0, fontSize: 18 }}>Chỉnh sửa thông tin CV</h3>
+                            <span style={{ fontSize: 13, color: 'var(--muted, #666)' }}>
+                                Cập nhật ngành nghề và nhãn chuyên môn mà không cần tải lại file.
+                            </span>
+                        </div>
+                    </div>
+
+                    <form onSubmit={handleEditSubmit}>
+                        <div style={{ background: 'var(--bg, #f8f9fa)', padding: '10px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
+                            <b>File gốc:</b> {editingCv.fileName} ({formatBytes(editingCv.fileSize)})
+                        </div>
+
+                        <div style={{ marginBottom: 14 }}>
+                            <label htmlFor="edit-cv-category" style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                                Ngành nghề / Lĩnh vực chuyên môn <span style={{ color: 'var(--coral)' }}>*</span>
+                            </label>
+                            <select
+                                id="edit-cv-category"
+                                value={editForm.categoryId}
+                                onChange={(e) => setEditForm({ ...editForm, categoryId: e.target.value })}
+                                required
+                                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13.5 }}
+                            >
+                                <option value="" disabled>-- Vui lòng chọn ngành nghề --</option>
+                                {categories.map((cat) => (
+                                    <option key={cat.id} value={cat.id}>
+                                        {cat.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div style={{ marginBottom: 14 }}>
+                            <label htmlFor="edit-cv-label" style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                                Nhãn CV / Vị trí hướng tới <span style={{ color: 'var(--coral)' }}>*</span>
+                            </label>
+                            <input
+                                id="edit-cv-label"
+                                type="text"
+                                value={editForm.label}
+                                onChange={(e) => setEditForm({ ...editForm, label: e.target.value })}
+                                placeholder="VD: CV Lập trình Web Frontend, CV Content Creator…"
+                                required
+                                maxLength={100}
+                                autoComplete="off"
+                                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13.5 }}
+                            />
+                        </div>
+
+                        <div style={{ marginBottom: 18 }}>
+                            <label htmlFor="edit-cv-searchable" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13.5 }}>
+                                <input
+                                    id="edit-cv-searchable"
+                                    type="checkbox"
+                                    checked={editForm.isSearchable}
+                                    onChange={(e) => setEditForm({ ...editForm, isSearchable: e.target.checked })}
+                                />
+                                <span>Cho phép nhà tuyển dụng tìm thấy CV này khi tìm kiếm ứng viên theo ngành</span>
+                            </label>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                            <button
+                                type="button"
+                                className="btn btn-outline"
+                                onClick={() => setEditModalOpen(false)}
+                                disabled={updating}
+                            >
+                                Hủy bỏ
+                            </button>
+                            <button
+                                type="submit"
+                                className="btn btn-primary"
+                                disabled={updating}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                            >
+                                {updating ? 'Đang lưu…' : 'Lưu thay đổi'}
+                            </button>
+                        </div>
+                    </form>
+                </ModalShell>
+            )}
         </>
     );
 }

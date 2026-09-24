@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
 import ModalShell from '../../components/modals/ModalShell';
+import UserTierBadge from '../../components/common/UserTierBadge';
 import { useStore } from '../../context/StoreContext';
 import { studentsSeed } from '../../data/studentDirectory';
 import { slugify } from '../../data/companies';
@@ -17,34 +18,75 @@ const TIER_LABEL = { gold: 'Gold Tier', silver: 'Silver Tier', bronze: 'Bronze T
 export default function StudentProfile() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { openChatWithPerson } = useStore();
+  const { state, openChatWithPerson } = useStore();
   const [selectedPf, setSelectedPf] = useState(null);
 
-  const matchedSeed = studentsSeed.find((s) => slugify(s.name) === slug);
-  const formattedName = slug
-    ? slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
-    : 'Sinh viên SkillBridge';
+  const currentUser = state?.currentUser;
+  const isSelf = currentUser && (
+    slugify(currentUser.fullName || '') === slug ||
+    slugify(state.displayName || '') === slug ||
+    slug === 'dao-van-nang'
+  );
 
-  const student = matchedSeed || {
-    name: formattedName,
-    school: 'Đại học FPT / Bách Khoa',
-    email: `${slug || 'student'}@edu.vn`,
-    phone: '0988 123 456',
-    reliability: 95,
-    completedJobs: 6,
-    avgRating: 4.9,
-    skills: ['Verified Canva Operator', 'CapCut Speed Editor', 'Content Writing'],
-    bio: 'Sinh viên năng động, cam kết hoàn thành công việc đúng tiến độ với tinh thần trách nhiệm cao nhất trên nền tảng SkillBridge.',
-    portfolio: ['Video ngắn TikTok & Reels', 'Bộ ấn phẩm Banner & Poster sự kiện', 'Thiết kế nhận diện thương hiệu'],
-    reviews: [
-      { name: 'Công ty Đối tác', stars: 5, comment: 'Sinh viên làm việc rất có trách nhiệm, giao bài đúng hạn và chất lượng sản phẩm tốt.' }
-    ]
-  };
+  const matchedSeed = studentsSeed.find((s) => slugify(s.name) === slug);
+
+  let formattedName = 'Sinh viên SkillBridge';
+  if (slug === 'dao-van-nang') {
+    formattedName = 'Đào Văn Năng';
+  } else if (slug) {
+    formattedName = slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  }
+
+  let student;
+  if (isSelf) {
+    student = {
+      name: currentUser?.fullName || state?.displayName || 'Đào Văn Năng',
+      school: currentUser?.schoolName || currentUser?.education || 'Đại học FPT Hà Nội',
+      email: currentUser?.email || `${slug}@edu.vn`,
+      phone: currentUser?.phoneNumber || '0327 724 169',
+      reliability: currentUser?.reliabilityScore ?? state?.myReliability ?? 98,
+      completedJobs: currentUser?.jobsDoneCount ?? (state?.myApplications?.filter((a) => a.status === 'completed')?.length || 8),
+      avgRating: currentUser?.avgRating || 5.0,
+      skills: (Array.isArray(currentUser?.skills) && currentUser?.skills.length > 0)
+        ? currentUser.skills.map(s => typeof s === 'string' ? s : (s.skillName || s.name || 'Kỹ năng'))
+        : ['Lập trình Fullstack Web', 'Thiết kế UI/UX Figma', 'Verified Canva Operator'],
+      bio: currentUser?.bio || 'Sinh viên Đại học FPT, chuyên môn Lập trình Web và Thiết kế giao diện. Cam kết hoàn thành công việc đúng tiến độ với tinh thần trách nhiệm cao nhất trên nền tảng SkillBridge.',
+      avatar: currentUser?.avatarUrl,
+      portfolio: (Array.isArray(currentUser?.portfolios) && currentUser?.portfolios.length > 0)
+        ? currentUser.portfolios.map(p => p.title || p)
+        : ['Hệ thống Sàn giao dịch SkillBridge', 'Bộ ấn phẩm thiết kế thương hiệu FPT', 'Video sáng tạo nội dung ngắn'],
+      planCode: currentUser?.planCode || state?.activePlanCode || 'STU_MASTER',
+      reviews: currentUser?.reviews || [
+        { name: 'Công ty Cổ phần Sáng Tạo FPT', stars: 5, comment: 'Sinh viên Đào Văn Năng làm việc rất có trách nhiệm, chủ động giao bài đúng hạn và sản phẩm đạt chất lượng cao.' },
+        { name: 'Studio Thiết kế Alpha', stars: 5, comment: 'Kỹ năng chuyên môn tốt, phản hồi tin nhắn nhanh và tiếp thu góp ý rất cầu thị.' }
+      ]
+    };
+  } else if (matchedSeed) {
+    student = matchedSeed;
+  } else {
+    student = {
+      name: formattedName,
+      school: slug === 'dao-van-nang' ? 'Đại học FPT Hà Nội' : 'Đại học FPT / Bách Khoa',
+      email: slug === 'dao-van-nang' ? 'nangdv@fpt.edu.vn' : `${slug || 'student'}@edu.vn`,
+      phone: slug === 'dao-van-nang' ? '0327 724 169' : '0988 123 456',
+      reliability: 98,
+      completedJobs: 8,
+      avgRating: 5.0,
+      skills: ['Lập trình Fullstack Web', 'Thiết kế UI/UX Figma', 'Verified Canva Operator'],
+      bio: 'Sinh viên năng động, cam kết hoàn thành công việc đúng tiến độ với tinh thần trách nhiệm cao nhất trên nền tảng SkillBridge.',
+      portfolio: ['Hệ thống Sàn giao dịch SkillBridge', 'Bộ ấn phẩm thiết kế nhận diện thương hiệu', 'Website thương mại điện tử'],
+      planCode: 'STU_MASTER',
+      reviews: [
+        { name: 'Doanh nghiệp Đối tác', stars: 5, comment: 'Sinh viên làm việc rất có trách nhiệm, giao bài đúng hạn và chất lượng sản phẩm tốt.' }
+      ]
+    };
+  }
 
   const tier = tierFromScore(student.reliability || 95);
   const skillsList = student.skills || [];
   const portfolioList = student.portfolio || [];
   const reviewsList = student.reviews || [];
+  const studentPlanCode = student.planCode || (student.reliability >= 95 ? 'STU_MASTER' : (student.reliability >= 85 ? 'STU_PRO' : 'STU_STARTER'));
 
   return (
     <div className="page active">
@@ -61,8 +103,9 @@ export default function StudentProfile() {
               style={{ width: 88, height: 88, borderRadius: '22px' }}
             />
             <div>
-              <div className="ph-name">
-                {student.name}
+              <div className="ph-name" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span>{student.name}</span>
+                <UserTierBadge planCode={studentPlanCode} userRole="student" variant="pill" size="sm" />
                 <div className={'stamp stamp-sm stamp-' + tier} title={`Xếp hạng: ${tier.toUpperCase()}`}><Icon name="check" /></div>
               </div>
               <div className="ph-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

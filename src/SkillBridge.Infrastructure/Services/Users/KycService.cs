@@ -153,7 +153,13 @@ public class KycService : IKycService
         }
 
         // Validate nghiệp vụ theo loại tài liệu
-        string docTypeEnum = request.DocumentType == "business_license" ? "business_license" : "student_card";
+        string docTypeEnum = request.DocumentType?.ToLowerInvariant() switch
+        {
+            "business_license" => "business_license",
+            "identity_card" => "identity_card",
+            "passport" => "passport",
+            _ => "student_card"
+        };
 
         if (docTypeEnum == "student_card")
         {

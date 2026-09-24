@@ -1214,6 +1214,9 @@ export function StoreProvider({ children }) {
   }, []);
 
   const refreshNotifications = useCallback(async () => {
+    if (!stateRef.current?.currentUser && !getAccessToken()) {
+      return;
+    }
     try {
       const res = await notificationApi.getNotifications(1, 30);
       if (res?.items) {
