@@ -259,16 +259,24 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor |
                                Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
-    // Giữ loopback mặc định (127.0.0.1, ::1) để chỉ chấp nhận proxy nội bộ tin cậy.
-    // KHÔNG clear KnownNetworks/KnownProxies để ngăn kẻ tấn công giả mạo X-Forwarded-For bypass rate limit.
-    var knownProxiesConfig = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>();
-    if (knownProxiesConfig != null)
+    if (builder.Configuration.GetValue<bool>("ForwardedHeaders:TrustAll", false))
     {
-        foreach (var proxy in knownProxiesConfig)
+        options.KnownNetworks.Clear();
+        options.KnownProxies.Clear();
+    }
+    else
+    {
+        // Giữ loopback mặc định (127.0.0.1, ::1) để chỉ chấp nhận proxy nội bộ tin cậy.
+        // KHÔNG clear KnownNetworks/KnownProxies để ngăn kẻ tấn công giả mạo X-Forwarded-For bypass rate limit.
+        var knownProxiesConfig = builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>();
+        if (knownProxiesConfig != null)
         {
-            if (System.Net.IPAddress.TryParse(proxy, out var ipAddress))
+            foreach (var proxy in knownProxiesConfig)
             {
-                options.KnownProxies.Add(ipAddress);
+                if (System.Net.IPAddress.TryParse(proxy, out var ipAddress))
+                {
+                    options.KnownProxies.Add(ipAddress);
+                }
             }
         }
     }
@@ -339,7 +347,7 @@ app.UseForwardedHeaders();
 
 app.UseMiddleware<SkillBridge.API.Middleware.ExceptionHandlingMiddleware>();
 
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("EnableSwagger", false))
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -366,6 +374,7 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
+app.MapGet("/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
 app.MapHub<SkillBridge.API.Hubs.PaymentHub>("/hubs/payment");
 app.MapHub<SkillBridge.API.Hubs.ChatHub>("/hubs/chat");
 
