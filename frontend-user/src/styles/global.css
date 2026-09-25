@@ -1748,6 +1748,8 @@ footer {
   font-family: inherit;
   background: var(--bg);
   transition: border-color .15s ease;
+  scroll-margin-bottom: 140px;
+  scroll-margin-top: 80px;
 }
 
 .field textarea {
@@ -3924,8 +3926,11 @@ footer {
   .auth-shell {
     grid-template-columns: 1fr;
     height: auto;
+    min-height: 100dvh;
+    min-height: 100vh;
     max-height: none;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .auth-side {
@@ -3999,9 +4004,19 @@ footer {
   }
 
   .auth-form-col {
-    padding: 28px 16px;
+    padding: 24px 16px 260px;
     height: auto;
+    min-height: 100dvh;
+    min-height: 100vh;
     max-height: none;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+
+  .auth-box {
+    margin: 0 auto;
+    width: 100%;
   }
 
   .jd-block,
@@ -6016,33 +6031,42 @@ table.adm-table {
   border-color: #ff6b6b !important;
 }
 
-.password-field {
+.password-field,
+.password-input-wrap {
   position: relative;
+  width: 100%;
 }
 
 .password-toggle {
   position: absolute;
-  right: 14px;
+  right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  background: none;
+  background: transparent;
   border: none;
   cursor: pointer;
-  padding: 4px;
-  display: flex;
+  padding: 6px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 16px;
-  line-height: 1;
+  color: var(--ink-soft, #64748b);
+  border-radius: 8px;
+  transition: all 0.15s ease;
+  z-index: 5;
 }
 
 .password-toggle:hover {
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--primary, #4f46e5);
+  background: rgba(99, 102, 241, 0.08);
 }
 
-.password-field input {
-  padding-right: 42px;
+.password-toggle:active {
+  transform: translateY(-50%) scale(0.95);
+}
+
+.password-field input,
+.password-input-wrap input {
+  padding-right: 44px !important;
 }
 
 /* Input with suffix */

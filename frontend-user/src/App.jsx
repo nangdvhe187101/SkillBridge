@@ -24,6 +24,7 @@ import PrivacyPolicy from './pages/legal/PrivacyPolicy';
 import PaymentRefundPolicy from './pages/legal/PaymentRefundPolicy';
 import Contact from './pages/customer/Contact';
 import Forbidden from './pages/customer/Forbidden';
+import ScrollToTop from './components/ScrollToTop';
 
 export default function App() {
   const EMPLOYER_ROLES = ['employer', 'recruiter', 'business', 'admin'];
@@ -31,6 +32,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      <ScrollToTop />
       <Routes>
         <Route element={<AuthLayout />}>
           <Route path="/auth" element={<Auth />} />

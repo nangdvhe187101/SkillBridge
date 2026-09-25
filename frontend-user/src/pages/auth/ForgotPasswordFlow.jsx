@@ -223,6 +223,9 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                                 type={showNewPassword ? 'text' : 'password'}
                                 placeholder="Ít nhất 8 ký tự"
                                 value={newPassword}
+                                onFocus={(e) => {
+                                    setTimeout(() => e.target?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 280);
+                                }}
                                 onChange={(e) => {
                                     setNewPassword(e.target.value);
                                     if (formError) setFormError('');
@@ -232,10 +235,11 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                                 type="button"
                                 className="password-toggle"
                                 onClick={() => setShowNewPassword(!showNewPassword)}
+                                title={showNewPassword ? 'Ẩn mật khẩu' : 'Xem mật khẩu'}
                                 aria-label={showNewPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                                 tabIndex={-1}
                             >
-                                <Icon name={showNewPassword ? 'eye-off' : 'eye'} width="18" height="18" />
+                                <Icon name={showNewPassword ? 'eye-off' : 'eye'} width="20" height="20" />
                             </button>
                         </div>
                         <div className="hint">Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt (vd: !@#$%).</div>
@@ -248,6 +252,9 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                                 type={showNewPassword2 ? 'text' : 'password'}
                                 placeholder="Nhập lại mật khẩu mới"
                                 value={newPassword2}
+                                onFocus={(e) => {
+                                    setTimeout(() => e.target?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 280);
+                                }}
                                 onChange={(e) => {
                                     setNewPassword2(e.target.value);
                                     if (formError) setFormError('');
@@ -257,10 +264,11 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                                 type="button"
                                 className="password-toggle"
                                 onClick={() => setShowNewPassword2(!showNewPassword2)}
+                                title={showNewPassword2 ? 'Ẩn mật khẩu' : 'Xem mật khẩu'}
                                 aria-label={showNewPassword2 ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                                 tabIndex={-1}
                             >
-                                <Icon name={showNewPassword2 ? 'eye-off' : 'eye'} width="18" height="18" />
+                                <Icon name={showNewPassword2 ? 'eye-off' : 'eye'} width="20" height="20" />
                             </button>
                         </div>
                     </div>

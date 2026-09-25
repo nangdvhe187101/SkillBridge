@@ -316,6 +316,7 @@ const initialState = {
   triZeroUsed: 2,
   conversations: [],
   openChatIds: [],
+  onlineUserIds: [],
   messengerPanelOpen: false,
   adsSettings: JSON.parse(localStorage.getItem('adsSettings') || JSON.stringify({
     adsOn: true,
@@ -930,18 +931,28 @@ function reducer(state, action) {
 
     case 'USER_STATUS_CHANGED': {
       const { userId, isOnline } = action.payload;
+      const targetId = Number(userId);
+      const currentOnlineIds = new Set(state.onlineUserIds || []);
+      if (isOnline) {
+        currentOnlineIds.add(targetId);
+      } else {
+        currentOnlineIds.delete(targetId);
+      }
       return {
         ...state,
+        onlineUserIds: Array.from(currentOnlineIds),
         conversations: (state.conversations || []).map((c) =>
-          Number(c.otherUserId) === Number(userId) ? { ...c, online: Boolean(isOnline) } : c
+          Number(c.otherUserId) === targetId ? { ...c, online: Boolean(isOnline) } : c
         ),
       };
     }
 
     case 'ONLINE_USERS_SYNC': {
-      const onlineSet = new Set((action.payload.onlineUserIds || []).map(Number));
+      const onlineList = (action.payload.onlineUserIds || []).map(Number);
+      const onlineSet = new Set(onlineList);
       return {
         ...state,
+        onlineUserIds: onlineList,
         conversations: (state.conversations || []).map((c) => ({
           ...c,
           online: onlineSet.has(Number(c.otherUserId)),

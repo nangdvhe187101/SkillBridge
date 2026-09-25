@@ -109,6 +109,12 @@ export default function RegisterForm({ onSwitchTab }) {
         );
     }
 
+    const handleInputFocus = (e) => {
+        setTimeout(() => {
+            e.target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 280);
+    };
+
     return (
         <form className="auth-form is-active" onSubmit={(e) => { e.preventDefault(); handleRegister(); }}>
             <h2>Tạo tài khoản mới</h2>
@@ -182,16 +188,18 @@ export default function RegisterForm({ onSwitchTab }) {
                         type={showPassword ? 'text' : 'password'}
                         placeholder="Ít nhất 8 ký tự"
                         value={regForm.password}
+                        onFocus={handleInputFocus}
                         onChange={(e) => updateField({ password: e.target.value })}
                     />
                     <button
                         type="button"
                         className="password-toggle"
                         onClick={() => setShowPassword(!showPassword)}
+                        title={showPassword ? 'Ẩn mật khẩu' : 'Xem mật khẩu'}
                         aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                         tabIndex={-1}
                     >
-                        <Icon name={showPassword ? 'eye-off' : 'eye'} width="18" height="18" />
+                        <Icon name={showPassword ? 'eye-off' : 'eye'} width="20" height="20" />
                     </button>
                 </div>
                 <div className="hint">Tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt.</div>
@@ -204,16 +212,18 @@ export default function RegisterForm({ onSwitchTab }) {
                         type={showPassword2 ? 'text' : 'password'}
                         placeholder="Nhập lại mật khẩu"
                         value={regForm.password2}
+                        onFocus={handleInputFocus}
                         onChange={(e) => updateField({ password2: e.target.value })}
                     />
                     <button
                         type="button"
                         className="password-toggle"
                         onClick={() => setShowPassword2(!showPassword2)}
+                        title={showPassword2 ? 'Ẩn mật khẩu' : 'Xem mật khẩu'}
                         aria-label={showPassword2 ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
                         tabIndex={-1}
                     >
-                        <Icon name={showPassword2 ? 'eye-off' : 'eye'} width="18" height="18" />
+                        <Icon name={showPassword2 ? 'eye-off' : 'eye'} width="20" height="20" />
                     </button>
                 </div>
             </div>

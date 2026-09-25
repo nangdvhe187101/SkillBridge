@@ -58,6 +58,12 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
     }
   };
 
+  const handleInputFocus = (e) => {
+    setTimeout(() => {
+      e.target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 280);
+  };
+
   return (
     <form className="auth-form is-active" onSubmit={handleSubmit}>
       <h2>Chào bạn quay lại</h2>
@@ -69,6 +75,7 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
           type="email"
           placeholder="ban@email.com"
           value={loginForm.email}
+          onFocus={handleInputFocus}
           onChange={(e) => {
             setLoginForm({ ...loginForm, email: e.target.value });
             if (emailError) validateEmail(e.target.value);
@@ -81,11 +88,12 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
 
       <div className="field">
         <label>Mật khẩu</label>
-        <div className="password-input-wrap">
+        <div className="password-field password-input-wrap">
           <input
             type={showPassword ? 'text' : 'password'}
             placeholder="••••••••"
             value={loginForm.password}
+            onFocus={handleInputFocus}
             onChange={(e) => {
               setLoginForm({ ...loginForm, password: e.target.value });
               if (formError) setFormError('');
@@ -95,10 +103,11 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
             type="button"
             className="password-toggle"
             onClick={() => setShowPassword(!showPassword)}
+            title={showPassword ? 'Ẩn mật khẩu' : 'Xem mật khẩu'}
             aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
             tabIndex={-1}
           >
-            <Icon name={showPassword ? 'eye-off' : 'eye'} width="18" height="18" />
+            <Icon name={showPassword ? 'eye-off' : 'eye'} width="20" height="20" />
           </button>
         </div>
       </div>

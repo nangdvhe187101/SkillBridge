@@ -9,6 +9,7 @@ using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.DTOs.Users;
 using SkillBridge.Application.Interfaces.Applications;
+using SkillBridge.Application.Interfaces.Chat;
 using SkillBridge.Application.Interfaces.Notifications;
 using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Application.Interfaces.Users;
@@ -21,17 +22,20 @@ public class TalentService : ITalentService
     private readonly SkillBridgeDbContext _dbContext;
     private readonly IStorageService _storageService;
     private readonly INotificationService _notificationService;
+    private readonly IUserPresenceService _presenceService;
     private readonly ILogger<TalentService> _logger;
 
     public TalentService(
         SkillBridgeDbContext dbContext,
         IStorageService storageService,
         INotificationService notificationService,
+        IUserPresenceService presenceService,
         ILogger<TalentService> logger)
     {
         _dbContext = dbContext;
         _storageService = storageService;
         _notificationService = notificationService;
+        _presenceService = presenceService;
         _logger = logger;
     }
 
@@ -134,6 +138,7 @@ public class TalentService : ITalentService
                 ActivePlanCode = planCode,
                 ActivePlanTier = tier,
                 JoinedAt = u.JoinedAt,
+                IsOnline = _presenceService.IsUserOnline(u.Id),
                 Skills = skills
             };
         })

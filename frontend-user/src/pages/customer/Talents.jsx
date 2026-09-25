@@ -470,6 +470,7 @@ export default function Talents() {
             {talents.map((talent) => {
               const isMaster = talent.activePlanCode === 'STU_MASTER';
               const isPro = talent.activePlanCode === 'STU_PRO';
+              const isOnline = (state.onlineUserIds || []).includes(Number(talent.id)) || Boolean(talent.isOnline);
 
               return (
                 <div
@@ -550,19 +551,37 @@ export default function Talents() {
                             border: isMaster ? '2px solid #ec4899' : isPro ? '2px solid #6366f1' : '1px solid var(--border)',
                           }}
                         />
-                        <span
-                          title="Đang hoạt động"
-                          style={{
-                            position: 'absolute',
-                            bottom: 0,
-                            right: 0,
-                            width: 12,
-                            height: 12,
-                            borderRadius: '50%',
-                            background: '#10b981',
-                            border: '2px solid var(--surface)',
-                          }}
-                        />
+                        {isOnline ? (
+                          <span
+                            title="Đang trực tuyến"
+                            style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              right: 0,
+                              width: 13,
+                              height: 13,
+                              borderRadius: '50%',
+                              background: '#10b981',
+                              border: '2px solid var(--surface)',
+                              boxShadow: '0 0 0 1px rgba(16, 185, 129, 0.4)',
+                            }}
+                          />
+                        ) : (
+                          <span
+                            title="Ngoại tuyến"
+                            style={{
+                              position: 'absolute',
+                              bottom: 0,
+                              right: 0,
+                              width: 12,
+                              height: 12,
+                              borderRadius: '50%',
+                              background: '#9ca3af',
+                              border: '2px solid var(--surface)',
+                              opacity: 0.6,
+                            }}
+                          />
+                        )}
                       </div>
 
                       <div style={{ minWidth: 0, flex: 1 }}>
@@ -584,14 +603,23 @@ export default function Talents() {
                           </h3>
                         </div>
 
-                        {/* User Tier Badge */}
-                        <div style={{ marginTop: 3 }}>
+                        {/* User Tier Badge & Status Tag */}
+                        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <UserTierBadge
                             planCode={talent.activePlanCode || 'FREE'}
                             userRole="student"
                             variant="pill"
                             size="sm"
                           />
+                          {isOnline ? (
+                            <span style={{ fontSize: 10.5, fontWeight: 700, color: '#10b981', background: 'rgba(16, 185, 129, 0.12)', padding: '1px 6px', borderRadius: 6 }}>
+                              ● Online
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: 10.5, fontWeight: 500, color: 'var(--ink-soft)', opacity: 0.75 }}>
+                              Ngoại tuyến
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -783,17 +811,60 @@ export default function Talents() {
             {/* Modal Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <Avatar
-                  src={selectedStudent.avatarUrl}
-                  name={selectedStudent.fullName}
-                  size="md"
-                  style={{ width: 44, height: 44 }}
-                />
+                <div style={{ position: 'relative' }}>
+                  <Avatar
+                    src={selectedStudent.avatarUrl}
+                    name={selectedStudent.fullName}
+                    size="md"
+                    style={{ width: 44, height: 44 }}
+                  />
+                  {((state.onlineUserIds || []).includes(Number(selectedStudent.id)) || Boolean(selectedStudent.isOnline)) ? (
+                    <span
+                      title="Đang trực tuyến"
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        right: 0,
+                        width: 11,
+                        height: 11,
+                        borderRadius: '50%',
+                        background: '#10b981',
+                        border: '2px solid var(--surface)',
+                      }}
+                    />
+                  ) : (
+                    <span
+                      title="Ngoại tuyến"
+                      style={{
+                        position: 'absolute',
+                        bottom: 0,
+                        right: 0,
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        background: '#9ca3af',
+                        border: '2px solid var(--surface)',
+                        opacity: 0.6,
+                      }}
+                    />
+                  )}
+                </div>
                 <div>
-                  <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, color: 'var(--ink)' }}>
-                    Mời {selectedStudent.fullName} nhận việc
-                  </h3>
-                  <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <h3 style={{ fontSize: 17, fontWeight: 800, margin: 0, color: 'var(--ink)' }}>
+                      Mời {selectedStudent.fullName} nhận việc
+                    </h3>
+                    {((state.onlineUserIds || []).includes(Number(selectedStudent.id)) || Boolean(selectedStudent.isOnline)) ? (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#10b981', background: 'rgba(16, 185, 129, 0.1)', padding: '1px 7px', borderRadius: 10 }}>
+                        ● Online
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--ink-soft)', background: 'rgba(0,0,0,0.05)', padding: '1px 7px', borderRadius: 10 }}>
+                        Ngoại tuyến
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
                     {selectedStudent.school || 'Sinh viên SkillBridge'}
                   </div>
                 </div>

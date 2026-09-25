@@ -27,6 +27,7 @@ public class TalentItemDto
     public string? ActivePlanCode { get; set; }
     public int ActivePlanTier { get; set; }
     public DateTime JoinedAt { get; set; }
+    public bool IsOnline { get; set; }
     public List<string> Skills { get; set; } = new();
 }
 

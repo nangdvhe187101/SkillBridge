@@ -1022,6 +1022,9 @@ function PasswordTab({ changePassword, logout }) {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
+    const [showCurrent, setShowCurrent] = useState(false);
+    const [showNext, setShowNext] = useState(false);
+    const [showNext2, setShowNext2] = useState(false);
 
     const save = async () => {
         setError('');
@@ -1065,30 +1068,66 @@ function PasswordTab({ changePassword, logout }) {
                 <div className="acct-field-row">
                     <div className="acct-field">
                         <label>Mật khẩu hiện tại</label>
-                        <input
-                            type="password"
-                            value={form.current}
-                            onChange={(e) => setForm({ ...form, current: e.target.value })}
-                        />
+                        <div className="password-field">
+                            <input
+                                type={showCurrent ? 'text' : 'password'}
+                                value={form.current}
+                                onChange={(e) => setForm({ ...form, current: e.target.value })}
+                            />
+                            <button
+                                type="button"
+                                className="password-toggle"
+                                onClick={() => setShowCurrent(!showCurrent)}
+                                title={showCurrent ? 'Ẩn mật khẩu' : 'Xem mật khẩu'}
+                                aria-label={showCurrent ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                                tabIndex={-1}
+                            >
+                                <Icon name={showCurrent ? 'eye-off' : 'eye'} width="20" height="20" />
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div className="acct-field-row" style={{ marginTop: 12 }}>
                     <div className="acct-field">
                         <label>Mật khẩu mới</label>
-                        <input
-                            type="password"
-                            value={form.next}
-                            onChange={(e) => setForm({ ...form, next: e.target.value })}
-                        />
+                        <div className="password-field">
+                            <input
+                                type={showNext ? 'text' : 'password'}
+                                value={form.next}
+                                onChange={(e) => setForm({ ...form, next: e.target.value })}
+                            />
+                            <button
+                                type="button"
+                                className="password-toggle"
+                                onClick={() => setShowNext(!showNext)}
+                                title={showNext ? 'Ẩn mật khẩu' : 'Xem mật khẩu'}
+                                aria-label={showNext ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                                tabIndex={-1}
+                            >
+                                <Icon name={showNext ? 'eye-off' : 'eye'} width="20" height="20" />
+                            </button>
+                        </div>
                         <div className="acct-hint">Ít nhất 8 ký tự, có chữ hoa, chữ thường, số và ký tự đặc biệt.</div>
                     </div>
                     <div className="acct-field">
                         <label>Nhập lại mật khẩu mới</label>
-                        <input
-                            type="password"
-                            value={form.next2}
-                            onChange={(e) => setForm({ ...form, next2: e.target.value })}
-                        />
+                        <div className="password-field">
+                            <input
+                                type={showNext2 ? 'text' : 'password'}
+                                value={form.next2}
+                                onChange={(e) => setForm({ ...form, next2: e.target.value })}
+                            />
+                            <button
+                                type="button"
+                                className="password-toggle"
+                                onClick={() => setShowNext2(!showNext2)}
+                                title={showNext2 ? 'Ẩn mật khẩu' : 'Xem mật khẩu'}
+                                aria-label={showNext2 ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                                tabIndex={-1}
+                            >
+                                <Icon name={showNext2 ? 'eye-off' : 'eye'} width="20" height="20" />
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

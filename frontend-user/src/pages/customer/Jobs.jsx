@@ -86,6 +86,13 @@ export default function Jobs() {
     setCurrentPage(1);
   }, [filter, q, sort]);
 
+  // Khi chuyển trang phân trang, cuộn mượt lên đầu danh sách việc làm
+  useEffect(() => {
+    if (currentPage > 1) {
+      window.scrollTo({ top: 320, behavior: 'smooth' });
+    }
+  }, [currentPage]);
+
   // Build dynamic category list from actual job data
   const cats = useMemo(() => {
     const seen = new Set();
