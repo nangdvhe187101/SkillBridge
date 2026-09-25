@@ -339,24 +339,32 @@ export default function Jobs() {
           </div>
 
           <div className="filter-row">
-            <div className="filter-chips">
-              {cats.map((c) => (
-                <button
-                  key={c.cat}
-                  className={'chip' + (filter === c.cat ? ' is-active' : '')}
-                  onClick={() => setFilter(c.cat)}
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                >
-                  {c.icon && <Icon name={c.icon} width="13" height="13" fill={c.icon === 'heart' ? 'currentColor' : 'none'} />}
-                  <span>{c.label}</span>
-                </button>
-              ))}
+            <div className="filter-chips-wrap">
+              <div className="filter-chips">
+                {cats.map((c) => (
+                  <button
+                    key={c.cat}
+                    className={'chip' + (filter === c.cat ? ' is-active' : '')}
+                    onClick={() => setFilter(c.cat)}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                  >
+                    {c.icon && <Icon name={c.icon} width="13" height="13" fill={c.icon === 'heart' ? 'currentColor' : 'none'} />}
+                    <span>{c.label}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-            <select className="sort-select" value={sort} onChange={(e) => setSort(e.target.value)}>
-              <option value="new">Mới nhất</option>
-              <option value="high">Ngân sách cao nhất</option>
-              <option value="low">Ngân sách thấp nhất</option>
-            </select>
+
+            <div className="filter-sort-wrap">
+              <span className="filter-count-badge">
+                Hiển thị <b>{list.length}</b> việc làm
+              </span>
+              <select className="sort-select" value={sort} onChange={(e) => setSort(e.target.value)}>
+                <option value="new">Mới nhất</option>
+                <option value="high">Ngân sách cao nhất</option>
+                <option value="low">Ngân sách thấp nhất</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
