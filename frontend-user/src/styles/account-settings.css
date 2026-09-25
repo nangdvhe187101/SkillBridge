@@ -297,13 +297,25 @@
     }
 
     .acct-sidebar-head {
-        padding: 20px 16px 4px;
+        padding: 18px 16px 4px;
+    }
+
+    .acct-sidebar-head h2 {
+        font-size: 20px;
     }
 
     .acct-tablist {
         flex-direction: row;
         overflow-x: auto;
         padding: 8px 12px;
+        gap: 6px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .acct-tablist::-webkit-scrollbar {
+        display: none;
     }
 
     .acct-tab {
@@ -311,6 +323,9 @@
         border-bottom: 3px solid transparent;
         border-radius: 8px 8px 0 0;
         white-space: nowrap;
+        padding: 10px 14px;
+        font-size: 13.5px;
+        flex-shrink: 0;
     }
 
     .acct-tab.is-active {
@@ -319,11 +334,12 @@
     }
 
     .acct-content {
-        padding: 24px 20px 60px;
+        padding: 20px 16px 60px;
     }
 
     .acct-field-row {
         grid-template-columns: 1fr;
+        gap: 14px;
     }
 
     .cv-item-card {
@@ -335,5 +351,20 @@
     .cv-item-actions {
         width: 100%;
         justify-content: flex-end;
+    }
+}
+
+@media (max-width: 600px) {
+    .acct-avatar-card {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 14px;
+        padding: 16px 12px;
+    }
+
+    .acct-avatar-info .btn {
+        width: 100%;
+        justify-content: center;
     }
 }

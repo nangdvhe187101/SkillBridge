@@ -61,6 +61,9 @@ public partial class Job
     [Column("revision_count")]
     public int RevisionCount { get; set; }
 
+    [Column("extension_count")]
+    public int ExtensionCount { get; set; }
+
     [Column("deadline_at", TypeName = "datetime")]
     public DateTime? DeadlineAt { get; set; }
 
@@ -132,4 +135,7 @@ public partial class Job
 
     [InverseProperty("Job")]
     public virtual ICollection<SavedJob> SavedJobs { get; set; } = new List<SavedJob>();
+
+    [InverseProperty("Job")]
+    public virtual ICollection<JobDeadlineExtension> DeadlineExtensions { get; set; } = new List<JobDeadlineExtension>();
 }

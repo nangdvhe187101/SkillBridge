@@ -1250,6 +1250,12 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasColumnType("decimal(12,0)")
                         .HasColumnName("escrow_amount");
 
+                    b.Property<int>("ExtensionCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("extension_count")
+                        .HasDefaultValueSql("'0'");
+
                     b.Property<int?>("HiredApplicantId")
                         .HasColumnType("int")
                         .HasColumnName("hired_applicant_id");
@@ -1431,6 +1437,83 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.HasIndex("JobId");
 
                     b.ToTable("job_attachments");
+                });
+
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.JobDeadlineExtension", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AdditionalDays")
+                        .HasColumnType("int")
+                        .HasColumnName("additional_days");
+
+                    b.Property<DateTime>("CurrentDeadline")
+                        .HasColumnType("datetime")
+                        .HasColumnName("current_deadline");
+
+                    b.Property<string>("DetailReason")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("detail_reason");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int")
+                        .HasColumnName("job_id");
+
+                    b.Property<DateTime>("ProposedDeadline")
+                        .HasColumnType("datetime")
+                        .HasColumnName("proposed_deadline");
+
+                    b.Property<string>("ReasonCategory")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("reason_category");
+
+                    b.Property<string>("RejectionReason")
+                        .HasColumnType("text")
+                        .HasColumnName("rejection_reason");
+
+                    b.Property<DateTime>("RequestedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("requested_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("RespondedAt")
+                        .HasColumnType("datetime")
+                        .HasColumnName("responded_at");
+
+                    b.Property<int?>("RespondedByUserId")
+                        .HasColumnType("int")
+                        .HasColumnName("responded_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("enum('pending','accepted','rejected','cancelled')")
+                        .HasColumnName("status")
+                        .HasDefaultValueSql("'pending'");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("int")
+                        .HasColumnName("student_id");
+
+                    b.HasKey("Id")
+                        .HasName("PRIMARY");
+
+                    b.HasIndex("RespondedByUserId");
+
+                    b.HasIndex(new[] { "StudentId" }, "fk_job_deadline_extensions_student");
+
+                    b.HasIndex(new[] { "JobId", "Status" }, "idx_job_deadline_extensions_job_status");
+
+                    b.ToTable("job_deadline_extensions", (string)null);
                 });
 
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.JobDeliverable", b =>
@@ -3278,6 +3361,34 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Navigation("Job");
                 });
 
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.JobDeadlineExtension", b =>
+                {
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.Job", "Job")
+                        .WithMany("DeadlineExtensions")
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_job_deadline_extensions_job");
+
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "RespondedByUser")
+                        .WithMany()
+                        .HasForeignKey("RespondedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_job_deadline_extensions_responder");
+
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "Student")
+                        .WithMany("StudentDeadlineExtensions")
+                        .HasForeignKey("StudentId")
+                        .IsRequired()
+                        .HasConstraintName("fk_job_deadline_extensions_student");
+
+                    b.Navigation("Job");
+
+                    b.Navigation("RespondedByUser");
+
+                    b.Navigation("Student");
+                });
+
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.JobDeliverable", b =>
                 {
                     b.HasOne("SkillBridge.Infrastructure.Data.Entities.Job", "Job")
@@ -3755,6 +3866,8 @@ namespace SkillBridge.Infrastructure.Migrations
 
                     b.Navigation("Conversations");
 
+                    b.Navigation("DeadlineExtensions");
+
                     b.Navigation("Disputes");
 
                     b.Navigation("FeaturedRequests");
@@ -3878,6 +3991,8 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Navigation("SavedJobs");
 
                     b.Navigation("SecurityLogs");
+
+                    b.Navigation("StudentDeadlineExtensions");
 
                     b.Navigation("Subscriptions");
 

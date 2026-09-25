@@ -11,14 +11,15 @@ import AdminOps from '../components/AdminOps';
 import AdminRoles from '../components/AdminRoles';
 import AdminMessages from '../components/AdminMessages';
 import AdminBankVerification from '../components/AdminBankVerification';
+import AdminPlans from '../components/AdminPlans';
 import Icon from '../components/Icon';
 import { adminLogout } from '../api/authApi';
 
 const ROLE_MODULES = {
-  super: ['users', 'content', 'disputes', 'finance', 'bank-verification', 'partners', 'messages', 'analytics', 'ops', 'roles'],
+  super: ['users', 'content', 'disputes', 'finance', 'plans', 'bank-verification', 'partners', 'messages', 'analytics', 'ops', 'roles'],
   moderator: ['content', 'messages'],
   dispute: ['disputes', 'messages'],
-  finance: ['finance', 'bank-verification'],
+  finance: ['finance', 'plans', 'bank-verification'],
 };
 const ROLE_WHOAMI = {
   super: 'Super Admin', moderator: 'Content Moderator', dispute: 'Dispute Officer', finance: 'Finance Viewer',
@@ -29,6 +30,7 @@ const TABS = [
   { id: 'content', path: '/content', icon: 'shield-check', label: 'Kiểm duyệt nội dung' },
   { id: 'disputes', path: '/disputes', icon: 'scale', label: 'Tranh chấp' },
   { id: 'finance', path: '/finance', icon: 'bank', label: 'Tài chính' },
+  { id: 'plans', path: '/plans', icon: 'bank', label: 'Gói bán & Bảng giá' },
   { id: 'bank-verification', path: '/bank-verification', icon: 'shield-check', label: 'Duyệt ngân hàng' },
   { id: 'partners', path: '/partners', icon: 'handshake', label: 'Đối tác & Quảng cáo' },
   { id: 'messages', path: '/messages', icon: 'chat', label: 'Tin nhắn & Giám sát' },
@@ -151,6 +153,7 @@ function AdminInner({ forcedTab }) {
           {activeTab === 'messages' && <AdminMessages />}
           {activeTab === 'analytics' && <AdminAnalytics />}
           {activeTab === 'ops' && <AdminOps />}
+          {activeTab === 'plans' && <AdminPlans />}
           {activeTab === 'roles' && <AdminRoles />}
         </div>
       </div>

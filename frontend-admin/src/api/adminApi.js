@@ -68,3 +68,22 @@ export async function rejectWithdrawal(id, reason = '') {
   });
 }
 
+// Subscription Plans Management APIs
+export async function getAdminSubscriptionPlans() {
+  return apiFetch('/admin/subscription-plans', { method: 'GET' });
+}
+
+export async function updateAdminSubscriptionPlan(id, planData) {
+  return apiFetch(`/admin/subscription-plans/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(planData),
+  });
+}
+
+export async function toggleAdminSubscriptionPlan(id) {
+  return apiFetch(`/admin/subscription-plans/${id}/toggle`, {
+    method: 'POST',
+  });
+}
+
+

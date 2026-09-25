@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
+import Avatar from '../../components/Avatar';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { companiesSeed, slugify } from '../../data/companies';
@@ -22,7 +23,24 @@ export default function CompanyProfile() {
   const matchedJob = (state.jobs || []).find((j) => slugify(j.emp) === slug);
   const matchedEmpName = matchedJob ? matchedJob.emp : null;
 
-  const entry = companiesSeed.find((c) => slugify(c.name) === slug) ||
+  const currentUser = state.currentUser;
+  const isSelf = currentUser && (
+    slugify(currentUser.companyName || currentUser.fullName || '') === slug
+  );
+
+  const selfCompany = isSelf ? {
+    name: currentUser.companyName || currentUser.fullName || 'Doanh nghiệp SkillBridge',
+    website: currentUser.website || null,
+    taxCode: currentUser.taxCode || 'Đang cập nhật',
+    size: currentUser.companySize || '10-50 nhân viên',
+    industry: currentUser.industry || 'Truyền thông & Công nghệ',
+    address: currentUser.address || 'Hà Nội, Việt Nam',
+    followers: 120,
+    description: currentUser.companyDescription || currentUser.bio || `${currentUser.companyName || currentUser.fullName} là đơn vị tuyển dụng uy tín đã được xác thực trên nền tảng SkillBridge.`,
+    longDescription: currentUser.companyDescription || currentUser.bio || 'Thường xuyên hợp tác cùng sinh viên và tài năng trẻ trên SkillBridge với cam kết thanh toán ký quỹ Escrow minh bạch và tôn trọng chất lượng công việc.'
+  } : null;
+
+  const entry = selfCompany || companiesSeed.find((c) => slugify(c.name) === slug) ||
     (matchedEmpName ? {
       name: matchedEmpName,
       website: matchedJob?.employerWebsite || null,
@@ -76,7 +94,12 @@ export default function CompanyProfile() {
 
         {/* Company Header */}
         <div className="cprofile-header">
-          <div className="cprofile-logo">{company.name.trim().charAt(0).toUpperCase()}</div>
+          <Avatar
+            src={company.logo || company.avatar || company.avatarUrl}
+            name={company.name}
+            fontSize={32}
+            style={{ width: 88, height: 88, borderRadius: '18px' }}
+          />
           <div className="cprofile-head-main">
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <h1 style={{ margin: 0 }}>{company.name}</h1>

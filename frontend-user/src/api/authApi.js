@@ -14,6 +14,12 @@ async function handleResponse(response) {
             err.status = 429;
             throw err;
         }
+        if (response.status === 403) {
+            const err = new Error(data?.message || "Tài khoản của bạn không có quyền thực hiện thao tác này (HTTP 403 Forbidden).");
+            err.status = 403;
+            err.data = data;
+            throw err;
+        }
 
         let errorMessage = data?.message;
         if (!errorMessage && data?.errors && typeof data.errors === 'object') {

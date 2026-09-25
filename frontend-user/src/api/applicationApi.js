@@ -28,3 +28,11 @@ export async function cancelOrWithdrawApplication(jobId, reason = '') {
         body: JSON.stringify({ reason }),
     });
 }
+
+export async function rejectApplication(jobId, applicationId, reason = '') {
+    return apiFetch(`/jobs/${jobId}/applications/${applicationId}/reject`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+    });
+}
+

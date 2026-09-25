@@ -635,4 +635,85 @@ public class BugFixesRegressionTests
         Assert.Null(jobAfterRehire.DeadlineWarningSentAt);
         Assert.Null(jobAfterRehire.DeadlineOverdueSentAt);
     }
+
+    [Fact]
+    public async Task CancelOrWithdrawApplication_WhenDeliverableSubmitted_ShouldThrowBusinessException()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var appRepoMock = new Mock<IApplicationRepository>();
+        var jobRepoMock = new Mock<IJobRepository>();
+        var cvRepoMock = new Mock<ICvFileRepository>();
+        var storageMock = new Mock<IStorageService>();
+        var escrowMock = new Mock<IEscrowPaymentService>();
+        var reliabilityMock = new Mock<IUserReliabilityService>();
+        var notifMock = new Mock<INotificationService>();
+        var loggerMock = new Mock<ILogger<ApplicationService>>();
+
+        var studentId = 55;
+        var employerId = 66;
+        var jobId = 777;
+
+        var student = new User { Id = studentId, RoleId = 1, Email = "student55@test.com", FullName = "Student 55", AccountStatus = "active", KycStatus = "verified", PasswordHash = "hash" };
+        var employer = new User { Id = employerId, RoleId = 2, Email = "employer66@test.com", FullName = "Employer 66", AccountStatus = "active", KycStatus = "verified", PasswordHash = "hash" };
+        await dbContext.Users.AddRangeAsync(student, employer);
+
+        var job = new Job
+        {
+            Id = jobId,
+            EmployerId = employerId,
+            Title = "Thiết kế Banner",
+            Description = "Mô tả",
+            Status = "submitted",
+            HiredApplicantId = studentId,
+            Budget = 500000m,
+            EscrowAmount = 500000m
+        };
+
+        var application = new JobApplication
+        {
+            Id = 888,
+            JobId = jobId,
+            StudentId = studentId,
+            Status = "hired",
+            CoverLetter = "Ứng tuyển",
+            AppliedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        var deliverable = new JobDeliverable
+        {
+            Id = 999,
+            JobId = jobId,
+            StudentId = studentId,
+            Version = 1,
+            FileName = "banner.png",
+            FileType = "image",
+            Status = "submitted",
+            Note = "Em nộp bài",
+            SubmittedAt = DateTime.UtcNow
+        };
+
+        await dbContext.Jobs.AddAsync(job);
+        await dbContext.Applications.AddAsync(application);
+        await dbContext.JobDeliverables.AddAsync(deliverable);
+        await dbContext.SaveChangesAsync();
+
+        var service = new ApplicationService(
+            appRepoMock.Object,
+            jobRepoMock.Object,
+            cvRepoMock.Object,
+            dbContext,
+            storageMock.Object,
+            escrowMock.Object,
+            reliabilityMock.Object,
+            notifMock.Object,
+            loggerMock.Object);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.CancelOrWithdrawApplicationAsync(studentId, jobId, "Muốn hủy"));
+
+        Assert.Contains("Bạn đã nộp sản phẩm bàn giao", ex.Message);
+    }
 }

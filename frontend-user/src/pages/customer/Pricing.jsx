@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
+import { subscriptionApi } from '../../api/subscriptionApi';
 
 /* ==========================================================================
    BỘ ICON SVG THIẾT KẾ ĐỘC QUYỀN (CUSTOM DESIGNED SVG ICONS)
@@ -151,19 +152,74 @@ export const PLAN_RANKS = {
   EMP_VIP: 3,
 };
 
+function renderFeatureItem(feat) {
+  if (typeof feat !== 'string') return feat;
+  if (!feat.includes('**')) return feat;
+  const parts = feat.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
+function mergePlanWithDb(defaultPlan, dbPlan) {
+  if (!dbPlan) return defaultPlan;
+  return {
+    ...defaultPlan,
+    name: dbPlan.name || defaultPlan.name,
+    tagline: dbPlan.tagline || defaultPlan.tagline,
+    badge: dbPlan.badgeText || defaultPlan.badge,
+    ribbonText: dbPlan.ribbonText ?? defaultPlan.ribbonText,
+    price: typeof dbPlan.price === 'number' ? dbPlan.price : defaultPlan.price,
+    priceSub: dbPlan.priceSub || defaultPlan.priceSub,
+    commissionRate: dbPlan.commissionRate ?? defaultPlan.commissionRate,
+    maxWeeklyApplications: dbPlan.maxWeeklyApplications,
+    maxActiveJobs: dbPlan.maxActiveJobs,
+    revisionLimit: dbPlan.revisionLimit,
+    features: Array.isArray(dbPlan.features) && dbPlan.features.length > 0
+      ? dbPlan.features
+      : defaultPlan.features,
+    isActive: dbPlan.isActive !== undefined ? dbPlan.isActive : true,
+  };
+}
+
 export default function Pricing() {
   const { state, showToast, refreshWallet } = useStore();
   const { openModal } = useModal();
   const navigate = useNavigate();
 
+  const [dbPlans, setDbPlans] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    subscriptionApi.getPlans()
+      .then(res => {
+        if (isMounted && res) {
+          const list = [
+            ...(res.studentPlans || []),
+            ...(res.employerPlans || []),
+            ...(Array.isArray(res) ? res : []),
+            ...(Array.isArray(res.data) ? res.data : [])
+          ];
+          setDbPlans(list);
+        }
+      })
+      .catch(err => {
+        console.warn('Could not fetch dynamic plans, using default static plans:', err);
+      });
+    return () => { isMounted = false; };
+  }, []);
+
   const isLoggedIn = Boolean(state.currentUser);
   const userRole = state.currentUser?.roleCode || state.role;
 
   useEffect(() => {
-    if (isLoggedIn && typeof refreshWallet === 'function') {
+    if (isLoggedIn && !state.isInitializing && typeof refreshWallet === 'function') {
       refreshWallet();
     }
-  }, [isLoggedIn, refreshWallet]);
+  }, [isLoggedIn, state.isInitializing, refreshWallet]);
 
   // Khóa tab theo vai trò khi đã login, cho phép khách chuyển tab khi chưa login
   const [guestTab, setGuestTab] = useState('student');
@@ -233,8 +289,8 @@ export default function Pricing() {
   };
 
 
-  // DANH SÁCH GÓI SINH VIÊN: Tinh gọn, trọng tâm, kích thích quyết định
-  const studentPlans = useMemo(() => [
+  const studentPlans = useMemo(() => {
+    const raw = [
     {
       code: 'FREE',
       name: 'Sinh Viên Cơ Bản',
@@ -333,10 +389,19 @@ export default function Pricing() {
       btnLabel: 'Kích hoạt VIP 99k',
       isCurrent: currentPlanCode === 'STU_MASTER',
     },
-  ], [currentPlanCode, state.subscriptionPro]);
+    ];
+    return raw.map(p => {
+      const db = dbPlans.find(d => 
+        (d.targetRole === 'student' || d.role === 'student') && 
+        (d.planCode === p.code || d.code === p.code || (p.code === 'FREE' && d.code === 'FREE_STUDENT'))
+      );
+      return mergePlanWithDb(p, db);
+    }).filter(p => p.isActive !== false);
+  }, [currentPlanCode, state.subscriptionPro, dbPlans]);
 
   // DANH SÁCH GÓI NHÀ TUYỂN DỤNG: Trực diện hiệu quả tuyển dụng
-  const employerPlans = useMemo(() => [
+  const employerPlans = useMemo(() => {
+    const raw = [
     {
       code: 'FREE',
       name: 'NTD Cơ Bản',
@@ -434,7 +499,15 @@ export default function Pricing() {
       btnLabel: 'Kích hoạt VIP 149k',
       isCurrent: currentPlanCode === 'EMP_VIP' || (state.vipBusiness && !currentPlanCode),
     },
-  ], [currentPlanCode, state.vipBusiness]);
+    ];
+    return raw.map(p => {
+      const db = dbPlans.find(d => 
+        (d.targetRole === 'employer' || d.role === 'employer') && 
+        (d.planCode === p.code || d.code === p.code || (p.code === 'FREE' && d.code === 'FREE_EMPLOYER'))
+      );
+      return mergePlanWithDb(p, db);
+    }).filter(p => p.isActive !== false);
+  }, [currentPlanCode, state.vipBusiness, dbPlans]);
 
   const currentPlans = activeTab === 'student' ? studentPlans : employerPlans;
 
@@ -627,7 +700,7 @@ export default function Pricing() {
                     {plan.features.map((featNode, idx) => (
                       <li key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, marginBottom: 10, lineHeight: 1.4 }}>
                         <CheckBulletIcon color={isLower ? 'var(--ink-soft)' : plan.themeColor} />
-                        <span style={{ color: isLower ? 'var(--ink-soft)' : 'var(--ink)' }}>{featNode}</span>
+                        <span style={{ color: isLower ? 'var(--ink-soft)' : 'var(--ink)' }}>{renderFeatureItem(featNode)}</span>
                       </li>
                     ))}
                   </ul>

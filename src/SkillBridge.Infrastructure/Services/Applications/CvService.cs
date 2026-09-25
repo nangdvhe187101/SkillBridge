@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Applications;
@@ -15,6 +16,7 @@ namespace SkillBridge.Infrastructure.Services.Applications;
 
 public class CvService : ICvService
 {
+    private const int MaxCvPerStudent = 5;
     private readonly ICvFileRepository _cvFileRepository;
     private readonly ICategoryRepository _categoryRepository;
     private readonly IStorageService _storageService;
@@ -55,6 +57,13 @@ public class CvService : ICvService
 
     public async Task<CvFileDto> UploadCvAsync(int studentId, UploadCvRequest request)
     {
+        var existingCount = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+            _context.CvFiles.Where(c => c.StudentId == studentId));
+        if (existingCount >= MaxCvPerStudent)
+        {
+            throw new BusinessException($"Bạn đã đạt giới hạn tối đa {MaxCvPerStudent} bản CV trong hồ sơ. Vui lòng xóa bớt CV không còn sử dụng để tải lên bản mới.");
+        }
+
         if (string.IsNullOrWhiteSpace(request.FileName))
         {
             throw new BusinessException("Tên file không được để trống.");
@@ -93,16 +102,17 @@ public class CvService : ICvService
             throw new BusinessException("Đường dẫn file CV không hợp lệ hoặc không thuộc hệ thống lưu trữ được tin cậy.");
         }
 
-        string? categoryName = null;
-        if (request.CategoryId.HasValue)
+        if (!request.CategoryId.HasValue || request.CategoryId.Value <= 0)
         {
-            var cat = await _categoryRepository.GetByIdAsync(request.CategoryId.Value);
-            if (cat == null)
-            {
-                throw new BusinessException("Danh mục nghề nghiệp không tồn tại.");
-            }
-            categoryName = cat.Name;
+            throw new BusinessException("Vui lòng chọn ngành nghề phù hợp cho CV.");
         }
+
+        var cat = await _categoryRepository.GetByIdAsync(request.CategoryId.Value);
+        if (cat == null)
+        {
+            throw new BusinessException("Danh mục nghề nghiệp không tồn tại.");
+        }
+        string categoryName = cat.Name;
 
         var entity = new CvFile
         {
@@ -130,6 +140,13 @@ public class CvService : ICvService
         string? label,
         int? categoryId)
     {
+        var existingCount = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.CountAsync(
+            _context.CvFiles.Where(c => c.StudentId == studentId));
+        if (existingCount >= MaxCvPerStudent)
+        {
+            throw new BusinessException($"Bạn đã đạt giới hạn tối đa {MaxCvPerStudent} bản CV trong hồ sơ. Vui lòng xóa bớt CV không còn sử dụng để tải lên bản mới.");
+        }
+
         if (stream == null || stream.Length == 0)
         {
             throw new BusinessException("Dữ liệu file không hợp lệ hoặc rỗng.");
@@ -150,16 +167,17 @@ public class CvService : ICvService
         // Validate denylist safe file signature
         FileSignatureValidator.ValidateSafeFile(stream, fileName);
 
-        string? categoryName = null;
-        if (categoryId.HasValue)
+        if (!categoryId.HasValue || categoryId.Value <= 0)
         {
-            var cat = await _categoryRepository.GetByIdAsync(categoryId.Value);
-            if (cat == null)
-            {
-                throw new BusinessException("Danh mục nghề nghiệp không tồn tại.");
-            }
-            categoryName = cat.Name;
+            throw new BusinessException("Vui lòng chọn ngành nghề phù hợp cho CV.");
         }
+
+        var cat = await _categoryRepository.GetByIdAsync(categoryId.Value);
+        if (cat == null)
+        {
+            throw new BusinessException("Danh mục nghề nghiệp không tồn tại.");
+        }
+        string categoryName = cat.Name;
 
         // Tải file trực tiếp lên Cloudflare R2
         var uploadResult = await _storageService.UploadStreamAsync(
@@ -187,12 +205,58 @@ public class CvService : ICvService
         return MapToDto(entity, categoryName);
     }
 
+    /**
+     * @ears .sdd/features/feat-cv-categorization/SPEC.md#REQ-CV-02
+     */
+    public async Task<CvFileDto> UpdateCvAsync(int studentId, int cvId, UpdateCvRequest request)
+    {
+        var cv = await _cvFileRepository.GetByIdAsync(cvId);
+        if (cv == null || cv.StudentId != studentId)
+        {
+            throw new BusinessException("CV không tồn tại hoặc bạn không có quyền chỉnh sửa.");
+        }
+
+        if (request.CategoryId <= 0)
+        {
+            throw new BusinessException("Vui lòng chọn ngành nghề phù hợp cho CV.");
+        }
+
+        var cat = await _categoryRepository.GetByIdAsync(request.CategoryId);
+        if (cat == null)
+        {
+            throw new BusinessException("Danh mục nghề nghiệp không tồn tại.");
+        }
+
+        cv.CategoryId = request.CategoryId;
+        cv.Label = string.IsNullOrWhiteSpace(request.Label) ? cv.FileName : request.Label.Trim();
+        cv.IsSearchable = request.IsSearchable;
+        cv.UpdatedAt = DateTime.UtcNow;
+
+        await _cvFileRepository.UpdateAsync(cv);
+        return MapToDto(cv, cat.Name);
+    }
+
+    /**
+     * @ears .sdd/features/feat-cv-categorization/SPEC.md#REQ-CV-05
+     */
     public async Task DeleteCvAsync(int studentId, int cvId)
     {
         var cv = await _cvFileRepository.GetByIdAsync(cvId);
         if (cv == null || cv.StudentId != studentId)
         {
             throw new BusinessException("CV không tồn tại hoặc bạn không có quyền xóa.");
+        }
+
+        // Chặn xóa nếu CV đang được sử dụng trong đơn ứng tuyển PENDING
+        var pendingApp = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+            _context.Applications
+                .Include(a => a.Job)
+                .Where(a => a.CvFileId == cvId && a.Status == "pending"));
+
+        if (pendingApp != null)
+        {
+            var jobTitle = pendingApp.Job?.Title ?? "công việc đang ứng tuyển";
+            throw new BusinessException($"Không thể xóa bản CV này vì đang được sử dụng trong đơn ứng tuyển chờ duyệt tại công việc \"{jobTitle}\".");
         }
 
         var fileKey = !string.IsNullOrWhiteSpace(cv.PublicId)

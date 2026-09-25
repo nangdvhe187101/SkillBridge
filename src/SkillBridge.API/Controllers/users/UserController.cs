@@ -64,4 +64,61 @@ public class UserController : ControllerBase
             fileKey = result.FileKey
         });
     }
+
+    [HttpGet("{id:int}/public-profile")]
+    [AllowAnonymous]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> GetPublicProfile(int id)
+    {
+        var profile = await _userService.GetPublicStudentProfileAsync(id);
+        return Ok(profile);
+    }
+
+    [HttpGet("portfolio")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> GetPortfolio()
+    {
+        var userId = User.GetRequiredUserId();
+        var result = await _userService.GetPortfolioAsync(userId);
+        return Ok(result);
+    }
+
+    [HttpPost("portfolio")]
+    [Consumes("multipart/form-data")]
+    [EnableRateLimiting("UploadPolicy")]
+    public async Task<IActionResult> UploadPortfolio([FromForm] IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Vui lòng chọn file tác phẩm để tải lên." });
+        }
+
+        var userId = User.GetRequiredUserId();
+        using var stream = file.OpenReadStream();
+        var result = await _userService.UploadPortfolioAsync(
+            userId,
+            stream,
+            file.FileName,
+            file.ContentType);
+
+        return Ok(result);
+    }
+
+    [HttpDelete("portfolio/{id:int}")]
+    [EnableRateLimiting("ResourceCreationPolicy")]
+    public async Task<IActionResult> DeletePortfolio(int id)
+    {
+        var userId = User.GetRequiredUserId();
+        await _userService.DeletePortfolioAsync(userId, id);
+        return Ok(new { message = "Xóa tác phẩm thành công." });
+    }
+
+    [HttpGet("badges")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> GetUserBadges()
+    {
+        var userId = User.GetRequiredUserId();
+        var result = await _userService.GetUserBadgesAsync(userId);
+        return Ok(result);
+    }
 }

@@ -18,4 +18,19 @@ public interface IUserService
         string fileName,
         string contentType,
         CancellationToken cancellationToken = default);
+
+    Task<UserPublicProfileDto> GetPublicStudentProfileAsync(int studentId, CancellationToken cancellationToken = default);
+
+    Task<System.Collections.Generic.List<PortfolioItemDto>> GetPortfolioAsync(int userId, CancellationToken cancellationToken = default);
+
+    Task<PortfolioItemDto> UploadPortfolioAsync(
+        int userId,
+        Stream stream,
+        string fileName,
+        string contentType,
+        CancellationToken cancellationToken = default);
+
+    Task DeletePortfolioAsync(int userId, int portfolioId, CancellationToken cancellationToken = default);
+
+    Task<System.Collections.Generic.List<UserBadgeItemDto>> GetUserBadgesAsync(int userId, CancellationToken cancellationToken = default);
 }

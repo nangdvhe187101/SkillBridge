@@ -7,8 +7,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Interfaces;
+using SkillBridge.Application.Interfaces.Jobs;
+using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.Interfaces.Notifications;
+using SkillBridge.Application.Interfaces.Admin;
 using SkillBridge.Infrastructure.Data;
+using SkillBridge.Infrastructure.Services.Admin;
 
 namespace SkillBridge.Infrastructure.Services.Jobs;
 
@@ -35,6 +39,7 @@ public class JobDeadlineReminderJob : BackgroundService
             try
             {
                 await ProcessDeadlineRemindersAsync(stoppingToken);
+                await ProcessAutoAcceptDeliverablesAsync(stoppingToken);
                 await timer.WaitForNextTickAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -87,6 +92,31 @@ public class JobDeadlineReminderJob : BackgroundService
             // 1. Kiểm tra mốc quá hạn (Overdue)
             if (now >= deadline && job.DeadlineOverdueSentAt == null)
             {
+                // @ears .sdd/features/feat-job-deadline-extension/SPEC.md#REQ-EXT-005: Tạm hoãn phạt/báo quá hạn khi có đơn gia hạn đang pending
+                var hasPendingExtension = await db.JobDeadlineExtensions
+                    .AnyAsync(e => e.JobId == job.Id && e.Status == "pending", ct);
+
+                if (hasPendingExtension)
+                {
+                    if (job.Employer != null)
+                    {
+                        try
+                        {
+                            await notificationService.SendAsync(
+                                job.Employer.Id,
+                                "⏱️",
+                                $"Công việc \"{job.Title}\" đã đến hạn nhưng đang có yêu cầu xin gia hạn deadline từ sinh viên chờ bạn phê duyệt. Vui lòng phản hồi sớm.",
+                                $"/employer/jobs/{job.Id}",
+                                ct);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Không thể gửi nhắc nhở duyệt gia hạn cho NTD {EmployerId} Job #{JobId}.", job.Employer.Id, job.Id);
+                        }
+                    }
+                    continue;
+                }
+
                 // Gửi thông báo & email cho sinh viên
                 if (job.HiredApplicant != null)
                 {
@@ -216,6 +246,63 @@ public class JobDeadlineReminderJob : BackgroundService
                 {
                     _logger.LogError(ex, "Lỗi lưu trạng thái deadline_warning_sent_at cho Job #{JobId}.", job.Id);
                 }
+            }
+        }
+    }
+
+    public async Task ProcessAutoAcceptDeliverablesAsync(CancellationToken ct = default)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<SkillBridgeDbContext>();
+        var settingService = scope.ServiceProvider.GetService<ISystemSettingService>();
+        var deliverableService = scope.ServiceProvider.GetRequiredService<IDeliverableService>();
+
+        var autoAcceptHours = 72;
+        if (settingService != null)
+        {
+            try
+            {
+                autoAcceptHours = await settingService.GetIntSettingAsync(SystemSettingService.KeyAutoAcceptHours, 72, ct);
+            }
+            catch
+            {
+                autoAcceptHours = 72;
+            }
+        }
+
+        var now = DateTime.UtcNow;
+        var threshold = now.AddHours(-autoAcceptHours);
+
+        var expiredDeliverables = await db.JobDeliverables
+            .Include(d => d.Job)
+            .Where(d => d.Status == "pending"
+                && d.SubmittedAt <= threshold
+                && d.Job.Status == "submitted")
+            .ToListAsync(ct);
+
+        foreach (var del in expiredDeliverables)
+        {
+            if (ct.IsCancellationRequested) break;
+
+            try
+            {
+                await deliverableService.ReviewDeliverableAsync(
+                    del.Job.EmployerId,
+                    del.JobId,
+                    del.Id,
+                    new ReviewDeliverableRequest
+                    {
+                        Status = "accepted",
+                        FeedbackComment = $"Hệ thống SkillBridge tự động nghiệm thu và giải ngân Escrow sau {autoAcceptHours} giờ theo cam kết bảo vệ quyền lợi sinh viên."
+                    },
+                    ct);
+
+                _logger.LogInformation("Đã tự động nghiệm thu và giải ngân Deliverable #{DeliverableId} của Job #{JobId} sau {Hours}h.",
+                    del.Id, del.JobId, autoAcceptHours);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi tự động nghiệm thu Deliverable #{DeliverableId} của Job #{JobId}.", del.Id, del.JobId);
             }
         }
     }

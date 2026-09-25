@@ -28,6 +28,7 @@ public class JobService : IJobService
     private readonly IUserReliabilityService _reliabilityService;
     private readonly INotificationService _notificationService;
     private readonly ILogger<JobService> _logger;
+    private readonly ISubscriptionPlanConfigService? _planConfigService;
 
     public JobService(
         IJobRepository jobRepository,
@@ -37,7 +38,8 @@ public class JobService : IJobService
         IEscrowPaymentService escrowPaymentService,
         IUserReliabilityService reliabilityService,
         INotificationService notificationService,
-        ILogger<JobService> logger)
+        ILogger<JobService> logger,
+        ISubscriptionPlanConfigService? planConfigService = null)
     {
         _jobRepository = jobRepository;
         _categoryRepository = categoryRepository;
@@ -47,11 +49,45 @@ public class JobService : IJobService
         _reliabilityService = reliabilityService;
         _notificationService = notificationService;
         _logger = logger;
+        _planConfigService = planConfigService;
     }
 
     public async Task<JobDetailDto> CreateJobAsync(int employerId, CreateJobRequest request)
     {
         ValidateJobInput(request.Title, request.Description, request.Budget, request.DeadlineAt, request.Location, request.Requirements);
+
+        // 1. Kiểm tra hạn mức số tin tuyển dụng đang mở đồng thời theo gói dịch vụ
+        int? maxActiveJobs = _planConfigService != null
+            ? await _planConfigService.GetMaxActiveJobsAsync(employerId)
+            : 1;
+
+        if (maxActiveJobs.HasValue)
+        {
+            var currentOpenJobs = await _dbContext.Jobs
+                .Where(j => j.EmployerId == employerId && j.Status == "open")
+                .CountAsync();
+
+            if (currentOpenJobs >= maxActiveJobs.Value)
+            {
+                // Nếu vượt hạn mức tin miễn phí của gói, chỉ cho phép đăng tiếp nếu là tin Tuyển gấp (+20.000đ)
+                if (!request.IsUrgent)
+                {
+                    throw new BusinessException($"Bạn đã đạt hạn mức tối đa {maxActiveJobs.Value} tin tuyển dụng đang mở đồng thời theo gói hiện tại. Vui lòng đóng bớt tin cũ, nâng cấp gói dịch vụ hoặc chọn 'Đánh dấu là công việc cần tuyển gấp (+20.000đ)' để đăng thêm tin ngay.");
+                }
+            }
+        }
+
+        // 2. Nếu đăng tin tuyển gấp (+20.000đ): Kiểm tra số dư ví trước khi tạo job
+        const decimal urgentJobFee = 20_000m;
+        if (request.IsUrgent)
+        {
+            var wallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == employerId);
+            if (wallet == null || wallet.Balance < urgentJobFee)
+            {
+                var curBal = wallet?.Balance ?? 0m;
+                throw new BusinessException($"Đăng tin tuyển gấp (+20.000đ) yêu cầu số dư ví tối thiểu 20.000đ (số dư hiện tại: {curBal:N0}đ). Vui lòng nạp thêm tiền vào ví SkillBridge để đăng tin.");
+            }
+        }
 
         var category = await _categoryRepository.GetByIdAsync(request.CategoryId);
         if (category == null)
@@ -68,7 +104,11 @@ public class JobService : IJobService
             .FirstOrDefaultAsync();
 
         int tierRevisionLimit = category.DefaultRevisionLimit; // Mặc định 2
-        if (activeEmployerSub != null)
+        if (_planConfigService != null)
+        {
+            tierRevisionLimit = await _planConfigService.GetAllowedRevisionLimitAsync(employerId, category.DefaultRevisionLimit);
+        }
+        else if (activeEmployerSub != null)
         {
             if (activeEmployerSub.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase))
                 tierRevisionLimit = Math.Max(tierRevisionLimit, 5);
@@ -78,8 +118,9 @@ public class JobService : IJobService
                 tierRevisionLimit = Math.Max(tierRevisionLimit, 3);
         }
 
+        // Chống bypass: Ép trần request.RevisionLimit không được vượt quá hạn mức cho phép của gói
         var revisionLimit = request.RevisionLimit.HasValue && request.RevisionLimit.Value >= 0
-            ? request.RevisionLimit.Value
+            ? Math.Min(request.RevisionLimit.Value, tierRevisionLimit)
             : tierRevisionLimit;
 
         var job = new Job
@@ -91,7 +132,7 @@ public class JobService : IJobService
             Location = string.IsNullOrWhiteSpace(request.Location) ? null : request.Location.Trim(),
             Budget = request.Budget,
             IsUrgent = request.IsUrgent,
-            IsFeatured = false,
+            IsFeatured = request.IsUrgent,
             Status = "open",
             HiredApplicantId = null,
             EscrowAmount = null,
@@ -101,6 +142,28 @@ public class JobService : IJobService
         };
 
         var createdJob = await _jobRepository.CreateJobWithRequirementsAsync(job, request.Requirements);
+
+        // 3. Nếu là tin tuyển gấp: Trừ 20.000đ vào ví và lưu lịch sử giao dịch
+        if (request.IsUrgent)
+        {
+            var wallet = await _dbContext.Wallets.FirstOrDefaultAsync(w => w.UserId == employerId);
+            if (wallet != null)
+            {
+                wallet.Balance -= urgentJobFee;
+                _dbContext.Transactions.Add(new Transaction
+                {
+                    UserId = employerId,
+                    Type = "featured_fee",
+                    Label = $"Phí đăng tin tuyển gấp: {createdJob.Title}",
+                    Amount = urgentJobFee,
+                    Sign = -1,
+                    ReferenceId = createdJob.Id,
+                    CreatedAt = DateTime.UtcNow
+                });
+                await _dbContext.SaveChangesAsync();
+            }
+        }
+
         var result = await _jobRepository.GetJobDetailDtoAsync(createdJob.Id, employerId);
         return result!;
     }

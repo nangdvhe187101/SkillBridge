@@ -13,6 +13,7 @@ import * as deliverableApi from '../api/deliverableApi';
 import * as walletApi from '../api/walletApi';
 import * as notificationApi from '../api/notificationApi';
 import * as chatApi from '../api/chatApi';
+import * as disputeApi from '../api/disputeApi';
 import { connectChatRealtime } from '../services/chatHubService';
 import { setAccessToken, clearAccessToken, getAccessToken } from '../api/tokenStore';
 
@@ -278,6 +279,7 @@ const initialState = {
   receipts: [],
   insuranceFund: 8200000,
   claims: [],
+  disputes: [],
   bankAccount: null,
   subscriptionPro: false,
   vipBusiness: false,
@@ -702,7 +704,7 @@ function reducer(state, action) {
         time: 'Vừa xong',
         skills: ['Canva', 'Video Editing', 'Content Marketing', 'English'],
         reliability: state.myReliability || 96,
-        avatar: (action.payload.name || state.currentUser?.fullName || 'S').charAt(0).toUpperCase(),
+        avatar: action.payload.avatar || state.currentUser?.avatarUrl || state.currentUser?.avatar || null,
         note: action.payload.note || '',
         sponsor: action.payload.sponsor || 'Doanh nghiệp'
       };
@@ -735,6 +737,8 @@ function reducer(state, action) {
       return { ...state, portfolioUploads: [action.item, ...state.portfolioUploads] };
     case 'REMOVE_PORTFOLIO':
       return { ...state, portfolioUploads: state.portfolioUploads.filter((_, i) => i !== action.idx) };
+    case 'SET_DISPUTES':
+      return { ...state, disputes: action.payload || [] };
 
     /* ---- reviews ---- */
     case 'SUBMIT_REVIEW': {
@@ -1101,6 +1105,21 @@ export function StoreProvider({ children }) {
     }
   }, []);
 
+  const refreshDisputes = useCallback(async () => {
+    if (!stateRef.current?.currentUser && !getAccessToken()) {
+      return;
+    }
+    try {
+      const res = await disputeApi.getMyDisputes();
+      if (Array.isArray(res)) {
+        dispatch({ type: 'SET_DISPUTES', payload: res });
+      }
+      return res;
+    } catch {
+      // Bỏ qua khi chưa đăng nhập hoặc lỗi mạng tạm thời
+    }
+  }, []);
+
   useEffect(() => {
     if (!state.currentUser) {
       dispatch({ type: 'SET_ACCESS_TOKEN', token: null });
@@ -1124,6 +1143,7 @@ export function StoreProvider({ children }) {
           }
           if (isMounted) {
             await refreshWallet();
+            await refreshDisputes();
           }
         } catch (e) {
           console.warn('Không thể tải hồ sơ hoặc ví chi tiết khi khởi động:', e);
@@ -1194,6 +1214,9 @@ export function StoreProvider({ children }) {
   }, []);
 
   const refreshNotifications = useCallback(async () => {
+    if (!stateRef.current?.currentUser && !getAccessToken()) {
+      return;
+    }
     try {
       const res = await notificationApi.getNotifications(1, 30);
       if (res?.items) {
@@ -1356,6 +1379,27 @@ export function StoreProvider({ children }) {
       realtime.stop();
     };
   }, [state.currentUser, state.isInitializing, refreshConversations, triggerRefreshConversations]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Polling đồng bộ thông báo thời gian thực mỗi 30s khi người dùng đăng nhập
+  const prevUnreadCountRef = useRef(0);
+  useEffect(() => {
+    if (!state.currentUser) return;
+    refreshNotifications();
+    const interval = setInterval(async () => {
+      if (document.visibilityState === 'visible') {
+        const notifs = await refreshNotifications();
+        const unread = (notifs || []).filter((n) => !n.read).length;
+        if (unread > prevUnreadCountRef.current && prevUnreadCountRef.current > 0) {
+          const latest = notifs[0];
+          if (latest) {
+            showToast?.(`🔔 ${latest.text}`, latest.icon || 'bell');
+          }
+        }
+        prevUnreadCountRef.current = unread;
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [state.currentUser, refreshNotifications, showToast]);
 
   // Tải danh mục và danh sách công việc công khai (không cần đăng nhập)
   useEffect(() => {
@@ -1619,6 +1663,7 @@ export function StoreProvider({ children }) {
       },
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),
       refreshWallet,
+      refreshDisputes,
       withdraw: async (amount) => {
         try {
           const res = await walletApi.requestWithdrawal(amount);
@@ -1937,7 +1982,7 @@ export function StoreProvider({ children }) {
     act.toggleSaveJob = act.toggleSaveJobAsync;
     return act;
   },
-  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, refreshWallet, state.cvFiles, state.myApplications, refreshNotifications, refreshConversations, fetchConversationMessages, startConversationWithUser, joinConversation, leaveConversation]
+  [showToast, state.savedJobIds, refreshJobs, refreshMyJobs, refreshMyApplications, refreshWallet, refreshDisputes, state.cvFiles, state.myApplications, refreshNotifications, refreshConversations, fetchConversationMessages, startConversationWithUser, joinConversation, leaveConversation]
 );
 
   const value = useMemo(() => ({ state, dispatch, showToast, ...actions }), [state, actions, showToast]);

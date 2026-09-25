@@ -106,3 +106,71 @@ export async function extendDeadline(jobId, newDeadlineAt, reason = '') {
         body: JSON.stringify({ newDeadlineAt, reason }),
     });
 }
+
+/**
+ * Sinh viên gửi đề xuất xin gia hạn deadline
+ */
+export async function requestDeadlineExtension(jobId, { additionalDays, reasonCategory = 'Khác', reason }) {
+    return apiFetch(`/jobs/${jobId}/deadline-extensions`, {
+        method: 'POST',
+        body: JSON.stringify({
+            additionalDays: Number(additionalDays),
+            reasonCategory: reasonCategory || 'Yêu cầu phát sinh',
+            detailReason: reason
+        }),
+    });
+}
+
+/**
+ * Lấy thông tin yêu cầu gia hạn đang chờ của job
+ */
+export async function getDeadlineExtensionRequest(jobId) {
+    try {
+        return await apiFetch(`/jobs/${jobId}/deadline-extensions/active`);
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Lấy lịch sử tất cả các lần xin gia hạn của job
+ */
+export async function getDeadlineExtensionHistory(jobId) {
+    try {
+        return await apiFetch(`/jobs/${jobId}/deadline-extensions/history`);
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * NTD phê duyệt hoặc từ chối yêu cầu gia hạn
+ */
+export async function respondDeadlineExtension(jobId, opts) {
+    let extId = opts?.extensionId;
+    if (!extId) {
+        const active = await getDeadlineExtensionRequest(jobId);
+        extId = active?.id;
+    }
+    if (!extId) {
+        throw new Error('Không tìm thấy yêu cầu gia hạn đang chờ phản hồi.');
+    }
+
+    return apiFetch(`/jobs/${jobId}/deadline-extensions/${extId}/respond`, {
+        method: 'POST',
+        body: JSON.stringify({
+            action: opts.accepted ? 'accept' : 'reject',
+            rejectionReason: opts.rejectionReason || ''
+        }),
+    });
+}
+
+/**
+ * Sinh viên thu hồi yêu cầu gia hạn
+ */
+export async function cancelDeadlineExtension(jobId, extensionId) {
+    return apiFetch(`/jobs/${jobId}/deadline-extensions/${extensionId}/cancel`, {
+        method: 'POST',
+    });
+}
+

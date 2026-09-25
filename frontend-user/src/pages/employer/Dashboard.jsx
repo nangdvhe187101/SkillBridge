@@ -15,6 +15,7 @@ const STATUS_LABEL = {
   in_progress: 'Đang thực hiện',
   submitted: 'Chờ xác nhận bàn giao',
   revision_requested: 'Đang chờ SV sửa lại',
+  disputed: 'Đang khiếu nại (Tranh chấp)',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
 };
@@ -25,6 +26,7 @@ const STATUS_COLOR = {
   in_progress: '#57C7FF',
   submitted: '#FF5C7A',
   revision_requested: '#FF9E57',
+  disputed: '#F59E0B',
   completed: '#4B2FD1',
   cancelled: '#A9A4CC',
 };
@@ -522,7 +524,8 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
 const PAGE_SIZE = 6;
 
 function JobsTab({ state, navigate, goToPostTab }) {
-  const { cancelJob, reopenJob, showToast } = useStore();
+  const { cancelJob, reopenJob, showToast, refreshDisputes, refreshMyJobs } = useStore();
+  const { openModal } = useModal();
   const confirm = useConfirm();
   const [q, setQ] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -534,12 +537,16 @@ function JobsTab({ state, navigate, goToPostTab }) {
 
   // Counts by status
   const counts = useMemo(() => {
-    const c = { all: state.myJobs.length, open: 0, in_progress: 0, submitted: 0, completed: 0, cancelled: 0 };
+    const c = { all: state.myJobs.length, open: 0, in_progress: 0, submitted: 0, disputed: 0, completed: 0, cancelled: 0 };
     state.myJobs.forEach(j => {
-      if (c[j.status] !== undefined) c[j.status]++;
+      const hasDispute = (state.disputes || []).some(
+        d => Number(d.jobId) === Number(j.id) && ['pending', 'in_arbitration'].includes(d.status)
+      );
+      const effStatus = hasDispute ? 'disputed' : j.status;
+      if (c[effStatus] !== undefined) c[effStatus]++;
     });
     return c;
-  }, [state.myJobs]);
+  }, [state.myJobs, state.disputes]);
 
   // Category options
   const categories = useMemo(() => {
@@ -551,8 +558,13 @@ function JobsTab({ state, navigate, goToPostTab }) {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     let list = state.myJobs.filter((j) => {
+      const hasDispute = (state.disputes || []).some(
+        d => Number(d.jobId) === Number(j.id) && ['pending', 'in_arbitration'].includes(d.status)
+      );
+      const effStatus = hasDispute ? 'disputed' : j.status;
+
       const matchSearch = needle === '' || j.title.toLowerCase().includes(needle) || (j.cat && j.cat.toLowerCase().includes(needle));
-      const matchStatus = statusFilter === 'all' || j.status === statusFilter;
+      const matchStatus = statusFilter === 'all' || effStatus === statusFilter;
       const matchCat = selectedCat === 'all' || j.cat === selectedCat;
       return matchSearch && matchStatus && matchCat;
     });
@@ -565,7 +577,7 @@ function JobsTab({ state, navigate, goToPostTab }) {
       list = [...list].sort((a, b) => (b.budget || 0) - (a.budget || 0));
     }
     return list;
-  }, [state.myJobs, q, statusFilter, selectedCat, sortBy]);
+  }, [state.myJobs, state.disputes, q, statusFilter, selectedCat, sortBy]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
@@ -651,6 +663,17 @@ function JobsTab({ state, navigate, goToPostTab }) {
           >
             <Icon name="hourglass" width={13} height={13} />
             Chờ nghiệm thu ({counts.submitted})
+          </button>
+        )}
+        {counts.disputed > 0 && (
+          <button
+            type="button"
+            className={'btn btn-sm ' + (statusFilter === 'disputed' ? 'btn-primary' : 'btn-outline')}
+            style={{ fontSize: 12.5, padding: '5px 12px', color: statusFilter === 'disputed' ? '#fff' : '#d97706', borderColor: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            onClick={() => setStatusFilter('disputed')}
+          >
+            <span>⚖️</span>
+            Tranh chấp ({counts.disputed})
           </button>
         )}
         <button
@@ -748,12 +771,19 @@ function JobsTab({ state, navigate, goToPostTab }) {
               const hasAttachments = (j.attachmentCount > 0) || (j.attachments && j.attachments.length > 0);
               const attCount = j.attachmentCount || j.attachments?.length || 0;
 
+              const relatedDispute = (state.disputes || []).find(
+                (d) => Number(d.jobId) === Number(j.id)
+              );
+              const isDisputeActive = relatedDispute && ['pending', 'in_arbitration'].includes(relatedDispute.status);
+              const isDisputed = j.status === 'disputed' || isDisputeActive;
+              const effStatus = isDisputed ? 'disputed' : j.status;
+
               return (
                 <div
                   key={j.id}
                   style={{
                     background: 'var(--surface)',
-                    border: '1px solid var(--border)',
+                    border: isDisputed ? '2px solid #f59e0b' : '1px solid var(--border)',
                     borderRadius: 14,
                     padding: '18px 20px',
                     transition: 'all 0.2s ease',
@@ -766,8 +796,8 @@ function JobsTab({ state, navigate, goToPostTab }) {
                   {/* Card Top: Badges */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span className={'djr-status ' + j.status} style={{ padding: '2px 9px', fontSize: 11.5 }}>
-                        {STATUS_LABEL[j.status] || j.status}
+                      <span className={'djr-status ' + effStatus} style={{ padding: '2px 9px', fontSize: 11.5, background: isDisputed ? '#d97706' : undefined, color: isDisputed ? '#fff' : undefined }}>
+                        {isDisputed ? '⚖️ Đang khiếu nại (72h)' : (STATUS_LABEL[j.status] || j.status)}
                       </span>
                       <span className="chip" style={{ fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                         <Icon name="folder" width={12} height={12} /> {j.cat}
@@ -828,7 +858,7 @@ function JobsTab({ state, navigate, goToPostTab }) {
                             <Icon name="user" width={12} height={12} /> {j.status === 'completed' ? 'Đã hoàn thành bởi' : 'Đang làm'}: {j.hiredApplicant}
                           </span>
                         )}
-                        {j.status === 'submitted' && (
+                        {j.status === 'submitted' && !isDisputed && (
                           <span style={{ color: 'var(--coral)', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                             <Icon name="alert-circle" width={14} height={14} /> Sinh viên đã gửi sản phẩm bàn giao!
                           </span>
@@ -836,6 +866,58 @@ function JobsTab({ state, navigate, goToPostTab }) {
                       </div>
                     </div>
                   </div>
+
+                  {/* Dispute Banner if Disputed */}
+                  {isDisputed && (
+                    <div style={{
+                      background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.12) 100%)',
+                      border: '1.5px solid rgba(245, 158, 11, 0.4)',
+                      borderRadius: 10,
+                      padding: '12px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      flexWrap: 'wrap',
+                      gap: 12
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ fontSize: 20 }}>⚖️</span>
+                        <div>
+                          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#b45309' }}>
+                            Công việc đang có hồ sơ khiếu nại tranh chấp (72h)
+                          </div>
+                          <div style={{ fontSize: 12, color: '#92400e', marginTop: 2 }}>
+                            Ban Trọng tài SkillBridge đang thụ lý. Bạn có thể nộp bổ sung chứng cứ hoặc xem tiến độ phân xử.
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-sm"
+                        style={{
+                          background: '#d97706',
+                          color: '#ffffff',
+                          fontWeight: 700,
+                          border: 'none',
+                          padding: '6px 14px',
+                          borderRadius: 8,
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => {
+                          const disputeId = relatedDispute?.id || j.disputeId || j.id;
+                          openModal('disputeDetail', {
+                            disputeId,
+                            onRefresh: () => {
+                              refreshMyJobs?.();
+                              refreshDisputes?.();
+                            }
+                          });
+                        }}
+                      >
+                        Xem hồ sơ Trọng tài
+                      </button>
+                    </div>
+                  )}
 
                   {/* Card Bottom: Applicants Count & Actions */}
                   <div
@@ -879,6 +961,47 @@ function JobsTab({ state, navigate, goToPostTab }) {
                       >
                         <Icon name="users" width={14} height={14} /> Quản lý ứng viên ({appsCount}) →
                       </button>
+
+                      {isDisputed && (
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          style={{ fontSize: 12, padding: '5px 12px', background: '#d97706', borderColor: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700 }}
+                          onClick={() => {
+                            const disputeId = relatedDispute?.id || j.disputeId || j.id;
+                            openModal('disputeDetail', {
+                              disputeId,
+                              onRefresh: () => {
+                                refreshMyJobs?.();
+                                refreshDisputes?.();
+                              }
+                            });
+                          }}
+                          title="Xem chi tiết hồ sơ tranh chấp & nộp bằng chứng trong 72h"
+                        >
+                          <span>⚖️</span> Tranh chấp
+                        </button>
+                      )}
+
+                      {!isDisputed && ['in_progress', 'submitted', 'revision_requested'].includes(effStatus) && (
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          style={{ fontSize: 12, padding: '5px 10px', color: '#d97706', borderColor: '#fcd34d', display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}
+                          onClick={() => {
+                            openModal('dispute', {
+                              job: j,
+                              onSuccess: () => {
+                                refreshMyJobs?.();
+                                refreshDisputes?.();
+                              }
+                            });
+                          }}
+                          title="Mở hồ sơ khiếu nại gửi lên Ban Trọng tài SkillBridge"
+                        >
+                          <span>⚖️</span> Khiếu nại
+                        </button>
+                      )}
 
                       {j.status === 'open' && (
                         <button

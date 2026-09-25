@@ -47,15 +47,15 @@ export default function Contact() {
 
             <div>
               <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Mã số doanh nghiệp (MST):</span>
-              <b style={{ fontFamily: 'monospace', letterSpacing: 0.5 }}>0110688999</b>
+              <b style={{ color: '#d97706', fontSize: 13 }}>Đang hoàn tất thủ tục cấp phép & đăng ký kinh doanh</b>
               <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
-                Do Sở Kế hoạch và Đầu tư Thành phố Hà Nội cấp ngày 15/03/2024
+                Dự án Khởi nghiệp Sáng tạo Sinh viên · FPT University EXE Capstone Project
               </span>
             </div>
 
             <div>
-              <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Người đại diện theo pháp luật:</span>
-              <b>ĐẶNG VŨ VĂN NĂNG</b> — Chức vụ: Giám đốc Điều hành (CEO)
+              <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Đại diện dự án / Phụ trách vận hành:</span>
+              <b>ĐÀO VĂN NĂNG</b> — Chức vụ: Trưởng dự án (Project Lead)
             </div>
 
             <div>
@@ -71,7 +71,7 @@ export default function Contact() {
             <div style={{ background: 'var(--bg-subtle, rgba(0,0,0,0.03))', padding: 12, borderRadius: 10, marginTop: 4 }}>
               <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Icon name="phone" width="15" height="15" style={{ color: 'var(--primary)' }} />
-                <b>Hotline CSKH:</b> <span style={{ color: 'var(--primary)', fontWeight: 700 }}>1900 6828</span> / 0987 654 321
+                <b>Hotline & Khiếu nại:</b> <span style={{ color: 'var(--primary)', fontWeight: 700 }}>0327 724 169</span> / 1900 6828
               </div>
               <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Icon name="mail" width="15" height="15" style={{ color: 'var(--primary)' }} />

@@ -15,10 +15,22 @@ namespace SkillBridge.API.Controllers.payments;
 public class SubscriptionsController : ControllerBase
 {
     private readonly ISubscriptionService _subscriptionService;
+    private readonly ISubscriptionPlanConfigService _planConfigService;
 
-    public SubscriptionsController(ISubscriptionService subscriptionService)
+    public SubscriptionsController(
+        ISubscriptionService subscriptionService,
+        ISubscriptionPlanConfigService planConfigService)
     {
         _subscriptionService = subscriptionService;
+        _planConfigService = planConfigService;
+    }
+
+    [HttpGet("plans")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GetPublicPlans(CancellationToken cancellationToken)
+    {
+        var result = await _planConfigService.GetPublicPlansAsync(cancellationToken);
+        return Ok(result);
     }
 
     [HttpPost("purchase")]

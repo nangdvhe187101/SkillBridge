@@ -33,7 +33,7 @@ function getFileIcon(fileName) {
 }
 
 export default function PostJobForm({ onDone, onCancelEdit }) {
-    const { state, createJobPost, updateJobPost, clearEditJob, refreshJobs, refreshMyJobs } = useStore();
+    const { state, createJobPost, updateJobPost, clearEditJob, refreshJobs, refreshMyJobs, refreshWallet } = useStore();
     const { showToast } = useToast();
     const fileInputRef = useRef(null);
 
@@ -241,9 +241,12 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                     }
                 }
                 // Refresh lại danh sách để có đầy đủ file vừa đính kèm từ backend
-                await Promise.allSettled([refreshJobs?.(), refreshMyJobs?.()]);
+                await Promise.allSettled([refreshJobs?.(), refreshMyJobs?.(), refreshWallet?.()]);
+            } else {
+                await Promise.allSettled([refreshJobs?.(), refreshMyJobs?.(), refreshWallet?.()]);
             }
 
+            showToast(urgent && !editingJob ? 'Đăng tin tuyển gấp thành công! (-20.000đ phí ghim nổi bật)' : (editingJob ? 'Lưu thay đổi thành công!' : 'Đăng tin tuyển dụng thành công!'), 'success');
             clearEditJob();
             onDone?.();
         } catch (err) {
@@ -527,6 +530,30 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                         <span>Đánh dấu là công việc cần tuyển gấp (Ưu tiên hiển thị Featured Listing, +20.000đ)</span>
                     </label>
                 </div>
+
+                {urgent && (
+                    <div style={{
+                        marginTop: 10,
+                        padding: '12px 14px',
+                        background: 'rgba(245, 158, 11, 0.08)',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        borderRadius: 10,
+                        fontSize: 12.5,
+                        color: 'var(--ink)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#d97706' }}>
+                                <Icon name="bolt" style={{ width: 14, height: 14 }} />
+                                <span>Đặc quyền Tuyển gấp & Vượt hạn mức:</span>
+                            </span>
+                            <span style={{ fontWeight: 800, color: '#d97706', fontSize: 13 }}>-20.000đ</span>
+                        </div>
+                        <p style={{ margin: 0, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+                            Tin sẽ được gắn huy hiệu <b>[Gấp]</b>, ưu tiên lên đầu trang và <b>cho phép bạn đăng thêm tin ngay cả khi đã dùng hết hạn mức của gói</b>.
+                            Phí dịch vụ 20.000đ sẽ được trừ trực tiếp từ Ví SkillBridge (Số dư hiện tại: <b style={{ color: 'var(--ink)' }}>{fmtVND(state.balance || 0)}</b>).
+                        </p>
+                    </div>
+                )}
 
                 <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
                     <button type="submit" className="btn btn-primary btn-block" disabled={isSubmitting}>

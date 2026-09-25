@@ -4,16 +4,22 @@ import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
 import ModalShell from '../../components/modals/ModalShell';
 import DashboardSidebar from '../../components/DashboardSidebar';
+import UserTierBadge from '../../components/common/UserTierBadge';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import { useConfirm } from '../../context/ConfirmContext';
+import { useToast } from '../../context/ToastContext';
 import { DeliverablePreview } from '../../components/modals/DeliverableModals';
 import { slugify } from '../../data/companies';
-import { getJobApplicants } from '../../api/applicationApi';
-import { getJobById, extendDeadline } from '../../api/jobApi';
+import { getJobApplicants, rejectApplication } from '../../api/applicationApi';
+import { getJobById, extendDeadline, getDeadlineExtensionRequest, respondDeadlineExtension } from '../../api/jobApi';
 import { getJobDeliverables } from '../../api/deliverableApi';
 import { getJobReviews } from '../../api/reviewApi';
 import { downloadCandidateCv, downloadJobAttachment } from '../../utils/fileDownloader';
+import DisputeModal from '../../components/modals/DisputeModal';
+import DisputeDetailModal from '../../components/modals/DisputeDetailModal';
+import StudentPublicProfileModal from '../../components/modals/StudentPublicProfileModal';
+import ReportModal from '../../components/modals/ReportModal';
 import '../../styles/account-settings.css';
 
 const STATUS_LABEL = {
@@ -22,6 +28,7 @@ const STATUS_LABEL = {
   in_progress: 'Đang thực hiện',
   submitted: 'Chờ xác nhận bàn giao',
   revision_requested: 'Đang chờ SV sửa lại',
+  disputed: 'Đang khiếu nại',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
 };
@@ -83,6 +90,7 @@ export default function JobApplicants() {
   const { state, deleteJob, cancelJob, reopenJob, openChatWithPerson, startConversationWithUser, sendChatMessage } = useStore();
   const { openModal } = useModal();
   const confirm = useConfirm();
+  const { showToast } = useToast();
   const navigate = useNavigate();
 
   const [applicantFilter, setApplicantFilter] = useState('all'); // 'all' | 'pending' | 'shortlisted' | 'hired' | 'rejected'
@@ -96,6 +104,79 @@ export default function JobApplicants() {
   const [viewStudentModal, setViewStudentModal] = useState(null);
   const [cannedModalApplicant, setCannedModalApplicant] = useState(null);
   const [extendDeadlineModalOpen, setExtendDeadlineModalOpen] = useState(false);
+  const [disputeModalOpen, setDisputeModalOpen] = useState(false);
+  const [disputeDetailModalOpen, setDisputeDetailModalOpen] = useState(false);
+  const [extTrigger, setExtTrigger] = useState(0);
+  const [rejectModalApplicant, setRejectModalApplicant] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejecting, setRejecting] = useState(false);
+  const [publicProfileStudentId, setPublicProfileStudentId] = useState(null);
+  const [reportData, setReportData] = useState(null);
+
+  const handleConfirmReject = async () => {
+    if (!rejectModalApplicant) return;
+    setRejecting(true);
+    try {
+      await rejectApplication(jobId, rejectModalApplicant.id, rejectReason);
+      setRejectModalApplicant(null);
+      setRejectReason('');
+      await loadData();
+    } catch (err) {
+      console.error('Lỗi khi từ chối ứng viên:', err);
+      alert(err.message || 'Không thể từ chối hồ sơ ứng viên này.');
+    } finally {
+      setRejecting(false);
+    }
+  };
+
+  const [pendingExtensionReq, setPendingExtensionReq] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (jobId) {
+      getDeadlineExtensionRequest(jobId)
+        .then((req) => {
+          if (isMounted) setPendingExtensionReq((req && req.status === 'pending') ? req : null);
+        })
+        .catch(() => {
+          if (isMounted) setPendingExtensionReq(null);
+        });
+    }
+    return () => { isMounted = false; };
+  }, [jobId, extTrigger]);
+
+  const handleAcceptExtension = async () => {
+    if (!pendingExtensionReq) return;
+    try {
+      await respondDeadlineExtension(jobId, { extensionId: pendingExtensionReq.id, accepted: true });
+      showToast?.('Đã chấp thuận gia hạn deadline thành công!', 'check');
+      setExtTrigger((t) => t + 1);
+      await loadData();
+    } catch (err) {
+      console.error('Lỗi khi chấp thuận gia hạn:', err);
+      showToast?.(err.message || 'Lỗi khi chấp thuận gia hạn deadline.', 'x');
+    }
+  };
+
+  const handleRejectExtension = async () => {
+    if (!pendingExtensionReq) return;
+    const reason = prompt('Nhập lý do từ chối gia hạn:', 'Tiến độ dự án đang rất gấp, không thể dời deadline thêm.');
+    if (reason === null) return;
+
+    try {
+      await respondDeadlineExtension(jobId, {
+        extensionId: pendingExtensionReq.id,
+        accepted: false,
+        rejectionReason: reason.trim() || 'Nhà tuyển dụng chưa thể sắp xếp gia hạn vào lúc này.'
+      });
+      showToast?.('Đã từ chối đề xuất gia hạn deadline.', 'check');
+      setExtTrigger((t) => t + 1);
+      await loadData();
+    } catch (err) {
+      console.error('Lỗi khi từ chối gia hạn:', err);
+      showToast?.(err.message || 'Lỗi khi từ chối gia hạn deadline.', 'x');
+    }
+  };
 
   // Shortlisted candidates stored in localStorage for persistence
   const [shortlistedIds, setShortlistedIds] = useState(() => {
@@ -207,6 +288,9 @@ export default function JobApplicants() {
       cvLabel: a.cvLabel,
       isHired: a.status === 'hired' || (job?.hiredApplicantId && a.studentId === job.hiredApplicantId) || job?.hiredApplicant === a.studentName || job?.hiredApplicant === a.name,
       rejected: a.status === 'rejected',
+      studentPlanCode: a.studentPlanCode,
+      studentPlanTier: a.studentPlanTier ?? 0,
+      isTopPinned: Boolean(a.isTopPinned || a.studentPlanTier === 3),
     }));
   }, [apiApplicants, job]);
 
@@ -476,13 +560,37 @@ export default function JobApplicants() {
                 )}
 
                 {wasEscrowed ? (
-                  <button
-                    className="btn btn-outline btn-sm"
-                    style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
-                    onClick={handleCancel}
-                  >
-                    Hủy việc & Hoàn tiền
-                  </button>
+                  <>
+                    {job.status !== 'disputed' && (
+                      <button
+                        className="btn btn-outline btn-sm"
+                        style={{ color: '#d97706', borderColor: '#fcd34d', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 600 }}
+                        onClick={() => setDisputeModalOpen(true)}
+                        title="Khiếu nại và chuyển vụ việc lên Ban Trọng tài phân xử"
+                      >
+                        <span>⚖️</span> Khiếu nại công việc
+                      </button>
+                    )}
+                    {job.status === 'disputed' && (
+                      <button
+                        className="btn btn-primary btn-sm"
+                        style={{ background: '#d97706', borderColor: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 700 }}
+                        onClick={() => setDisputeDetailModalOpen(true)}
+                        title="Xem hồ sơ tranh chấp & nộp bằng chứng trong 72h"
+                      >
+                        <span>⚖️</span> Hồ sơ tranh chấp
+                      </button>
+                    )}
+                    {job.status !== 'disputed' && (
+                      <button
+                        className="btn btn-outline btn-sm"
+                        style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
+                        onClick={handleCancel}
+                      >
+                        Hủy việc & Hoàn tiền
+                      </button>
+                    )}
+                  </>
                 ) : job.status === 'open' ? (
                   <button
                     className="btn btn-outline btn-sm"
@@ -504,6 +612,151 @@ export default function JobApplicants() {
                 )}
               </div>
             </div>
+
+            {/* Dispute Warning Banner for Employer */}
+            {job.status === 'disputed' && (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.12) 100%)',
+                border: '1.5px solid rgba(245, 158, 11, 0.4)',
+                borderRadius: 12,
+                padding: '16px 20px',
+                marginTop: 18,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 14
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 260 }}>
+                  <span style={{ fontSize: 26 }}>⚖️</span>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: '#b45309' }}>
+                      Công việc đang có hồ sơ khiếu nại tại Ban Trọng tài SkillBridge
+                    </div>
+                    <div style={{ fontSize: 13, color: '#92400e', marginTop: 2, lineHeight: 1.5 }}>
+                      Quỹ tiền ký quỹ Escrow ({fmtVND(job.escrowAmount || job.budget)}) đang được bảo vệ an toàn. Cả hai bên có thời hạn 72 giờ để cung cấp tài liệu, hình ảnh đối chiếu trước khi Trọng tài viên phân xử.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{
+                    background: '#d97706',
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    border: 'none',
+                    padding: '8px 18px',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 8px rgba(217, 119, 6, 0.3)'
+                  }}
+                  onClick={() => setDisputeDetailModalOpen(true)}
+                >
+                  Xem hồ sơ & Bằng chứng
+                </button>
+              </div>
+            )}
+
+            {/* Student Deadline Extension Proposal Banner */}
+            {pendingExtensionReq && (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(79, 70, 229, 0.12) 100%)',
+                border: '1.5px solid rgba(99, 102, 241, 0.35)',
+                borderRadius: 12,
+                padding: '16px 20px',
+                marginTop: 18,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 14
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 260 }}>
+                  <span style={{ fontSize: 26 }}>🕒</span>
+                  <div>
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--primary)' }}>
+                      Sinh viên đề xuất xin gia hạn thời hạn hoàn thành (+{pendingExtensionReq.additionalDays} ngày)
+                    </div>
+                    <div style={{ fontSize: 13, color: 'var(--ink)', marginTop: 3 }}>
+                      Hạn đề xuất mới: <strong>{new Date(pendingExtensionReq.proposedDeadline).toLocaleString('vi-VN')}</strong> · Lý do ({pendingExtensionReq.reasonCategory || 'Đề xuất'}): "<em>{pendingExtensionReq.detailReason || pendingExtensionReq.reason}</em>"
+                    </div>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-sm"
+                    style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+                    onClick={handleRejectExtension}
+                  >
+                    Từ chối
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    style={{ fontWeight: 700, background: 'var(--primary)' }}
+                    onClick={handleAcceptExtension}
+                  >
+                    Chấp thuận gia hạn
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Completed Job Review Callout Banner */}
+            {job.status === 'completed' && (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, rgba(202, 138, 4, 0.14) 100%)',
+                border: '1.5px solid rgba(234, 179, 8, 0.35)',
+                borderRadius: 12,
+                padding: '16px 20px',
+                marginTop: 18,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 14
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 260 }}>
+                  <span style={{ fontSize: 26 }}>⭐</span>
+                  <div>
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: '#a16207' }}>
+                      Dự án đã hoàn thành! Hãy gửi đánh giá cho sinh viên
+                    </div>
+                    <div style={{ fontSize: 13, color: '#854d0e', marginTop: 2 }}>
+                      Nhận xét của bạn sẽ giúp xây dựng uy tín cho sinh viên và nâng cao điểm uy tín Nhà tuyển dụng của bạn.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{
+                    background: '#ca8a04',
+                    color: '#ffffff',
+                    fontWeight: 700,
+                    border: 'none',
+                    padding: '8px 18px',
+                    borderRadius: 8,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                  onClick={() => openModal('review', {
+                    jobId: job.id,
+                    jobTitle: job.title,
+                    withName: job.hiredApplicant,
+                    direction: 'toStudent',
+                    onReviewed: () => loadData()
+                  })}
+                >
+                  <Icon name="star" width={14} height={14} style={{ fill: '#fff', stroke: '#fff' }} />
+                  Đánh giá sinh viên
+                </button>
+              </div>
+            )}
 
             {/* Inline Job Content & Requirements Details */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginTop: 18 }}>
@@ -891,6 +1144,8 @@ export default function JobApplicants() {
                 const isHiredOne = a.isHired;
                 const isLocked = hasHired && !isHiredOne;
                 const isShortlisted = shortlistedIds.includes(a.id || a.name);
+                const isMasterPinned = Boolean(a.isTopPinned || a.studentPlanTier === 3);
+                const isProTalent = a.studentPlanTier === 2;
 
                 return (
                   <div
@@ -901,9 +1156,29 @@ export default function JobApplicants() {
                       alignItems: 'stretch',
                       gap: 14,
                       opacity: isLocked ? 0.5 : 1,
-                      borderBottom: '1px solid var(--border)',
+                      border: isMasterPinned
+                        ? '2px solid rgba(236, 72, 153, 0.65)'
+                        : isProTalent
+                          ? '1.5px solid rgba(99, 102, 241, 0.45)'
+                          : 'none',
+                      borderBottom: (isMasterPinned || isProTalent) ? undefined : '1px solid var(--border)',
+                      borderRadius: (isMasterPinned || isProTalent) ? 14 : 0,
+                      margin: (isMasterPinned || isProTalent) ? '10px 0' : 0,
+                      boxShadow: isMasterPinned
+                        ? '0 6px 20px rgba(236, 72, 153, 0.15)'
+                        : isProTalent
+                          ? '0 4px 14px rgba(99, 102, 241, 0.1)'
+                          : 'none',
                       padding: '18px 20px',
-                      background: isHiredOne ? 'rgba(74, 222, 128, 0.04)' : isShortlisted ? 'rgba(234, 179, 8, 0.03)' : 'transparent',
+                      background: isHiredOne
+                        ? 'rgba(74, 222, 128, 0.04)'
+                        : isMasterPinned
+                          ? 'linear-gradient(180deg, rgba(236, 72, 153, 0.04) 0%, var(--surface) 100%)'
+                          : isProTalent
+                            ? 'linear-gradient(180deg, rgba(99, 102, 241, 0.03) 0%, var(--surface) 100%)'
+                            : isShortlisted
+                              ? 'rgba(234, 179, 8, 0.03)'
+                              : 'transparent',
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 14 }}>
@@ -918,7 +1193,47 @@ export default function JobApplicants() {
                             >
                               {a.name}
                             </b>
-                            {tierIconEl(a.tier)}
+                            {a.studentPlanCode ? (
+                              <UserTierBadge planCode={a.studentPlanCode} userRole="student" variant="pill" size="sm" />
+                            ) : (
+                              tierIconEl(a.tier)
+                            )}
+                            {isMasterPinned && (
+                              <span
+                                style={{
+                                  padding: '3px 10px',
+                                  fontSize: 10.5,
+                                  fontWeight: 800,
+                                  borderRadius: 999,
+                                  background: 'linear-gradient(135deg, #ec4899, #8b5cf6, #06b6d4)',
+                                  color: '#fff',
+                                  boxShadow: '0 2px 8px rgba(236, 72, 153, 0.35)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4
+                                }}
+                              >
+                                ★ GHIM TOP 1 VIP
+                              </span>
+                            )}
+                            {isProTalent && !isMasterPinned && (
+                              <span
+                                style={{
+                                  padding: '3px 8px',
+                                  fontSize: 10.5,
+                                  fontWeight: 700,
+                                  borderRadius: 999,
+                                  background: 'rgba(99, 102, 241, 0.12)',
+                                  color: '#4f46e5',
+                                  border: '1px solid rgba(99, 102, 241, 0.3)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 3
+                                }}
+                              >
+                                ⚡ PRO TALENT
+                              </span>
+                            )}
                             {isHiredOne && (
                               <span className="chip chip-lime" style={{ padding: '2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                                 <Icon name="check" width={11} height={11} /> Đã thuê
@@ -1008,6 +1323,21 @@ export default function JobApplicants() {
                             </button>
                           )}
 
+                          {job.status === 'open' && !hasHired && !a.rejected && !a.isHired && (
+                            <button
+                              type="button"
+                              className="reject"
+                              title="Từ chối hồ sơ ứng tuyển này"
+                              style={{ color: '#ef4444', borderColor: '#fca5a5' }}
+                              onClick={() => {
+                                setRejectModalApplicant(a);
+                                setRejectReason('Cảm ơn bạn đã quan tâm đến dự án. Hiện tại tiêu chí chưa hoàn toàn phù hợp với giai đoạn này.');
+                              }}
+                            >
+                              <Icon name="x" width={14} height={14} />
+                            </button>
+                          )}
+
                           <button
                             className="reject"
                             title="Nhắn tin trao đổi"
@@ -1029,11 +1359,32 @@ export default function JobApplicants() {
                           </button>
 
                           <button
+                            type="button"
                             className="reject"
-                            title="Xem chi tiết hồ sơ năng lực"
-                            onClick={() => setViewStudentModal(a)}
+                            title="Xem chi tiết hồ sơ & đánh giá uy tín từ các NTD khác"
+                            onClick={() => {
+                              if (a.studentId) setPublicProfileStudentId(a.studentId);
+                              else setViewStudentModal(a);
+                            }}
                           >
                             <Icon name="eye" />
+                          </button>
+
+                          <button
+                            type="button"
+                            className="reject"
+                            title="Báo cáo vi phạm hoặc tài khoản nghi vấn"
+                            style={{ color: '#dc2626' }}
+                            onClick={() => {
+                              setReportData({
+                                targetUserId: a.studentId,
+                                targetUserName: a.name,
+                                jobId: job.id,
+                                jobTitle: job.title
+                              });
+                            }}
+                          >
+                            <Icon name="flag" width={14} height={14} />
                           </button>
                         </div>
                       </div>
@@ -1139,9 +1490,12 @@ export default function JobApplicants() {
       {viewStudentModal && (
         <ModalShell onClose={() => setViewStudentModal(null)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
-            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, fontWeight: 700 }}>
-              {viewStudentModal.name?.charAt(0) || 'S'}
-            </div>
+            <Avatar
+              src={viewStudentModal.avatar || viewStudentModal.studentAvatarUrl}
+              name={viewStudentModal.name}
+              fontSize={22}
+              style={{ width: 56, height: 56, borderRadius: '50%' }}
+            />
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <h3 style={{ margin: 0, fontSize: 18 }}>{viewStudentModal.name}</h3>
@@ -1250,6 +1604,89 @@ export default function JobApplicants() {
           </div>
         </ModalShell>
       )}
+
+      {/* Modal Tranh Chấp & Khiếu Nại Cho NTD */}
+      <EmployerDisputeModals
+        job={job}
+        apiDeliverables={apiDeliverables}
+        disputeModalOpen={disputeModalOpen}
+        setDisputeModalOpen={setDisputeModalOpen}
+        disputeDetailModalOpen={disputeDetailModalOpen}
+        setDisputeDetailModalOpen={setDisputeDetailModalOpen}
+        loadData={loadData}
+      />
+
+      {/* Modal Từ chối ứng viên */}
+      {rejectModalApplicant && (
+        <ModalShell onClose={() => setRejectModalApplicant(null)}>
+          <div style={{ padding: '0.5rem 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 8, background: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Icon name="x" width={20} height={20} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: 17, color: '#b91c1c' }}>Từ chối hồ sơ ứng tuyển</h3>
+            </div>
+            <p style={{ fontSize: '0.9rem', color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+              Bạn đang từ chối ứng viên <b>{rejectModalApplicant.name}</b> cho vị trí "<b>{job?.title}</b>".
+            </p>
+            <div style={{ marginTop: '1rem', marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.4rem', color: 'var(--ink)' }}>
+                Lý do từ chối (thông báo lịch sự gửi tới sinh viên):
+              </label>
+              <textarea
+                rows={3}
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Nhập lý do hoặc lời chúc động viên..."
+                style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: '0.9rem', boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" className="btn btn-outline" onClick={() => setRejectModalApplicant(null)} disabled={rejecting}>
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                className="btn"
+                style={{ backgroundColor: '#ef4444', color: '#fff', border: 'none', fontWeight: 600 }}
+                disabled={rejecting}
+                onClick={handleConfirmReject}
+              >
+                {rejecting ? 'Đang từ chối...' : 'Xác nhận từ chối'}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* Modal Hồ sơ công khai & Đánh giá uy tín sinh viên */}
+      <StudentPublicProfileModal
+        isOpen={!!publicProfileStudentId}
+        onClose={() => setPublicProfileStudentId(null)}
+        studentId={publicProfileStudentId}
+        onReport={(id, name) => {
+          setPublicProfileStudentId(null);
+          setReportData({
+            targetUserId: id,
+            targetUserName: name,
+            jobId: job?.id,
+            jobTitle: job?.title
+          });
+        }}
+      />
+
+      {/* Modal Báo cáo vi phạm */}
+      <ReportModal
+        isOpen={!!reportData}
+        onClose={() => setReportData(null)}
+        targetUserId={reportData?.targetUserId}
+        targetUserName={reportData?.targetUserName}
+        jobId={reportData?.jobId}
+        jobTitle={reportData?.jobTitle}
+        onSuccess={() => {
+          loadData();
+        }}
+      />
     </div>
   );
 }
@@ -1418,5 +1855,37 @@ function ExtendDeadlineModal({ job, onClose, onExtend }) {
         </button>
       </div>
     </ModalShell>
+  );
+}
+
+{/* MODAL MỞ KHIẾU NẠI & TRANH CHẤP CHO NTD */}
+// eslint-disable-next-line no-unused-vars
+export function EmployerDisputeModals({ job, apiDeliverables, disputeModalOpen, setDisputeModalOpen, disputeDetailModalOpen, setDisputeDetailModalOpen, loadData }) {
+  const { refreshDisputes } = useStore();
+  return (
+    <>
+      {disputeModalOpen && (
+        <DisputeModal
+          job={job}
+          deliverableId={apiDeliverables?.[0]?.id}
+          onClose={() => setDisputeModalOpen(false)}
+          onSuccess={() => {
+            loadData?.();
+            refreshDisputes?.();
+            setDisputeModalOpen(false);
+          }}
+        />
+      )}
+      {disputeDetailModalOpen && (
+        <DisputeDetailModal
+          disputeId={job.disputeId || job.id}
+          onClose={() => setDisputeDetailModalOpen(false)}
+          onRefresh={() => {
+            loadData?.();
+            refreshDisputes?.();
+          }}
+        />
+      )}
+    </>
   );
 }

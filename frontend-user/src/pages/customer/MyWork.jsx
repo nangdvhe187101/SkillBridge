@@ -6,9 +6,12 @@ import { useStore, fmtVND } from '../../context/StoreContext';
 import { useModal } from '../../context/ModalContext';
 import { useToast } from '../../context/ToastContext';
 import { getJobDeliverables } from '../../api/deliverableApi';
-import { getJobById } from '../../api/jobApi';
+import { getJobById, getDeadlineExtensionRequest, cancelDeadlineExtension } from '../../api/jobApi';
+import { getJobReviews } from '../../api/reviewApi';
 import { downloadJobAttachment, downloadDeliverableFile } from '../../utils/fileDownloader';
 import { DeliverablePreview } from '../../components/modals/DeliverableModals';
+import DisputeModal from '../../components/modals/DisputeModal';
+import DisputeDetailModal from '../../components/modals/DisputeDetailModal';
 import Icon from '../../components/Icon';
 
 function formatDateTime(ts) {
@@ -100,6 +103,7 @@ const APP_STATUS_LABEL = {
   rejected: 'Chưa phù hợp',
   submitted: 'Đã nộp bàn giao',
   revision_requested: 'Cần sửa đổi',
+  disputed: 'Đang khiếu nại',
   completed: 'Hoàn thành',
   cancelled: 'Đã hủy',
 };
@@ -111,7 +115,8 @@ export default function MyWork() {
     openChatWithPerson,
     refreshMyApplications,
     cancelStudentWorkAsync,
-    withdrawApplicationAsync
+    withdrawApplicationAsync,
+    refreshDisputes
   } = useStore();
   const { openModal } = useModal();
   const { showToast } = useToast();
@@ -128,22 +133,88 @@ export default function MyWork() {
   const [cancelModalJob, setCancelModalJob] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
+  const [disputeModalJob, setDisputeModalJob] = useState(null);
+  const [disputeDetailModalId, setDisputeDetailModalId] = useState(null);
+  const [extensionRefreshTrigger, setExtensionRefreshTrigger] = useState(0);
+  const [extensionsMap, setExtensionsMap] = useState({});
   const appsPageSize = 6;
 
-  // Làm mới danh sách ứng tuyển khi vào trang
+  // Làm mới danh sách ứng tuyển & khiếu nại khi vào trang
   useEffect(() => {
     if (typeof refreshMyApplications === 'function') {
       refreshMyApplications();
     }
-  }, [refreshMyApplications]);
+    if (typeof refreshDisputes === 'function') {
+      refreshDisputes();
+    }
+  }, [refreshMyApplications, refreshDisputes]);
+
+  const loadJobReview = useCallback(async (jobId) => {
+    if (!jobId) return;
+    try {
+      const res = await getJobReviews(jobId);
+      if (res) {
+        setJobReviewsMap(prev => ({ ...prev, [jobId]: res }));
+      }
+    } catch {}
+  }, []);
+
+  // Tải trạng thái yêu cầu gia hạn deadline đang chờ cho các công việc của sinh viên
+  useEffect(() => {
+    let isMounted = true;
+    const candidateJobs = (state?.myApplications || [])
+      .map(a => a.jobId || a.job?.id)
+      .filter(Boolean);
+
+    if (candidateJobs.length === 0) return;
+
+    Promise.all(
+      candidateJobs.map(async (jid) => {
+        try {
+          const ext = await getDeadlineExtensionRequest(jid);
+          return { jid, ext };
+        } catch {
+          return { jid, ext: null };
+        }
+      })
+    ).then((results) => {
+      if (isMounted) {
+        const map = {};
+        results.forEach(r => {
+          if (r.ext) map[r.jid] = r.ext;
+        });
+        setExtensionsMap(map);
+      }
+    });
+
+    return () => { isMounted = false; };
+  }, [state?.myApplications, extensionRefreshTrigger]);
+
+  const handleCancelExtension = async (targetJobId, extId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn thu hồi đề xuất gia hạn deadline này không?')) return;
+    try {
+      await cancelDeadlineExtension(targetJobId, extId);
+      showToast?.('Đã thu hồi đề xuất gia hạn thành công.', 'check');
+      setExtensionRefreshTrigger(t => t + 1);
+    } catch (err) {
+      showToast?.(err.message || 'Không thể thu hồi yêu cầu gia hạn.', 'x');
+    }
+  };
 
   // Lọc các ứng tuyển đang trong giai đoạn làm việc thực tế
   const activeApps = useMemo(() => {
-    return (state.myApplications || []).filter((a) =>
-      ['hired', 'submitted', 'revision_requested'].includes(a.status) ||
-      ['in_progress', 'submitted', 'revision_requested'].includes(a.jobStatus)
-    );
-  }, [state.myApplications]);
+    return (state.myApplications || []).filter((a) => {
+      const targetJobId = a.jobId || a.id;
+      const hasDispute = (state.disputes || []).some(
+        (d) => Number(d.jobId) === Number(targetJobId) && ['pending', 'in_arbitration'].includes(d.status)
+      );
+      return (
+        hasDispute ||
+        ['hired', 'submitted', 'revision_requested', 'disputed'].includes(a.status) ||
+        ['in_progress', 'submitted', 'revision_requested', 'disputed'].includes(a.jobStatus)
+      );
+    });
+  }, [state.myApplications, state.disputes]);
 
   // Nạp danh sách deliverables và chi tiết job thật cho các việc đang làm
   const loadDeliverables = useCallback(async () => {
@@ -209,8 +280,14 @@ export default function MyWork() {
       const matchingJob = (state.jobs || []).find((j) => j.id === targetJobId || (a.dashJobId && j.dashJobId === a.dashJobId)) || jobInfo;
       const delivData = deliverablesMap[targetJobId] || {};
 
+      const relatedDispute = (state.disputes || []).find(
+        (d) => Number(d.jobId) === Number(targetJobId)
+      );
+
       let effectiveStatus = a.jobStatus || jobInfo?.status;
-      if (!effectiveStatus || effectiveStatus === 'open' || effectiveStatus === 'filled') {
+      if (relatedDispute && ['pending', 'in_arbitration'].includes(relatedDispute.status)) {
+        effectiveStatus = 'disputed';
+      } else if (!effectiveStatus || effectiveStatus === 'open' || effectiveStatus === 'filled') {
         effectiveStatus = a.status === 'hired' ? 'in_progress' : a.status;
       }
 
@@ -227,6 +304,8 @@ export default function MyWork() {
       return {
         id: targetJobId,
         jobId: targetJobId,
+        disputeId: relatedDispute?.id || a.disputeId || null,
+        disputeInfo: relatedDispute || null,
         title: a.jobTitle || a.title || jobInfo?.title || matchingJob?.title || 'Công việc',
         desc: jobInfo?.description || matchingJob?.desc || matchingJob?.description || '',
         req: reqList,
@@ -656,7 +735,8 @@ export default function MyWork() {
                   const isSubmitted = j.status === 'submitted';
                   const isRevision = j.status === 'revision_requested';
                   const isCompleted = j.status === 'completed';
-                  const isInProgress = !isSubmitted && !isRevision && !isCompleted;
+                  const isDisputed = j.status === 'disputed';
+                  const isInProgress = !isSubmitted && !isRevision && !isCompleted && !isDisputed;
                   const empName = j.emp || 'Nhà tuyển dụng';
                   const targetJobId = j.jobId || j.id;
                   const urgency = getDeadlineUrgency(j.deadlineAt);
@@ -668,7 +748,7 @@ export default function MyWork() {
                       style={{
                         background: '#ffffff',
                         borderRadius: 16,
-                        border: isRevision ? '2px solid #fda4af' : '1px solid #e2e8f0',
+                        border: isDisputed ? '2px solid #f59e0b' : (isRevision ? '2px solid #fda4af' : '1px solid #e2e8f0'),
                         boxShadow: '0 4px 16px rgba(0,0,0,0.04)',
                         overflow: 'hidden',
                         transition: 'transform 0.2s, box-shadow 0.2s'
@@ -676,7 +756,7 @@ export default function MyWork() {
                     >
                       {/* Top status header */}
                       <div style={{
-                        background: isRevision ? '#fff1f2' : (isSubmitted ? '#f0fdf4' : '#f8fafc'),
+                        background: isDisputed ? '#fffbeb' : (isRevision ? '#fff1f2' : (isSubmitted ? '#f0fdf4' : '#f8fafc')),
                         padding: '12px 24px',
                         borderBottom: '1px solid #e2e8f0',
                         display: 'flex',
@@ -709,6 +789,11 @@ export default function MyWork() {
                         </div>
 
                         <div>
+                          {isDisputed && (
+                            <span style={{ background: '#d97706', color: '#fff', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20 }}>
+                              ⚖️ Đang khiếu nại (Trọng tài xử lý)
+                            </span>
+                          )}
                           {isRevision && (
                             <span style={{ background: '#f43f5e', color: '#fff', fontSize: 12, fontWeight: 700, padding: '4px 12px', borderRadius: 20 }}>
                               Yêu cầu sửa đổi (Lượt {(j.revisionCount || 0) + 1}/{j.revisionLimit || 2})
@@ -1391,6 +1476,203 @@ export default function MyWork() {
                           </div>
                         ) : null}
 
+                        {isSubmitted && !isDisputed && (
+                          <div style={{
+                            background: 'rgba(2, 132, 199, 0.08)',
+                            border: '1px solid rgba(2, 132, 199, 0.3)',
+                            borderRadius: 12,
+                            padding: '14px 18px',
+                            margin: '14px 0 10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 12
+                          }}>
+                            <span style={{ fontSize: 24 }}>⏳</span>
+                            <div>
+                              <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0369a1' }}>
+                                Đã nộp sản phẩm — Đang trong thời hạn kiểm tra nghiệm thu (72 giờ)
+                              </div>
+                              <div style={{ fontSize: 12, color: '#0c4a6e', marginTop: 2 }}>
+                                Nhà tuyển dụng có 72 giờ để đánh giá hoặc yêu cầu sửa đổi. Nếu quá 72h đối tác không phản hồi, hệ thống SkillBridge sẽ tự động tất toán 100% tiền ký quỹ vào ví của bạn.
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Extension Request Status Banner */}
+                        {(() => {
+                          const ext = extensionsMap[targetJobId];
+                          if (!ext) return null;
+                          if (ext.status === 'pending') {
+                            return (
+                              <div style={{
+                                background: 'rgba(99, 102, 241, 0.08)',
+                                border: '1px solid rgba(99, 102, 241, 0.3)',
+                                borderRadius: 12,
+                                padding: '12px 16px',
+                                margin: '12px 0 8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 10
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
+                                  <span style={{ fontSize: 20 }}>🕒</span>
+                                  <div style={{ fontSize: 12.5, color: '#4338ca' }}>
+                                    <strong>Đề xuất gia hạn (+{ext.additionalDays} ngày):</strong> Đang chờ Nhà tuyển dụng phê duyệt. (Lý do: "{ext.detailReason || ext.reason}")
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="btn btn-outline btn-sm"
+                                  style={{ fontSize: 11.5, padding: '4px 10px', color: '#6366f1', borderColor: '#c7d2fe' }}
+                                  onClick={() => handleCancelExtension(targetJobId, ext.id)}
+                                >
+                                  Thu hồi
+                                </button>
+                              </div>
+                            );
+                          }
+                          if (ext.status === 'accepted') {
+                            return (
+                              <div style={{
+                                background: 'rgba(16, 185, 129, 0.08)',
+                                border: '1px solid rgba(16, 185, 129, 0.3)',
+                                borderRadius: 12,
+                                padding: '12px 16px',
+                                margin: '12px 0 8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10
+                              }}>
+                                <span style={{ fontSize: 20 }}>✅</span>
+                                <div style={{ fontSize: 12.5, color: '#047857' }}>
+                                  <strong>Đã gia hạn thành công:</strong> Nhà tuyển dụng đã chấp thuận gia hạn thêm +{ext.additionalDays} ngày cho công việc này.
+                                </div>
+                              </div>
+                            );
+                          }
+                          if (ext.status === 'rejected') {
+                            return (
+                              <div style={{
+                                background: 'rgba(239, 68, 68, 0.08)',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                borderRadius: 12,
+                                padding: '12px 16px',
+                                margin: '12px 0 8px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 10
+                              }}>
+                                <span style={{ fontSize: 20 }}>❌</span>
+                                <div style={{ fontSize: 12.5, color: '#b91c1c' }}>
+                                  <strong>Đề xuất gia hạn không được chấp thuận:</strong> {ext.rejectionReason || 'Vui lòng hoàn thành theo hạn chót ban đầu.'}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+
+                        {/* Completed Review Promotion Banner */}
+                        {isCompleted && (
+                          <div style={{
+                            background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.08) 0%, rgba(202, 138, 4, 0.14) 100%)',
+                            border: '1.5px solid rgba(234, 179, 8, 0.35)',
+                            borderRadius: 12,
+                            padding: '14px 18px',
+                            margin: '14px 0 10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: 12
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <span style={{ fontSize: 24 }}>⭐</span>
+                              <div>
+                                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#a16207' }}>
+                                  Dự án đã hoàn thành và tất toán thành công!
+                                </div>
+                                <div style={{ fontSize: 12, color: '#854d0e', marginTop: 2 }}>
+                                  Đánh giá Nhà tuyển dụng để nhận thêm điểm uy tín Reliability Score (+5đ) và nâng cao xếp hạng hồ sơ của bạn.
+                                </div>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              style={{
+                                background: '#ca8a04',
+                                color: '#ffffff',
+                                fontWeight: 700,
+                                border: 'none',
+                                padding: '7px 16px',
+                                borderRadius: 8,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 6
+                              }}
+                              onClick={() => openModal('review', {
+                                jobTitle: j.title,
+                                withName: empName,
+                                direction: 'toEmployer',
+                                dashJobId: targetJobId,
+                                jobId: targetJobId,
+                                onReviewed: () => {
+                                  refreshMyApplications?.();
+                                  loadJobReview(targetJobId);
+                                }
+                              })}
+                            >
+                              <Icon name="star" width={14} height={14} style={{ fill: '#fff', stroke: '#fff' }} />
+                              Đánh giá Nhà tuyển dụng
+                            </button>
+                          </div>
+                        )}
+
+                        {isDisputed && (
+                          <div style={{
+                            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.12) 100%)',
+                            border: '1.5px solid rgba(245, 158, 11, 0.4)',
+                            borderRadius: 14,
+                            padding: '16px 20px',
+                            margin: '16px 0 12px'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                <span style={{ fontSize: 24 }}>⚖️</span>
+                                <div>
+                                  <div style={{ fontSize: 14, fontWeight: 700, color: '#b45309' }}>
+                                    Vụ việc đang được Ban Trọng tài SkillBridge thụ lý
+                                  </div>
+                                  <div style={{ fontSize: 12.5, color: '#92400e', marginTop: 2 }}>
+                                    Tiền ký quỹ Escrow đang được phong tỏa bảo vệ quyền lợi hai bên. Bấm vào hồ sơ để xem chi tiết hoặc nộp bổ sung chứng cứ trong hạn 72 giờ.
+                                  </div>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                className="btn btn-sm"
+                                style={{
+                                  background: '#d97706',
+                                  color: '#ffffff',
+                                  fontWeight: 700,
+                                  border: 'none',
+                                  padding: '7px 16px',
+                                  borderRadius: 8,
+                                  cursor: 'pointer',
+                                  boxShadow: '0 2px 6px rgba(217, 119, 6, 0.3)'
+                                }}
+                                onClick={() => setDisputeDetailModalId(j.disputeId || j.jobId)}
+                              >
+                                Xem hồ sơ tranh chấp
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
                         {/* Action buttons */}
                         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
                           {isRevision && (
@@ -1495,6 +1777,43 @@ export default function MyWork() {
                           >
                             <Icon name="eye" width={13} height={13} /> Xem chi tiết tin
                           </button>
+
+                          {['in_progress', 'revision_requested'].includes(j.status) && !isDisputed && (
+                            <button
+                              type="button"
+                              className="btn btn-outline"
+                              style={{ color: '#4f46e5', borderColor: '#c7d2fe', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                              onClick={() => openModal('deadlineExtension', {
+                                job: j,
+                                onSuccess: () => setExtensionRefreshTrigger((t) => t + 1)
+                              })}
+                              title="Gửi đề xuất xin thêm thời gian hoàn thành"
+                            >
+                              <Icon name="clock" width={13} height={13} /> Xin gia hạn deadline
+                            </button>
+                          )}
+
+                          {['in_progress', 'submitted', 'revision_requested'].includes(j.status) && (
+                            <button
+                              className="btn btn-outline"
+                              style={{ color: '#d97706', borderColor: '#fcd34d', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                              onClick={() => setDisputeModalJob(j)}
+                              title="Mở hồ sơ khiếu nại gửi lên Ban Trọng tài SkillBridge"
+                            >
+                              <span>⚖️</span> Khiếu nại công việc
+                            </button>
+                          )}
+
+                          {j.status === 'disputed' && (
+                            <button
+                              className="btn btn-primary"
+                              style={{ background: '#d97706', borderColor: '#d97706', display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 700 }}
+                              onClick={() => setDisputeDetailModalId(j.disputeId || j.jobId)}
+                              title="Xem chi tiết hồ sơ tranh chấp & nộp bằng chứng trong 72h"
+                            >
+                              <span>⚖️</span> Xem hồ sơ tranh chấp
+                            </button>
+                          )}
 
                           <button
                             className="btn btn-outline"
@@ -1771,6 +2090,32 @@ export default function MyWork() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* MODAL MỞ KHIẾU NẠI (DISPUTE MODAL) */}
+      {disputeModalJob && (
+        <DisputeModal
+          job={disputeModalJob}
+          deliverableId={disputeModalJob.deliverable?.id}
+          onClose={() => setDisputeModalJob(null)}
+          onSuccess={() => {
+            refreshMyApplications?.();
+            refreshDisputes?.();
+            setDisputeModalJob(null);
+          }}
+        />
+      )}
+
+      {/* MODAL XEM HỒ SƠ TRANH CHẤP & NỘP CHỨNG CỨ 72H */}
+      {disputeDetailModalId && (
+        <DisputeDetailModal
+          disputeId={disputeDetailModalId}
+          onClose={() => setDisputeDetailModalId(null)}
+          onRefresh={() => {
+            refreshMyApplications?.();
+            refreshDisputes?.();
+          }}
+        />
       )}
     </div>
   );

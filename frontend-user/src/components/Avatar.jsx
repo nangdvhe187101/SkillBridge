@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { resolveAvatarUrl } from '../utils/avatarHelper';
 
 const GRADIENTS = [
   'linear-gradient(135deg, var(--primary, #6366f1), var(--coral, #f43f5e))',
@@ -8,43 +9,29 @@ const GRADIENTS = [
   'linear-gradient(135deg, #FF9A5C, var(--coral, #f43f5e))',
 ];
 
-const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:5004/api';
-const API_BASE = API_URL.replace(/\/api\/?$/, '');
-
 function hashStr(s) {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
   return h;
 }
 
-export default function Avatar({ src, name = '?', className, style, fontSize = 13 }) {
+export default function Avatar({ src, name = '?', className, style, fontSize = 13, size }) {
   const [error, setError] = useState(false);
 
   useEffect(() => {
     setError(false);
   }, [src]);
 
-  const initial = name.trim().charAt(0).toUpperCase() || '?';
-  const grad = GRADIENTS[hashStr(name) % GRADIENTS.length];
+  const safeName = typeof name === 'string' && name.trim() ? name.trim() : '?';
+  const initial = safeName.charAt(0).toUpperCase() || '?';
+  const grad = GRADIENTS[hashStr(safeName) % GRADIENTS.length];
+  const resolvedSrc = resolveAvatarUrl(src);
 
-  let resolvedSrc = null;
-  if (src && typeof src === 'string') {
-    const s = src.trim();
-    if (s.startsWith('data:') || s.startsWith('blob:')) {
-      resolvedSrc = s;
-    } else if (s.includes('.r2.dev/')) {
-      const key = s.substring(s.indexOf('.r2.dev/') + 8);
-      resolvedSrc = `${API_URL}/storage/file?key=${encodeURIComponent(key)}`;
-    } else if (s.includes('/api/storage/file')) {
-      resolvedSrc = s.startsWith('http') ? s : `${API_BASE}${s.startsWith('/') ? '' : '/'}${s}`;
-    } else if (s.startsWith('http://') || s.startsWith('https://')) {
-      resolvedSrc = s;
-    } else if (s) {
-      resolvedSrc = `${API_URL}/storage/file?key=${encodeURIComponent(s)}`;
-    }
-  }
-
-  const defaultSize = className ? {} : { width: 24, height: 24, borderRadius: '50%' };
+  let defaultSize = className ? {} : { width: 24, height: 24, borderRadius: '50%' };
+  if (size === 'sm') defaultSize = { width: 28, height: 28, borderRadius: '50%' };
+  if (size === 'md') defaultSize = { width: 38, height: 38, borderRadius: '50%' };
+  if (size === 'lg') defaultSize = { width: 56, height: 56, borderRadius: '50%' };
+  if (size === 'xl') defaultSize = { width: 88, height: 88, borderRadius: '22px' };
 
   if (resolvedSrc && !error) {
     return (
@@ -59,13 +46,7 @@ export default function Avatar({ src, name = '?', className, style, fontSize = 1
           ...defaultSize,
           ...style,
         }}
-        onError={(e) => {
-          if (!e.currentTarget.dataset.retried && src) {
-            e.currentTarget.dataset.retried = 'true';
-            const key = src.includes('avatars/') ? src.substring(src.indexOf('avatars/')) : src;
-            e.currentTarget.src = `${API_URL}/storage/file?key=${encodeURIComponent(key)}`;
-            return;
-          }
+        onError={() => {
           setError(true);
         }}
       />

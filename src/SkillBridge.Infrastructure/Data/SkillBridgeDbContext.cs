@@ -56,6 +56,8 @@ public partial class SkillBridgeDbContext : DbContext
 
     public virtual DbSet<Job> Jobs { get; set; }
 
+    public virtual DbSet<JobDeadlineExtension> JobDeadlineExtensions { get; set; }
+
     public virtual DbSet<JobAttachment> JobAttachments { get; set; }
 
     public virtual DbSet<JobDeliverable> JobDeliverables { get; set; }
@@ -108,6 +110,7 @@ public partial class SkillBridgeDbContext : DbContext
     public virtual DbSet<WithdrawalRequest> WithdrawalRequests { get; set; }
     public virtual DbSet<PaymentOrder> PaymentOrders { get; set; }
     public virtual DbSet<WebhookLog> WebhookLogs { get; set; }
+    public virtual DbSet<SubscriptionPlanConfig> SubscriptionPlanConfigs { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -442,6 +445,7 @@ public partial class SkillBridgeDbContext : DbContext
 
             entity.Property(e => e.PostedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(e => e.RevisionLimit).HasDefaultValueSql("'2'");
+            entity.Property(e => e.ExtensionCount).HasDefaultValueSql("'0'");
             entity.Property(e => e.Status).HasDefaultValueSql("'open'");
             entity.Property(e => e.UpdatedAt)
                 .ValueGeneratedOnAddOrUpdate()
@@ -819,6 +823,33 @@ public partial class SkillBridgeDbContext : DbContext
                 .HasForeignKey(d => d.ReviewedByAdminId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_bank_verif_admin");
+        });
+
+        modelBuilder.Entity<JobDeadlineExtension>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("job_deadline_extensions");
+
+            entity.HasIndex(e => new { e.JobId, e.Status }, "idx_job_deadline_extensions_job_status");
+            entity.HasIndex(e => e.StudentId, "fk_job_deadline_extensions_student");
+
+            entity.Property(e => e.Status).HasDefaultValueSql("'pending'");
+            entity.Property(e => e.RequestedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.Job).WithMany(p => p.DeadlineExtensions)
+                .HasForeignKey(d => d.JobId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_job_deadline_extensions_job");
+
+            entity.HasOne(d => d.Student).WithMany(p => p.StudentDeadlineExtensions)
+                .HasForeignKey(d => d.StudentId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_job_deadline_extensions_student");
+
+            entity.HasOne(d => d.RespondedByUser).WithMany()
+                .HasForeignKey(d => d.RespondedByUserId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_job_deadline_extensions_responder");
         });
 
         OnModelCreatingPartial(modelBuilder);

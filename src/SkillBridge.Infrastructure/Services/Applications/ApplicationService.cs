@@ -32,6 +32,7 @@ public class ApplicationService : IApplicationService
     private readonly INotificationService _notificationService;
     private readonly IEmailService? _emailService;
     private readonly ILogger<ApplicationService> _logger;
+    private readonly ISubscriptionPlanConfigService? _planConfigService;
 
     public ApplicationService(
         IApplicationRepository applicationRepository,
@@ -43,7 +44,8 @@ public class ApplicationService : IApplicationService
         IUserReliabilityService reliabilityService,
         INotificationService notificationService,
         ILogger<ApplicationService> logger,
-        IEmailService? emailService = null)
+        IEmailService? emailService = null,
+        ISubscriptionPlanConfigService? planConfigService = null)
     {
         _applicationRepository = applicationRepository;
         _jobRepository = jobRepository;
@@ -55,6 +57,7 @@ public class ApplicationService : IApplicationService
         _notificationService = notificationService;
         _logger = logger;
         _emailService = emailService;
+        _planConfigService = planConfigService;
     }
 
     public async Task<JobApplicationResponseDto> ApplyJobAsync(int studentId, ApplyJobRequest request)
@@ -73,6 +76,24 @@ public class ApplicationService : IApplicationService
         if (job.EmployerId == studentId)
         {
             throw new BusinessException("Bạn không thể ứng tuyển vào công việc do chính mình đăng.");
+        }
+
+        // Kiểm tra hạn mức nộp hồ sơ ứng tuyển trong tuần của sinh viên
+        int? maxWeeklyApps = _planConfigService != null
+            ? await _planConfigService.GetMaxWeeklyApplicationsAsync(studentId)
+            : 5;
+
+        if (maxWeeklyApps.HasValue)
+        {
+            var sevenDaysAgo = DateTime.UtcNow.AddDays(-7);
+            var recentAppsCount = await _dbContext.Applications
+                .Where(a => a.StudentId == studentId && a.AppliedAt >= sevenDaysAgo && a.Status != "cancelled")
+                .CountAsync();
+
+            if (recentAppsCount >= maxWeeklyApps.Value)
+            {
+                throw new BusinessException($"Bạn đã sử dụng hết hạn mức {maxWeeklyApps.Value} lượt nộp hồ sơ ứng tuyển trong tuần theo gói hiện tại. Vui lòng nâng cấp lên gói Freelance Pro để nộp hồ sơ không giới hạn.");
+            }
         }
 
         var existingApp = await _applicationRepository.GetByJobAndStudentAsync(request.JobId, studentId);
@@ -174,26 +195,56 @@ public class ApplicationService : IApplicationService
         }
 
         var (applications, totalCount) = await _applicationRepository.GetByJobIdPagedAsync(jobId, page, pageSize);
-        var items = applications.Select(a => new ApplicantItemDto
+
+        var studentIds = applications.Select(a => a.StudentId).Distinct().ToList();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var activeSubs = await _dbContext.Subscriptions
+            .AsNoTracking()
+            .Where(s => studentIds.Contains(s.UserId)
+                     && s.Status == PaymentConstants.ActiveSubscriptionStatus
+                     && (s.RenewalDate == null || s.RenewalDate >= today))
+            .ToListAsync();
+
+        var items = applications.Select(a =>
         {
-            ApplicationId = a.Id,
-            StudentId = a.StudentId,
-            StudentName = a.Student?.FullName ?? "Sinh viên",
-            StudentEmail = a.Student?.Email,
-            StudentPhone = a.Student?.PhoneNumber,
-            StudentAvatarUrl = _storageService.GetPublicUrl(a.Student?.AvatarUrl),
-            School = a.Student?.School,
-            ReliabilityScore = a.Student?.ReliabilityScore ?? 95,
-            JobsDoneCount = a.Student?.JobsDoneCount ?? 0,
-            KycStatus = a.Student?.KycStatus ?? "verified",
-            CvFileId = a.CvFileId,
-            CvFileName = a.CvFile?.FileName,
-            CvFileUrl = a.CvFileId.HasValue ? $"/api/cv-files/{a.CvFileId.Value}/download" : null,
-            CvLabel = a.CvFile?.Label,
-            CoverLetter = a.CoverLetter,
-            Status = a.Status,
-            AppliedAt = a.AppliedAt
-        }).ToList();
+            var sub = activeSubs.FirstOrDefault(s => s.UserId == a.StudentId);
+            int tier = 0;
+            string? planCode = null;
+            if (sub != null)
+            {
+                var p = sub.PlanName.ToUpperInvariant();
+                if (p.Contains("MASTER")) { tier = 3; planCode = "STU_MASTER"; }
+                else if (p.Contains("PRO")) { tier = 2; planCode = "STU_PRO"; }
+                else if (p.Contains("STARTER")) { tier = 1; planCode = "STU_STARTER"; }
+            }
+
+            return new ApplicantItemDto
+            {
+                ApplicationId = a.Id,
+                StudentId = a.StudentId,
+                StudentName = a.Student?.FullName ?? "Sinh viên",
+                StudentEmail = a.Student?.Email,
+                StudentPhone = a.Student?.PhoneNumber,
+                StudentAvatarUrl = _storageService.GetPublicUrl(a.Student?.AvatarUrl),
+                School = a.Student?.School,
+                ReliabilityScore = a.Student?.ReliabilityScore ?? 95,
+                JobsDoneCount = a.Student?.JobsDoneCount ?? 0,
+                KycStatus = a.Student?.KycStatus ?? "verified",
+                CvFileId = a.CvFileId,
+                CvFileName = a.CvFile?.FileName,
+                CvFileUrl = a.CvFileId.HasValue ? $"/api/cv-files/{a.CvFileId.Value}/download" : null,
+                CvLabel = a.CvFile?.Label,
+                CoverLetter = a.CoverLetter,
+                Status = a.Status,
+                AppliedAt = a.AppliedAt,
+                StudentPlanCode = planCode,
+                StudentPlanTier = tier,
+                IsTopPinned = (tier == 3)
+            };
+        })
+        .OrderByDescending(x => x.StudentPlanTier)
+        .ThenByDescending(x => x.AppliedAt)
+        .ToList();
 
         return new SkillBridge.Application.DTOs.Jobs.PagedResult<ApplicantItemDto>
         {
@@ -429,7 +480,19 @@ public class ApplicationService : IApplicationService
                     throw new BusinessException("Công việc này đã bị hủy trước đó.");
                 }
 
-                var isJobInProgress = new[] { "in_progress", "submitted", "revision_requested" }.Contains(job.Status);
+                // BẢO VỆ TÍNH TOÀN VẸN BÀN GIAO: Chặn sinh viên tự ý hủy việc khi đã nộp sản phẩm bàn giao đang chờ duyệt
+                if (isHiredForThisJob)
+                {
+                    var hasSubmittedDeliverables = job.Status == "submitted" ||
+                        await _dbContext.JobDeliverables.AnyAsync(d => d.JobId == jobId && d.StudentId == studentId && d.Status == "submitted");
+
+                    if (hasSubmittedDeliverables)
+                    {
+                        throw new BusinessException("Bạn đã nộp sản phẩm bàn giao và đang chờ nhà tuyển dụng nghiệm thu. Không thể rút đơn hoặc hủy việc lúc này (nếu có tranh chấp, vui lòng tạo hồ sơ khiếu nại).");
+                    }
+                }
+
+                var isJobInProgress = new[] { "in_progress", "revision_requested" }.Contains(job.Status);
                 var isHiredOrInProgress = isHiredForThisJob && isJobInProgress;
                 var filesToDelete = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 int? notifyEmployerId = null;
@@ -550,6 +613,63 @@ public class ApplicationService : IApplicationService
                 throw;
             }
         });
+    }
+
+    public async Task RejectApplicationAsync(int employerId, int jobId, int applicationId, string? reason = null)
+    {
+        var job = await _dbContext.Jobs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(j => j.Id == jobId);
+
+        if (job == null)
+        {
+            throw new BusinessException("Công việc không tồn tại.");
+        }
+
+        if (job.EmployerId != employerId)
+        {
+            throw new BusinessException("Bạn không có quyền thao tác trên tin tuyển dụng này.");
+        }
+
+        var application = await _dbContext.Applications
+            .FirstOrDefaultAsync(a => a.Id == applicationId && a.JobId == jobId);
+
+        if (application == null)
+        {
+            throw new BusinessException("Không tìm thấy hồ sơ ứng tuyển này.");
+        }
+
+        if (application.Status == "rejected")
+        {
+            return;
+        }
+
+        if (application.Status == "hired" || application.Status == "completed")
+        {
+            throw new BusinessException("Không thể từ chối ứng viên đã được thuê hoặc đã hoàn thành công việc.");
+        }
+
+        application.Status = "rejected";
+        application.UpdatedAt = DateTime.UtcNow;
+
+        await _dbContext.SaveChangesAsync();
+
+        try
+        {
+            var msg = string.IsNullOrWhiteSpace(reason)
+                ? $"Nhà tuyển dụng đã xem xét hồ sơ của bạn cho công việc \"{job.Title}\" và chưa phù hợp ở thời điểm hiện tại. Chúc bạn may mắn ở các cơ hội tiếp theo!"
+                : $"Hồ sơ của bạn cho công việc \"{job.Title}\" chưa phù hợp: {reason}";
+
+            await _notificationService.SendAsync(
+                application.StudentId,
+                "ℹ️",
+                msg,
+                $"/jobs/{job.Id}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Không thể gửi thông báo từ chối ứng viên cho Student {StudentId} Job #{JobId}.", application.StudentId, jobId);
+        }
     }
 
     private async Task<Job?> GetJobWithLockAsync(int jobId, CancellationToken ct = default)

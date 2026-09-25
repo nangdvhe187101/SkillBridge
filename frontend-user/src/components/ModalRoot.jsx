@@ -1,9 +1,14 @@
 import { useModal } from '../context/ModalContext';
 import { TopupModal, WithdrawModal, SubscribeModal, UpgradeVipModal, PlanPurchaseModal, HireModal, ClaimModal } from './modals/PayModals';
 import { DeliverableModal, RevisionModal, DeliverableReviewModal } from './modals/DeliverableModals';
-import { ReceiptModal, ViewJobModal, ReportModal, SuccessModal } from './modals/MiscModals';
+import { ReceiptModal, ViewJobModal, SuccessModal } from './modals/MiscModals';
+import ReportModal from './modals/ReportModal';
 import ChatModal from './modals/ChatModal';
 import ReviewModal from './modals/ReviewModal';
+import KycModal from './modals/KycModal';
+import DisputeModal from './modals/DisputeModal';
+import DisputeDetailModal from './modals/DisputeDetailModal';
+import DeadlineExtensionModal from './modals/DeadlineExtensionModal';
 
 export default function ModalRoot() {
   const { modal, closeModal } = useModal();
@@ -27,6 +32,10 @@ export default function ModalRoot() {
     case 'success': return <SuccessModal {...props} />;
     case 'chat': return <ChatModal {...props} />;
     case 'review': return <ReviewModal {...props} />;
+    case 'kyc': return <KycModal {...props} />;
+    case 'dispute': return <DisputeModal {...props} />;
+    case 'disputeDetail': return <DisputeDetailModal {...props} />;
+    case 'deadlineExtension': return <DeadlineExtensionModal {...props} />;
     default: return null;
   }
 }

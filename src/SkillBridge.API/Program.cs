@@ -371,6 +371,7 @@ using (var scope = app.Services.CreateScope())
         var dbContext = services.GetRequiredService<SkillBridge.Infrastructure.Data.SkillBridgeDbContext>();
         await SkillBridge.Infrastructure.Data.DbInitializer.SeedAdminAsync(dbContext, app.Configuration, logger);
         await SkillBridge.Infrastructure.Data.DbInitializer.EnsureChatSchemaAsync(dbContext, logger);
+        await SkillBridge.Infrastructure.Data.DbInitializer.EnsureSubscriptionPlansSchemaAndSeedAsync(dbContext, logger);
     }
     catch (Exception ex)
     {

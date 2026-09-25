@@ -39,7 +39,7 @@ export default function Footer() {
               <div>
                 <span>Khiếu nại & Tranh chấp:</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
-                  <b style={{ color: '#2563eb', fontSize: 15 }}>0987 654 321</b>
+                  <b style={{ color: '#2563eb', fontSize: 15 }}>0327 724 169</b>
                   <span style={{ fontSize: 11.5 }}>(8h00 – 21h30)</span>
                 </div>
               </div>
@@ -229,10 +229,10 @@ export default function Footer() {
             Dự án Khởi nghiệp Sáng tạo Sinh viên · FPT University EXE Capstone Project
           </p>
           <p style={{ margin: '0 0 4px 0' }}>
-            Công ty Cổ phần Công nghệ và Giáo dục SkillBridge Việt Nam — GPĐKKD: <b>0110829145</b> cấp tại Sở KH & ĐT TP. Hà Nội ngày 15/03/2024.
+            Nền tảng Công nghệ & Việc làm Sinh viên SkillBridge Việt Nam (Dự án đang trong quá trình hoàn tất thủ tục đăng ký kinh doanh & cấp MST).
           </p>
           <p style={{ margin: '0 0 16px 0' }}>
-            Địa chỉ văn phòng: Tòa nhà FPT Polytechnic, Phố Trịnh Văn Bô, Phường Phương Canh, Quận Nam Từ Liêm, TP. Hà Nội. Điện thoại: 1900.6828 - 0987.654.321. Chịu trách nhiệm nội dung: <b>Đặng Vũ Văn Năng</b>.
+            Địa chỉ văn phòng: Tòa nhà FPT Polytechnic, Phố Trịnh Văn Bô, Phường Phương Canh, Quận Nam Từ Liêm, TP. Hà Nội. Điện thoại: 1900.6828 - 0327.724.169. Chịu trách nhiệm nội dung: <b>Đào Văn Năng</b>.
           </p>
 
           {/* Official Seals & Badges: DISPLAY ONLY, NO OUTBOUND LINKS */}
