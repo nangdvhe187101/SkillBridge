@@ -74,29 +74,25 @@ namespace SkillBridge.Infrastructure.Services.Auth
             }
 
             var email = payload.Email.Trim().ToLowerInvariant();
-            var targetRoleCode = string.IsNullOrWhiteSpace(dto.RoleCode) ? RoleCode.Student : dto.RoleCode.Trim().ToLowerInvariant();
 
-            // Nếu người dùng chọn hoặc đang là sinh viên, kiểm tra domain trường FPT/FE
-            if (targetRoleCode == RoleCode.Student)
+            // Ràng buộc bảo mật tối cao: Đăng nhập Google CHỈ DÀNH RIÊNG cho sinh viên trường FPT
+            var isFptStudent = email.EndsWith("@fpt.edu.vn", StringComparison.OrdinalIgnoreCase) ||
+                               email.EndsWith("@fe.edu.vn", StringComparison.OrdinalIgnoreCase);
+
+            if (!isFptStudent)
             {
-                var isEduDomain = email.EndsWith("@fpt.edu.vn", StringComparison.OrdinalIgnoreCase) ||
-                                  email.EndsWith("@fe.edu.vn", StringComparison.OrdinalIgnoreCase);
-
-                if (!isEduDomain)
-                {
-                    throw new BusinessException("Tài khoản sinh viên bắt buộc sử dụng email trường (@fpt.edu.vn hoặc @fe.edu.vn). Vui lòng chọn tài khoản Google sinh viên của bạn.");
-                }
+                throw new BusinessException("Tính năng Đăng nhập bằng Google chỉ dành riêng cho sinh viên FPT (@fpt.edu.vn hoặc @fe.edu.vn). Nhà tuyển dụng hoặc các tài khoản khác vui lòng đăng nhập bằng Email và Mật khẩu bên dưới.");
             }
 
             var user = await userRepository.GetByEmailAsync(email);
 
             if (user == null)
             {
-                // Người dùng mới đăng ký lần đầu bằng Google
-                var role = await roleRepository.GetByCodeAsync(targetRoleCode);
+                // Người dùng mới đăng ký lần đầu bằng Google -> Luôn luôn gán vai trò Sinh viên (Student)
+                var role = await roleRepository.GetByCodeAsync(RoleCode.Student);
                 if (role == null)
                 {
-                    throw new BusinessException("Vai trò người dùng không hợp lệ.");
+                    throw new BusinessException("Không tìm thấy cấu hình vai trò sinh viên trong hệ thống.");
                 }
 
                 user = new User
@@ -121,7 +117,12 @@ namespace SkillBridge.Infrastructure.Services.Auth
             }
             else
             {
-                // Người dùng đã tồn tại -> Kiểm tra trạng thái
+                // Người dùng đã tồn tại -> Kiểm tra trạng thái và vai trò
+                if (user.Role?.Code != RoleCode.Student)
+                {
+                    throw new BusinessException("Tài khoản này thuộc vai trò Nhà tuyển dụng, không hỗ trợ đăng nhập qua Google SSO sinh viên. Vui lòng đăng nhập bằng Email và Mật khẩu.");
+                }
+
                 if (user.AccountStatus == "locked" || user.AccountStatus == "blacklisted")
                 {
                     throw new BusinessException("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.");

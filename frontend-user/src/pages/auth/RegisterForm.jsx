@@ -235,13 +235,17 @@ export default function RegisterForm({ onSwitchTab }) {
                 {loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}
             </button>
 
-            <div className="auth-separator" style={{ display: 'flex', alignItems: 'center', margin: '20px 0 14px', color: 'var(--text-muted, #94a3b8)', fontSize: 13 }}>
-                <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
-                <span style={{ padding: '0 12px' }}>hoặc tiếp tục với</span>
-                <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
-            </div>
+            {role === 'student' && (
+                <>
+                    <div className="auth-separator" style={{ display: 'flex', alignItems: 'center', margin: '20px 0 14px', color: 'var(--text-muted, #94a3b8)', fontSize: 13 }}>
+                        <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
+                        <span style={{ padding: '0 12px' }}>hoặc tiếp tục với</span>
+                        <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
+                    </div>
 
-            <GoogleLoginButton roleCode={role} text="Đăng ký với Google" onError={(msg) => setFormError(msg)} />
+                    <GoogleLoginButton roleCode="student" text="Đăng ký nhanh với Google" onError={(msg) => setFormError(msg)} />
+                </>
+            )}
 
             <div className="auth-foot">
                 Đã có tài khoản? <a onClick={() => onSwitchTab('login')}>Đăng nhập</a>

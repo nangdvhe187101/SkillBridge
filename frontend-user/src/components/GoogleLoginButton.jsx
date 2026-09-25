@@ -49,6 +49,7 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
                         callback: handleCredentialResponse,
                         auto_select: false,
                         cancel_on_tap_outside: true,
+                        hosted_domain: 'fpt.edu.vn',
                     });
 
                     if (googleButtonRef.current) {
@@ -93,14 +94,6 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
         };
     }, [clientId, roleCode, text, navigate, searchParams, googleLogin, onError]);
 
-    // Trình kích hoạt đăng nhập dạng popup tùy biến khi người dùng bấm
-    const handleCustomClick = () => {
-        if (loading) return;
-        if (window.google?.accounts?.id) {
-            window.google.accounts.id.prompt();
-        }
-    };
-
     return (
         <div className="google-sso-container" style={{ width: '100%', marginTop: 12, marginBottom: 12 }}>
             {/* Vùng render chuẩn của Google */}
@@ -115,9 +108,12 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
                     opacity: loading ? 0.6 : 1,
                 }}
             />
+            <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted, #64748b)', marginTop: 6 }}>
+                🎓 <i>Chỉ hỗ trợ tài khoản trường <b>@fpt.edu.vn</b></i>
+            </div>
             {loading && (
-                <div style={{ textAlign: 'center', fontSize: 13, color: 'var(--text-muted, #64748b)', marginTop: 6 }}>
-                    Đang kết nối tài khoản Google...
+                <div style={{ textAlign: 'center', fontSize: 13, color: '#2563eb', marginTop: 4 }}>
+                    Đang xác thực tài khoản sinh viên FPT...
                 </div>
             )}
         </div>
