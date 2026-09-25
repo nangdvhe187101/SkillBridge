@@ -23,8 +23,12 @@ import TermsOfService from './pages/legal/TermsOfService';
 import PrivacyPolicy from './pages/legal/PrivacyPolicy';
 import PaymentRefundPolicy from './pages/legal/PaymentRefundPolicy';
 import Contact from './pages/customer/Contact';
+import Forbidden from './pages/customer/Forbidden';
 
 export default function App() {
+  const EMPLOYER_ROLES = ['employer', 'recruiter', 'business', 'admin'];
+  const STUDENT_ROLES = ['student', 'admin'];
+
   return (
     <BrowserRouter>
       <Routes>
@@ -52,45 +56,47 @@ export default function App() {
           <Route path="/payment-policy" element={<PaymentRefundPolicy />} />
           <Route path="/dispute-policy" element={<PaymentRefundPolicy />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/forbidden" element={<Forbidden />} />
+          <Route path="/403" element={<Forbidden />} />
 
           {/* Student Role Routes */}
           <Route path="/mywork" element={
-            <ProtectedRoute><MyWork /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}><MyWork /></ProtectedRoute>
           } />
           <Route path="/student/mywork" element={
-            <ProtectedRoute><MyWork /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}><MyWork /></ProtectedRoute>
           } />
           <Route path="/profile" element={
             <ProtectedRoute><Profile /></ProtectedRoute>
           } />
           <Route path="/student/profile" element={
-            <ProtectedRoute><Profile /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}><Profile /></ProtectedRoute>
           } />
 
           {/* Employer Role Routes */}
           <Route path="/employer" element={
-            <ProtectedRoute><Dashboard forcedTab="overview" /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={EMPLOYER_ROLES}><Dashboard forcedTab="overview" /></ProtectedRoute>
           } />
           <Route path="/employer/dashboard" element={
-            <ProtectedRoute><Dashboard forcedTab="overview" /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={EMPLOYER_ROLES}><Dashboard forcedTab="overview" /></ProtectedRoute>
           } />
           <Route path="/employer/jobs" element={
-            <ProtectedRoute><Dashboard forcedTab="jobs" /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={EMPLOYER_ROLES}><Dashboard forcedTab="jobs" /></ProtectedRoute>
           } />
           <Route path="/employer/post-job" element={
-            <ProtectedRoute><Dashboard forcedTab="post" /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={EMPLOYER_ROLES}><Dashboard forcedTab="post" /></ProtectedRoute>
           } />
           <Route path="/employer/create-job" element={
-            <ProtectedRoute><Dashboard forcedTab="post" /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={EMPLOYER_ROLES}><Dashboard forcedTab="post" /></ProtectedRoute>
           } />
           <Route path="/employer/ads" element={
-            <ProtectedRoute><Dashboard forcedTab="ads" /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={EMPLOYER_ROLES}><Dashboard forcedTab="ads" /></ProtectedRoute>
           } />
           <Route path="/employer/jobs/:jobId/edit" element={
-            <ProtectedRoute><Dashboard forcedTab="edit" /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={EMPLOYER_ROLES}><Dashboard forcedTab="edit" /></ProtectedRoute>
           } />
           <Route path="/employer/jobs/:jobId" element={
-            <ProtectedRoute><JobApplicants /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={EMPLOYER_ROLES}><JobApplicants /></ProtectedRoute>
           } />
 
           {/* Backward compatibility aliases */}
@@ -124,7 +130,7 @@ export default function App() {
             <ProtectedRoute><AccountSettings forcedTab="kyc" /></ProtectedRoute>
           } />
           <Route path="/settings/cv" element={
-            <ProtectedRoute><AccountSettings forcedTab="cv_manager" /></ProtectedRoute>
+            <ProtectedRoute allowedRoles={STUDENT_ROLES}><AccountSettings forcedTab="cv_manager" /></ProtectedRoute>
           } />
           <Route path="/settings/password" element={
             <ProtectedRoute><AccountSettings forcedTab="password" /></ProtectedRoute>
