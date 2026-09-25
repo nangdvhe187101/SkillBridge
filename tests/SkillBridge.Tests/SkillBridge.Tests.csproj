@@ -15,14 +15,14 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Moq" Version="4.20.72" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.14" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\SkillBridge.Domain\SkillBridge.Domain.csproj" />
-    <ProjectReference Include="..\..\src\SkillBridge.Application\SkillBridge.Application.csproj" />
-    <ProjectReference Include="..\..\src\SkillBridge.Infrastructure\SkillBridge.Infrastructure.csproj" />
-    <ProjectReference Include="..\..\src\SkillBridge.API\SkillBridge.API.csproj" />
+    <ProjectReference Include="../../src/SkillBridge.Domain/SkillBridge.Domain.csproj" />
+    <ProjectReference Include="../../src/SkillBridge.Application/SkillBridge.Application.csproj" />
+    <ProjectReference Include="../../src/SkillBridge.Infrastructure/SkillBridge.Infrastructure.csproj" />
+    <ProjectReference Include="../../src/SkillBridge.API/SkillBridge.API.csproj" />
   </ItemGroup>
 
 </Project>
