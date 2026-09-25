@@ -169,7 +169,14 @@ var frontendBaseUrl = builder.Configuration["Frontend:BaseUrl"] ?? "http://local
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-        policy.WithOrigins(frontendBaseUrl, "http://localhost:5173")
+        policy.WithOrigins(
+    frontendBaseUrl,
+    "https://skillbridge.id.vn",
+    "https://www.skillbridge.id.vn",
+    "https://admin.skillbridge.id.vn",
+    "http://localhost:5173",
+    "http://localhost:5174"
+)
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials()); // cần thiết cho SignalR và Cookie
