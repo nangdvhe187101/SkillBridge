@@ -52,7 +52,7 @@ public class KycController : ControllerBase
     [EnableRateLimiting("UploadPolicy")]
     public async Task<IActionResult> SubmitKyc(
         [FromForm] SubmitKycRequest request,
-        [FromForm] List<IFormFile> files,
+        List<IFormFile> files,
         CancellationToken ct)
     {
         var userId = User.GetRequiredUserId();

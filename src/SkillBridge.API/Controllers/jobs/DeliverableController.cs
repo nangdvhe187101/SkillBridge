@@ -36,7 +36,7 @@ public class DeliverableController : ControllerBase
     [EnableRateLimiting("UploadPolicy")]
     public async Task<IActionResult> SubmitDeliverable(
         int jobId,
-        [FromForm] IFormFile? file,
+        IFormFile? file,
         [FromForm] string? externalUrl,
         [FromForm] string? note,
         CancellationToken cancellationToken = default)

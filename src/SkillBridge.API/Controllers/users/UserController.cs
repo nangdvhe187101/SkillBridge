@@ -42,7 +42,7 @@ public class UserController : ControllerBase
     [HttpPost("avatar")]
     [Consumes("multipart/form-data")]
     [EnableRateLimiting("UploadPolicy")]
-    public async Task<IActionResult> UploadAvatar([FromForm] IFormFile file)
+    public async Task<IActionResult> UploadAvatar(IFormFile file)
     {
         if (file == null || file.Length == 0)
         {
@@ -86,7 +86,7 @@ public class UserController : ControllerBase
     [HttpPost("portfolio")]
     [Consumes("multipart/form-data")]
     [EnableRateLimiting("UploadPolicy")]
-    public async Task<IActionResult> UploadPortfolio([FromForm] IFormFile file)
+    public async Task<IActionResult> UploadPortfolio(IFormFile file)
     {
         if (file == null || file.Length == 0)
         {

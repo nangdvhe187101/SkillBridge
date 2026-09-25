@@ -142,7 +142,7 @@ public class ConversationsController : ControllerBase
     [EnableRateLimiting("UploadPolicy")]
     public async Task<IActionResult> UploadAttachment(
         [FromRoute] int id,
-        [FromForm] IFormFile file,
+        IFormFile file,
         CancellationToken cancellationToken = default)
     {
         if (file == null || file.Length == 0)

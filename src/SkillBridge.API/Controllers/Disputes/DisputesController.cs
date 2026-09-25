@@ -36,7 +36,7 @@ public class DisputesController : ControllerBase
         [FromForm] string reason,
         [FromForm] string? origin,
         [FromForm] int? deliverableId,
-        [FromForm] List<IFormFile>? files,
+        List<IFormFile>? files,
         [FromForm] List<string>? fileDescriptions,
         CancellationToken ct = default)
     {
@@ -96,7 +96,7 @@ public class DisputesController : ControllerBase
     [EnableRateLimiting("UploadPolicy")]
     public async Task<IActionResult> AddEvidence(
         [FromRoute] int id,
-        [FromForm] IFormFile file,
+        IFormFile file,
         [FromForm] string? description,
         CancellationToken ct = default)
     {

@@ -153,7 +153,7 @@ public class JobController : ControllerBase
     [HttpPost("{id:int}/attachments")]
     [Consumes("multipart/form-data")]
     [EnableRateLimiting("UploadPolicy")]
-    public async Task<IActionResult> UploadJobAttachment(int id, [FromForm] Microsoft.AspNetCore.Http.IFormFile file)
+    public async Task<IActionResult> UploadJobAttachment(int id, Microsoft.AspNetCore.Http.IFormFile file)
     {
         var employerId = User.GetRequiredUserId();
         using var stream = file?.OpenReadStream();
