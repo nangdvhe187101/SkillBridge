@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Disallow: /employer/
+Disallow: /admin/
+Disallow: /mywork/
+Disallow: /profile/
+Disallow: /settings/
+Disallow: /wallet/
+Disallow: /messages/
+
+Sitemap: https://skillbridge.id.vn/sitemap.xml
