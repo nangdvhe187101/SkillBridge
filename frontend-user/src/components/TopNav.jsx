@@ -177,14 +177,14 @@ export default function TopNav() {
               </button>
             ) : (
               <>
-                <button className="btn btn-outline btn-sm" onClick={() => { navigate('/employer/post-job'); setNavOpen(false); }}>
-                  Đăng tin tuyển dụng
+                <button className="btn btn-primary btn-sm" onClick={() => { navigate('/auth?tab=register'); setNavOpen(false); }}>
+                  Đăng ký miễn phí
                 </button>
                 <button className="btn btn-outline btn-sm" onClick={() => { navigate('/auth?tab=login'); setNavOpen(false); }}>
                   Đăng nhập
                 </button>
-                <button className="btn btn-primary btn-sm" onClick={() => { navigate('/auth?tab=register'); setNavOpen(false); }}>
-                  Đăng ký miễn phí
+                <button className="btn btn-subtle btn-sm" onClick={() => { navigate('/employer/post-job'); setNavOpen(false); }}>
+                  Đăng tin tuyển dụng
                 </button>
               </>
             )}
@@ -402,7 +402,7 @@ export default function TopNav() {
                 Đăng tin tuyển dụng
               </button>
               <button className="btn btn-ghost btn-sm" onClick={() => navigate('/auth?tab=login')}>Đăng nhập</button>
-              <button className="btn btn-primary btn-sm" onClick={() => navigate('/auth?tab=register')}>
+              <button className="btn btn-primary btn-sm btn-nav-register" onClick={() => navigate('/auth?tab=register')}>
                 Đăng ký miễn phí
               </button>
             </>

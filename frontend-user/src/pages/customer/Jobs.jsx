@@ -38,6 +38,7 @@ export default function Jobs() {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState('Tất cả');
   const [sort, setSort] = useState('new');
+  const [statusTab, setStatusTab] = useState('open'); // 'open' | 'in_progress' | 'completed' | 'all'
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(6);
   const [adModal, setAdModal] = useState(null); // Ad object
@@ -45,11 +46,40 @@ export default function Jobs() {
   const [submittedAd, setSubmittedAd] = useState(false);
 
   useEffect(() => {
-    if (refreshJobs) refreshJobs();
-  }, [refreshJobs]);
+    if (refreshJobs) {
+      refreshJobs(statusTab === 'all' ? 'all' : statusTab);
+    }
+  }, [refreshJobs, statusTab]);
 
-  const allJobs = state.jobs;
+  const allJobs = state.jobs || [];
   const savedCount = (state.savedJobIds || []).length;
+
+  // Thống kê số lượng theo trạng thái để hiển thị trên Tab
+  const { openCount, inProgressCount, completedCount, allCount } = useMemo(() => {
+    let openC = 0;
+    let inProgressC = 0;
+    let completedC = 0;
+    let allC = 0;
+
+    allJobs.forEach((j) => {
+      if (j.status === 'cancelled') return;
+      allC++;
+      const isCompleted = j.status === 'completed';
+      const isHiredOrInProgress = (j.status === 'in_progress' || j.status === 'filled' || j.status === 'submitted' || j.status === 'revision_requested' || Boolean(j.hiredApplicantId)) && !isCompleted;
+      const isOpen = j.status === 'open' && !j.hiredApplicantId && !isCompleted;
+
+      if (isOpen) openC++;
+      else if (isHiredOrInProgress) inProgressC++;
+      else if (isCompleted) completedC++;
+    });
+
+    return { openCount: openC, inProgressCount: inProgressC, completedCount: completedC, allCount: allC };
+  }, [allJobs]);
+
+  const handleStatusTabChange = (newTab) => {
+    setStatusTab(newTab);
+    setCurrentPage(1);
+  };
 
   // Reset to page 1 on filter/search/sort change
   useEffect(() => {
@@ -68,18 +98,40 @@ export default function Jobs() {
   }, [allJobs, savedCount]);
 
   const list = useMemo(() => {
-    let l = allJobs.filter(
-      (j) =>
-        (j.status === 'open' || state.appliedJobIds.includes(j.id)) &&
-        (filter === 'Tất cả' || (filter === 'saved' ? (state.savedJobIds || []).includes(j.id) : j.cat === filter)) &&
-        (q === '' || j.title.toLowerCase().includes(q.toLowerCase().trim()) ||
-          (j.cat && j.cat.toLowerCase().includes(q.toLowerCase().trim())) ||
-          (j.emp && j.emp.toLowerCase().includes(q.toLowerCase().trim())))
-    );
+    let l = allJobs.filter((j) => {
+      // 1. Phân định trạng thái chuẩn xác theo BR-01 & BR-02
+      const isCompleted = j.status === 'completed';
+      const isHiredOrInProgress = (j.status === 'in_progress' || j.status === 'filled' || j.status === 'submitted' || j.status === 'revision_requested' || Boolean(j.hiredApplicantId)) && !isCompleted;
+      const isOpen = j.status === 'open' && !j.hiredApplicantId && !isCompleted;
+
+      if (statusTab === 'open' && !isOpen) return false;
+      if (statusTab === 'in_progress' && !isHiredOrInProgress) return false;
+      if (statusTab === 'completed' && !isCompleted) return false;
+      if (statusTab === 'all' && j.status === 'cancelled') return false;
+
+      // 2. Lọc theo danh mục / Đã lưu
+      if (filter === 'saved') {
+        if (!(state.savedJobIds || []).includes(j.id)) return false;
+      } else if (filter !== 'Tất cả' && j.cat !== filter) {
+        return false;
+      }
+
+      // 3. Lọc theo từ khóa tìm kiếm
+      if (q) {
+        const query = q.toLowerCase().trim();
+        const match = (j.title && j.title.toLowerCase().includes(query)) ||
+          (j.cat && j.cat.toLowerCase().includes(query)) ||
+          (j.emp && j.emp.toLowerCase().includes(query));
+        if (!match) return false;
+      }
+
+      return true;
+    });
+
     if (sort === 'high') l = [...l].sort((a, b) => b.budget - a.budget);
     if (sort === 'low') l = [...l].sort((a, b) => a.budget - b.budget);
     return l;
-  }, [allJobs, state.appliedJobIds, state.savedJobIds, filter, q, sort]);
+  }, [allJobs, statusTab, filter, state.savedJobIds, q, sort]);
 
   const totalPages = Math.ceil(list.length / pageSize) || 1;
   const pagedList = useMemo(() => {
@@ -109,6 +161,10 @@ export default function Jobs() {
   let adCounter = (currentPage - 1);
   pagedList.forEach((j, i) => {
     const isJobSaved = (state.savedJobIds || []).includes(j.id);
+    const isCompleted = j.status === 'completed';
+    const isHiredOrInProgress = (j.status === 'in_progress' || j.status === 'filled' || j.status === 'submitted' || j.status === 'revision_requested' || Boolean(j.hiredApplicantId)) && !isCompleted;
+    const isOpen = j.status === 'open' && !j.hiredApplicantId && !isCompleted;
+
     items.push(
       <div className="job-card" key={j.id} onClick={() => navigate(`/jobs/${j.id}`)}>
         <div className="jc-top" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -148,6 +204,35 @@ export default function Jobs() {
         </div>
         <h3>{j.title}</h3>
         <div className="jc-tags" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {/* Badge trạng thái rõ ràng */}
+          {isCompleted && (
+            <span
+              className="chip"
+              style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#059669', fontWeight: 600, border: '1px solid rgba(16, 185, 129, 0.25)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              title="Công việc đã hoàn thành và nghiệm thu"
+            >
+              <Icon name="check" width="12" height="12" /> Đã hoàn thành
+            </span>
+          )}
+          {isHiredOrInProgress && (
+            <span
+              className="chip"
+              style={{ background: 'rgba(59, 130, 246, 0.12)', color: '#2563eb', fontWeight: 600, border: '1px solid rgba(59, 130, 246, 0.25)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              title="Đã có sinh viên nhận việc và đang triển khai"
+            >
+              <Icon name="lock" width="12" height="12" /> Đã có người nhận
+            </span>
+          )}
+          {isOpen && (
+            <span
+              className="chip chip-lime"
+              style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              title="Công việc đang mở tuyển ứng viên mới"
+            >
+              <Icon name="bolt" width="12" height="12" /> Đang tuyển
+            </span>
+          )}
+
           <span className="chip">{j.cat}</span>
           {(() => {
             const dur = formatDurationBadge(j.deadlineAt, j.postedAt);
@@ -207,6 +292,52 @@ export default function Jobs() {
             <input type="text" placeholder="Tìm theo tên công việc, ví dụ: dựng video TikTok..." value={q} onChange={(e) => setQ(e.target.value)} />
             <button className="btn btn-primary btn-sm">Tìm kiếm</button>
           </div>
+
+          {/* Thanh chuyển tab Trạng thái việc làm (Status Filter Tabs) */}
+          <div className="status-tabs-row" style={{ display: 'flex', gap: 8, marginTop: 16, marginBottom: 4, overflowX: 'auto', paddingBottom: 4 }}>
+            {[
+              { key: 'open', label: 'Đang mở tuyển', count: openCount, icon: 'bolt' },
+              { key: 'in_progress', label: 'Đang thực hiện', count: inProgressCount, icon: 'lock' },
+              { key: 'completed', label: 'Đã hoàn thành', count: completedCount, icon: 'check' },
+              { key: 'all', label: 'Tất cả', count: allCount, icon: 'grid' },
+            ].map((tab) => {
+              const isActive = statusTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => handleStatusTabChange(tab.key)}
+                  className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-subtle'}`}
+                  style={{
+                    borderRadius: 20,
+                    padding: '6px 14px',
+                    fontWeight: isActive ? 600 : 500,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontSize: 13,
+                    whiteSpace: 'nowrap',
+                    boxShadow: isActive ? '0 2px 8px rgba(108, 76, 255, 0.25)' : 'none',
+                    transition: 'all 0.18s ease',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Icon name={tab.icon} width="13" height="13" />
+                  <span>{tab.label}</span>
+                  <span style={{
+                    background: isActive ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.06)',
+                    color: isActive ? '#fff' : 'var(--ink-soft)',
+                    borderRadius: 10,
+                    padding: '1px 6px',
+                    fontSize: 11,
+                    marginLeft: 2
+                  }}>
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           <div className="filter-row">
             <div className="filter-chips">
               {cats.map((c) => (

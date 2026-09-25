@@ -176,9 +176,13 @@ export default function JobDetail() {
     else if (appStatus === 'rejected') applyLabel = 'Rất tiếc, bạn chưa được chọn';
     else if (appStatus === 'cancelled') applyLabel = 'Đã hủy';
     else applyLabel = 'Đã ứng tuyển';
-  } else if (j?.status && j.status !== 'open') {
-    applyLabel = 'Đã đóng tuyển';
+  } else if (j?.hiredApplicantId || (j?.status && j.status !== 'open')) {
     applyDisabled = true;
+    if (j?.status === 'completed') {
+      applyLabel = 'Công việc đã hoàn thành';
+    } else {
+      applyLabel = 'Đã có người nhận việc';
+    }
   }
 
   const handleStartApply = () => {
@@ -321,6 +325,28 @@ export default function JobDetail() {
           </a>
           <div className="jd-grid">
             <div className="jd-main">
+              {j.status === 'completed' && (
+                <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669', flexShrink: 0 }}>
+                    <Icon name="check" width="16" height="16" />
+                  </div>
+                  <div>
+                    <b style={{ color: '#059669', fontSize: 14, display: 'block' }}>Công việc đã hoàn thành & nghiệm thu</b>
+                    <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Dự án này đã được hoàn tất thành công. Thông tin được lưu trữ để tham khảo hồ sơ.</span>
+                  </div>
+                </div>
+              )}
+              {((j.status && j.status !== 'open' && j.status !== 'completed') || j.hiredApplicantId) && (
+                <div style={{ background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: 10, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(59, 130, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb', flexShrink: 0 }}>
+                    <Icon name="lock" width="16" height="16" />
+                  </div>
+                  <div>
+                    <b style={{ color: '#2563eb', fontSize: 14, display: 'block' }}>Công việc đã có người nhận việc</b>
+                    <span style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Nhà tuyển dụng đã giao việc cho sinh viên phù hợp và hệ thống đã ngừng tiếp nhận hồ sơ mới.</span>
+                  </div>
+                </div>
+              )}
               <h1>{j.title}</h1>
               <div className="jd-tags">
                 <span className="chip">{j.cat}</span>
@@ -356,22 +382,21 @@ export default function JobDetail() {
                   </h4>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
                     {(j.attachments || dashJob?.attachments || []).map((f, i) => (
-                      <div key={f.id || i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--surface)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 36, height: 36, borderRadius: 8, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0 }}>
+                      <div key={f.id || i} className="job-attachment-row">
+                        <div className="job-attachment-info">
+                          <div className="job-attachment-icon">
                             <Icon name="folder" width="18" height="18" />
                           </div>
-                          <div>
-                            <b style={{ fontSize: 13.5, display: 'block' }}>{f.fileName || f.name}</b>
-                            <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                          <div className="job-attachment-text">
+                            <b className="job-attachment-name" title={f.fileName || f.name}>{f.fileName || f.name}</b>
+                            <span className="job-attachment-size">
                               {(f.fileSize || f.size) ? ((f.fileSize || f.size) > 1024 * 1024 ? ((f.fileSize || f.size) / (1024 * 1024)).toFixed(1) + ' MB' : ((f.fileSize || f.size) / 1024).toFixed(0) + ' KB') : 'Tài liệu đề bài'}
                             </span>
                           </div>
                         </div>
                         <button
                           type="button"
-                          className="btn btn-outline btn-sm"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                          className="btn btn-outline btn-sm job-attachment-btn"
                           onClick={async () => {
                             showToast(`Đang tải xuống: ${f.fileName || f.name}`);
                             await downloadJobAttachment(f, j.title, j.id);

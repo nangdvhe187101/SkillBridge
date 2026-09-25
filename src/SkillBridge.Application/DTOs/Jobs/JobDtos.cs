@@ -122,6 +122,7 @@ public class JobQueryParameters
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 10;
     public string? Sort { get; set; } // "newest", "budget_asc", "budget_desc"
+    public string? Status { get; set; } // "open", "in_progress", "completed", "all"
 }
 
 public class PagedResult<T>

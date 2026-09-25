@@ -19,6 +19,7 @@ export async function getJobs(params = {}) {
     if (params.page) query.append('page', params.page);
     if (params.pageSize) query.append('pageSize', params.pageSize);
     if (params.sort) query.append('sort', params.sort);
+    if (params.status) query.append('status', params.status);
 
     const queryString = query.toString();
     const url = queryString ? `/jobs?${queryString}` : '/jobs';

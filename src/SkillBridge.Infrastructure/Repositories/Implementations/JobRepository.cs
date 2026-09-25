@@ -101,10 +101,32 @@ public class JobRepository : IJobRepository
 
     public async Task<PagedResult<JobSummaryDto>> GetPublicJobsPagedAsync(JobQueryParameters query, int? currentUserId = null)
     {
-        // 1. Tận dụng index idx_jobs_status_category (Status = 'open', CategoryId)
         var queryable = _context.Jobs
             .AsNoTracking()
-            .Where(j => j.Status == "open" && j.Employer.AccountStatus != "blacklisted");
+            .Where(j => j.Employer.AccountStatus != "blacklisted");
+
+        // Lọc theo trạng thái công việc (mặc định: chỉ lấy công việc đang mở tuyển và CHƯA CÓ NGƯỜI NHẬN VIỆC)
+        var statusFilter = query.Status?.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(statusFilter) || statusFilter == "open")
+        {
+            queryable = queryable.Where(j => j.Status == "open" && j.HiredApplicantId == null);
+        }
+        else if (statusFilter == "in_progress" || statusFilter == "filled")
+        {
+            queryable = queryable.Where(j => (j.Status == "in_progress" || j.Status == "submitted" || j.Status == "revision_requested" || j.HiredApplicantId != null) && j.Status != "completed" && j.Status != "cancelled");
+        }
+        else if (statusFilter == "completed")
+        {
+            queryable = queryable.Where(j => j.Status == "completed");
+        }
+        else if (statusFilter == "all")
+        {
+            queryable = queryable.Where(j => j.Status != "cancelled");
+        }
+        else
+        {
+            queryable = queryable.Where(j => j.Status == statusFilter);
+        }
 
         if (query.CategoryId.HasValue && query.CategoryId.Value > 0)
         {

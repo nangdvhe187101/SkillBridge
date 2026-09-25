@@ -393,10 +393,10 @@ function reducer(state, action) {
         return {
           ...oldJ,
           ...newJ,
-          hiredApplicant: newJ.hiredApplicant || oldJ.hiredApplicant || null,
-          hiredApplicantId: newJ.hiredApplicantId || oldJ.hiredApplicantId || null,
-          hiredStudentName: newJ.hiredStudentName || oldJ.hiredStudentName || null,
-          escrowAmount: newJ.escrowAmount ?? oldJ.escrowAmount ?? null,
+          hiredApplicant: newJ.hiredApplicant !== undefined ? newJ.hiredApplicant : (oldJ.hiredApplicant || null),
+          hiredApplicantId: newJ.hiredApplicantId !== undefined ? newJ.hiredApplicantId : (oldJ.hiredApplicantId || null),
+          hiredStudentName: newJ.hiredStudentName !== undefined ? newJ.hiredStudentName : (oldJ.hiredStudentName || null),
+          escrowAmount: newJ.escrowAmount !== undefined ? newJ.escrowAmount : (oldJ.escrowAmount ?? null),
         };
       });
       return { ...state, jobs };
@@ -1179,9 +1179,11 @@ export function StoreProvider({ children }) {
     };
   }, []);
 
-  const refreshJobs = useCallback(async () => {
+  const refreshJobs = useCallback(async (status = null) => {
     try {
-      const res = await jobApi.getJobs({ page: 1, pageSize: 50 });
+      const params = { page: 1, pageSize: 50 };
+      if (status) params.status = status;
+      const res = await jobApi.getJobs(params);
       const items = res?.items || (Array.isArray(res) ? res : []);
       dispatch({ type: 'SET_JOBS', jobs: items.map(mapPublicJob) });
     } catch (err) {
