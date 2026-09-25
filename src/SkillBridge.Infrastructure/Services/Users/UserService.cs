@@ -379,7 +379,8 @@ public class UserService : IUserService
             ReliabilityScore = user.ReliabilityScore,
             JobsDoneCount = user.JobsDoneCount,
             ReferralCode = user.ReferralCode,
-            JoinedAt = user.JoinedAt
+            JoinedAt = user.JoinedAt,
+            HasPassword = !string.IsNullOrEmpty(user.PasswordHash) && !user.PasswordHash.StartsWith("GOOGLE_SSO:")
         };
     }
 }

@@ -36,8 +36,8 @@ namespace SkillBridge.Infrastructure.Services.Auth
             var currentPassword = dto.CurrentPassword ?? string.Empty;
             var newPassword = dto.NewPassword ?? string.Empty;
 
-            if (string.IsNullOrEmpty(currentPassword) || string.IsNullOrEmpty(newPassword))
-                throw new BusinessException("Vui lòng nhập đầy đủ mật khẩu hiện tại và mật khẩu mới");
+            if (string.IsNullOrEmpty(newPassword))
+                throw new BusinessException("Vui lòng nhập mật khẩu mới");
 
             if (newPassword.Length > 100)
                 throw new BusinessException("Mật khẩu mới không được vượt quá 100 ký tự");
@@ -49,14 +49,25 @@ namespace SkillBridge.Infrastructure.Services.Auth
             if (user is null)
                 throw new BusinessException("Không tìm thấy thông tin người dùng");
 
-            var currentValid = BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash);
-            if (!currentValid)
-                throw new BusinessException("Mật khẩu hiện tại không chính xác");
+            var isGoogleSsoAccountWithoutPassword = !string.IsNullOrEmpty(user.PasswordHash) &&
+                                                    user.PasswordHash.StartsWith("GOOGLE_SSO:");
 
-            var isDuplicate = BCrypt.Net.BCrypt.Verify(newPassword, user.PasswordHash);
-            if (isDuplicate)
-                throw new BusinessException("Mật khẩu mới không được trùng với mật khẩu cũ");
+            if (!isGoogleSsoAccountWithoutPassword)
+            {
+                // Tài khoản thông thường đã có mật khẩu: Bắt buộc kiểm tra mật khẩu hiện tại
+                if (string.IsNullOrEmpty(currentPassword))
+                    throw new BusinessException("Vui lòng nhập mật khẩu hiện tại");
 
+                var currentValid = BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash);
+                if (!currentValid)
+                    throw new BusinessException("Mật khẩu hiện tại không chính xác");
+
+                var isDuplicate = BCrypt.Net.BCrypt.Verify(newPassword, user.PasswordHash);
+                if (isDuplicate)
+                    throw new BusinessException("Mật khẩu mới không được trùng với mật khẩu cũ");
+            }
+
+            // Lưu mật khẩu chuẩn (bỏ tiền tố GOOGLE_SSO:)
             user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
             user.FailedLoginAttempts = 0;
             user.LockoutUntil = null;
@@ -80,7 +91,9 @@ namespace SkillBridge.Infrastructure.Services.Auth
                 logger.LogError(ex, "Gửi thông báo đổi mật khẩu thất bại cho user {UserId}", user.Id);
             }
 
-            return "Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.";
+            return isGoogleSsoAccountWithoutPassword
+                ? "Thiết lập mật khẩu thành công! Giờ đây bạn có thể đăng nhập bằng cả Google và Mật khẩu mới."
+                : "Đổi mật khẩu thành công. Vui lòng đăng nhập lại bằng mật khẩu mới.";
         }
     }
 }

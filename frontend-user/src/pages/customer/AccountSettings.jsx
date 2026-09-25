@@ -1017,7 +1017,8 @@ function CvManagerTab() {
 }
 
 // 4. Password Tab
-function PasswordTab({ changePassword, logout }) {
+function PasswordTab({ changePassword, logout, currentUser }) {
+    const hasPassword = currentUser?.hasPassword !== false;
     const [form, setForm] = useState({ current: '', next: '', next2: '' });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
@@ -1029,12 +1030,12 @@ function PasswordTab({ changePassword, logout }) {
     const save = async () => {
         setError('');
         setSuccess('');
-        if (!form.current) {
+        if (hasPassword && !form.current) {
             setError('Vui lòng nhập mật khẩu hiện tại.');
             return;
         }
         if (!form.next) {
-            setError('Vui lòng nhập mật khẩu mới.');
+            setError(hasPassword ? 'Vui lòng nhập mật khẩu mới.' : 'Vui lòng nhập mật khẩu muốn thiết lập.');
             return;
         }
         if (form.next !== form.next2) {
@@ -1047,14 +1048,18 @@ function PasswordTab({ changePassword, logout }) {
         }
         setSaving(true);
         try {
-            await changePassword(form.current, form.next);
-            setSuccess('Đổi mật khẩu thành công! Hệ thống sẽ chuyển hướng để bạn đăng nhập lại sau 2 giây...');
+            await changePassword(hasPassword ? form.current : null, form.next);
+            setSuccess(hasPassword
+                ? 'Đổi mật khẩu thành công! Hệ thống sẽ chuyển hướng để bạn đăng nhập lại sau 2 giây...'
+                : 'Thiết lập mật khẩu thành công! Giờ đây bạn có thể đăng nhập bằng cả Google và Mật khẩu vừa tạo.');
             setForm({ current: '', next: '', next2: '' });
-            setTimeout(() => {
-                if (logout) logout();
-            }, 2000);
+            if (hasPassword) {
+                setTimeout(() => {
+                    if (logout) logout();
+                }, 2000);
+            }
         } catch (err) {
-            setError(err?.message || 'Không thể đổi mật khẩu. Vui lòng kiểm tra lại mật khẩu hiện tại.');
+            setError(err?.message || 'Không thể thực hiện thao tác. Vui lòng thử lại.');
         } finally {
             setSaving(false);
         }
@@ -1062,34 +1067,59 @@ function PasswordTab({ changePassword, logout }) {
 
     return (
         <>
-            <h1 className="acct-content-title">Đổi mật khẩu</h1>
+            <h1 className="acct-content-title">{hasPassword ? 'Đổi mật khẩu' : 'Thiết lập mật khẩu đăng nhập'}</h1>
 
-            <div className="acct-section">
-                <div className="acct-field-row">
-                    <div className="acct-field">
-                        <label>Mật khẩu hiện tại</label>
-                        <div className="password-field">
-                            <input
-                                type={showCurrent ? 'text' : 'password'}
-                                value={form.current}
-                                onChange={(e) => setForm({ ...form, current: e.target.value })}
-                            />
-                            <button
-                                type="button"
-                                className="password-toggle"
-                                onClick={() => setShowCurrent(!showCurrent)}
-                                title={showCurrent ? 'Ẩn mật khẩu' : 'Xem mật khẩu'}
-                                aria-label={showCurrent ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
-                                tabIndex={-1}
-                            >
-                                <Icon name={showCurrent ? 'eye-off' : 'eye'} width="20" height="20" />
-                            </button>
-                        </div>
+            {!hasPassword && (
+                <div style={{
+                    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+                    border: '1px solid rgba(99, 102, 241, 0.25)',
+                    borderRadius: 12,
+                    padding: '16px 20px',
+                    marginBottom: 24,
+                    display: 'flex',
+                    gap: 14,
+                    alignItems: 'center'
+                }}>
+                    <Icon name="shield-check" width="28" height="28" style={{ color: '#6366f1', flexShrink: 0 }} />
+                    <div>
+                        <b style={{ color: 'var(--text-main, #0f172a)', fontSize: 15, display: 'block', marginBottom: 2 }}>
+                            Tài khoản đang liên kết Google SSO FPT
+                        </b>
+                        <span style={{ color: 'var(--text-muted, #475569)', fontSize: 13, lineHeight: 1.5 }}>
+                            Bạn đang đăng nhập qua tài khoản Google sinh viên FPT và chưa đặt mật khẩu riêng. Bạn có thể thiết lập mật khẩu bên dưới để có thể đăng nhập linh hoạt bằng cả 2 cách (qua Google hoặc qua Email/Mật khẩu).
+                        </span>
                     </div>
                 </div>
-                <div className="acct-field-row" style={{ marginTop: 12 }}>
+            )}
+
+            <div className="acct-section">
+                {hasPassword && (
+                    <div className="acct-field-row">
+                        <div className="acct-field">
+                            <label>Mật khẩu hiện tại</label>
+                            <div className="password-field">
+                                <input
+                                    type={showCurrent ? 'text' : 'password'}
+                                    value={form.current}
+                                    onChange={(e) => setForm({ ...form, current: e.target.value })}
+                                />
+                                <button
+                                    type="button"
+                                    className="password-toggle"
+                                    onClick={() => setShowCurrent(!showCurrent)}
+                                    title={showCurrent ? 'Ẩn mật khẩu' : 'Xem mật khẩu'}
+                                    aria-label={showCurrent ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                                    tabIndex={-1}
+                                >
+                                    <Icon name={showCurrent ? 'eye-off' : 'eye'} width="20" height="20" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+                <div className="acct-field-row" style={{ marginTop: hasPassword ? 12 : 0 }}>
                     <div className="acct-field">
-                        <label>Mật khẩu mới</label>
+                        <label>{hasPassword ? 'Mật khẩu mới' : 'Tạo mật khẩu mới'}</label>
                         <div className="password-field">
                             <input
                                 type={showNext ? 'text' : 'password'}
@@ -1136,7 +1166,7 @@ function PasswordTab({ changePassword, logout }) {
             {success && <div style={{ color: 'var(--lime, #10b981)', marginBottom: 16, fontSize: 13 }}>{success}</div>}
 
             <button className="btn btn-primary" onClick={save} disabled={saving} style={{ marginTop: 6 }}>
-                {saving ? 'Đang cập nhật...' : 'Cập nhật mật khẩu'}
+                {saving ? 'Đang lưu...' : (hasPassword ? 'Cập nhật mật khẩu' : 'Thiết lập mật khẩu')}
             </button>
         </>
     );
@@ -1803,7 +1833,7 @@ export default function AccountSettings({ forcedTab }) {
                         )}
 
                         {tab === 'password' && (
-                            <PasswordTab changePassword={changePassword} logout={logout} />
+                            <PasswordTab changePassword={changePassword} logout={logout} currentUser={safeUser} />
                         )}
                     </div>
                 </div>

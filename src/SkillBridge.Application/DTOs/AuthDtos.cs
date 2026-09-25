@@ -36,6 +36,7 @@ public class AuthResponseDto
     public string Email { get; set; } = string.Empty;
     public string RoleCode { get; set; } = string.Empty;
     public string? AvatarUrl { get; set; }
+    public bool HasPassword { get; set; } = true;
 }
 
 public class RefreshTokenDto
@@ -85,6 +86,6 @@ public class ResetPasswordDto
 
 public class ChangePasswordDto
 {
-    public string CurrentPassword { get; set; } = string.Empty;
+    public string? CurrentPassword { get; set; }
     public string NewPassword { get; set; } = string.Empty;
 }

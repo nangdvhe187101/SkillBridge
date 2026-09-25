@@ -22,6 +22,7 @@ public class UserProfileDto
     public int JobsDoneCount { get; set; }
     public string? ReferralCode { get; set; }
     public DateTime JoinedAt { get; set; }
+    public bool HasPassword { get; set; } = true;
 }
 
 public class UpdateUserProfileRequest

@@ -100,7 +100,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
                     FullName = string.IsNullOrWhiteSpace(payload.Name) ? email.Split('@')[0] : payload.Name,
                     Email = email,
                     AvatarUrl = payload.Picture,
-                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N")),
+                    PasswordHash = "GOOGLE_SSO:" + BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N")),
                     RoleId = role.Id,
                     KycStatus = "pending",
                     AccountStatus = "active", // Google đã xác minh chính chủ -> Kích hoạt ngay
@@ -183,7 +183,8 @@ namespace SkillBridge.Infrastructure.Services.Auth
                 FullName = user.FullName,
                 Email = user.Email,
                 RoleCode = user.Role.Code,
-                AvatarUrl = storageService.GetPublicUrl(user.AvatarUrl)
+                AvatarUrl = storageService.GetPublicUrl(user.AvatarUrl),
+                HasPassword = !string.IsNullOrEmpty(user.PasswordHash) && !user.PasswordHash.StartsWith("GOOGLE_SSO:")
             };
 
             return (result, refreshToken);
