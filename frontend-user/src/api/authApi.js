@@ -70,12 +70,24 @@ export async function register(fullNameOrData, email, password, phoneNumber, rol
         };
     }
 
-    const res = await fetch(`${API_URL}/auth/register`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-    });
-    return handleResponse(res);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    try {
+        const res = await fetch(`${API_URL}/auth/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: controller.signal,
+        });
+        return await handleResponse(res);
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            throw new Error('Yêu cầu tạo tài khoản quá thời gian (timeout). Vui lòng thử lại sau giây lát.');
+        }
+        throw err;
+    } finally {
+        clearTimeout(timeoutId);
+    }
 }
 
 export async function login(email, password) {

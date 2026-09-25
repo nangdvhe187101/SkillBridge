@@ -404,16 +404,20 @@ namespace SkillBridge.Infrastructure.Services.Email
         {
             using var client = new SmtpClient();
             client.CheckCertificateRevocation = false;
+            client.Timeout = 6000; // 6 giây timeout, tránh nghẽn luồng kết nối
+            using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(6));
             var port = int.TryParse(config["Smtp:Port"], out var p) ? p : 587;
             await client.ConnectAsync(
                 config["Smtp:Host"] ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:Host"),
                 port,
-                SecureSocketOptions.StartTls);
+                SecureSocketOptions.StartTls,
+                cts.Token);
             await client.AuthenticateAsync(
                 config["Smtp:Username"] ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:Username"),
-                config["Smtp:Password"] ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:Password"));
-            await client.SendAsync(message);
-            await client.DisconnectAsync(true);
+                config["Smtp:Password"] ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:Password"),
+                cts.Token);
+            await client.SendAsync(message, cts.Token);
+            await client.DisconnectAsync(true, cts.Token);
         }
     }
 }

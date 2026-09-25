@@ -140,14 +140,18 @@ public class RegisterService : IRegisterService
 
         var verifyLink = $"{config["Frontend:BaseUrl"]}/verify-email?token={Uri.EscapeDataString(verifyTokenPlain)}";
 
-        try
+        // Gửi email xác thực trong background để phản hồi ngay lập tức cho người dùng, tránh nghẽn luồng HTTP
+        _ = Task.Run(async () =>
         {
-            await emailService.SendVerificationEmailAsync(user.Email, user.FullName, verifyLink);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Gửi email xác thực thất bại cho user {UserId}.", user.Id);
-        }
+            try
+            {
+                await emailService.SendVerificationEmailAsync(user.Email, user.FullName, verifyLink);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Gửi email xác thực thất bại cho user {UserId}.", user.Id);
+            }
+        });
 
         var emailLabel = dto.RoleCode == RoleCode.Student ? "email trường" : "email";
 

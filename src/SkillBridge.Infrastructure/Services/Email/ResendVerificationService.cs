@@ -75,14 +75,17 @@ namespace SkillBridge.Infrastructure.Services.Email
             await authTokenRepository.SaveChangesAsync();
 
             var verifyLink = $"{config["Frontend:BaseUrl"]}/verify-email?token={Uri.EscapeDataString(verifyTokenPlain)}";
-            try
+            _ = Task.Run(async () =>
             {
-                await emailService.SendVerificationEmailAsync(user.Email, user.FullName, verifyLink);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Gửi email gửi lại xác thực thất bại cho user {UserId}. Link xác thực (dành cho DEV): {VerifyLink}", user.Id, verifyLink);
-            }
+                try
+                {
+                    await emailService.SendVerificationEmailAsync(user.Email, user.FullName, verifyLink);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Gửi email gửi lại xác thực thất bại cho user {UserId}. Link xác thực (dành cho DEV): {VerifyLink}", user.Id, verifyLink);
+                }
+            });
 
             return GenericMessage;
         }
