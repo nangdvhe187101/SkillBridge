@@ -108,7 +108,7 @@ public class RegisterService : IRegisterService
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             RoleId = role.Id,
             KycStatus = "pending",
-            AccountStatus = "pending",
+            AccountStatus = dto.RoleCode == RoleCode.Student ? "active" : "pending",
             ReliabilityScore = 100,
             JobsDoneCount = 0,
             JoinedAt = DateTime.UtcNow
@@ -153,13 +153,15 @@ public class RegisterService : IRegisterService
             }
         });
 
-        var emailLabel = dto.RoleCode == RoleCode.Student ? "email trường" : "email";
+        var message = dto.RoleCode == RoleCode.Student
+            ? "Đăng ký thành công! Tài khoản sinh viên của bạn đã được kích hoạt. Bạn có thể đăng nhập ngay."
+            : "Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản trước khi đăng nhập.";
 
         return new RegisterResultDto
         {
             UserId = user.Id,
             Email = user.Email,
-            Message = $"Đăng ký thành công. Vui lòng kiểm tra {emailLabel} để xác thực tài khoản trước khi đăng nhập."
+            Message = message
         };
     }
 

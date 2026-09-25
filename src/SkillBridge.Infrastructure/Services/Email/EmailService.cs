@@ -402,22 +402,52 @@ namespace SkillBridge.Infrastructure.Services.Email
 
         private async Task SendAsync(MimeMessage message)
         {
-            using var client = new SmtpClient();
-            client.CheckCertificateRevocation = false;
-            client.Timeout = 6000; // 6 giây timeout, tránh nghẽn luồng kết nối
-            using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(6));
+            var host = config["Smtp:Host"] ?? "smtp.gmail.com";
             var port = int.TryParse(config["Smtp:Port"], out var p) ? p : 587;
-            await client.ConnectAsync(
-                config["Smtp:Host"] ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:Host"),
-                port,
-                SecureSocketOptions.StartTls,
-                cts.Token);
-            await client.AuthenticateAsync(
-                config["Smtp:Username"] ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:Username"),
-                config["Smtp:Password"] ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:Password"),
-                cts.Token);
-            await client.SendAsync(message, cts.Token);
-            await client.DisconnectAsync(true, cts.Token);
+            var username = config["Smtp:Username"] ?? string.Empty;
+            var password = config["Smtp:Password"] ?? string.Empty;
+
+            if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+            {
+                logger.LogWarning("Bỏ qua gửi email vì chưa cấu hình Smtp:Username hoặc Smtp:Password.");
+                return;
+            }
+
+            try
+            {
+                using var client = new SmtpClient();
+                client.CheckCertificateRevocation = false;
+                client.Timeout = 6000;
+                using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(6));
+
+                var socketOption = port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
+                await client.ConnectAsync(host, port, socketOption, cts.Token);
+                await client.AuthenticateAsync(username, password, cts.Token);
+                await client.SendAsync(message, cts.Token);
+                await client.DisconnectAsync(true, cts.Token);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Thử kết nối SMTP cổng {Port} thất bại. Thử tự động chuyển sang cổng thay thế...", port);
+                try
+                {
+                    var fallbackPort = port == 587 ? 465 : 587;
+                    var fallbackSocketOption = fallbackPort == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls;
+                    using var fallbackClient = new SmtpClient();
+                    fallbackClient.CheckCertificateRevocation = false;
+                    fallbackClient.Timeout = 6000;
+                    using var fallbackCts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(6));
+
+                    await fallbackClient.ConnectAsync(host, fallbackPort, fallbackSocketOption, fallbackCts.Token);
+                    await fallbackClient.AuthenticateAsync(username, password, fallbackCts.Token);
+                    await fallbackClient.SendAsync(message, fallbackCts.Token);
+                    await fallbackClient.DisconnectAsync(true, fallbackCts.Token);
+                }
+                catch (Exception fallbackEx)
+                {
+                    logger.LogError(fallbackEx, "Gửi email thất bại hoàn toàn qua SMTP host {Host} cho {Recipient}.", host, message.To?.ToString());
+                }
+            }
         }
     }
 }

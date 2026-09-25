@@ -74,7 +74,23 @@ namespace SkillBridge.Infrastructure.Services
             }
 
             if (user.AccountStatus == "pending")
-                throw new BusinessException("Tài khoản chưa được kích hoạt, vui lòng kiểm tra email để xác thực trước khi đăng nhập");
+            {
+                // Nếu là sinh viên có email trường hợp lệ (@fpt.edu.vn, @fe.edu.vn), tự kích hoạt khi nhập đúng mật khẩu
+                var isEduStudent = user.Role.Code == RoleCode.Student &&
+                    (user.Email.EndsWith("@fpt.edu.vn", StringComparison.OrdinalIgnoreCase) ||
+                     user.Email.EndsWith("@fe.edu.vn", StringComparison.OrdinalIgnoreCase));
+
+                if (isEduStudent)
+                {
+                    user.AccountStatus = "active";
+                    await userRepository.SaveChangesAsync();
+                }
+                else
+                {
+                    throw new BusinessException("Tài khoản chưa được kích hoạt, vui lòng kiểm tra email để xác thực trước khi đăng nhập");
+                }
+            }
+
             if (user.AccountStatus == "locked" || user.AccountStatus == "blacklisted")
                 throw new BusinessException("Tài khoản đã bị khóa, vui lòng liên hệ hỗ trợ");
 
