@@ -100,6 +100,16 @@ export async function login(email, password) {
     return handleResponse(res);
 }
 
+export async function googleLogin(idToken, roleCode = 'student') {
+    const res = await fetch(`${API_URL}/auth/google`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken, roleCode }),
+    });
+    return handleResponse(res);
+}
+
 export async function verifyEmail(token) {
     const res = await fetch(`${API_URL}/auth/verify-email`, {
         method: "POST",

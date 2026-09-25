@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useStore } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
+import GoogleLoginButton from '../../components/GoogleLoginButton';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -233,6 +234,14 @@ export default function RegisterForm({ onSwitchTab }) {
             <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
                 {loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}
             </button>
+
+            <div className="auth-separator" style={{ display: 'flex', alignItems: 'center', margin: '20px 0 14px', color: 'var(--text-muted, #94a3b8)', fontSize: 13 }}>
+                <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
+                <span style={{ padding: '0 12px' }}>hoặc tiếp tục với</span>
+                <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
+            </div>
+
+            <GoogleLoginButton roleCode={role} text="Đăng ký với Google" onError={(msg) => setFormError(msg)} />
 
             <div className="auth-foot">
                 Đã có tài khoản? <a onClick={() => onSwitchTab('login')}>Đăng nhập</a>

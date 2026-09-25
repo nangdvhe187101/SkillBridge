@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
+import GoogleLoginButton from '../../components/GoogleLoginButton';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
@@ -121,6 +122,14 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
       <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
         {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
       </button>
+
+      <div className="auth-separator" style={{ display: 'flex', alignItems: 'center', margin: '20px 0 14px', color: 'var(--text-muted, #94a3b8)', fontSize: 13 }}>
+        <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
+        <span style={{ padding: '0 12px' }}>hoặc tiếp tục với</span>
+        <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
+      </div>
+
+      <GoogleLoginButton roleCode="student" onError={(msg) => setFormError(msg)} />
 
       <div className="auth-foot">
         Chưa có tài khoản? <a onClick={() => onSwitchTab('register')}>Đăng ký ngay</a>

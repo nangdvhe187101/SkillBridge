@@ -4,7 +4,7 @@ import { myJobsSeed } from '../data/myJobs';
 import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
 import { useToast } from './ToastContext';
 
-import { login as loginApi, register as registerApi, logout as logoutApi, refreshToken as refreshTokenApi, changePassword as changePasswordApi } from '../api/authApi';
+import { login as loginApi, googleLogin as googleLoginApi, register as registerApi, logout as logoutApi, refreshToken as refreshTokenApi, changePassword as changePasswordApi } from '../api/authApi';
 import * as jobApi from '../api/jobApi';
 import * as cvApi from '../api/cvApi';
 import * as applicationApi from '../api/applicationApi';
@@ -1932,6 +1932,23 @@ export function StoreProvider({ children }) {
         }
         await refreshWallet();
         showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, 'user');
+        return result;
+      },
+      googleLogin: async (idToken, roleCode = 'student') => {
+        const result = await googleLoginApi(idToken, roleCode);
+        setAccessToken(result.token);
+        dispatch({ type: "AUTH_LOGIN_SUCCESS", payload: result });
+        authBroadcast?.postMessage({ type: 'AUTH_LOGIN_SUCCESS', payload: result });
+        try {
+          const profile = await userApi.getUserProfile();
+          if (profile) {
+            dispatch({ type: 'UPDATE_PROFILE', patch: profile });
+          }
+        } catch (e) {
+          console.warn('Không thể tải hồ sơ chi tiết khi đăng nhập bằng Google:', e);
+        }
+        await refreshWallet();
+        showToast(`Chào mừng bạn, ${result.fullName}!`, 'user');
         return result;
       },
       logout: async () => {
