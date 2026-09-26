@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
-const DEFAULT_CLIENT_ID = '337920152554-4vptlhk19d146p69i3j0ck5bflsqe4r9.apps.googleusercontent.com'; // Dự phòng hoặc đọc từ env
+const DEFAULT_CLIENT_ID = '275431712095-73cfhprsdt4seghbdrjr4clpl9f7j6g7.apps.googleusercontent.com';
 
 export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp tục với Google', onError }) {
     const { googleLogin } = useStore();
