@@ -29,9 +29,9 @@ namespace SkillBridge.Infrastructure.Services.Email
 
         public async Task SendVerificationEmailAsync(string toEmail, string fullName, string verificationLink)
         {
+            var fromEmail = config["Smtp:From"] ?? config["Resend:From"] ?? "noreply@skillbridge.id.vn";
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"]
-                ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:From")));
+            message.From.Add(new MailboxAddress("SkillBridge", fromEmail));
             message.To.Add(new MailboxAddress(fullName, toEmail));
             message.Subject = "Xác thực email - SkillBridge";
 
@@ -62,14 +62,14 @@ namespace SkillBridge.Infrastructure.Services.Email
             };
 
             message.Body = bodyBuilder.ToMessageBody();
-            await SendAsync(message);
+            await SendSafeAsync(message);
         }
 
         public async Task SendPasswordResetOtpAsync(string toEmail, string fullName, string otp)
         {
+            var fromEmail = config["Smtp:From"] ?? config["Resend:From"] ?? "noreply@skillbridge.id.vn";
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"]
-                ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:From")));
+            message.From.Add(new MailboxAddress("SkillBridge", fromEmail));
             message.To.Add(new MailboxAddress(fullName, toEmail));
             message.Subject = "Mã xác thực đặt lại mật khẩu - SkillBridge";
 
@@ -95,14 +95,14 @@ namespace SkillBridge.Infrastructure.Services.Email
             };
 
             message.Body = bodyBuilder.ToMessageBody();
-            await SendAsync(message);
+            await SendSafeAsync(message);
         }
 
         public async Task SendPasswordChangedNotificationAsync(string toEmail, string fullName)
         {
+            var fromEmail = config["Smtp:From"] ?? config["Resend:From"] ?? "noreply@skillbridge.id.vn";
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"]
-                ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:From")));
+            message.From.Add(new MailboxAddress("SkillBridge", fromEmail));
             message.To.Add(new MailboxAddress(fullName, toEmail));
             message.Subject = "Mật khẩu của bạn vừa được thay đổi - SkillBridge";
             message.Body = new TextPart("plain")
@@ -113,14 +113,14 @@ namespace SkillBridge.Infrastructure.Services.Email
                        $"Trân trọng,\nĐội ngũ SkillBridge"
             };
 
-            await SendAsync(message);
+            await SendSafeAsync(message);
         }
 
         public async Task SendDeadlineWarningEmailAsync(string toEmail, string fullName, string jobTitle, DateTime deadlineAt)
         {
+            var fromEmail = config["Smtp:From"] ?? config["Resend:From"] ?? "noreply@skillbridge.id.vn";
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"]
-                ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:From")));
+            message.From.Add(new MailboxAddress("SkillBridge", fromEmail));
             message.To.Add(new MailboxAddress(fullName, toEmail));
             message.Subject = $"Nhắc nhở: Công việc \"{jobTitle}\" sắp đến hạn bàn giao - SkillBridge";
             message.Body = new TextPart("plain")
@@ -131,14 +131,14 @@ namespace SkillBridge.Infrastructure.Services.Email
                        $"Trân trọng,\nĐội ngũ SkillBridge"
             };
 
-            await SendAsync(message);
+            await SendSafeAsync(message);
         }
 
         public async Task SendDeadlineOverdueEmailAsync(string toEmail, string fullName, string jobTitle, DateTime deadlineAt)
         {
+            var fromEmail = config["Smtp:From"] ?? config["Resend:From"] ?? "noreply@skillbridge.id.vn";
             var message = new MimeMessage();
-            message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"]
-                ?? throw new InvalidOperationException("Thiếu cấu hình Smtp:From")));
+            message.From.Add(new MailboxAddress("SkillBridge", fromEmail));
             message.To.Add(new MailboxAddress(fullName, toEmail));
             message.Subject = $"Cảnh báo: Công việc \"{jobTitle}\" đã quá hạn bàn giao - SkillBridge";
             message.Body = new TextPart("plain")
@@ -149,7 +149,7 @@ namespace SkillBridge.Infrastructure.Services.Email
                        $"Trân trọng,\nĐội ngũ SkillBridge"
             };
 
-            await SendAsync(message);
+            await SendSafeAsync(message);
         }
 
         public async Task SendJobHiredEmailAsync(string toEmail, string studentName, string jobTitle, decimal budget, DateTime deadlineAt)
