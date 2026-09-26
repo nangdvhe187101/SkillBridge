@@ -138,8 +138,17 @@ namespace SkillBridge.Infrastructure.Services.Auth
             }
             else
             {
-                // Người dùng đã tồn tại -> Kiểm tra trạng thái và vai trò
-                if (user.Role?.Code != RoleCode.Student)
+                // Người dùng đã tồn tại -> Kiểm tra trạng thái và vai trò (Bảo vệ 2 lớp qua cả Navigation Property và RoleId)
+                var studentRole = await roleRepository.GetByCodeAsync(RoleCode.Student);
+                if (user.Role == null && studentRole != null && user.RoleId == studentRole.Id)
+                {
+                    user.Role = studentRole;
+                }
+
+                var isStudent = (user.Role != null && string.Equals(user.Role.Code, RoleCode.Student, StringComparison.OrdinalIgnoreCase))
+                                || (studentRole != null && user.RoleId == studentRole.Id);
+
+                if (!isStudent)
                 {
                     throw new BusinessException("Tài khoản này thuộc vai trò Nhà tuyển dụng, không hỗ trợ đăng nhập qua Google SSO sinh viên. Vui lòng đăng nhập bằng Email và Mật khẩu.");
                 }
