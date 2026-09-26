@@ -22,6 +22,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
         private readonly IAuthTokenRepository authTokenRepository;
         private readonly IJwtService jwtService;
         private readonly IStorageService storageService;
+        private readonly IEmailService emailService;
         private readonly IConfiguration config;
         private readonly ILogger<GoogleAuthService> logger;
 
@@ -31,6 +32,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
             IAuthTokenRepository _authTokenRepository,
             IJwtService _jwtService,
             IStorageService _storageService,
+            IEmailService _emailService,
             IConfiguration _config,
             ILogger<GoogleAuthService> _logger)
         {
@@ -39,6 +41,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
             authTokenRepository = _authTokenRepository;
             jwtService = _jwtService;
             storageService = _storageService;
+            emailService = _emailService;
             config = _config;
             logger = _logger;
         }
@@ -84,7 +87,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
                 throw new BusinessException("Tính năng Đăng nhập bằng Google chỉ dành riêng cho sinh viên FPT (@fpt.edu.vn hoặc @fe.edu.vn). Nhà tuyển dụng hoặc các tài khoản khác vui lòng đăng nhập bằng Email và Mật khẩu bên dưới.");
             }
 
-            var user = await userRepository.GetByEmailAsync(email);
+            var user = await userRepository.GetByEmailWithRoleAsync(email);
 
             if (user == null)
             {
@@ -113,7 +116,25 @@ namespace SkillBridge.Infrastructure.Services.Auth
                 await userRepository.SaveChangesAsync();
 
                 // Nạp lại User cùng Role
-                user = await userRepository.GetByEmailAsync(email);
+                user = await userRepository.GetByEmailWithRoleAsync(email);
+
+                // Gửi email chào mừng sinh viên mới (Non-blocking / Background)
+                if (user != null)
+                {
+                    var targetEmail = user.Email;
+                    var targetName = user.FullName;
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await emailService.SendStudentWelcomeEmailAsync(targetEmail, targetName);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex, "Không thể gửi email chào mừng sinh viên FPT tới {Email}", targetEmail);
+                        }
+                    });
+                }
             }
             else
             {

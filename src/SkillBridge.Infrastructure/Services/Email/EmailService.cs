@@ -381,6 +381,69 @@ namespace SkillBridge.Infrastructure.Services.Email
             await SendSafeAsync(message);
         }
 
+        public async Task SendStudentWelcomeEmailAsync(string toEmail, string fullName)
+        {
+            var frontendUrl = config["Frontend:BaseUrl"] ?? "https://www.skillbridge.id.vn";
+            var jobsUrl = $"{frontendUrl.TrimEnd('/')}/jobs";
+            var settingsUrl = $"{frontendUrl.TrimEnd('/')}/settings?tab=password";
+
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"]
+                ?? config["Smtp:Username"]
+                ?? "noreply@skillbridge.id.vn"));
+            message.To.Add(new MailboxAddress(fullName, toEmail));
+            message.Subject = "🎉 Chào mừng bạn gia nhập SkillBridge - Nền tảng việc làm sinh viên FPT";
+
+            var bodyBuilder = new BodyBuilder
+            {
+                HtmlBody = $@"
+<div style=""font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background-color: #ffffff; color: #1e293b;"">
+    <div style=""text-align: center; margin-bottom: 28px;"">
+        <div style=""display: inline-block; background: #2563eb; color: #ffffff; width: 44px; height: 44px; line-height: 44px; border-radius: 12px; font-weight: 800; font-size: 22px; margin-bottom: 12px;"">S</div>
+        <h1 style=""color: #0f172a; margin: 0; font-size: 24px; font-weight: 700;"">SkillBridge</h1>
+        <p style=""color: #64748b; font-size: 14px; margin-top: 4px;"">Nền tảng kết nối việc làm ngắn hạn cho sinh viên</p>
+    </div>
+
+    <div style=""background: #f8fafc; border-radius: 12px; padding: 24px; margin-bottom: 24px; border: 1px solid #edf2f7;"">
+        <h2 style=""color: #0f172a; font-size: 18px; margin-top: 0; margin-bottom: 12px;"">Xin chào {fullName} 👋</h2>
+        <p style=""color: #334155; line-height: 1.6; margin: 0 0 14px;"">
+            Chúc mừng bạn đã kích hoạt thành công tài khoản Sinh viên tại <strong>SkillBridge</strong> thông qua cổng đăng nhập trường <strong>Google FPT SSO</strong> (<code>{toEmail}</code>).
+        </p>
+        <div style=""background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; border-radius: 6px; font-size: 14px; color: #065f46;"">
+            ✅ <strong>Tài khoản đã được xác thực chính chủ:</strong> Bạn đã có thể ứng tuyển ngay vào các dự án và công việc sinh viên mà không cần chờ duyệt email.
+        </div>
+    </div>
+
+    <div style=""margin-bottom: 28px;"">
+        <h3 style=""color: #0f172a; font-size: 16px; margin-bottom: 12px;"">💡 Gợi ý bắt đầu nhanh:</h3>
+        <ol style=""color: #475569; padding-left: 20px; line-height: 1.8; margin: 0;"">
+            <li><strong>Khám phá việc làm:</strong> Tìm kiếm các công việc micro-job ngắn hạn phù hợp lịch học tại trường.</li>
+            <li><strong>Hoàn thiện hồ sơ:</strong> Cập nhật kỹ năng và portfolio để tăng 300% tỷ lệ được nhà tuyển dụng liên hệ.</li>
+            <li><strong>Thiết lập mật khẩu riêng:</strong> Nếu muốn đăng nhập bằng mật khẩu độc lập, bạn có thể <a href=""{settingsUrl}"" style=""color: #2563eb; text-decoration: none; font-weight: 600;"">thiết lập mật khẩu tại đây</a>.</li>
+        </ol>
+    </div>
+
+    <div style=""text-align: center; margin: 32px 0;"">
+        <a href=""{jobsUrl}"" target=""_blank"" style=""background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; padding: 14px 36px; text-decoration: none; border-radius: 10px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 14px rgba(37,99,235,0.3);"">
+            Khám phá việc làm ngay 🚀
+        </a>
+    </div>
+
+    <div style=""padding-top: 20px; border-top: 1px solid #f1f5f9; text-align: center; color: #94a3b8; font-size: 12px; line-height: 1.6;"">
+        Email này được gửi tự động khi bạn đăng nhập SkillBridge bằng tài khoản Google trường FPT.<br/>
+        &copy; {DateTime.UtcNow.Year} SkillBridge Platform. Mọi quyền được bảo lưu.
+    </div>
+</div>",
+                TextBody = $"Xin chào {fullName},\n\n" +
+                           $"Chúc mừng bạn đã kích hoạt tài khoản Sinh viên tại SkillBridge qua Google FPT SSO ({toEmail}).\n\n" +
+                           $"Khám phá các việc làm ngắn hạn ngay tại: {jobsUrl}\n\n" +
+                           $"Trân trọng,\nĐội ngũ SkillBridge"
+            };
+
+            message.Body = bodyBuilder.ToMessageBody();
+            await SendSafeAsync(message);
+        }
+
         private Task<bool> IsEmailEnabledAsync(string toggleKey)
         {
             var host = config["Smtp:Host"];

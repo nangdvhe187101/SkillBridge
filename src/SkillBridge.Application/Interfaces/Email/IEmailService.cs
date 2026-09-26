@@ -26,5 +26,6 @@ namespace SkillBridge.Application.Interfaces
         Task SendDailyApplicantDigestEmailAsync(string toEmail, string employerName, string jobTitle, int applicantCount);
 
         Task SendJobMatchAlertEmailAsync(string toEmail, string studentName, string jobTitle, decimal budget, string jobUrl);
+        Task SendStudentWelcomeEmailAsync(string toEmail, string fullName);
     }
 }
