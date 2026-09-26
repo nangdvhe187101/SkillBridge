@@ -10,6 +10,23 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
     const [searchParams] = useSearchParams();
     const [loading, setLoading] = useState(false);
     const googleButtonRef = useRef(null);
+    const hasRenderedRef = useRef(false);
+
+    // Lưu các callbacks & props vào ref để tránh kích hoạt useEffect liên tục khi component cha re-render
+    const googleLoginRef = useRef(googleLogin);
+    googleLoginRef.current = googleLogin;
+
+    const onErrorRef = useRef(onError);
+    onErrorRef.current = onError;
+
+    const roleCodeRef = useRef(roleCode);
+    roleCodeRef.current = roleCode;
+
+    const navigateRef = useRef(navigate);
+    navigateRef.current = navigate;
+
+    const searchParamsRef = useRef(searchParams);
+    searchParamsRef.current = searchParams;
 
     const clientId = import.meta.env?.VITE_GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID;
 
@@ -18,22 +35,22 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
 
         const handleCredentialResponse = async (response) => {
             if (!response?.credential) {
-                if (onError) onError('Không nhận được mã xác thực từ Google.');
+                if (onErrorRef.current) onErrorRef.current('Không nhận được mã xác thực từ Google.');
                 return;
             }
 
             setLoading(true);
             try {
-                await googleLogin(response.credential, roleCode);
-                const redirect = searchParams.get('redirect');
+                await googleLoginRef.current(response.credential, roleCodeRef.current);
+                const redirect = searchParamsRef.current?.get('redirect');
                 if (redirect) {
-                    navigate(redirect);
+                    navigateRef.current(redirect);
                 } else {
-                    navigate('/');
+                    navigateRef.current('/');
                 }
             } catch (err) {
-                if (onError) {
-                    onError(err.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.');
+                if (onErrorRef.current) {
+                    onErrorRef.current(err.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.');
                 }
             } finally {
                 if (isMounted) setLoading(false);
@@ -42,7 +59,11 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
 
         // Hàm khởi tạo Google Identity Services
         const initGsi = () => {
-            if (window.google?.accounts?.id) {
+            if (window.google?.accounts?.id && googleButtonRef.current) {
+                if (hasRenderedRef.current && googleButtonRef.current.hasChildNodes()) {
+                    return; // Đã render rồi thì giữ nguyên, không render lại để tránh nhấp nháy
+                }
+
                 try {
                     window.google.accounts.id.initialize({
                         client_id: clientId,
@@ -52,17 +73,18 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
                         hosted_domain: 'fpt.edu.vn',
                     });
 
-                    if (googleButtonRef.current) {
-                        window.google.accounts.id.renderButton(googleButtonRef.current, {
-                            theme: 'outline',
-                            size: 'large',
-                            width: '100%',
-                            text: text.includes('Đăng ký') ? 'signup_with' : 'signin_with',
-                            shape: 'rectangular',
-                            logo_alignment: 'left',
-                            locale: 'vi',
-                        });
-                    }
+                    googleButtonRef.current.innerHTML = '';
+                    window.google.accounts.id.renderButton(googleButtonRef.current, {
+                        theme: 'outline',
+                        size: 'large',
+                        width: '100%',
+                        text: text.includes('Đăng ký') ? 'signup_with' : 'signin_with',
+                        shape: 'rectangular',
+                        logo_alignment: 'left',
+                        locale: 'vi',
+                    });
+
+                    hasRenderedRef.current = true;
                 } catch (e) {
                     console.warn('GSI render error:', e);
                 }
@@ -92,7 +114,7 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
         return () => {
             isMounted = false;
         };
-    }, [clientId, roleCode, text, navigate, searchParams, googleLogin, onError]);
+    }, [clientId, text]);
 
     return (
         <div className="google-sso-container" style={{ width: '100%', marginTop: 12, marginBottom: 12 }}>
