@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Net.Http;
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Configuration;
@@ -14,10 +15,13 @@ namespace SkillBridge.Infrastructure.Services.Email
 {
     public class EmailService : IEmailService
     {
+        private static readonly HttpClient ResendHttpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         private readonly IConfiguration config;
         private readonly ILogger<EmailService> logger;
 
-        public EmailService(IConfiguration _config, ILogger<EmailService>? _logger = null)
+        public EmailService(
+            IConfiguration _config,
+            ILogger<EmailService>? _logger = null)
         {
             config = _config;
             logger = _logger ?? NullLogger<EmailService>.Instance;
@@ -450,10 +454,79 @@ namespace SkillBridge.Infrastructure.Services.Email
             return Task.FromResult(!string.IsNullOrWhiteSpace(host));
         }
 
+        private async Task<bool> SendViaResendAsync(MimeMessage message)
+        {
+            var apiKey = config["Resend:ApiKey"];
+            if (string.IsNullOrWhiteSpace(apiKey))
+            {
+                return false;
+            }
+
+            try
+            {
+                var recipient = message.To.Mailboxes.FirstOrDefault()?.Address;
+                if (string.IsNullOrWhiteSpace(recipient))
+                {
+                    logger.LogWarning("Không thể gửi qua Resend vì không tìm thấy địa chỉ người nhận.");
+                    return false;
+                }
+
+                var sender = config["Resend:From"];
+                if (string.IsNullOrWhiteSpace(sender))
+                {
+                    sender = "SkillBridge <onboarding@resend.dev>";
+                }
+
+                var payload = new
+                {
+                    from = sender,
+                    to = new[] { recipient },
+                    subject = message.Subject,
+                    html = message.HtmlBody ?? message.TextBody ?? string.Empty,
+                    text = message.TextBody
+                };
+
+                var client = ResendHttpClient;
+
+                var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Post, "https://api.resend.com/emails");
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey.Trim());
+                request.Content = new System.Net.Http.StringContent(
+                    System.Text.Json.JsonSerializer.Serialize(payload),
+                    System.Text.Encoding.UTF8,
+                    "application/json"
+                );
+
+                var response = await client.SendAsync(request);
+                var responseContent = await response.Content.ReadAsStringAsync();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    logger.LogInformation("Gửi email thành công qua Resend HTTPS API tới {Recipient} với tiêu đề '{Subject}'. Response: {Resp}", recipient, message.Subject, responseContent);
+                    return true;
+                }
+
+                logger.LogWarning("Gửi email qua Resend HTTPS API không thành công (Status {StatusCode}): {Content}. Đang thử fallback qua SMTP...", response.StatusCode, responseContent);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Lỗi kết nối Resend HTTPS API. Thử fallback qua SMTP...");
+                return false;
+            }
+        }
+
         private async Task SendSafeAsync(MimeMessage message)
         {
             try
             {
+                // Ưu tiên 1: Gửi qua Resend HTTPS API (Cổng 443 - không bao giờ bị Render chặn)
+                var sentViaResend = await SendViaResendAsync(message);
+                if (sentViaResend)
+                {
+                    return;
+                }
+
+                // Ưu tiên 2: Fallback qua SMTP truyền thống
                 await SendAsync(message);
             }
             catch (Exception ex)
