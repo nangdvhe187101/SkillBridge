@@ -97,7 +97,7 @@ export default function TopNav() {
     <nav className="topnav">
       <div className="wrap">
         <NavLink to="/" className="logo" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-          <img src="/logo.png" alt="SkillBridge" width="150" height="40" style={{ height: 40, width: 'auto', objectFit: 'contain' }} />
+          <img src="/logo.png" alt="SkillBridge" className="nav-logo-img" width="150" height="40" style={{ height: 40, width: 'auto', objectFit: 'contain' }} />
         </NavLink>
 
         <div className={'navlinks' + (navOpen ? ' open' : '')} id="navlinks">

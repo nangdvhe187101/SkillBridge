@@ -53,6 +53,9 @@ body {
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
 }
 
 body {
@@ -61,6 +64,17 @@ body {
   background: var(--bg);
   -webkit-font-smoothing: antialiased;
   overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+  position: relative;
+}
+
+#root,
+#main-content {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
+  box-sizing: border-box;
 }
 
 h1,
@@ -4389,7 +4403,7 @@ footer {
   min-width: 0;
 }
 
-@media (max-width:480px) {
+@media (max-width: 768px) {
   html, body {
     overflow-x: hidden !important;
     width: 100% !important;
@@ -4402,48 +4416,101 @@ footer {
   }
 
   .wrap {
-    padding: 0 14px;
+    padding: 0 16px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* ---- Header Mobile Optimization (Chống vỡ & chống tràn ngang Header) ---- */
+  .topnav {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
   }
 
   .topnav .wrap {
-    height: 62px;
-    padding: 0 12px;
+    height: 60px !important;
+    padding: 0 12px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
   }
 
-  .logo {
-    font-size: 16px;
-    gap: 6px;
-  }
-
-  .logo-mark {
-    width: 26px;
-    height: 26px;
-    font-size: 13px;
+  .nav-logo-img,
+  .logo img {
+    height: 30px !important;
+    max-width: 110px !important;
+    width: auto !important;
+    object-fit: contain !important;
   }
 
   .nav-cta {
-    gap: 4px;
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    margin-left: auto !important;
+    flex-shrink: 0 !important;
   }
 
+  /* ẨN User menu, ví tiền và các nút chữ dài trên header mobile - chuyển sang menu trượt */
+  .nav-cta .user-menu,
+  .nav-cta .wallet-pill,
+  .nav-cta > .btn-primary,
+  .nav-cta > .btn-ghost,
+  .nav-cta > .btn-subtle,
+  .nav-cta > .btn-post,
+  .nav-cta > .btn-nav-register {
+    display: none !important;
+  }
+
+  .nav-icon-btn,
   .theme-toggle,
   .navtoggle {
-    width: 34px;
-    height: 34px;
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 9px !important;
+    flex-shrink: 0 !important;
   }
 
-  .btn-sm {
-    padding: 7px 11px;
-    font-size: 12.5px;
+  .navlinks {
+    top: 60px !important;
+    max-height: calc(100vh - 60px) !important;
   }
 
   /* ---- Hero Mobile Optimization (Chống tràn ngang & cắt chữ) ---- */
   .hero {
-    overflow-x: hidden;
-    padding: 24px 0 32px;
+    overflow-x: hidden !important;
+    padding: 24px 0 32px !important;
+    width: 100% !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+  }
+
+  .hero .mesh,
+  .hero .mesh-1,
+  .hero .mesh-2 {
+    display: none !important;
+  }
+
+  .hero .wrap {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 0 16px !important;
   }
 
   .hero h1 {
-    font-size: clamp(24px, 7.5vw, 32px) !important;
+    font-size: clamp(24px, 7.5vw, 34px) !important;
     line-height: 1.25 !important;
     margin-bottom: 14px !important;
     word-break: normal !important;
@@ -4458,17 +4525,31 @@ footer {
   .hero p.lede {
     font-size: 14.5px !important;
     line-height: 1.55 !important;
-    margin-bottom: 20px !important;
+    margin-bottom: 22px !important;
+    max-width: 100% !important;
+    word-break: normal !important;
+    overflow-wrap: break-word !important;
   }
 
   .hero-ctas {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
     gap: 10px !important;
     margin-bottom: 24px !important;
   }
 
   .hero-ctas .btn {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    min-height: 46px !important;
+    justify-content: center !important;
+    font-size: 14.5px !important;
     padding: 12px 18px !important;
-    font-size: 14px !important;
     border-radius: 10px !important;
   }
 
@@ -4476,6 +4557,14 @@ footer {
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
     gap: 12px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .stat-row .stat {
+    min-width: 0 !important;
+    box-sizing: border-box !important;
   }
 
   .stat-row .stat:last-child {
@@ -4487,19 +4576,51 @@ footer {
   }
 
   .stat-row .stat span {
-    font-size: 11px !important;
+    font-size: 11.5px !important;
+    line-height: 1.35 !important;
+    display: block !important;
+    word-break: break-word !important;
+  }
+
+  .hero-visual {
+    height: auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    margin-top: 16px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+  }
+
+  .hv-card {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    transform: none !important;
+    animation: none !important;
+    margin: 0 !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+  }
+
+  .hv1, .hv2, .hv3 {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    transform: none !important;
+    animation: none !important;
+    top: auto !important;
+    left: auto !important;
   }
 
   .hv-stamp {
-    width: 50px !important;
-    height: 50px !important;
-    top: -6px !important;
-    right: 4px !important;
-  }
-
-  .hv-stamp svg {
-    width: 50px !important;
-    height: 50px !important;
+    display: none !important;
   }
 
   .dash-stats,
