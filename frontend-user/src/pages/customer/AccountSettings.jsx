@@ -243,7 +243,7 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
 
             {error && <div className="field-error acct-error">{error}</div>}
 
-            <button className="btn btn-primary" onClick={save} disabled={saving} style={{ marginTop: 6 }}>
+            <button className="btn btn-primary acct-submit-btn" onClick={save} disabled={saving}>
                 {saving ? 'Đang lưu...' : 'Lưu thông tin doanh nghiệp'}
             </button>
         </>
@@ -370,7 +370,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
 
             {error && <div className="field-error acct-error">{error}</div>}
 
-            <button className="btn btn-primary" onClick={save} disabled={saving} style={{ marginTop: 6 }}>
+            <button className="btn btn-primary acct-submit-btn" onClick={save} disabled={saving}>
                 {saving ? 'Đang lưu...' : 'Lưu thông tin'}
             </button>
         </>
@@ -643,22 +643,22 @@ function CvManagerTab() {
                 </p>
 
                 {/* Quota Meter Bar */}
-                <div style={{ background: 'var(--surface-2, rgba(0,0,0,0.03))', padding: '14px 18px', borderRadius: 12, border: '1px solid var(--border)', marginBottom: 20 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, fontSize: 13 }}>
-                        <span style={{ fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+                <div className="cv-quota-card">
+                    <div className="cv-quota-header">
+                        <span className="cv-quota-title">
                             <Icon name="folder" width="16" height="16" style={{ color: quotaColor }} />
                             Hạn mức lưu trữ CV cá nhân
                         </span>
-                        <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: quotaColor, fontSize: 13.5 }}>
+                        <span className="cv-quota-count" style={{ color: quotaColor }}>
                             {cvList.length} / 5 bản CV
                         </span>
                     </div>
-                    <div style={{ height: 6, width: '100%', background: 'var(--border)', borderRadius: 999, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${quotaPercentage}%`, background: quotaColor, transition: 'width 0.3s ease, background 0.3s ease' }} />
+                    <div className="cv-quota-track">
+                        <div className="cv-quota-fill" style={{ width: `${quotaPercentage}%`, background: quotaColor }} />
                     </div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted, #666)', marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
+                    <div className="cv-quota-sub">
                         <span>Mỗi sinh viên được quản lý tối đa 5 bản CV chuyên môn.</span>
-                        {cvList.length >= 5 && <span style={{ color: 'var(--coral)', fontWeight: 600 }}>Đã dùng hết 100% dung lượng</span>}
+                        {cvList.length >= 5 && <span className="cv-quota-alert">Đã dùng hết 100% dung lượng</span>}
                     </div>
                 </div>
 
@@ -690,26 +690,25 @@ function CvManagerTab() {
                         opacity: cvList.length >= 5 ? 0.75 : 1,
                         border: isDragging ? '2px dashed var(--primary, #6c4cff)' : undefined,
                         background: isDragging ? 'rgba(108, 76, 255, 0.05)' : undefined,
-                        transition: 'border-color 0.2s ease, background 0.2s ease'
                     }}
                     aria-label="Kéo thả hoặc nhấn để chọn file CV tải lên"
                 >
-                    <div style={{ marginBottom: 10, color: isDragging ? 'var(--primary)' : 'var(--primary)' }}>
-                        <Icon name="upload-cloud" width="42" height="42" />
+                    <div className="cv-dropzone-icon">
+                        <Icon name="upload-cloud" width="38" height="38" />
                     </div>
-                    <h3 style={{ fontSize: 16, margin: '0 0 6px' }}>
+                    <h3 className="cv-dropzone-title">
                         {uploading
                             ? 'Đang xử lý tải lên…'
                             : isDragging
                             ? 'Thả file CV vào đây để tiếp tục'
                             : cvList.length >= 5
                             ? 'Đã đạt hạn mức tối đa 5 bản CV'
-                            : 'Kéo & thả file CV vào đây hoặc nhấn để chọn file'}
+                            : 'Chọn hoặc kéo thả file CV vào đây'}
                     </h3>
-                    <p style={{ fontSize: 12.5, color: 'var(--muted, #666)', margin: 0 }}>
+                    <p className="cv-dropzone-hint">
                         {cvList.length >= 5
                             ? 'Vui lòng xóa bớt CV không còn sử dụng để thêm bản mới.'
-                            : 'Định dạng hỗ trợ: PDF, DOC, DOCX (Tối đa 10 MB). Bạn sẽ được chọn ngành nghề và đặt nhãn sau khi chọn file.'}
+                            : 'Định dạng hỗ trợ: PDF, DOC, DOCX (Tối đa 10 MB). Nhấn để chọn file từ thiết bị.'}
                     </p>
                 </div>
             </div>
@@ -761,14 +760,14 @@ function CvManagerTab() {
                 ) : (
                     <div className="cv-list">
                         {cvList.map((cv) => (
-                            <div className="cv-item-card" key={cv.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px', border: '1px solid var(--border)', borderRadius: 12, marginBottom: 12, background: 'var(--surface, #fff)' }}>
-                                <div className="cv-item-left" style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0, flex: 1, marginRight: 12 }}>
-                                    <div className="cv-item-icon" style={{ width: 44, height: 44, borderRadius: 10, background: 'rgba(108, 76, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0 }}>
+                            <div className="cv-item-card" key={cv.id}>
+                                <div className="cv-item-left">
+                                    <div className="cv-item-icon">
                                         <Icon name="file-text" width="22" height="22" />
                                     </div>
-                                    <div className="cv-item-meta" style={{ minWidth: 0 }}>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                            <b style={{ fontSize: 15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cv.label || cv.fileName}</b>
+                                    <div className="cv-item-meta">
+                                        <div className="cv-item-title-row">
+                                            <b className="cv-item-title">{cv.label || cv.fileName}</b>
                                             {cv.categoryName ? (
                                                 <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px', fontWeight: 600 }}>
                                                     {cv.categoryName}
@@ -779,8 +778,8 @@ function CvManagerTab() {
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="cv-item-sub" style={{ fontSize: 12.5, color: 'var(--muted, #666)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 220 }}>{cv.fileName}</span>
+                                        <div className="cv-item-sub">
+                                            <span className="cv-item-filename">{cv.fileName}</span>
                                             <span>•</span>
                                             <span>{formatBytes(cv.fileSize)}</span>
                                             {cv.uploadedAt && (
@@ -792,14 +791,14 @@ function CvManagerTab() {
                                             {cv.isSearchable ? (
                                                 <>
                                                     <span>•</span>
-                                                    <span style={{ color: 'var(--primary)', fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                                    <span className="cv-status-searchable">
                                                         <Icon name="search" width="12" height="12" /> Cho phép tìm kiếm
                                                     </span>
                                                 </>
                                             ) : (
                                                 <>
                                                     <span>•</span>
-                                                    <span style={{ color: 'var(--muted)', fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                                    <span className="cv-status-private">
                                                         <Icon name="lock" width="12" height="12" /> Chỉ dùng ứng tuyển
                                                     </span>
                                                 </>
@@ -808,11 +807,10 @@ function CvManagerTab() {
                                     </div>
                                 </div>
 
-                                <div className="cv-item-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                <div className="cv-item-actions">
                                     <button
                                         type="button"
-                                        className="btn btn-outline btn-sm"
-                                        style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                                        className="btn btn-outline btn-sm cv-btn-action"
                                         onClick={() => handleOpenEdit(cv)}
                                         title="Chỉnh sửa ngành nghề và tên nhãn"
                                         aria-label={`Chỉnh sửa thông tin CV ${cv.label || cv.fileName}`}
@@ -821,8 +819,7 @@ function CvManagerTab() {
                                     </button>
                                     <button
                                         type="button"
-                                        className="btn btn-outline btn-sm"
-                                        style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                                        className="btn btn-outline btn-sm cv-btn-action"
                                         onClick={() => downloadCandidateCv(cv.id, cv.fileName)}
                                         title="Xem hoặc tải về máy"
                                         aria-label={`Xem hoặc tải CV ${cv.label || cv.fileName}`}
@@ -831,8 +828,7 @@ function CvManagerTab() {
                                     </button>
                                     <button
                                         type="button"
-                                        className="btn btn-outline btn-sm"
-                                        style={{ color: 'var(--coral, #f43f5e)', borderColor: 'var(--coral, #f43f5e)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                                        className="btn btn-outline btn-sm cv-btn-action cv-btn-delete"
                                         onClick={() => handleDelete(cv.id, cv.fileName)}
                                         title="Xóa CV khỏi hồ sơ"
                                         aria-label={`Xóa CV ${cv.label || cv.fileName}`}
@@ -863,7 +859,9 @@ function CvManagerTab() {
 
                     <form onSubmit={handleUploadSubmit}>
                         <div style={{ background: 'var(--bg, #f8f9fa)', padding: '10px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
-                            <b>File đã chọn:</b> {pendingFile?.name} ({formatBytes(pendingFile?.size)})
+                            <span style={{ color: 'var(--muted, #666)' }}>File đã chọn: </span>
+                            <b style={{ wordBreak: 'break-word' }}>{pendingFile?.name}</b>
+                            <span style={{ color: 'var(--muted, #666)', marginLeft: 6 }}>({pendingFile && formatBytes(pendingFile.size)})</span>
                         </div>
 
                         <div style={{ marginBottom: 14 }}>
@@ -875,7 +873,7 @@ function CvManagerTab() {
                                 value={uploadForm.categoryId}
                                 onChange={(e) => setUploadForm({ ...uploadForm, categoryId: e.target.value })}
                                 required
-                                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13.5 }}
+                                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)' }}
                             >
                                 <option value="" disabled>-- Vui lòng chọn ngành nghề --</option>
                                 {categories.map((cat) => (
@@ -899,7 +897,7 @@ function CvManagerTab() {
                                 required
                                 maxLength={100}
                                 autoComplete="off"
-                                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13.5 }}
+                                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)' }}
                             />
                             <span style={{ display: 'block', fontSize: 11.5, color: 'var(--muted, #666)', marginTop: 4 }}>
                                 Tên phân biệt giữa các bản CV của bạn (Ví dụ: CV React, CV Node.js).
@@ -918,7 +916,7 @@ function CvManagerTab() {
                             </label>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                        <div className="modal-actions-responsive">
                             <button
                                 type="button"
                                 className="btn btn-outline"
@@ -957,7 +955,9 @@ function CvManagerTab() {
 
                     <form onSubmit={handleEditSubmit}>
                         <div style={{ background: 'var(--bg, #f8f9fa)', padding: '10px 14px', borderRadius: 8, marginBottom: 14, fontSize: 13 }}>
-                            <b>File gốc:</b> {editingCv.fileName} ({formatBytes(editingCv.fileSize)})
+                            <span style={{ color: 'var(--muted, #666)' }}>File gốc: </span>
+                            <b style={{ wordBreak: 'break-word' }}>{editingCv.fileName}</b>
+                            <span style={{ color: 'var(--muted, #666)', marginLeft: 6 }}>({formatBytes(editingCv.fileSize)})</span>
                         </div>
 
                         <div style={{ marginBottom: 14 }}>
@@ -969,7 +969,7 @@ function CvManagerTab() {
                                 value={editForm.categoryId}
                                 onChange={(e) => setEditForm({ ...editForm, categoryId: e.target.value })}
                                 required
-                                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13.5 }}
+                                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)' }}
                             >
                                 <option value="" disabled>-- Vui lòng chọn ngành nghề --</option>
                                 {categories.map((cat) => (
@@ -993,7 +993,7 @@ function CvManagerTab() {
                                 required
                                 maxLength={100}
                                 autoComplete="off"
-                                style={{ width: '100%', padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13.5 }}
+                                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border)' }}
                             />
                         </div>
 
@@ -1009,7 +1009,7 @@ function CvManagerTab() {
                             </label>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                        <div className="modal-actions-responsive">
                             <button
                                 type="button"
                                 className="btn btn-outline"
@@ -1183,7 +1183,7 @@ function PasswordTab({ changePassword, logout, currentUser }) {
             {error && <div className="field-error acct-error">{error}</div>}
             {success && <div style={{ color: 'var(--lime, #10b981)', marginBottom: 16, fontSize: 13 }}>{success}</div>}
 
-            <button className="btn btn-primary" onClick={save} disabled={saving} style={{ marginTop: 6 }}>
+            <button className="btn btn-primary acct-submit-btn" onClick={save} disabled={saving}>
                 {saving ? 'Đang lưu...' : (hasPassword ? 'Cập nhật mật khẩu' : 'Thiết lập mật khẩu')}
             </button>
         </>
@@ -1788,6 +1788,14 @@ export default function AccountSettings({ forcedTab }) {
         roleCode: isEmployer ? 'employer' : 'student',
     };
 
+    const activeTabRef = useRef(null);
+
+    useEffect(() => {
+        if (activeTabRef.current) {
+            activeTabRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
+    }, [tab]);
+
     const handleAvatarUpdated = (newAvatarUrl) => {
         if (updateProfile) {
             updateProfile({ avatarUrl: newAvatarUrl }).catch(() => {});
@@ -1810,9 +1818,9 @@ export default function AccountSettings({ forcedTab }) {
                         {tabs.map((t) => (
                             <button
                                 key={t.id}
+                                ref={tab === t.id ? activeTabRef : null}
                                 className={'acct-tab' + (tab === t.id ? ' is-active' : '')}
                                 onClick={() => navigate(t.path)}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8 }}
                             >
                                 <Icon name={t.icon} width="16" height="16" />
                                 <span>{t.label}</span>
