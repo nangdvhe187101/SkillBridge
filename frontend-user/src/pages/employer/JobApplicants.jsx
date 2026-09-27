@@ -274,7 +274,7 @@ export default function JobApplicants() {
       email: a.studentEmail,
       phone: a.studentPhone,
       avatar: a.studentAvatarUrl,
-      school: a.school || 'Sinh viên đại học',
+      school: a.school || 'Đại học FPT',
       tier: a.tier || 'gold',
       score: a.reliabilityScore || 95,
       jobsDone: a.jobsDoneCount || 0,
@@ -1521,7 +1521,7 @@ export default function JobApplicants() {
               </div>
               <div>
                 <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Trường đại học:</span>
-                <b>{viewStudentModal.school || 'Đại học tại Việt Nam'}</b>
+                <b>{viewStudentModal.school || 'Đại học FPT'}</b>
               </div>
               <div>
                 <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Công việc đã hoàn thành:</span>

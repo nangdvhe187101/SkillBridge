@@ -127,7 +127,7 @@ export default function StudentPublicProfileModal({ isOpen, onClose, studentId, 
                                         )}
                                     </div>
                                     <p style={{ margin: '0.25rem 0 0', color: '#64748b', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                                        <Icon name="map-pin" /> {profile.school || 'Đại học / Cao đẳng'}
+                                        <Icon name="map-pin" /> {profile.school || 'Đại học FPT'}
                                     </p>
                                 </div>
                             </div>

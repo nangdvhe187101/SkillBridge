@@ -628,7 +628,7 @@ export default function Talents() {
                     <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 12 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                         <span style={{ opacity: 0.7 }}>🏛</span>
-                        <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{talent.school || 'Đại học tại Việt Nam'}</span>
+                        <span style={{ fontWeight: 600, color: 'var(--ink)' }}>{talent.school || 'Đại học FPT'}</span>
                       </div>
                       {talent.industry && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -865,7 +865,7 @@ export default function Talents() {
                     )}
                   </div>
                   <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
-                    {selectedStudent.school || 'Sinh viên SkillBridge'}
+                    {selectedStudent.school || 'Đại học FPT'}
                   </div>
                 </div>
               </div>

@@ -336,7 +336,7 @@ export default function Profile() {
                   <span>
                     {isEmployer
                       ? (state.currentUser?.industry || 'Doanh nghiệp đối tác · SkillBridge')
-                      : (kycData?.school || state.currentUser?.school || 'Sinh viên SkillBridge')}
+                      : (kycData?.school || state.currentUser?.school || 'Đại học FPT')}
                   </span>
                 </span>
 

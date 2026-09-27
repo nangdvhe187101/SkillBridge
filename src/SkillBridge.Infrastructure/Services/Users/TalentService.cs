@@ -129,7 +129,7 @@ public class TalentService : ITalentService
                 Id = u.Id,
                 FullName = u.FullName,
                 AvatarUrl = _storageService.GetPublicUrl(u.AvatarUrl),
-                School = u.School,
+                School = string.IsNullOrWhiteSpace(u.School) ? "Đại học FPT" : u.School,
                 Industry = u.Industry,
                 CompanyDescription = u.CompanyDescription,
                 ReliabilityScore = u.ReliabilityScore,

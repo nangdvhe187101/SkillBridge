@@ -216,7 +216,7 @@ public class UserService : IUserService
             Id = user.Id,
             FullName = user.FullName,
             AvatarUrl = _storageService.GetPublicUrl(user.AvatarUrl),
-            School = user.School ?? "Đại học / Cao đẳng",
+            School = string.IsNullOrWhiteSpace(user.School) ? "Đại học FPT" : user.School,
             Bio = user.CompanyDescription ?? "Sinh viên nhiệt huyết, cam kết chất lượng sản phẩm và tiến độ hoàn thành đúng hạn trên SkillBridge.",
             RoleCode = user.Role?.Name ?? "student",
             ReliabilityScore = user.ReliabilityScore,
