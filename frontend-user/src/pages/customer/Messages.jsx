@@ -94,6 +94,18 @@ export default function Messages() {
     }, [active?.messages?.length]);
 
     useEffect(() => {
+        const handleViewportResize = () => {
+            if (bodyRef.current) {
+                bodyRef.current.scrollTop = bodyRef.current.scrollHeight;
+            }
+        };
+        if (typeof window !== 'undefined' && window.visualViewport) {
+            window.visualViewport.addEventListener('resize', handleViewportResize);
+            return () => window.visualViewport.removeEventListener('resize', handleViewportResize);
+        }
+    }, []);
+
+    useEffect(() => {
         if (!menuOpen) return;
         const onClickOutside = (e) => {
             if (menuWrapRef.current && !menuWrapRef.current.contains(e.target)) setMenuOpen(false);

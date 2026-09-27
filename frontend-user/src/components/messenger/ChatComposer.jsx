@@ -26,10 +26,18 @@ export default function ChatComposer({ onSend, blocked, onUnblock, conversationI
     const [uploadProgressText, setUploadProgressText] = useState('');
 
     const fileInputRef = useRef(null);
+    const textInputRef = useRef(null);
     const emojiWrapRef = useRef(null);
     const timerRef = useRef(null);
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
+
+    const handleInputFocus = () => {
+        // On mobile, ensure the input stays visible when virtual keyboard opens
+        setTimeout(() => {
+            textInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 250);
+    };
 
     useEffect(() => {
         if (!emojiOpen) return;
@@ -288,10 +296,12 @@ export default function ChatComposer({ onSend, blocked, onUnblock, conversationI
             </div>
 
             <input
+                ref={textInputRef}
                 type="text"
                 className="msgr-composer-input"
                 placeholder="Nhập tin nhắn..."
                 value={input}
+                onFocus={handleInputFocus}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); sendText(); } }}
             />
