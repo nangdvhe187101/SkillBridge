@@ -19,26 +19,33 @@ export default function Layout() {
 
     const handleViewportChange = () => {
       const vv = window.visualViewport;
+      const currentHeight = vv ? vv.height : window.innerHeight;
       const windowHeight = window.innerHeight;
-      const keyboardHeight = Math.max(0, windowHeight - vv.height);
+      const keyboardHeight = Math.max(0, windowHeight - currentHeight);
 
-      document.documentElement.style.setProperty('--visual-viewport-height', `${vv.height}px`);
+      document.documentElement.style.setProperty('--visual-viewport-height', `${currentHeight}px`);
       document.documentElement.style.setProperty('--keyboard-offset', `${keyboardHeight}px`);
 
-      if (keyboardHeight > 100) {
+      if (keyboardHeight > 80) {
         document.body.classList.add('keyboard-open');
       } else {
         document.body.classList.remove('keyboard-open');
       }
     };
 
-    window.visualViewport.addEventListener('resize', handleViewportChange);
-    window.visualViewport.addEventListener('scroll', handleViewportChange);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+      window.visualViewport.addEventListener('scroll', handleViewportChange);
+    }
+    window.addEventListener('resize', handleViewportChange);
     handleViewportChange();
 
     return () => {
-      window.visualViewport.removeEventListener('resize', handleViewportChange);
-      window.visualViewport.removeEventListener('scroll', handleViewportChange);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportChange);
+        window.visualViewport.removeEventListener('scroll', handleViewportChange);
+      }
+      window.removeEventListener('resize', handleViewportChange);
       document.documentElement.style.removeProperty('--visual-viewport-height');
       document.documentElement.style.removeProperty('--keyboard-offset');
       document.body.classList.remove('keyboard-open');
