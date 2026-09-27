@@ -387,7 +387,8 @@ const DEFAULT_CV_CATEGORIES = [
 
 // 3. CV & Storage Manager Tab (Student)
 function CvManagerTab() {
-    const { addToast } = useToast();
+    const toast = useToast();
+    const addToast = toast?.addToast || toast?.showToast || (() => {});
     const confirm = useConfirm();
     const [cvList, setCvList] = useState([]);
     const [categories, setCategories] = useState(DEFAULT_CV_CATEGORIES);
@@ -583,14 +584,19 @@ function CvManagerTab() {
                 categoryId: parseInt(editForm.categoryId, 10),
                 isSearchable: editForm.isSearchable,
             });
-            addToast('Cập nhật thông tin CV thành công!', 'success');
+            if (typeof addToast === 'function') {
+                addToast('Cập nhật thông tin CV thành công!', 'success');
+            }
             setEditModalOpen(false);
+            setEditingCv(null);
             if (updated) {
                 setCvList((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
             }
             await loadCvs();
         } catch (err) {
-            addToast(err?.message || 'Không thể cập nhật CV.', 'error');
+            if (typeof addToast === 'function') {
+                addToast(err?.message || 'Không thể cập nhật CV.', 'error');
+            }
         } finally {
             setUpdating(false);
         }
