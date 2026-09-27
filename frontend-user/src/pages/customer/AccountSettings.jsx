@@ -377,12 +377,20 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
     );
 }
 
+const DEFAULT_CV_CATEGORIES = [
+    { id: 1, name: 'Thiết kế đồ hoạ' },
+    { id: 2, name: 'Viết nội dung' },
+    { id: 3, name: 'Lập trình web' },
+    { id: 4, name: 'Dựng video' },
+    { id: 5, name: 'Dịch thuật' },
+];
+
 // 3. CV & Storage Manager Tab (Student)
 function CvManagerTab() {
     const { addToast } = useToast();
     const confirm = useConfirm();
     const [cvList, setCvList] = useState([]);
-    const [categories, setCategories] = useState([]);
+    const [categories, setCategories] = useState(DEFAULT_CV_CATEGORIES);
     const [loading, setLoading] = useState(true);
     const [uploading, setUploading] = useState(false);
     const [updating, setUpdating] = useState(false);
@@ -422,9 +430,11 @@ function CvManagerTab() {
     const loadCategories = async () => {
         try {
             const data = await getCategories();
-            setCategories(Array.isArray(data) ? data : []);
+            if (Array.isArray(data) && data.length > 0) {
+                setCategories(data);
+            }
         } catch (err) {
-            console.error('Lỗi lấy danh mục ngành nghề:', err);
+            console.error('Lỗi lấy danh mục ngành nghề, sử dụng danh mục mặc định:', err);
         }
     };
 
@@ -575,8 +585,10 @@ function CvManagerTab() {
             });
             addToast('Cập nhật thông tin CV thành công!', 'success');
             setEditModalOpen(false);
-            setEditingCv(null);
-            setCvList((prev) => prev.map((item) => (item.id === updated.id ? updated : item)));
+            if (updated) {
+                setCvList((prev) => prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)));
+            }
+            await loadCvs();
         } catch (err) {
             addToast(err?.message || 'Không thể cập nhật CV.', 'error');
         } finally {

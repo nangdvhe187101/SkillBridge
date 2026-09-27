@@ -1,11 +1,7 @@
 import { apiFetch } from './authApi';
 
-const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
-
 export async function getCategories() {
-    const res = await fetch(`${API_URL}/categories`);
-    if (!res.ok) throw new Error("Không thể tải danh sách danh mục");
-    return res.json();
+    return apiFetch('/categories', { method: 'GET' });
 }
 
 export async function getJobs(params = {}) {

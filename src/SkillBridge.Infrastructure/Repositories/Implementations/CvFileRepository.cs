@@ -41,7 +41,10 @@ public class CvFileRepository : ICvFileRepository
 
     public async Task UpdateAsync(CvFile cvFile)
     {
-        _context.CvFiles.Update(cvFile);
+        if (_context.Entry(cvFile).State == EntityState.Detached)
+        {
+            _context.CvFiles.Update(cvFile);
+        }
         await _context.SaveChangesAsync();
     }
 

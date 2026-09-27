@@ -166,6 +166,57 @@ public class CvCategorizationTests
     }
 
     [Fact]
+    public async Task UpdateCvAsync_WithRealRepository_ShouldUpdateSuccessfully()
+    {
+        var category1 = new Category { Id = 1, Name = "Thiết kế đồ hoạ", PreviewStrategy = "watermark_image" };
+        var category2 = new Category { Id = 2, Name = "Lập trình web", PreviewStrategy = "sample_rows" };
+        _dbContext.Categories.AddRange(category1, category2);
+
+        var cv = new CvFile
+        {
+            Id = 101,
+            StudentId = 13,
+            FileName = "SkillBridge_EXE201.docx",
+            FileUrl = "https://localhost/uploads/test.docx",
+            PublicId = "test_pid",
+            FileSize = 1024,
+            Label = "SkillBridge_EXE201.docx",
+            CategoryId = null,
+            IsSearchable = true,
+            UploadedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        _dbContext.CvFiles.Add(cv);
+        await _dbContext.SaveChangesAsync();
+
+        var cvRepo = new SkillBridge.Infrastructure.Repositories.Implementations.CvFileRepository(_dbContext);
+        var catRepo = new SkillBridge.Infrastructure.Repositories.Implementations.CategoryRepository(_dbContext);
+        var service = new CvService(cvRepo, catRepo, _storageMock.Object, _dbContext, _loggerMock.Object);
+
+        var request = new UpdateCvRequest
+        {
+            Label = "CV Kỹ sư phần mềm",
+            CategoryId = 2,
+            IsSearchable = true
+        };
+
+        var result = await service.UpdateCvAsync(13, 101, request);
+        Assert.Equal(2, result.CategoryId);
+        Assert.Equal("Lập trình web", result.CategoryName);
+
+        // Update again from Category 2 to Category 1
+        var request2 = new UpdateCvRequest
+        {
+            Label = "CV Thiết kế",
+            CategoryId = 1,
+            IsSearchable = false
+        };
+        var result2 = await service.UpdateCvAsync(13, 101, request2);
+        Assert.Equal(1, result2.CategoryId);
+        Assert.Equal("Thiết kế đồ hoạ", result2.CategoryName);
+    }
+
+    [Fact]
     public async Task UploadCvAsync_WhenCategoryIdMissing_ShouldThrowBusinessException()
     {
         // Arrange

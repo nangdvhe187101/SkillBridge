@@ -228,6 +228,7 @@ public class CvService : ICvService
         }
 
         cv.CategoryId = request.CategoryId;
+        cv.Category = cat;
         cv.Label = string.IsNullOrWhiteSpace(request.Label) ? cv.FileName : request.Label.Trim();
         cv.IsSearchable = request.IsSearchable;
         cv.UpdatedAt = DateTime.UtcNow;
