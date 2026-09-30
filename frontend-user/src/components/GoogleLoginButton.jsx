@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 const DEFAULT_CLIENT_ID = '275431712095-73cfhprsdt4seghbdrjr4clpl9f7j6g7.apps.googleusercontent.com';
 
 export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp tục với Google', onError }) {
     const { googleLogin } = useStore();
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchParams] = useSearchParams();
     const [loading, setLoading] = useState(false);
     const googleButtonRef = useRef(null);
@@ -28,6 +29,9 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
     const searchParamsRef = useRef(searchParams);
     searchParamsRef.current = searchParams;
 
+    const locationRef = useRef(location);
+    locationRef.current = location;
+
     const clientId = import.meta.env?.VITE_GOOGLE_CLIENT_ID || DEFAULT_CLIENT_ID;
 
     useEffect(() => {
@@ -42,9 +46,9 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
             setLoading(true);
             try {
                 await googleLoginRef.current(response.credential, roleCodeRef.current);
-                const redirect = searchParamsRef.current?.get('redirect');
+                const redirect = searchParamsRef.current?.get('redirect') || locationRef.current?.state?.from;
                 if (redirect) {
-                    navigateRef.current(redirect);
+                    navigateRef.current(redirect, { replace: true });
                 } else {
                     navigateRef.current('/');
                 }

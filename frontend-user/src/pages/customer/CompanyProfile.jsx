@@ -137,6 +137,51 @@ export default function CompanyProfile() {
           </div>
         </div>
 
+        {/* Escrow Guarantee Trust Banner */}
+        <div
+          style={{
+            marginTop: 20,
+            padding: '14px 18px',
+            borderRadius: 12,
+            background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%)',
+            border: '1px solid rgba(34, 197, 94, 0.25)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 16,
+            flexWrap: 'wrap',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10,
+                background: '#16a34a',
+                color: '#fff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              <Icon name="shield-check" width="22" height="22" />
+            </div>
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }}>
+                Bảo chứng Ký quỹ Escrow 100% An toàn cho Sinh viên
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                Tiền thù lao luôn được Nhà tuyển dụng ký quỹ trước khi giao việc. Bạn luôn được đảm bảo chi trả đầy đủ và đúng hạn khi hoàn thành.
+              </div>
+            </div>
+          </div>
+          <span className="chip chip-lime" style={{ fontWeight: 700, fontSize: 11.5 }}>
+            ✓ Cam kết giải ngân minh bạch
+          </span>
+        </div>
+
         {/* Navigation Tabs */}
         <div style={{ display: 'flex', gap: 8, marginTop: 24, borderBottom: '1px solid var(--border)', paddingBottom: 10 }}>
           <button className={'chip ' + (tab === 'about' ? 'is-active' : '')} onClick={() => setTab('about')}>
@@ -151,7 +196,7 @@ export default function CompanyProfile() {
         </div>
 
         {/* Tab Content */}
-        <div className="profile-grid" style={{ marginTop: 24 }}>
+        <div className="cprofile-grid profile-grid" style={{ marginTop: 24 }}>
           <div>
             {tab === 'about' && (
               <>
@@ -169,7 +214,7 @@ export default function CompanyProfile() {
                     <div className="empty-state">Hiện chưa có tin tuyển dụng nào đang mở.</div>
                   ) : (
                     openJobs.slice(0, 5).map((j) => (
-                      <div className="tx-row" style={{ cursor: 'pointer' }} key={j.id} onClick={() => navigate(`/jobs/${j.id}`)}>
+                      <div className="tx-row" style={{ cursor: 'pointer', alignItems: 'center' }} key={j.id} onClick={() => navigate(`/jobs/${j.id}`)}>
                         <div className="tx-ic" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)' }}>
                           <Icon name="briefcase" width="16" height="16" />
                         </div>
@@ -177,7 +222,20 @@ export default function CompanyProfile() {
                           <b>{j.title}</b>
                           <span>{j.cat} · {j.time}</span>
                         </div>
-                        <b style={{ fontSize: 13, color: 'var(--primary-dark)' }}>{fmtVND(j.budget)}</b>
+                        <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 12 }}>
+                          <b style={{ fontSize: 13, color: 'var(--primary-dark)' }}>{fmtVND(j.budget)}</b>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            style={{ fontSize: 11.5, padding: '4px 10px', borderRadius: 8, fontWeight: 600 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/jobs/${j.id}`);
+                            }}
+                          >
+                            Ứng tuyển →
+                          </button>
+                        </div>
                       </div>
                     ))
                   )}
@@ -197,7 +255,7 @@ export default function CompanyProfile() {
                   <div className="empty-state">Nhà tuyển dụng chưa đăng tin nào.</div>
                 ) : (
                   jobs.map((j) => (
-                    <div className="tx-row" style={{ cursor: 'pointer' }} key={j.id} onClick={() => navigate(`/jobs/${j.id}`)}>
+                    <div className="tx-row" style={{ cursor: 'pointer', alignItems: 'center' }} key={j.id} onClick={() => navigate(`/jobs/${j.id}`)}>
                       <div className="tx-ic" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)' }}>
                         <Icon name="briefcase" width="16" height="16" />
                       </div>
@@ -214,11 +272,26 @@ export default function CompanyProfile() {
                         </div>
                         <span>{j.cat} · {j.time}</span>
                       </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary-dark)' }}>{fmtVND(j.budget)}</div>
-                        <span className={'djr-status ' + (j.status === 'open' ? 'open' : 'filled')} style={{ display: 'inline-block', marginTop: 4 }}>
-                          {j.status === 'open' ? 'Đang tuyển' : 'Đã đầy'}
-                        </span>
+                      <div style={{ textAlign: 'right', display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary-dark)' }}>{fmtVND(j.budget)}</div>
+                          <span className={'djr-status ' + (j.status === 'open' ? 'open' : 'filled')} style={{ display: 'inline-block', marginTop: 4 }}>
+                            {j.status === 'open' ? 'Đang tuyển' : 'Đã đầy'}
+                          </span>
+                        </div>
+                        {j.status === 'open' && (
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            style={{ fontSize: 11.5, padding: '5px 12px', borderRadius: 8, fontWeight: 600 }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              navigate(`/jobs/${j.id}`);
+                            }}
+                          >
+                            Ứng tuyển →
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))

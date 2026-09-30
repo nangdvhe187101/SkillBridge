@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
 import Pagination from '../../components/Pagination';
+import EmptyState from '../../components/common/EmptyState';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { adsPool } from '../../data/ads';
 import { slugify } from '../../data/companies';
@@ -378,7 +379,24 @@ export default function Jobs() {
       <div className="jobs-body">
         <div className="wrap">
           <div className="job-grid">
-            {items.length === 0 ? <div className="empty-state">Không tìm thấy công việc phù hợp với bộ lọc hiện tại.</div> : items}
+            {items.length === 0 ? (
+              <EmptyState
+                preset="search"
+                title="Không tìm thấy công việc phù hợp"
+                description={
+                  q || filter !== 'Tất cả' || statusTab !== 'open'
+                    ? 'Không có công việc nào thỏa mãn tiêu chí tìm kiếm hoặc bộ lọc hiện tại của bạn.'
+                    : 'Hiện tại chưa có công việc mới nào được đăng tải trên hệ thống.'
+                }
+                actionLabel={q || filter !== 'Tất cả' || statusTab !== 'open' ? 'Xóa bộ lọc & Xem tất cả' : 'Làm mới danh sách'}
+                onAction={() => {
+                  setQ('');
+                  setFilter('Tất cả');
+                  setStatusTab('open');
+                  if (refreshJobs) refreshJobs('open');
+                }}
+              />
+            ) : items}
           </div>
 
           {/* Reusable Pagination */}

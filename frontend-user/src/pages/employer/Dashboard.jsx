@@ -54,9 +54,9 @@ function formatDeadline(ts) {
 import Avatar from '../../components/Avatar';
 import { useConfirm } from '../../context/ConfirmContext';
 
-function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goToAdsTab }) {
+function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, _goToAdsTab }) {
   const { openChatWithPerson } = useStore();
-  const companyName = state.user?.companyName || state.user?.fullName || 'Nhà tuyển dụng';
+  const companyName = state.currentUser?.companyName || state.currentUser?.fullName || 'Nhà tuyển dụng';
   const openCount = state.myJobs.filter((j) => j.status === 'open').length;
   const inProgressCount = state.myJobs.filter((j) => ['in_progress', 'submitted', 'revision_requested'].includes(j.status)).length;
   const totalApps = state.myJobs.reduce((s, j) => s + (j.applicantsCount ?? j.applicants?.length ?? 0), 0);
@@ -146,8 +146,8 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <button
               type="button"
-              className="btn btn-lime"
-              style={{ fontWeight: 700, padding: '10px 20px', fontSize: 14, boxShadow: '0 4px 14px rgba(203, 255, 77, 0.4)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              className="btn"
+              style={{ background: '#FFFFFF', color: '#181528', fontWeight: 700, padding: '10px 20px', fontSize: 14, borderRadius: 10, boxShadow: '0 4px 14px rgba(0, 0, 0, 0.15)', display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
               onClick={goToPostTab}
             >
               <Icon name="plus" width="16" height="16" /> Đăng tin mới
@@ -155,8 +155,9 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
             <button
               type="button"
               className="btn"
-              style={{ background: 'rgba(255,255,255,0.12)', color: '#fff', border: '1px solid rgba(255,255,255,0.25)', padding: '10px 18px', fontSize: 13.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              style={{ background: 'rgba(255, 255, 255, 0.12)', color: '#FFFFFF', border: '1px solid rgba(255, 255, 255, 0.25)', padding: '10px 18px', fontSize: 13.5, borderRadius: 10, display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
               onClick={() => navigate('/wallet')}
+              title="Bấm để xem chi tiết ví và lịch sử ký quỹ"
             >
               <Icon name="wallet" width="14" height="14" /> Ví ký quỹ: <b>{fmtVND(state.balance || 0)}</b>
             </button>
@@ -318,68 +319,7 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
         </div>
       )}
 
-      {/* Quick Action Shortcuts Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 24 }}>
-        <button
-          type="button"
-          className="btn btn-outline"
-          style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10, background: 'var(--surface)' }}
-          onClick={goToJobsTab}
-        >
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon name="file-text" width={18} height={18} />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <b style={{ display: 'block', fontSize: 13.5 }}>Quản lý tin đăng</b>
-            <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Xem và duyệt ứng viên</span>
-          </div>
-        </button>
 
-        <button
-          type="button"
-          className="btn btn-outline"
-          style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10, background: 'var(--surface)' }}
-          onClick={goToPostTab}
-        >
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(203, 255, 77, 0.2)', color: 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon name="plus" width={18} height={18} />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <b style={{ display: 'block', fontSize: 13.5 }}>Tạo tin tuyển dụng</b>
-            <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Đăng đề bài & ngân sách</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          className="btn btn-outline"
-          style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10, background: 'var(--surface)' }}
-          onClick={goToAdsTab}
-        >
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(87, 199, 255, 0.15)', color: '#0284c7', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon name="megaphone" width={18} height={18} />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <b style={{ display: 'block', fontSize: 13.5 }}>Chiến dịch Affiliate</b>
-            <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Mở rộng mạng lưới tuyển dụng</span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          className="btn btn-outline"
-          style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10, background: 'var(--surface)' }}
-          onClick={() => navigate('/wallet')}
-        >
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255, 92, 122, 0.12)', color: 'var(--coral)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Icon name="card" width={18} height={18} />
-          </div>
-          <div style={{ textAlign: 'left' }}>
-            <b style={{ display: 'block', fontSize: 13.5 }}>Ví & Ký quỹ an toàn</b>
-            <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Nạp / Rút & Lịch sử Escrow</span>
-          </div>
-        </button>
-      </div>
 
       {/* Recent Applicants Feed */}
       <div className="dash-panel" style={{ marginBottom: 24 }}>
@@ -393,17 +333,42 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, goT
         </div>
 
         {recentApplicants.length === 0 ? (
-          <div className="empty-state" style={{ padding: '36px 20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}>
-              <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Icon name="users" width={28} height={28} />
+          totalApps > 0 ? (
+            <div className="empty-state" style={{ padding: '36px 20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(16, 185, 129, 0.12)', color: '#10b981', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="users" width={28} height={28} />
+                </div>
               </div>
+              <b style={{ fontSize: 16, color: 'var(--ink)' }}>Bạn đang có {totalApps} hồ sơ ứng tuyển cần xem xét</b>
+              <p style={{ color: 'var(--ink-soft)', marginTop: 6, maxWidth: 480, margin: '6px auto 16px', lineHeight: 1.55 }}>
+                Các ứng viên tài năng đã nộp hồ sơ vào các tin tuyển dụng đang mở. Hãy vào danh sách tin để xem chi tiết CV, portfolio và bắt đầu phỏng vấn sinh viên.
+              </p>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={goToJobsTab}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Icon name="file-text" width={14} height={14} /> Duyệt hồ sơ theo từng tin ({totalApps})
+              </button>
             </div>
-            <b>Chưa có ứng viên mới nộp hồ sơ</b>
-            <p style={{ color: 'var(--ink-soft)', marginTop: 4, maxWidth: 440, margin: '6px auto 0' }}>
-              Tin tuyển dụng của bạn đang hoạt động. Bạn có thể chia sẻ link tin hoặc bật chế độ <b>Tuyển gấp (Featured)</b> để thu hút thêm nhiều hồ sơ chất lượng!
-            </p>
-          </div>
+          ) : (
+            <div className="empty-state" style={{ padding: '36px 20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+                <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(108, 76, 255, 0.08)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Icon name="users" width={28} height={28} />
+                </div>
+              </div>
+              <b style={{ fontSize: 16, color: 'var(--ink)' }}>Chưa có ứng viên mới nộp hồ sơ</b>
+              <p style={{ color: 'var(--ink-soft)', marginTop: 6, maxWidth: 440, margin: '6px auto 16px', lineHeight: 1.55 }}>
+                Tin tuyển dụng của bạn đang hoạt động. Bạn có thể chia sẻ link tin hoặc bật chế độ <b>Tuyển gấp (Featured)</b> để thu hút thêm nhiều hồ sơ chất lượng!
+              </p>
+              <button type="button" className="btn btn-outline btn-sm" onClick={goToJobsTab}>
+                Xem danh sách tin tuyển dụng
+              </button>
+            </div>
+          )
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {recentApplicants.map((app, i) => (

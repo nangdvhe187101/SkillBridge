@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Icon from './Icon';
 import { useStore, fmtVND } from '../context/StoreContext';
 import { useToast } from '../context/ToastContext';
+import { useModal } from '../context/ModalContext';
 import { getJobById, uploadJobAttachment, deleteJobAttachment } from '../api/jobApi';
 import { downloadJobAttachment } from '../utils/fileDownloader';
 
@@ -35,11 +37,37 @@ function getFileIcon(fileName) {
 export default function PostJobForm({ onDone, onCancelEdit }) {
     const { state, createJobPost, updateJobPost, clearEditJob, refreshJobs, refreshMyJobs, refreshWallet } = useStore();
     const { showToast } = useToast();
+    const { openModal } = useModal();
+    const navigate = useNavigate();
     const fileInputRef = useRef(null);
 
     const categoriesList = state.categories && state.categories.length > 0 ? state.categories : DEFAULT_CATS;
 
     const editingJob = state.editingJobId ? state.myJobs.find((j) => j.id === state.editingJobId) : null;
+    const isEditing = Boolean(state.editingJobId || editingJob);
+
+    // Tính toán hạn mức tin tuyển dụng mở đồng thời theo gói dịch vụ
+    const openJobs = (state.myJobs || []).filter((j) => j.status === 'open' && (!editingJob || j.id !== editingJob.id));
+    const openJobsCount = openJobs.length;
+
+    const planCode = state.activePlanCode || (state.vipBusiness ? 'EMP_VIP' : 'FREE');
+    let maxActiveJobs = 1;
+    let planName = 'Gói Cơ bản (Miễn phí)';
+    if (planCode === 'EMP_VIP' || state.vipBusiness) {
+        maxActiveJobs = Infinity;
+        planName = 'Gói Doanh nghiệp VIP';
+    } else if (planCode === 'EMP_GROWTH' || planCode?.includes('GROWTH')) {
+        maxActiveJobs = 15;
+        planName = 'Gói Tăng trưởng (Growth)';
+    } else if (planCode === 'EMP_STARTER' || planCode?.includes('STARTER')) {
+        maxActiveJobs = 5;
+        planName = 'Gói Khởi động (Starter)';
+    }
+
+    const isLimitReached = !isEditing && maxActiveJobs !== Infinity && openJobsCount >= maxActiveJobs;
+    const walletBalance = Number(state.balance || 0);
+    const hasEnoughWalletForUrgent = walletBalance >= 20000;
+    const urgentShortfall = Math.max(0, 20000 - walletBalance);
 
     const [title, setTitle] = useState('');
     const [categoryId, setCategoryId] = useState(categoriesList[0]?.id || 1);
@@ -191,6 +219,18 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
             return;
         }
 
+        // Kiểm tra hạn mức đăng tin của NTD trước khi submit
+        if (isLimitReached && !urgent) {
+            showToast(`Bạn hiện có ${openJobsCount}/${maxActiveJobs} tin đang mở (đạt hạn mức ${planName}). Vui lòng chọn 'Đăng tin tuyển gấp (+20.000đ)' hoặc đóng bớt tin cũ để đăng thêm.`, 'alert-triangle');
+            return;
+        }
+
+        if (urgent && !hasEnoughWalletForUrgent) {
+            showToast(`Đăng tin tuyển gấp (+20.000đ) yêu cầu số dư ví tối thiểu 20.000đ (Hiện có: ${fmtVND(walletBalance)}). Vui lòng nạp thêm tiền vào ví.`, 'alert-triangle');
+            openModal?.('topup', { initialAmount: Math.max(urgentShortfall, 50000), autoCreate: true });
+            return;
+        }
+
         const reqList = requirementsText
             .split('\n')
             .map(r => r.trim())
@@ -272,6 +312,173 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                             ? `Còn ${triZeroLeft}/3 lượt đăng tin miễn phí hoa hồng nền tảng theo chính sách Triple-Zero.`
                             : 'Đã dùng hết lượt Triple-Zero — phí nền tảng tiêu chuẩn sẽ được áp dụng khi hoàn thành công việc.')}
                 </div>
+
+                {/* Banner cảnh báo Hạn mức đăng tin tuyển dụng */}
+                {isLimitReached ? (
+                    <div style={{
+                        marginTop: 14,
+                        marginBottom: 18,
+                        padding: '16px 18px',
+                        background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(234, 88, 12, 0.06) 100%)',
+                        border: '1.5px solid rgba(245, 158, 11, 0.45)',
+                        borderRadius: 12,
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                            <div style={{
+                                width: 36,
+                                height: 36,
+                                borderRadius: 10,
+                                background: 'rgba(245, 158, 11, 0.2)',
+                                color: '#d97706',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0
+                            }}>
+                                <Icon name="alert-triangle" style={{ width: 20, height: 20 }} />
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+                                    <b style={{ color: '#b45309', fontSize: 14 }}>Thông báo: Đã đạt hạn mức tin mở đồng thời</b>
+                                    <span className="chip chip-coral" style={{ fontSize: 11, padding: '2px 8px' }}>
+                                        {openJobsCount} / {maxActiveJobs} tin đang mở ({planName})
+                                    </span>
+                                </div>
+                                <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--ink)', lineHeight: 1.5 }}>
+                                    Theo quy định của <b>{planName}</b>, bạn chỉ có thể mở tối đa <b>{maxActiveJobs} tin tuyển dụng miễn phí</b> cùng một lúc. Để đăng tin này ngay lập tức, bạn có thể chọn một trong các phương án sau:
+                                </p>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+                                    {/* Option 1: Urgent posting */}
+                                    <div style={{
+                                        padding: '12px 14px',
+                                        borderRadius: 10,
+                                        border: urgent ? '2px solid #f59e0b' : '1px solid var(--border)',
+                                        background: urgent ? 'rgba(245, 158, 11, 0.12)' : 'var(--surface)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 8,
+                                    }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                            <b style={{ fontSize: 13, color: '#d97706', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                <Icon name="zap" style={{ width: 14, height: 14 }} />
+                                                Đăng tin Tuyển gấp
+                                            </b>
+                                            <span style={{ fontSize: 12, fontWeight: 700, color: '#d97706' }}>+20.000đ</span>
+                                        </div>
+                                        <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.4 }}>
+                                            Vượt hạn mức ngay lập tức, ghim nổi bật tin lên đầu danh sách việc làm.
+                                        </p>
+                                        {!urgent ? (
+                                            <button
+                                                type="button"
+                                                className="btn btn-primary btn-sm"
+                                                style={{ width: '100%', fontSize: 12, background: '#f59e0b', borderColor: '#f59e0b', marginTop: 'auto' }}
+                                                onClick={() => setUrgent(true)}
+                                            >
+                                                Bật tuyển gấp (+20k)
+                                            </button>
+                                        ) : (
+                                            <div style={{ fontSize: 12, display: 'flex', flexDirection: 'column', gap: 4, marginTop: 'auto' }}>
+                                                <span style={{ color: hasEnoughWalletForUrgent ? '#16a34a' : '#dc2626', fontWeight: 600 }}>
+                                                    Ví: {fmtVND(walletBalance)} {hasEnoughWalletForUrgent ? '✓ Đủ phí' : `(Thiếu ${fmtVND(urgentShortfall)})`}
+                                                </span>
+                                                {!hasEnoughWalletForUrgent && (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-outline btn-sm"
+                                                        style={{ width: '100%', fontSize: 11.5, borderColor: '#f59e0b', color: '#d97706' }}
+                                                        onClick={() => openModal?.('topup', { initialAmount: Math.max(urgentShortfall, 50000), autoCreate: true })}
+                                                    >
+                                                        Nạp thêm vào ví
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Option 2: Close old job */}
+                                    <div style={{
+                                        padding: '12px 14px',
+                                        borderRadius: 10,
+                                        border: '1px solid var(--border)',
+                                        background: 'var(--surface)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 8,
+                                    }}>
+                                        <b style={{ fontSize: 13, color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <Icon name="file-text" style={{ width: 14, height: 14 }} />
+                                            Đóng bớt tin tuyển cũ
+                                        </b>
+                                        <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.4 }}>
+                                            Đóng các tin đã tuyển đủ ứng viên để giải phóng chỉ tiêu tin miễn phí.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline btn-sm"
+                                            style={{ width: '100%', fontSize: 12, marginTop: 'auto' }}
+                                            onClick={() => navigate('/employer/jobs')}
+                                        >
+                                            Quản lý tin đã đăng →
+                                        </button>
+                                    </div>
+
+                                    {/* Option 3: Upgrade plan */}
+                                    <div style={{
+                                        padding: '12px 14px',
+                                        borderRadius: 10,
+                                        border: '1px solid var(--border)',
+                                        background: 'var(--surface)',
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 8,
+                                    }}>
+                                        <b style={{ fontSize: 13, color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <Icon name="crown" style={{ width: 14, height: 14 }} />
+                                            Nâng cấp gói dịch vụ
+                                        </b>
+                                        <p style={{ margin: 0, fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.4 }}>
+                                            Mở 5 tin (Starter), 15 tin (Growth) hoặc không giới hạn (VIP).
+                                        </p>
+                                        <button
+                                            type="button"
+                                            className="btn btn-outline btn-sm"
+                                            style={{ width: '100%', fontSize: 12, marginTop: 'auto', borderColor: 'var(--primary)', color: 'var(--primary)' }}
+                                            onClick={() => navigate('/pricing')}
+                                        >
+                                            Xem bảng giá →
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ) : (
+                    !isEditing && maxActiveJobs !== Infinity && (
+                        <div style={{
+                            marginTop: 10,
+                            marginBottom: 16,
+                            padding: '8px 14px',
+                            borderRadius: 8,
+                            background: 'rgba(22, 163, 74, 0.08)',
+                            border: '1px solid rgba(22, 163, 74, 0.25)',
+                            fontSize: 12.5,
+                            color: '#15803d',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            flexWrap: 'wrap',
+                            gap: 8
+                        }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                                <Icon name="check" style={{ width: 14, height: 14 }} />
+                                <span>Hạn mức tin mở đồng thời: <b>{openJobsCount}/{maxActiveJobs}</b> tin ({planName}).</span>
+                            </span>
+                            <span style={{ fontWeight: 600 }}>Còn {maxActiveJobs - openJobsCount} tin miễn phí</span>
+                        </div>
+                    )
+                )}
 
                 <div className="field">
                     <label>Tiêu đề công việc <span style={{ color: 'var(--coral)' }}>*</span></label>

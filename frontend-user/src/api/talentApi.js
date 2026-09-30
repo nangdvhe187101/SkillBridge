@@ -9,6 +9,8 @@ export const talentApi = {
     if (params.industry || params.major) qs.append('industry', params.industry || params.major);
     if (params.school || params.university) qs.append('school', params.school || params.university);
     if (params.minReliabilityScore || params.minScore) qs.append('minReliabilityScore', params.minReliabilityScore || params.minScore);
+    if (params.minRate) qs.append('minRate', params.minRate);
+    if (params.maxRate) qs.append('maxRate', params.maxRate);
     const query = qs.toString();
     return apiFetch(`/talents${query ? '?' + query : ''}`, { method: 'GET' });
   },

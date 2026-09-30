@@ -9,6 +9,8 @@ public class TalentFilterRequest
     public string? School { get; set; }
     public string? Industry { get; set; }
     public int? MinReliabilityScore { get; set; }
+    public decimal? MinRate { get; set; }
+    public decimal? MaxRate { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 12;
 }
@@ -23,6 +25,8 @@ public class TalentItemDto
     public string? CompanyDescription { get; set; } // Bio
     public int ReliabilityScore { get; set; }
     public int JobsDoneCount { get; set; }
+    public decimal ExpectedRate { get; set; } = 100_000m;
+    public string RateUnit { get; set; } = "đ/giờ";
     public string KycStatus { get; set; } = "verified";
     public string? ActivePlanCode { get; set; }
     public int ActivePlanTier { get; set; }
