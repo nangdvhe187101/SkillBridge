@@ -75,7 +75,7 @@ export default function Pagination({
       }}
     >
       {/* Left: Summary text and optional page size select */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--ink-soft)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-soft)', flexWrap: 'wrap' }}>
         {totalItems > 0 && (
           <span>
             Hiển thị <b>{startItem}</b> – <b>{endItem}</b> trong <b>{totalItems}</b> {itemLabel}
@@ -111,7 +111,7 @@ export default function Pagination({
       </div>
 
       {/* Right: Page Navigation Buttons */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
         {/* First Page */}
         <button
           className="btn btn-outline btn-sm"

@@ -124,6 +124,21 @@ public class TalentService : ITalentService
                 .Take(4)
                 .ToList();
 
+            decimal expectedRate = 120_000m;
+            if (tier == 3) expectedRate = 400_000m;
+            else if (tier == 2) expectedRate = 250_000m;
+            else if (tier == 1) expectedRate = 160_000m;
+            else
+            {
+                if (u.ReliabilityScore >= 95 && u.JobsDoneCount >= 10) expectedRate = 200_000m;
+                else if (u.ReliabilityScore >= 85 && u.JobsDoneCount >= 3) expectedRate = 140_000m;
+                else if (u.JobsDoneCount > 0) expectedRate = 100_000m;
+                else expectedRate = 80_000m;
+            }
+
+            if (request.MinRate.HasValue && expectedRate < request.MinRate.Value) return null;
+            if (request.MaxRate.HasValue && expectedRate > request.MaxRate.Value) return null;
+
             return new TalentItemDto
             {
                 Id = u.Id,
@@ -134,6 +149,8 @@ public class TalentService : ITalentService
                 CompanyDescription = u.CompanyDescription,
                 ReliabilityScore = u.ReliabilityScore,
                 JobsDoneCount = u.JobsDoneCount,
+                ExpectedRate = expectedRate,
+                RateUnit = "đ/giờ",
                 KycStatus = u.KycStatus ?? "verified",
                 ActivePlanCode = planCode,
                 ActivePlanTier = tier,
@@ -142,6 +159,8 @@ public class TalentService : ITalentService
                 Skills = skills
             };
         })
+        .Where(x => x != null)
+        .Select(x => x!)
         .OrderByDescending(x => x.ActivePlanTier)
         .ThenByDescending(x => x.ReliabilityScore)
         .ThenByDescending(x => x.JobsDoneCount)

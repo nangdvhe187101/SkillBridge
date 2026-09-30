@@ -75,7 +75,7 @@ export default function Pagination({
       }}
     >
       {/* Left: Summary text and optional page size select */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--ink-soft)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--ink-soft)', flexWrap: 'wrap' }}>
         {totalItems > 0 && (
           <span>
             Hiển thị <b>{startItem}</b> – <b>{endItem}</b> trong <b>{totalItems}</b> {itemLabel}
@@ -111,25 +111,27 @@ export default function Pagination({
       </div>
 
       {/* Right: Page Navigation Buttons */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      <nav aria-label="Điều hướng phân trang" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
         {/* First Page */}
         <button
-          className="btn btn-outline btn-sm"
+          className="adm-btn-action outline"
           onClick={() => onPageChange(1)}
           disabled={currentPage === 1}
-          style={{ padding: '4px 8px', minWidth: 32, fontSize: 12 }}
+          style={{ minWidth: 32, height: 32, padding: 0, fontSize: 13, borderRadius: 8 }}
           title="Trang đầu"
+          aria-label="Đi đến trang đầu"
         >
           «
         </button>
 
         {/* Prev Page */}
         <button
-          className="btn btn-outline btn-sm"
+          className="adm-btn-action outline"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          style={{ padding: '4px 8px', minWidth: 32, fontSize: 12 }}
+          style={{ minWidth: 32, height: 32, padding: 0, fontSize: 13, borderRadius: 8 }}
           title="Trang trước"
+          aria-label="Đi đến trang trước"
         >
           ‹
         </button>
@@ -138,7 +140,7 @@ export default function Pagination({
         {getPageNumbers().map((p, idx) => {
           if (p === 'ellipsis-start' || p === 'ellipsis-end') {
             return (
-              <span key={`el-${idx}`} style={{ padding: '0 4px', color: 'var(--ink-soft)', fontSize: 12 }}>
+              <span key={`el-${idx}`} style={{ padding: '0 4px', color: 'var(--ink-soft)', fontSize: 13 }} aria-hidden="true">
                 …
               </span>
             );
@@ -148,14 +150,18 @@ export default function Pagination({
           return (
             <button
               key={p}
-              className={`btn btn-sm ${isActive ? 'btn-primary' : 'btn-outline'}`}
+              className={`adm-btn-action ${isActive ? 'primary' : 'outline'}`}
               onClick={() => onPageChange(p)}
               style={{
-                padding: '4px 10px',
                 minWidth: 32,
-                fontSize: 12.5,
+                height: 32,
+                padding: '0 8px',
+                fontSize: 13,
                 fontWeight: isActive ? 700 : 500,
+                borderRadius: 8,
               }}
+              aria-label={`Trang ${p}`}
+              aria-current={isActive ? 'page' : undefined}
             >
               {p}
             </button>
@@ -164,26 +170,28 @@ export default function Pagination({
 
         {/* Next Page */}
         <button
-          className="btn btn-outline btn-sm"
+          className="adm-btn-action outline"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          style={{ padding: '4px 8px', minWidth: 32, fontSize: 12 }}
+          style={{ minWidth: 32, height: 32, padding: 0, fontSize: 13, borderRadius: 8 }}
           title="Trang kế tiếp"
+          aria-label="Đi đến trang kế tiếp"
         >
           ›
         </button>
 
         {/* Last Page */}
         <button
-          className="btn btn-outline btn-sm"
+          className="adm-btn-action outline"
           onClick={() => onPageChange(totalPages)}
           disabled={currentPage === totalPages}
-          style={{ padding: '4px 8px', minWidth: 32, fontSize: 12 }}
+          style={{ minWidth: 32, height: 32, padding: 0, fontSize: 13, borderRadius: 8 }}
           title="Trang cuối"
+          aria-label="Đi đến trang cuối"
         >
           »
         </button>
-      </div>
+      </nav>
     </div>
   );
 }

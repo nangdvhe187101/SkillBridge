@@ -2075,11 +2075,107 @@ footer {
   color: var(--ink-soft);
 }
 
+/* UI/UX State Utilities: Empty, Skeleton, Error */
+@keyframes sb-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--surface-2, #f1f5f9) 25%, var(--border, #e2e8f0) 50%, var(--surface-2, #f1f5f9) 75%);
+  background-size: 200% 100%;
+  animation: sb-shimmer 1.6s infinite ease-in-out;
+  border-radius: var(--radius, 10px);
+}
+
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(90deg, #1e293b 25%, #334155 50%, #1e293b 75%);
+  background-size: 200% 100%;
+}
+
+.skeleton-text {
+  height: 14px;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.skeleton-circle {
+  border-radius: 50%;
+}
+
 .empty-state {
   grid-column: 1/-1;
   text-align: center;
-  padding: 60px 20px;
+  padding: 56px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   color: var(--ink-soft);
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.empty-state-icon-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 20px;
+  background: var(--surface-2, #f1f5f9);
+  border: 1px solid var(--border, #e2e8f0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 18px;
+  color: var(--primary, #4f46e5);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+.empty-state-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 8px;
+}
+
+.empty-state-desc {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+  margin-bottom: 22px;
+}
+
+.empty-state-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.error-state {
+  grid-column: 1/-1;
+  text-align: center;
+  padding: 48px 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.error-state-icon-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 16px;
+  color: var(--coral, #ef4444);
 }
 
 .ad-card {
@@ -2550,7 +2646,8 @@ footer {
   border-bottom-color: var(--primary);
 }
 
-.cprofile-grid {
+.cprofile-grid,
+.profile-grid {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
   gap: 22px;
@@ -2558,8 +2655,29 @@ footer {
 }
 
 @media (max-width:920px) {
-  .cprofile-grid {
+  .cprofile-grid,
+  .profile-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .cprofile-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 18px 16px;
+    gap: 16px;
+  }
+
+  .cprofile-header > div:last-child {
+    width: 100%;
+    display: flex;
+    gap: 8px;
+  }
+
+  .cprofile-header > div:last-child .btn {
+    flex: 1;
+    justify-content: center;
   }
 }
 

@@ -147,14 +147,21 @@ export default function TopNav() {
           {isStudent && (
             <NavLink to="/mywork" className={linkClass} onClick={() => setNavOpen(false)}>Việc của tôi</NavLink>
           )}
-          {isEmployer && (
-            <NavLink to="/employer/dashboard" className={linkClass} onClick={() => setNavOpen(false)}>Dashboard NTD</NavLink>
-          )}
           <NavLink to="/pricing" className={linkClass} onClick={() => setNavOpen(false)}>Bảng giá</NavLink>
 
           {isLoggedIn && (
             <div className="nav-mobile-only">
               <div style={{ height: 1, background: 'var(--border)', margin: '6px 0' }} />
+              {isEmployer && (
+                <>
+                  <NavLink to="/employer/post-job" className={linkClass} onClick={() => setNavOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--primary)', fontWeight: 700 }}>
+                    <Icon name="edit" width={15} height={15} /> Đăng tin tuyển dụng mới
+                  </NavLink>
+                  <NavLink to="/employer/jobs" className={linkClass} onClick={() => setNavOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Icon name="file-text" width={15} height={15} /> Tin tuyển dụng của tôi
+                  </NavLink>
+                </>
+              )}
               <NavLink to="/profile" className={linkClass} onClick={() => setNavOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Icon name="users" width="15" height="15" /> Hồ sơ của tôi
               </NavLink>
@@ -341,14 +348,29 @@ export default function TopNav() {
                   onClick={() => setUserMenuOpen((o) => !o)}
                   aria-haspopup="true"
                   aria-expanded={userMenuOpen}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}
                 >
                   <Avatar
                     src={state.currentUser.avatarUrl}
                     name={state.currentUser.fullName}
                     fontSize={12}
-                    style={{ width: 24, height: 24, borderRadius: '50%' }}
+                    style={{ width: 26, height: 26, borderRadius: '50%' }}
                   />
-                  <span>Xin chào, {state.currentUser.fullName}</span>
+                  <span style={{ fontWeight: 600 }}>{state.currentUser.fullName}</span>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '2px 7px',
+                      borderRadius: 999,
+                      background: isStudent ? 'rgba(16, 185, 129, 0.12)' : (isEmployer ? 'rgba(79, 70, 229, 0.12)' : 'rgba(100, 116, 139, 0.12)'),
+                      color: isStudent ? '#059669' : (isEmployer ? 'var(--primary)' : '#475569'),
+                      border: isStudent ? '1px solid rgba(16, 185, 129, 0.25)' : (isEmployer ? '1px solid rgba(79, 70, 229, 0.25)' : '1px solid rgba(100, 116, 139, 0.2)'),
+                      lineHeight: 1.2
+                    }}
+                  >
+                    {isStudent ? 'Sinh viên' : (isEmployer ? 'Nhà tuyển dụng' : 'Admin')}
+                  </span>
                   <UserTierBadge planCode={userPlanCode} userRole={state.currentUser?.roleCode} variant="icon-only" size="sm" />
                   <span className="nav-more-caret">▾</span>
                 </button>
@@ -386,6 +408,19 @@ export default function TopNav() {
                       <Icon name="briefcase" width="14" height="14" /> Việc của tôi
                     </NavLink>
                   )}
+                  {isEmployer && (
+                    <>
+                      <NavLink to="/employer/dashboard" className="nav-more-link" onClick={() => goFromUserMenu('/employer/dashboard')} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Icon name="chart-bar" width={14} height={14} /> Dashboard tuyển dụng
+                      </NavLink>
+                      <NavLink to="/employer/post-job" className="nav-more-link" onClick={() => goFromUserMenu('/employer/post-job')} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--primary)', fontWeight: 600 }}>
+                        <Icon name="edit" width={14} height={14} /> Đăng tin tuyển dụng mới
+                      </NavLink>
+                      <NavLink to="/employer/jobs" className="nav-more-link" onClick={() => goFromUserMenu('/employer/jobs')} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Icon name="file-text" width={14} height={14} /> Quản lý tin đã đăng
+                      </NavLink>
+                    </>
+                  )}
                   <NavLink to="/account-settings" className="nav-more-link" onClick={() => goFromUserMenu('/account-settings')} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Icon name="key" width="14" height="14" /> Cài đặt tài khoản
                   </NavLink>
@@ -395,6 +430,26 @@ export default function TopNav() {
                   </button>
                 </div>
               </div>
+
+              {isEmployer && (
+                <button
+                  className="btn btn-primary btn-sm btn-nav-post-employer"
+                  onClick={() => navigate('/employer/post-job')}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    fontWeight: 700,
+                    borderRadius: 999,
+                    padding: '6px 14px',
+                    boxShadow: '0 2px 8px rgba(108, 76, 255, 0.28)'
+                  }}
+                  title="Đăng tin tuyển dụng mới"
+                >
+                  <Icon name="edit" width={14} height={14} />
+                  <span>Đăng tin</span>
+                </button>
+              )}
             </>
           ) : (
             <>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
 import GoogleLoginButton from '../../components/GoogleLoginButton';
@@ -13,6 +13,7 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { login: doLogin } = useStore();
 
@@ -46,9 +47,9 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
     setLoading(true);
     try {
       await doLogin(loginForm.email, loginForm.password);
-      const redirect = searchParams.get('redirect');
+      const redirect = searchParams.get('redirect') || location.state?.from;
       if (redirect) {
-        navigate(redirect);
+        navigate(redirect, { replace: true });
       } else {
         navigate('/');
       }

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
+import Pagination from '../../components/Pagination';
 import UserTierBadge from '../../components/common/UserTierBadge';
 import { useStore } from '../../context/StoreContext';
 import { talentApi } from '../../api/talentApi';
@@ -54,8 +55,16 @@ export default function Talents() {
   const [school, setSchool] = useState('');
   const [industry, setIndustry] = useState('');
   const [minScore, setMinScore] = useState('');
+  const [rateRange, setRateRange] = useState('');
   const [page, setPage] = useState(1);
-  const pageSize = 12;
+  const [pageSize, setPageSize] = useState(12);
+
+  // Smooth scroll up when changing page
+  useEffect(() => {
+    if (page > 1) {
+      window.scrollTo({ top: 340, behavior: 'smooth' });
+    }
+  }, [page]);
 
   // Invite Modal State
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
@@ -70,11 +79,27 @@ export default function Talents() {
   const fetchTalents = useCallback(async () => {
     try {
       setLoading(true);
+      let minRate;
+      let maxRate;
+      if (rateRange === 'under_100') {
+        maxRate = 100000;
+      } else if (rateRange === '100_200') {
+        minRate = 100000;
+        maxRate = 200000;
+      } else if (rateRange === '200_400') {
+        minRate = 200000;
+        maxRate = 400000;
+      } else if (rateRange === 'above_400') {
+        minRate = 400000;
+      }
+
       const res = await talentApi.getTalents({
         keyword: keyword.trim() || undefined,
         school: school || undefined,
         industry: industry || undefined,
         minReliabilityScore: minScore ? parseInt(minScore, 10) : undefined,
+        minRate,
+        maxRate,
         page,
         pageSize,
       });
@@ -89,7 +114,7 @@ export default function Talents() {
     } finally {
       setLoading(false);
     }
-  }, [keyword, school, industry, minScore, page, showToast]);
+  }, [keyword, school, industry, minScore, rateRange, page, showToast]);
 
   useEffect(() => {
     fetchTalents();
@@ -106,6 +131,7 @@ export default function Talents() {
     setSchool('');
     setIndustry('');
     setMinScore('');
+    setRateRange('');
     setPage(1);
   };
 
@@ -270,7 +296,7 @@ export default function Talents() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
               gap: 16,
               alignItems: 'flex-end',
             }}
@@ -377,6 +403,32 @@ export default function Talents() {
               </select>
             </div>
 
+            {/* Expected Rate Filter */}
+            <div>
+              <label style={{ display: 'block', fontSize: 12.5, fontWeight: 700, marginBottom: 6, color: 'var(--ink)' }}>
+                Thù lao mong muốn
+              </label>
+              <select
+                value={rateRange}
+                onChange={(e) => setRateRange(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  borderRadius: 10,
+                  border: '1.5px solid var(--border)',
+                  fontSize: 13.5,
+                  background: 'var(--surface)',
+                  color: 'var(--ink)',
+                }}
+              >
+                <option value="">Tất cả mức giá</option>
+                <option value="under_100">Dưới 100k / giờ (Tiết kiệm)</option>
+                <option value="100_200">100k – 200k / giờ (Phổ biến)</option>
+                <option value="200_400">200k – 400k / giờ (Chuyên nghiệp)</option>
+                <option value="above_400">Trên 400k / giờ (Chuyên gia)</option>
+              </select>
+            </div>
+
             {/* Action Buttons */}
             <div style={{ display: 'flex', gap: 8 }}>
               <button
@@ -393,7 +445,7 @@ export default function Talents() {
               >
                 Lọc kết quả
               </button>
-              {(keyword || school || industry || minScore) && (
+              {(keyword || school || industry || minScore || rateRange) && (
                 <button
                   type="button"
                   onClick={handleResetFilters}
@@ -463,7 +515,7 @@ export default function Talents() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))',
               gap: 22,
             }}
           >
@@ -638,27 +690,33 @@ export default function Talents() {
                       )}
                     </div>
 
-                    {/* Score & Job Stats */}
+                    {/* Score, Jobs & Expected Rate */}
                     <div
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
                         background: 'rgba(0, 0, 0, 0.03)',
                         borderRadius: 10,
-                        padding: '8px 12px',
+                        padding: '10px 12px',
                         marginBottom: 14,
                         fontSize: 12.5,
                       }}
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ color: '#f59e0b', fontWeight: 800 }}>★</span>
-                        <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{talent.reliabilityScore}</span>
-                        <span style={{ color: 'var(--ink-soft)', fontSize: 11 }}>Điểm uy tín</span>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ color: '#f59e0b', fontWeight: 800 }}>★</span>
+                          <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{talent.reliabilityScore}</span>
+                          <span style={{ color: 'var(--ink-soft)', fontSize: 11 }}>Uy tín</span>
+                        </div>
+
+                        <div style={{ color: 'var(--ink-soft)', fontSize: 12 }}>
+                          Đã làm: <strong style={{ color: '#10b981' }}>{talent.jobsDoneCount} việc</strong>
+                        </div>
                       </div>
 
-                      <div style={{ color: 'var(--ink-soft)', fontSize: 12 }}>
-                        Hoàn thành: <strong style={{ color: '#10b981' }}>{talent.jobsDoneCount} việc</strong>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6, borderTop: '1px dashed var(--border)' }}>
+                        <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>Thù lao kỳ vọng:</span>
+                        <span style={{ fontWeight: 800, color: 'var(--primary)', fontSize: 13 }}>
+                          {Number(talent.expectedRate || 120000).toLocaleString('vi-VN')}đ<span style={{ fontSize: 11, fontWeight: 500, color: 'var(--ink-soft)' }}>/giờ</span>
+                        </span>
                       </div>
                     </div>
 
@@ -749,30 +807,22 @@ export default function Talents() {
           </div>
         )}
 
-        {/* Pagination */}
-        {!loading && totalPages > 1 && (
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 36 }}>
-            <button
-              type="button"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="btn btn-ghost"
-              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)' }}
-            >
-              Trang trước
-            </button>
-            <div style={{ display: 'flex', alignItems: 'center', padding: '0 12px', fontSize: 13.5, fontWeight: 700 }}>
-              Trang {page} / {totalPages}
-            </div>
-            <button
-              type="button"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="btn btn-ghost"
-              style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)' }}
-            >
-              Trang sau
-            </button>
+        {/* Reusable Accessible Pagination */}
+        {!loading && totalCount > 0 && (
+          <div style={{ marginTop: 32 }}>
+            <Pagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={totalCount}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(newSize) => {
+                setPageSize(newSize);
+                setPage(1);
+              }}
+              pageSizeOptions={[12, 24, 36]}
+              itemLabel="nhân tài"
+            />
           </div>
         )}
       </div>

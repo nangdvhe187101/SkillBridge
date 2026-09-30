@@ -1,30 +1,34 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import AuthLayout from './components/AuthLayout';
 import ProtectedRoute from './components/ProtectedRoute';
-import Home from './pages/customer/Home';
-import Auth from './pages/auth/Auth';
-import VerifyEmail from './pages/auth/VerifyEmail';
-import Jobs from './pages/customer/Jobs';
-import JobDetail from './pages/customer/JobDetail';
-import MyWork from './pages/customer/MyWork';
-import Profile from './pages/customer/Profile';
-import CompanyProfile from './pages/customer/CompanyProfile';
-import StudentProfile from './pages/customer/StudentProfile';
-import Pricing from './pages/customer/Pricing';
-import Talents from './pages/customer/Talents';
-import Dashboard from './pages/employer/Dashboard';
-import JobApplicants from './pages/employer/JobApplicants';
-import Wallet from './pages/customer/Wallet';
-import Messages from './pages/customer/Messages';
-import AccountSettings from './pages/customer/AccountSettings';
-import PaymentResult from './pages/customer/PaymentResult';
-import TermsOfService from './pages/legal/TermsOfService';
-import PrivacyPolicy from './pages/legal/PrivacyPolicy';
-import PaymentRefundPolicy from './pages/legal/PaymentRefundPolicy';
-import Contact from './pages/customer/Contact';
-import Forbidden from './pages/customer/Forbidden';
 import ScrollToTop from './components/ScrollToTop';
+import { PageLoadingSkeleton } from './components/common/LoadingSkeleton';
+
+// Lazy-loaded route pages for optimal LCP, TTI and performance
+const Home = lazy(() => import('./pages/customer/Home'));
+const Auth = lazy(() => import('./pages/auth/Auth'));
+const VerifyEmail = lazy(() => import('./pages/auth/VerifyEmail'));
+const Jobs = lazy(() => import('./pages/customer/Jobs'));
+const JobDetail = lazy(() => import('./pages/customer/JobDetail'));
+const MyWork = lazy(() => import('./pages/customer/MyWork'));
+const Profile = lazy(() => import('./pages/customer/Profile'));
+const CompanyProfile = lazy(() => import('./pages/customer/CompanyProfile'));
+const StudentProfile = lazy(() => import('./pages/customer/StudentProfile'));
+const Pricing = lazy(() => import('./pages/customer/Pricing'));
+const Talents = lazy(() => import('./pages/customer/Talents'));
+const Dashboard = lazy(() => import('./pages/employer/Dashboard'));
+const JobApplicants = lazy(() => import('./pages/employer/JobApplicants'));
+const Wallet = lazy(() => import('./pages/customer/Wallet'));
+const Messages = lazy(() => import('./pages/customer/Messages'));
+const AccountSettings = lazy(() => import('./pages/customer/AccountSettings'));
+const PaymentResult = lazy(() => import('./pages/customer/PaymentResult'));
+const TermsOfService = lazy(() => import('./pages/legal/TermsOfService'));
+const PrivacyPolicy = lazy(() => import('./pages/legal/PrivacyPolicy'));
+const PaymentRefundPolicy = lazy(() => import('./pages/legal/PaymentRefundPolicy'));
+const Contact = lazy(() => import('./pages/customer/Contact'));
+const Forbidden = lazy(() => import('./pages/customer/Forbidden'));
 
 export default function App() {
   const EMPLOYER_ROLES = ['employer', 'recruiter', 'business', 'admin'];
@@ -33,15 +37,16 @@ export default function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
-      <Routes>
-        <Route element={<AuthLayout />}>
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/auth/:mode" element={<Auth />} />
-          <Route path="/login" element={<Auth forcedTab="login" />} />
-          <Route path="/register" element={<Auth forcedTab="register" />} />
-          <Route path="/forgot-password" element={<Auth forcedTab="forgot" />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-        </Route>
+      <Suspense fallback={<PageLoadingSkeleton />}>
+        <Routes>
+          <Route element={<AuthLayout />}>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/auth/:mode" element={<Auth />} />
+            <Route path="/login" element={<Auth forcedTab="login" />} />
+            <Route path="/register" element={<Auth forcedTab="register" />} />
+            <Route path="/forgot-password" element={<Auth forcedTab="forgot" />} />
+            <Route path="/verify-email" element={<VerifyEmail />} />
+          </Route>
 
         <Route element={<Layout />}>
           {/* Public & Customer Routes */}
@@ -145,6 +150,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

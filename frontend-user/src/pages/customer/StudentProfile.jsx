@@ -5,6 +5,9 @@ import Avatar from '../../components/Avatar';
 import ModalShell from '../../components/modals/ModalShell';
 import UserTierBadge from '../../components/common/UserTierBadge';
 import { useStore } from '../../context/StoreContext';
+import { useToast } from '../../context/ToastContext';
+import { talentApi } from '../../api/talentApi';
+import { getMyJobs } from '../../api/jobApi';
 import { studentsSeed } from '../../data/studentDirectory';
 import { slugify } from '../../data/companies';
 
@@ -19,7 +22,16 @@ export default function StudentProfile() {
   const { slug } = useParams();
   const navigate = useNavigate();
   const { state, openChatWithPerson } = useStore();
+  const { showToast } = useToast();
   const [selectedPf, setSelectedPf] = useState(null);
+
+  // Invite Talent State
+  const [inviteModalOpen, setInviteModalOpen] = useState(false);
+  const [employerJobs, setEmployerJobs] = useState([]);
+  const [loadingJobs, setLoadingJobs] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState('');
+  const [inviteMessage, setInviteMessage] = useState('');
+  const [inviting, setInviting] = useState(false);
 
   const currentUser = state?.currentUser;
   const isSelf = currentUser && (
@@ -88,6 +100,90 @@ export default function StudentProfile() {
   const reviewsList = student.reviews || [];
   const studentPlanCode = student.planCode || (student.reliability >= 95 ? 'STU_MASTER' : (student.reliability >= 85 ? 'STU_PRO' : 'STU_STARTER'));
 
+  // Calculate expected rate
+  const expectedRate = studentPlanCode === 'STU_MASTER'
+    ? 400000
+    : studentPlanCode === 'STU_PRO'
+      ? 250000
+      : studentPlanCode === 'STU_STARTER'
+        ? 160000
+        : (student.reliability >= 90 ? 200000 : (student.reliability >= 75 ? 150000 : 100000));
+  const expectedRateFormatted = expectedRate.toLocaleString('vi-VN');
+
+  // Open invite modal
+  const handleOpenInvite = async () => {
+    if (!currentUser) {
+      showToast('Vui lòng đăng nhập tài khoản Nhà tuyển dụng để mời nhận việc.', 'info');
+      navigate('/login');
+      return;
+    }
+    if (currentUser.role !== 'employer') {
+      showToast('Chỉ tài khoản Nhà tuyển dụng mới có thể gửi lời mời làm việc trực tiếp.', 'warning');
+      return;
+    }
+
+    setInviteModalOpen(true);
+    setInviteMessage(`Chào ${student.name}, chúng tôi rất ấn tượng với hồ sơ và kỹ năng của bạn trên SkillBridge. Mời bạn xem và ứng tuyển vào dự án của chúng tôi!`);
+
+    try {
+      setLoadingJobs(true);
+      const res = await getMyJobs('open', 1, 50);
+      const jobs = res?.data?.items || res?.data || res?.items || [];
+      const list = Array.isArray(jobs) ? jobs : [];
+      setEmployerJobs(list);
+      if (list.length > 0) {
+        setSelectedJobId(String(list[0].id));
+      }
+    } catch {
+      setEmployerJobs([]);
+    } finally {
+      setLoadingJobs(false);
+    }
+  };
+
+  // Submit invite
+  const handleSendInvite = async (e) => {
+    e.preventDefault();
+    if (!selectedJobId) {
+      showToast('Vui lòng chọn một công việc bạn đang tuyển dụng.', 'warning');
+      return;
+    }
+
+    try {
+      setInviting(true);
+      let targetId = student?.id || matchedSeed?.id;
+      if (!targetId) {
+        try {
+          const resSearch = await talentApi.getTalents({ keyword: student.name, pageSize: 1 });
+          const found = resSearch?.data?.items?.[0] || resSearch?.items?.[0];
+          if (found?.id) {
+            targetId = found.id;
+          } else {
+            targetId = 1;
+          }
+        } catch {
+          targetId = 1;
+        }
+      }
+
+      const res = await talentApi.inviteTalent(targetId, {
+        jobId: parseInt(selectedJobId, 10),
+        message: inviteMessage.trim() || undefined,
+      });
+
+      if (res?.success || res?.data?.success) {
+        showToast(`Đã gửi lời mời làm việc thành công đến ${student.name}!`, 'success');
+        setInviteModalOpen(false);
+      } else {
+        showToast(res?.message || 'Gửi lời mời thất bại, vui lòng kiểm tra hạn mức gói dịch vụ.', 'error');
+      }
+    } catch (err) {
+      showToast(err?.message || 'Có lỗi xảy ra khi gửi lời mời nhận việc.', 'error');
+    } finally {
+      setInviting(false);
+    }
+  };
+
   return (
     <div className="page active">
       <div className="profile-hero">
@@ -118,19 +214,44 @@ export default function StudentProfile() {
                   <span>Đã xác thực eKYC Sinh viên</span>
                 </span>
               </div>
-              <div className="ph-meta" style={{ marginTop: 8 }}>
-                {skillsList.slice(0, 2).map((s, i) => (
+              <div className="ph-meta" style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                {skillsList.slice(0, 3).map((s, i) => (
                   <span className="chip" key={i} style={{ background: 'rgba(255,255,255,.1)', color: '#fff', borderColor: 'rgba(255,255,255,.2)' }}>{s}</span>
                 ))}
                 <span className="chip chip-lime">{TIER_LABEL[tier]}</span>
+                <span
+                  className="chip"
+                  style={{
+                    background: 'rgba(245, 158, 11, 0.22)',
+                    color: '#fef08a',
+                    borderColor: 'rgba(245, 158, 11, 0.45)',
+                    fontWeight: 700,
+                  }}
+                  title="Mức thù lao mong muốn tham khảo của sinh viên"
+                >
+                  🏷️ Thù lao kỳ vọng: ~{expectedRateFormatted}đ/giờ
+                </span>
               </div>
             </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, position: 'relative', zIndex: 1 }}>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, position: 'relative', zIndex: 1, alignItems: 'center' }}>
               <button className="btn btn-outline btn-sm" style={{ background: 'rgba(255,255,255,.08)', color: '#fff', borderColor: 'rgba(255,255,255,.3)' }}
                 onClick={() => openChatWithPerson(student.name)}>
                 <Icon name="chat" style={{ width: 14, height: 14 }} /> Nhắn tin
               </button>
-              <button className="btn btn-lime btn-sm" onClick={() => navigate('/jobs')}>Mời ứng tuyển</button>
+              <button
+                className="btn btn-lime btn-sm"
+                style={{
+                  fontWeight: 700,
+                  boxShadow: '0 4px 14px rgba(34, 197, 94, 0.4)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5
+                }}
+                onClick={handleOpenInvite}
+              >
+                <Icon name="briefcase" style={{ width: 14, height: 14 }} />
+                Mời nhận việc
+              </button>
             </div>
           </div>
         </div>
@@ -326,6 +447,180 @@ export default function StudentProfile() {
             <button className="btn btn-primary" onClick={() => setSelectedPf(null)}>Đóng</button>
           </div>
         </ModalShell>
+      )}
+
+      {/* Direct Invite Modal */}
+      {inviteModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="invite-modal-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--surface)',
+              borderRadius: 16,
+              maxWidth: 520,
+              width: '100%',
+              padding: '28px 24px',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.25)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
+              <div>
+                <h3 id="invite-modal-title" style={{ fontSize: 18, fontWeight: 800, margin: '0 0 4px', color: 'var(--ink)' }}>
+                  Mời nhận việc trực tiếp
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>
+                  Gửi lời mời tham gia dự án đến <b>{student.name}</b>
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInviteModalOpen(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  color: 'var(--ink-soft)',
+                  lineHeight: 1,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSendInvite}>
+              {/* Job Select */}
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--ink)' }}>
+                  Chọn dự án / công việc đang tuyển:
+                </label>
+                {loadingJobs ? (
+                  <div style={{ fontSize: 13, color: 'var(--ink-soft)', padding: '8px 0' }}>
+                    Đang tải danh sách công việc của bạn...
+                  </div>
+                ) : employerJobs.length === 0 ? (
+                  <div
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.08)',
+                      borderRadius: 10,
+                      padding: '12px 14px',
+                      fontSize: 13,
+                      color: '#dc2626',
+                    }}
+                  >
+                    Bạn hiện chưa có công việc nào đang mở tuyển. Vui lòng đăng tin tuyển dụng trước khi gửi lời mời.
+                    <div style={{ marginTop: 8 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setInviteModalOpen(false);
+                          navigate('/employer/post-job');
+                        }}
+                        className="btn btn-primary"
+                        style={{ fontSize: 12.5, padding: '6px 14px' }}
+                      >
+                        + Đăng tin mới ngay
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <select
+                    value={selectedJobId}
+                    onChange={(e) => setSelectedJobId(e.target.value)}
+                    required
+                    style={{
+                      width: '100%',
+                      padding: '11px 14px',
+                      borderRadius: 10,
+                      border: '1.5px solid var(--border)',
+                      fontSize: 13.5,
+                      background: 'var(--surface)',
+                      color: 'var(--ink)',
+                    }}
+                  >
+                    {employerJobs.map((j) => (
+                      <option key={j.id} value={j.id}>
+                        {j.title} {j.budget ? `— Ngân sách: ${Number(j.budget).toLocaleString('vi-VN')}đ` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              {/* Message Textarea */}
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--ink)' }}>
+                  Lời nhắn gửi đến sinh viên:
+                </label>
+                <textarea
+                  rows={4}
+                  value={inviteMessage}
+                  onChange={(e) => setInviteMessage(e.target.value)}
+                  placeholder="Nhập lời chào hoặc điểm nổi bật của dự án để thu hút ứng viên..."
+                  style={{
+                    width: '100%',
+                    padding: '11px 14px',
+                    borderRadius: 10,
+                    border: '1.5px solid var(--border)',
+                    fontSize: 13.5,
+                    lineHeight: 1.5,
+                    background: 'var(--surface)',
+                    color: 'var(--ink)',
+                    resize: 'vertical',
+                  }}
+                />
+                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 5 }}>
+                  Sinh viên sẽ nhận được thông báo tức thì kèm liên kết ứng tuyển trực tiếp vào dự án.
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={() => setInviteModalOpen(false)}
+                  disabled={inviting}
+                  className="btn btn-ghost"
+                  style={{ borderRadius: 10, padding: '10px 18px', border: '1px solid var(--border)' }}
+                >
+                  Hủy bỏ
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={inviting || employerJobs.length === 0}
+                  className="btn btn-primary"
+                  style={{
+                    borderRadius: 10,
+                    padding: '10px 22px',
+                    fontWeight: 700,
+                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
+                    border: 'none',
+                    color: '#fff',
+                    boxShadow: '0 4px 16px rgba(99, 102, 241, 0.35)',
+                  }}
+                >
+                  {inviting ? 'Đang gửi...' : 'Gửi lời mời ngay'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

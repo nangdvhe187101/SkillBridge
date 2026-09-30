@@ -7,6 +7,7 @@ import { useConfirm } from '../context/ConfirmContext';
 import { exportTransactionsToExcel, exportTransactionsToCSV } from '../utils/fileDownloader';
 import { getAdminWithdrawals, approveWithdrawal, rejectWithdrawal } from '../api/adminApi';
 import Icon from './Icon';
+import AdminModal from './AdminModal';
 
 export default function AdminFinance() {
   const { subscriptions, renewSubscription, cancelSubscription } = useAdmin();
@@ -73,10 +74,10 @@ export default function AdminFinance() {
   const totalRevenue = revenueBarsSeed.reduce((s, b) => s + b.value, 0);
 
   const kpis = [
-    { label: 'Tổng doanh thu', value: fmtVND(totalRevenue) },
-    { label: 'Doanh thu tháng này', value: fmtVND(36500000) },
-    { label: 'Tăng trưởng MoM', value: '+18.4%' },
-    { label: 'ARPU', value: '420.000đ' },
+    { label: 'Tổng doanh thu', value: fmtVND(totalRevenue), icon: 'bank', colorClass: 'kpi-emerald' },
+    { label: 'Doanh thu tháng này', value: fmtVND(36500000), icon: 'chart-bar', colorClass: 'kpi-blue' },
+    { label: 'Tăng trưởng MoM', value: '+18.4%', icon: 'check', colorClass: 'kpi-purple' },
+    { label: 'Giá trị TB / GD (ARPU)', value: '420.000đ', icon: 'users', colorClass: 'kpi-amber' },
   ];
 
   const exportReport = (period, format = 'xlsx') => {
@@ -97,15 +98,25 @@ export default function AdminFinance() {
     showToast(`Đã xuất báo cáo tài chính ${format.toUpperCase()} (${periodNames[period]}) thành công!`, 'check');
   };
 
-
   return (
     <section className="adm-section active">
       <div className="adm-head">
         <h2>Quản lý tài chính & doanh thu</h2>
         <p>Tổng quan 4 nguồn doanh thu, Quỹ bảo hiểm cộng đồng và quản lý gói nâng cấp.</p>
       </div>
-      <div className="adm-kpis">
-        {kpis.map((k) => <div className="adm-kpi" key={k.label}><div className="k-lbl">{k.label}</div><div className="k-val">{k.value}</div></div>)}
+
+      <div className="adm-vibrant-kpis">
+        {kpis.map((k) => (
+          <div className={`adm-vibrant-kpi ${k.colorClass}`} key={k.label}>
+            <div className="adm-kpi-icon-wrap">
+              <Icon name={k.icon} style={{ width: 22, height: 22 }} />
+            </div>
+            <div className="adm-kpi-content">
+              <div className="k-lbl">{k.label}</div>
+              <div className="k-val">{k.value}</div>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="adm-card">
@@ -294,87 +305,72 @@ export default function AdminFinance() {
       </div>
 
       {actionModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 9999,
-            padding: 16
-          }}
+        <AdminModal
+          isOpen={!!actionModal}
+          onClose={() => setActionModal(null)}
+          title={actionModal.type === 'approve' ? 'Xác nhận duyệt chi rút tiền' : 'Từ chối yêu cầu rút tiền'}
+          icon={actionModal.type === 'approve' ? 'check' : 'x'}
+          iconColor={actionModal.type === 'approve' ? 'var(--emerald)' : 'var(--rose)'}
+          maxWidth={520}
         >
-          <div
-            style={{
-              background: '#fff',
-              borderRadius: 12,
-              padding: 24,
-              maxWidth: 500,
-              width: '100%',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
-            }}
-          >
-            <h3 style={{ marginTop: 0, marginBottom: 8 }}>
-              {actionModal.type === 'approve' ? 'Xác nhận duyệt yêu cầu rút tiền' : 'Từ chối yêu cầu rút tiền'}
-            </h3>
-            <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
-              {actionModal.type === 'approve'
-                ? `Bạn đang chuẩn bị duyệt yêu cầu rút ${fmtVND(actionModal.item.amount)} cho ${actionModal.item.userName} (${actionModal.item.bankName} - STK: ${actionModal.item.accountNumberFull || `${actionModal.item.accountNumberMask || '—'} (CẢNH BÁO: Chỉ có số mặt nạ)`} | Chủ TK: ${actionModal.item.accountHolderName || '—'}). Hãy đảm bảo lệnh chuyển khoản ngân hàng đã được thực hiện.`
-                : `Khi từ chối, số tiền ${fmtVND(actionModal.item.amount)} sẽ được tự động hoàn lại 100% vào ví của ${actionModal.item.userName}.`}
-            </p>
+          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, marginBottom: 16 }}>
+            {actionModal.type === 'approve'
+              ? `Bạn đang chuẩn bị duyệt yêu cầu rút ${fmtVND(actionModal.item.amount)} cho ${actionModal.item.userName} (${actionModal.item.bankName} - STK: ${actionModal.item.accountNumberFull || `${actionModal.item.accountNumberMask || '—'} (CẢNH BÁO: Chỉ có số mặt nạ)`} | Chủ TK: ${actionModal.item.accountHolderName || '—'}). Hãy đảm bảo lệnh chuyển khoản ngân hàng đã được thực hiện.`
+              : `Khi từ chối, số tiền ${fmtVND(actionModal.item.amount)} sẽ được tự động hoàn lại 100% vào ví của ${actionModal.item.userName}.`}
+          </p>
 
-            <div style={{ marginTop: 16, marginBottom: 20 }}>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-                {actionModal.type === 'approve' ? 'Ghi chú / Mã UNC tham chiếu (Tùy chọn)' : 'Lý do từ chối (Bắt buộc)'}
-              </label>
-              <textarea
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  borderRadius: 8,
-                  border: '1px solid var(--line)',
-                  fontSize: 13.5,
-                  minHeight: 80,
-                  resize: 'vertical',
-                  boxSizing: 'border-box'
-                }}
-                placeholder={
-                  actionModal.type === 'approve'
-                    ? 'Ví dụ: Đã chuyển qua Vietcombank, mã UNC #123456'
-                    : 'Ví dụ: Tên tài khoản ngân hàng không khớp thông tin hồ sơ, vui lòng kiểm tra lại'
-                }
-                value={actionNote}
-                onChange={(e) => setActionNote(e.target.value)}
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button
-                type="button"
-                className="btn btn-outline"
-                disabled={submittingAction}
-                onClick={() => setActionModal(null)}
-              >
-                Hủy
-              </button>
-              <button
-                type="button"
-                className={`btn ${actionModal.type === 'approve' ? 'btn-primary' : 'btn-danger'}`}
-                style={actionModal.type === 'reject' ? { background: 'var(--coral)', color: '#fff', border: 'none' } : {}}
-                disabled={submittingAction || (actionModal.type === 'reject' && !actionNote.trim())}
-                onClick={handleExecuteAction}
-              >
-                {submittingAction
-                  ? 'Đang xử lý...'
-                  : actionModal.type === 'approve'
-                  ? 'Xác nhận Đã Chuyển Tiền'
-                  : 'Xác nhận Từ Chối & Hoàn Tiền'}
-              </button>
-            </div>
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+              {actionModal.type === 'approve' ? 'Ghi chú / Mã UNC tham chiếu (Tùy chọn)' : 'Lý do từ chối (Bắt buộc)'}
+            </label>
+            <textarea
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                background: 'var(--bg)',
+                color: 'var(--ink)',
+                fontSize: 13.5,
+                minHeight: 80,
+                resize: 'vertical',
+                boxSizing: 'border-box'
+              }}
+              placeholder={
+                actionModal.type === 'approve'
+                  ? 'Ví dụ: Đã chuyển qua Vietcombank, mã UNC #123456'
+                  : 'Ví dụ: Tên tài khoản ngân hàng không khớp thông tin hồ sơ, vui lòng kiểm tra lại'
+              }
+              value={actionNote}
+              onChange={(e) => setActionNote(e.target.value)}
+            />
           </div>
-        </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+            <button
+              type="button"
+              className="adm-btn-action outline"
+              disabled={submittingAction}
+              onClick={() => setActionModal(null)}
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              className={`adm-btn-action ${actionModal.type === 'approve' ? 'success' : 'danger'}`}
+              disabled={submittingAction || (actionModal.type === 'reject' && !actionNote.trim())}
+              onClick={handleExecuteAction}
+            >
+              {submittingAction ? (
+                <><span className="adm-spinner" /> Đang xử lý...</>
+              ) : actionModal.type === 'approve' ? (
+                'Xác nhận Đã Chuyển Tiền'
+              ) : (
+                'Xác nhận Từ Chối & Hoàn Tiền'
+              )}
+            </button>
+          </div>
+        </AdminModal>
       )}
 
       <div className="adm-card">
