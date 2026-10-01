@@ -11,6 +11,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isWarmupSlow, setIsWarmupSlow] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
@@ -21,7 +22,11 @@ export default function Login() {
     }
 
     setLoading(true);
+    setIsWarmupSlow(false);
     setError('');
+    const slowTimer = setTimeout(() => {
+      setIsWarmupSlow(true);
+    }, 3500);
 
     try {
       const data = await adminLogin(email.trim(), password);
@@ -45,6 +50,8 @@ export default function Login() {
     } catch (err) {
       setError(err.message || 'Thông tin đăng nhập không đúng.');
     } finally {
+      clearTimeout(slowTimer);
+      setIsWarmupSlow(false);
       setLoading(false);
     }
   };
@@ -275,6 +282,24 @@ export default function Login() {
               <span>Đăng nhập Quản Trị</span>
             )}
           </button>
+
+          {isWarmupSlow && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: '8px 12px',
+                borderRadius: 8,
+                backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                border: '1px solid rgba(99, 102, 241, 0.3)',
+                color: '#a5b4fc',
+                fontSize: 12.5,
+                textAlign: 'center',
+                lineHeight: 1.4,
+              }}
+            >
+              ⚡ Máy chủ Admin đang khởi động lần đầu, vui lòng đợi trong giây lát...
+            </div>
+          )}
         </form>
 
         <div

@@ -86,4 +86,22 @@ export async function toggleAdminSubscriptionPlan(id) {
   });
 }
 
+// Dispute Management APIs
+export async function getAdminDisputes(status) {
+  const query = status ? `?status=${encodeURIComponent(status)}` : '';
+  return apiFetch(`/admin/disputes${query}`, { method: 'GET' });
+}
+
+export async function getDisputeChatEvidence(disputeId) {
+  return apiFetch(`/admin/disputes/${disputeId}/chat-evidence`, { method: 'GET' });
+}
+
+export async function resolveDispute(disputeId, payload) {
+  return apiFetch(`/admin/disputes/${disputeId}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+
 

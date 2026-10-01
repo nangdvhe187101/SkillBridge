@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import AuthLayout from './components/AuthLayout';
@@ -33,6 +33,17 @@ const Forbidden = lazy(() => import('./pages/customer/Forbidden'));
 export default function App() {
   const EMPLOYER_ROLES = ['employer', 'recruiter', 'business', 'admin'];
   const STUDENT_ROLES = ['student', 'admin'];
+
+  // Pre-warm backend ngầm ngay khi user mở trang để loại bỏ Render cold-start
+  useEffect(() => {
+    try {
+      const apiUrl = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) || 'http://localhost:5004/api';
+      const healthUrl = apiUrl.replace(/\/api\/?$/, '') + '/health';
+      fetch(healthUrl, { method: 'GET', mode: 'cors' }).catch(() => {});
+    } catch {
+      // Bỏ qua lỗi mạng nền
+    }
+  }, []);
 
   return (
     <BrowserRouter>

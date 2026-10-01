@@ -11,6 +11,7 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
   const [emailError, setEmailError] = useState('');
   const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isWarmupSlow, setIsWarmupSlow] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -45,6 +46,11 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
     }
 
     setLoading(true);
+    setIsWarmupSlow(false);
+    const slowTimer = setTimeout(() => {
+      setIsWarmupSlow(true);
+    }, 3500);
+
     try {
       await doLogin(loginForm.email, loginForm.password);
       const redirect = searchParams.get('redirect') || location.state?.from;
@@ -56,6 +62,8 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
     } catch (err) {
       setFormError(err.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
     } finally {
+      clearTimeout(slowTimer);
+      setIsWarmupSlow(false);
       setLoading(false);
     }
   };
@@ -123,6 +131,12 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
       <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
         {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
       </button>
+
+      {isWarmupSlow && (
+        <div style={{ marginTop: '10px', fontSize: '0.85rem', color: '#6366f1', textAlign: 'center', lineHeight: '1.4' }}>
+          ⚡ Máy chủ đang thức dậy sau thời gian nghỉ, bạn đợi chút nhé...
+        </div>
+      )}
 
       <div className="auth-separator" style={{ display: 'flex', alignItems: 'center', margin: '20px 0 14px', color: 'var(--text-muted, #94a3b8)', fontSize: 13 }}>
         <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
