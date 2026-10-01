@@ -1922,16 +1922,19 @@ export function StoreProvider({ children }) {
         setAccessToken(result.token);
         dispatch({ type: "AUTH_LOGIN_SUCCESS", payload: result });
         authBroadcast?.postMessage({ type: 'AUTH_LOGIN_SUCCESS', payload: result });
-        try {
-          const profile = await userApi.getUserProfile();
-          if (profile) {
-            dispatch({ type: 'UPDATE_PROFILE', patch: profile });
-          }
-        } catch (e) {
-          console.warn('Không thể tải hồ sơ chi tiết khi đăng nhập:', e);
-        }
-        await refreshWallet();
         showToast(`Chào mừng bạn trở lại, ${result.fullName}!`, 'user');
+        // Tải hồ sơ và ví ngầm trong nền, không chặn chuyển trang đăng nhập
+        (async () => {
+          try {
+            const profile = await userApi.getUserProfile();
+            if (profile) {
+              dispatch({ type: 'UPDATE_PROFILE', patch: profile });
+            }
+          } catch (e) {
+            console.warn('Không thể tải hồ sơ chi tiết khi đăng nhập:', e);
+          }
+          await refreshWallet();
+        })();
         return result;
       },
       googleLogin: async (idToken, roleCode = 'student') => {
@@ -1939,16 +1942,19 @@ export function StoreProvider({ children }) {
         setAccessToken(result.token);
         dispatch({ type: "AUTH_LOGIN_SUCCESS", payload: result });
         authBroadcast?.postMessage({ type: 'AUTH_LOGIN_SUCCESS', payload: result });
-        try {
-          const profile = await userApi.getUserProfile();
-          if (profile) {
-            dispatch({ type: 'UPDATE_PROFILE', patch: profile });
-          }
-        } catch (e) {
-          console.warn('Không thể tải hồ sơ chi tiết khi đăng nhập bằng Google:', e);
-        }
-        await refreshWallet();
         showToast(`Chào mừng bạn, ${result.fullName}!`, 'user');
+        // Tải hồ sơ và ví ngầm trong nền, không chặn chuyển trang đăng nhập
+        (async () => {
+          try {
+            const profile = await userApi.getUserProfile();
+            if (profile) {
+              dispatch({ type: 'UPDATE_PROFILE', patch: profile });
+            }
+          } catch (e) {
+            console.warn('Không thể tải hồ sơ chi tiết khi đăng nhập bằng Google:', e);
+          }
+          await refreshWallet();
+        })();
         return result;
       },
       logout: async () => {
