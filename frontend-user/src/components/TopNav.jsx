@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import Icon from './Icon';
 import Avatar from './Avatar';
 import { useTheme } from '../context/ThemeContext';
@@ -16,6 +16,18 @@ export default function TopNav() {
   const unreadMsgCount = (state.conversations || []).reduce((sum, c) => sum + c.unread, 0);
   const [notifFilter, setNotifFilter] = useState('all'); // 'all' | 'contract' | 'finance' | 'unread'
   const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    setNavOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!navOpen) return;
+    const onEsc = (e) => { if (e.key === 'Escape') setNavOpen(false); };
+    document.addEventListener('keydown', onEsc);
+    return () => document.removeEventListener('keydown', onEsc);
+  }, [navOpen]);
 
   const filteredNotifs = useMemo(() => {
     return (state.notifications || []).filter((n) => {
@@ -464,16 +476,27 @@ export default function TopNav() {
           )}
 
           <button
+            type="button"
             className="navtoggle"
-            onClick={() => setNavOpen((o) => !o)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setNavOpen((o) => !o);
+            }}
             aria-label={navOpen ? "Đóng menu" : "Mở menu"}
             aria-expanded={navOpen}
             aria-controls="navlinks"
           >
-            <Icon name="menu" />
+            <Icon name={navOpen ? "x" : "menu"} />
           </button>
         </div>
       </div>
+      {navOpen && (
+        <div
+          className="nav-backdrop"
+          onClick={() => setNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
     </nav>
   );
 }
