@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Logging;
 using SkillBridge.API.Common;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
@@ -14,11 +15,13 @@ namespace SkillBridge.API.Controllers
     [EnableRateLimiting("AuthPolicy")]
     public class GoogleAuthController : ControllerBase
     {
-        private readonly IGoogleAuthService googleAuthService;
+        private readonly IGoogleAuthService _googleAuthService;
+        private readonly ILogger<GoogleAuthController> _logger;
 
-        public GoogleAuthController(IGoogleAuthService _googleAuthService)
+        public GoogleAuthController(IGoogleAuthService googleAuthService, ILogger<GoogleAuthController> logger)
         {
-            googleAuthService = _googleAuthService;
+            _googleAuthService = googleAuthService;
+            _logger = logger;
         }
 
         [HttpPost("google")]
@@ -26,7 +29,7 @@ namespace SkillBridge.API.Controllers
         {
             try
             {
-                var (result, refreshToken) = await googleAuthService.GoogleLoginAsync(dto);
+                var (result, refreshToken) = await _googleAuthService.GoogleLoginAsync(dto);
                 Response.SetRefreshTokenCookie(refreshToken);
                 return Ok(result);
             }
@@ -36,7 +39,8 @@ namespace SkillBridge.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(500, new { message = "Đã xảy ra lỗi trong quá trình xác thực với Google: " + ex.Message });
+                _logger.LogError(ex, "Lỗi xảy ra trong quá trình xác thực Google Login");
+                return StatusCode(500, new { message = "Đã xảy ra lỗi trong quá trình xác thực với Google. Vui lòng thử lại sau." });
             }
         }
     }

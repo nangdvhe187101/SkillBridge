@@ -5,109 +5,190 @@
 
 .acct-settings-layout {
     display: grid;
-    grid-template-columns: 260px 1fr;
-    min-height: calc(100vh - 72px);
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 36px;
+    max-width: 1160px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 32px 24px 80px;
+    min-height: calc(100vh - 120px);
+    box-sizing: border-box;
+}
+
+/* ========================================================== */
+/* EMPLOYER DASHBOARD - FULL-WIDTH LAYOUT (DOCKED TO LEFT)    */
+/* ========================================================== */
+.acct-settings-layout.employer-dashboard-layout {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
+    display: grid !important;
+    grid-template-columns: 260px minmax(0, 1fr) !important;
+    min-height: calc(100vh - 72px) !important;
     border-top: 1px solid var(--border, #e5e5ea);
+    background: var(--bg, #f8fafc);
+}
+
+.acct-settings-layout.employer-dashboard-layout .acct-sidebar {
+    border-right: 1px solid var(--border, #e5e5ea);
+    background: var(--surface, #ffffff);
+    padding: 24px 16px 40px 24px;
+    min-height: calc(100vh - 72px);
+    box-sizing: border-box;
+}
+
+.acct-settings-layout.employer-dashboard-layout .acct-content {
+    padding: 32px 40px 80px;
+    box-sizing: border-box;
+    min-width: 0;
+    max-width: 100%;
+}
+
+@media (max-width: 860px) {
+    .acct-settings-layout.employer-dashboard-layout {
+        display: flex !important;
+        flex-direction: column !important;
+        width: 100% !important;
+        max-width: 100vw !important;
+        min-width: 0 !important;
+        overflow-x: hidden !important;
+        border-top: none !important;
+        padding: 0 !important;
+    }
+
+    .acct-settings-layout.employer-dashboard-layout .acct-sidebar {
+        width: 100% !important;
+        padding: 12px 16px 4px !important;
+        min-height: auto !important;
+        border-right: none !important;
+        border-bottom: 1px solid var(--border, #e5e5ea) !important;
+    }
+
+    .acct-settings-layout.employer-dashboard-layout .acct-content {
+        padding: 20px 16px 60px !important;
+    }
 }
 
 /* ----------------------------------------- */
 /* SIDEBAR & NAVIGATION TABS                 */
 /* ----------------------------------------- */
 .acct-sidebar {
-    border-right: 1px solid var(--border, #e5e5ea);
     display: flex;
     flex-direction: column;
     min-height: 0;
-    background: var(--surface, #fff);
+    background: transparent;
+    padding-right: 4px;
 }
 
 .acct-sidebar-head {
-    padding: 24px 20px 12px;
+    padding: 4px 8px 16px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border, #e2e8f0);
 }
 
 .acct-sidebar-head h2 {
-    font-size: 24px;
-    margin: 0;
-    color: var(--text, #111);
+    font-size: 22px;
+    font-weight: 700;
+    margin: 0 0 6px;
+    color: var(--ink, #0f172a);
+    letter-spacing: -0.015em;
 }
 
 .acct-tablist {
-    padding: 12px 8px;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
 }
 
 .acct-tab {
     text-align: left;
-    border: none;
-    background: none;
-    border-left: 3px solid transparent;
-    padding: 12px 16px;
-    font-size: 15px;
-    color: var(--text, #333);
+    border: 1px solid transparent;
+    background: transparent;
+    padding: 11px 16px;
+    font-size: 14px;
+    color: var(--ink-soft, #475569);
     cursor: pointer;
-    border-radius: 0 10px 10px 0;
-    transition: all 0.18s ease;
+    border-radius: 12px;
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     font-weight: 500;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .acct-tab:hover {
-    background: var(--hover, rgba(0, 0, 0, 0.04));
-    color: var(--primary, #5b4cf5);
+    background: var(--surface-2, #f1f5f9);
+    color: var(--ink, #0f172a);
+    transform: translateX(2px);
 }
 
 .acct-tab.is-active {
-    color: var(--primary, #5b4cf5);
-    font-weight: 700;
-    border-left-color: var(--primary, #5b4cf5);
-    background: var(--hover, rgba(91, 76, 245, 0.08));
+    color: var(--primary, #4f46e5);
+    font-weight: 600;
+    background: rgba(79, 70, 229, 0.08);
+    border-color: rgba(79, 70, 229, 0.18);
+    box-shadow: 0 1px 3px rgba(79, 70, 229, 0.06);
+}
+
+[data-theme="dark"] .acct-tab.is-active {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: #a5b4fc;
 }
 
 /* ----------------------------------------- */
-/* MAIN CONTENT CONTAINER                    */
+/* MAIN CONTENT CONTAINER & CARD             */
 /* ----------------------------------------- */
 .acct-content {
-    padding: 32px 40px 80px;
-    min-width: 0; /* Prevents flex/grid overflow */
+    min-width: 0;
+    padding: 0;
 }
 
 .acct-content-inner {
-    max-width: 760px;
+    background: var(--surface, #ffffff);
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: 18px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 8px 24px -4px rgba(15, 23, 42, 0.03);
+    padding: 32px 36px;
     width: 100%;
+    box-sizing: border-box;
+    max-width: 860px;
 }
 
 .acct-content-title {
-    font-size: 24px;
+    font-size: 20px;
     font-weight: 700;
-    margin: 0 0 16px;
+    margin: 0 0 20px;
     padding-bottom: 16px;
-    border-bottom: 1px solid var(--border, #e5e5ea);
-    color: var(--text, #111);
+    border-bottom: 1px solid var(--border, #e2e8f0);
+    color: var(--ink, #0f172a);
+    letter-spacing: -0.01em;
 }
 
 .acct-section {
-    padding: 24px 0;
-    border-bottom: 1px solid var(--border, #e5e5ea);
+    padding: 20px 0;
+    border-bottom: 1px solid var(--border, #e2e8f0);
 }
 
 .acct-section:last-of-type {
     border-bottom: none;
+    padding-bottom: 0;
 }
 
 .acct-section-title {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
-    margin: 0 0 14px;
-    color: var(--text, #111);
+    margin: 0 0 12px;
+    color: var(--ink, #0f172a);
 }
 
 .acct-section-desc {
-    font-size: 13.5px;
-    color: var(--muted, #666);
+    font-size: 13px;
+    color: var(--ink-soft, #64748b);
     margin: 0 0 16px;
     line-height: 1.6;
 }
@@ -135,35 +216,36 @@
     font-size: 13px;
     font-weight: 600;
     margin-bottom: 6px;
-    color: var(--text, #222);
+    color: var(--ink, #0f172a);
 }
 
 .acct-field input,
 .acct-field textarea,
 .acct-field select {
     width: 100%;
-    padding: 10px 14px;
-    border-radius: 9px;
-    border: 1px solid var(--border, #e5e5ea);
-    background: var(--surface, #fff);
+    padding: 11px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border, #e2e8f0);
+    background: var(--surface-2, #f8fafc);
     font-size: 14px;
-    color: var(--text, #111);
+    color: var(--ink, #0f172a);
     box-sizing: border-box;
-    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .acct-field input:focus,
 .acct-field textarea:focus,
 .acct-field select:focus {
     outline: none;
-    border-color: var(--primary, #5b4cf5);
-    box-shadow: 0 0 0 3px rgba(91, 76, 245, 0.15);
+    background: var(--bg, #ffffff);
+    border-color: var(--primary, #4f46e5);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12);
 }
 
 .acct-field input:disabled {
     opacity: 0.65;
     cursor: not-allowed;
-    background: var(--bg, #f7f7fa);
+    background: var(--surface-2, #f1f5f9);
 }
 
 .acct-hint {
@@ -511,6 +593,8 @@
         min-width: 0;
         overflow-x: hidden;
         border-top: none;
+        padding: 0;
+        margin: 0;
     }
 
     .acct-sidebar {

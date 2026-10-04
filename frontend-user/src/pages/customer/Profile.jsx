@@ -9,7 +9,7 @@ import { useModal } from '../../context/ModalContext';
 import { useConfirm } from '../../context/ConfirmContext';
 import { useToast } from '../../context/ToastContext';
 import { downloadCandidateCv } from '../../utils/fileDownloader';
-import { uploadAvatar, getMyPortfolio, uploadPortfolioItem, deletePortfolioItem, getMyBadges, getUserProfile, updateUserProfile } from '../../api/userApi';
+import { uploadAvatar, uploadCover, getMyPortfolio, uploadPortfolioItem, deletePortfolioItem, getMyBadges, getUserProfile, updateUserProfile } from '../../api/userApi';
 import { getUserReviews } from '../../api/reviewApi';
 import { getKycStatus } from '../../api/kycApi';
 import { getMyCvFiles } from '../../api/cvApi';
@@ -31,8 +31,8 @@ export default function Profile() {
   const docInputRef = useRef();
   const portfolioInputRef = useRef();
   const avatarInputRef = useRef();
+  const coverInputRef = useRef();
 
-  const rawAvatarUrl = state.currentUser?.avatarUrl || null;
   const { openModal } = useModal();
   const [kycData, setKycData] = useState(null);
   const [selectedPf, setSelectedPf] = useState(null);
@@ -57,6 +57,8 @@ export default function Profile() {
   const [savingBio, setSavingBio] = useState(false);
 
   const effectiveUser = profileData || state.currentUser;
+  const rawAvatarUrl = effectiveUser?.avatarUrl || effectiveUser?.avatar || state.currentUser?.avatarUrl || state.currentUser?.avatar || null;
+  const rawCoverUrl = effectiveUser?.coverImageUrl || state.currentUser?.coverImageUrl || null;
   const currentUserId = effectiveUser?.id;
   const userRole = (effectiveUser?.roleCode || effectiveUser?.roleName || state.role || 'student').toLowerCase();
   const isEmployer = userRole === 'employer' || userRole === 'recruiter' || userRole === 'business';
@@ -177,12 +179,34 @@ export default function Profile() {
     ? (reviews.reduce((s, r) => s + (r.stars || 5), 0) / reviews.length).toFixed(1)
     : null;
 
-  // Trích xuất ngành chuyên môn từ danh sách CV thật
+  // Trích xuất ngành chuyên môn: ưu tiên kỹ năng thật từ DB > danh sách CV thật
   const activeSkills = useMemo(() => {
+    if (Array.isArray(effectiveUser?.skills) && effectiveUser.skills.length > 0) {
+      return effectiveUser.skills;
+    }
     const cats = cvList.map((c) => c.categoryName).filter(Boolean);
     const unique = Array.from(new Set(cats));
     return unique.length > 0 ? unique : ['Ứng viên tiềm năng', 'Sẵn sàng nhận việc'];
-  }, [cvList]);
+  }, [effectiveUser?.skills, cvList]);
+
+  const onCoverChange = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      showToast('Đang tải lên ảnh bìa…', 'hourglass');
+      const res = await uploadCover(f);
+      if (dispatch) {
+        dispatch({ type: 'UPDATE_PROFILE', patch: { coverImageUrl: res.coverImageUrl } });
+      } else if (updateProfile) {
+        await updateProfile({ coverImageUrl: res.coverImageUrl });
+      }
+      showToast('Đã cập nhật ảnh bìa mới!', 'check');
+    } catch (err) {
+      showToast(err?.message || 'Không thể tải lên ảnh bìa.', 'error');
+    } finally {
+      if (e.target) e.target.value = '';
+    }
+  };
 
   const onAvatarChange = async (e) => {
     const f = e.target.files?.[0];
@@ -262,14 +286,32 @@ export default function Profile() {
     : (effectiveUser?.fullName || state.displayName || 'Sinh viên SkillBridge');
 
   const publicProfileUrl = isEmployer
-    ? `/company/${slugify(currentName)}`
-    : `/student/${slugify(currentName)}`;
+    ? `/company/${effectiveUser?.id || slugify(currentName)}`
+    : `/student/${effectiveUser?.id || slugify(currentName)}`;
 
   return (
     <div className="page active">
       {/* Profile Hero Header */}
-      <div className="profile-hero">
+      <div
+        className="profile-hero"
+        style={rawCoverUrl ? {
+          background: `linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.88)), url(${rawCoverUrl}) center/cover no-repeat`
+        } : undefined}
+      >
+        <input ref={coverInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onCoverChange} />
         <div className="wrap">
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 10 }}>
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              style={{ background: 'rgba(255,255,255,.12)', color: '#fff', borderColor: 'rgba(255,255,255,.3)', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              onClick={() => coverInputRef.current?.click()}
+              title="Đổi ảnh bìa hồ sơ"
+            >
+              <Icon name="camera" width="13" height="13" />
+              <span>{rawCoverUrl ? 'Đổi ảnh bìa' : 'Thêm ảnh bìa'}</span>
+            </button>
+          </div>
           <div className="ph-row">
             <div
               className="ph-avatar"

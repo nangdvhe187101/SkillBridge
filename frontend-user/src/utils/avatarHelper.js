@@ -9,7 +9,8 @@ const API_BASE = API_URL.replace(/\/api\/?$/, '');
 export function resolveAvatarUrl(src) {
   if (!src || typeof src !== 'string') return null;
   const s = src.trim();
-  if (!s || s.length <= 2) return null;
+  if (!s || s.length <= 2 || s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined') return null;
+
 
   // 1. Data URI hoặc Blob URL (upload preview)
   if (s.startsWith('data:') || s.startsWith('blob:')) {

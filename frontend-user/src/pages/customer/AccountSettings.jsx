@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { useConfirm } from '../../context/ConfirmContext';
-import { uploadAvatar } from '../../api/userApi';
+import { uploadAvatar, uploadCover } from '../../api/userApi';
 import { getMyCvFiles, uploadCvFile, deleteCv, updateCv } from '../../api/cvApi';
 import { getCategories } from '../../api/jobApi';
 import { getKycStatus, submitKyc } from '../../api/kycApi';
@@ -69,7 +69,7 @@ function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
                 title="Bấm để đổi ảnh đại diện"
             >
                 <Avatar
-                    src={currentUser?.avatarUrl}
+                    src={currentUser?.avatarUrl || currentUser?.avatar}
                     name={currentUser?.fullName || 'User'}
                     className="acct-avatar-img"
                     fontSize={28}
@@ -101,19 +101,114 @@ function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
 }
 
 // 1. Employer Profile Tab
-function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
+// Cover Upload Component
+function CoverUploadCard({ currentUser, onCoverUpdated }) {
+    const toast = useToast();
+    const addToast = toast?.addToast || toast?.showToast || (() => {});
+    const fileInputRef = useRef(null);
+    const [uploading, setUploading] = useState(false);
+
+    const handleFileChange = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+        const ext = file.name.split('.').pop()?.toLowerCase();
+        if (!allowedExts.includes(ext)) {
+            addToast('Định dạng ảnh không hợp lệ. Chỉ chấp nhận file JPG, PNG hoặc WEBP.', 'error');
+            return;
+        }
+
+        if (file.size > 10 * 1024 * 1024) {
+            addToast('Dung lượng ảnh bìa vượt quá giới hạn (tối đa 10MB).', 'error');
+            return;
+        }
+
+        setUploading(true);
+        try {
+            const res = await uploadCover(file);
+            addToast('Cập nhật ảnh bìa thành công!', 'success');
+            if (onCoverUpdated) {
+                onCoverUpdated(res.coverImageUrl);
+            }
+        } catch (err) {
+            addToast(err?.message || 'Không thể tải lên ảnh bìa.', 'error');
+        } finally {
+            setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    return (
+        <div style={{ marginBottom: 24, borderRadius: 14, overflow: 'hidden', border: '1px solid var(--line, #e2e8f0)', background: 'var(--bg-card, #fff)' }}>
+            <input
+                type="file"
+                ref={fileInputRef}
+                style={{ display: 'none' }}
+                accept="image/png, image/jpeg, image/webp"
+                onChange={handleFileChange}
+            />
+            <div style={{ position: 'relative', height: 140, background: currentUser?.coverImageUrl ? `url(${currentUser.coverImageUrl}) center/cover no-repeat` : 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%)' }}>
+                <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{ position: 'absolute', bottom: 12, right: 12, background: 'rgba(0,0,0,0.65)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(4px)', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+                    disabled={uploading}
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    <Icon name={uploading ? 'hourglass' : 'camera'} width="14" height="14" />
+                    <span>{uploading ? 'Đang tải lên...' : (currentUser?.coverImageUrl ? 'Đổi ảnh bìa' : 'Thêm ảnh bìa')}</span>
+                </button>
+            </div>
+            <div style={{ padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 600 }}>Ảnh bìa hồ sơ (Cover Banner)</h4>
+                    <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--ink-soft, #64748b)' }}>Tỷ lệ đề xuất 16:9 hoặc 3:1. Giúp trang hồ sơ cá nhân và công ty nổi bật và chuyên nghiệp.</p>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// 1. Employer Profile Tab
+function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCoverUpdated }) {
     const [form, setForm] = useState({
         fullName: currentUser.fullName || currentUser.companyName || '',
         representative: currentUser.representative || '',
         taxCode: currentUser.taxCode || '',
         industry: currentUser.industry || 'Truyền thông & Marketing',
+        companySize: currentUser.companySize || '10-50 nhân sự',
         address: currentUser.address || '',
         website: currentUser.website || '',
         phone: currentUser.phone || currentUser.phoneNumber || '',
+        headline: currentUser.headline || '',
         bio: currentUser.bio || currentUser.companyDescription || '',
+        benefits: Array.isArray(currentUser.benefits) ? currentUser.benefits : [],
+        socialLinks: currentUser.socialLinks || { website: '', linkedin: '', facebook: '' }
     });
+    const [newBenefit, setNewBenefit] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+
+    const SUGGESTED_BENEFITS = [
+        'Hỗ trợ dấu mộc thực tập',
+        'Làm việc linh hoạt Hybrid / Remote',
+        'Thưởng hiệu quả theo dự án',
+        'Được mentor hướng dẫn 1-1',
+        'Môi trường trẻ trung, cởi mở',
+        'Cơ hội trở thành nhân viên chính thức'
+    ];
+
+    const addBenefit = (text) => {
+        const val = (text || newBenefit).trim();
+        if (!val || form.benefits.includes(val)) return;
+        setForm({ ...form, benefits: [...form.benefits, val] });
+        setNewBenefit('');
+    };
+
+    const removeBenefit = (index) => {
+        setForm({ ...form, benefits: form.benefits.filter((_, i) => i !== index) });
+    };
 
     const save = async () => {
         setError('');
@@ -133,12 +228,16 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
                 representative: form.representative.trim(),
                 taxCode: form.taxCode.trim(),
                 industry: form.industry,
+                companySize: form.companySize,
                 address: form.address.trim(),
                 website: form.website.trim(),
                 phone: form.phone || null,
                 phoneNumber: form.phone || null,
+                headline: form.headline.trim(),
                 bio: form.bio.trim(),
                 companyDescription: form.bio.trim(),
+                benefits: form.benefits,
+                socialLinks: form.socialLinks
             });
         } catch (err) {
             setError(err?.message || 'Không thể lưu thông tin hồ sơ.');
@@ -151,6 +250,7 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
         <>
             <h1 className="acct-content-title">Hồ sơ Doanh nghiệp</h1>
 
+            <CoverUploadCard currentUser={currentUser} onCoverUpdated={onCoverUpdated} />
             <AvatarUploadCard currentUser={currentUser} onAvatarUpdated={onAvatarUpdated} />
 
             <div className="acct-section">
@@ -160,7 +260,7 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
                         <label>Tên công ty / Doanh nghiệp <span style={{ color: 'var(--coral)' }}>*</span></label>
                         <input
                             type="text"
-                            placeholder="Ví dụ: Công ty TNHH Sáng Tạo Mới"
+                            placeholder="Ví dụ: Công ty Cổ phần Sáng Tạo FPT"
                             value={form.fullName}
                             onChange={(e) => setForm({ ...form, fullName: e.target.value })}
                         />
@@ -179,6 +279,52 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
                             <option>Ẩm thực & Dịch vụ F&B</option>
                             <option>Khác</option>
                         </select>
+                    </div>
+                </div>
+
+                <div className="acct-field-row" style={{ marginTop: 12 }}>
+                    <div className="acct-field">
+                        <label>Người đại diện pháp luật</label>
+                        <input
+                            type="text"
+                            placeholder="Họ và tên người đại diện"
+                            value={form.representative}
+                            onChange={(e) => setForm({ ...form, representative: e.target.value })}
+                        />
+                    </div>
+                    <div className="acct-field">
+                        <label>Mã số thuế doanh nghiệp (MST)</label>
+                        <input
+                            type="text"
+                            placeholder="Ví dụ: 0108899888"
+                            value={form.taxCode}
+                            onChange={(e) => setForm({ ...form, taxCode: e.target.value })}
+                        />
+                    </div>
+                </div>
+
+                <div className="acct-field-row" style={{ marginTop: 12 }}>
+                    <div className="acct-field">
+                        <label>Quy mô nhân sự</label>
+                        <select
+                            value={form.companySize}
+                            onChange={(e) => setForm({ ...form, companySize: e.target.value })}
+                        >
+                            <option>1-10 nhân sự</option>
+                            <option>10-50 nhân sự</option>
+                            <option>50-200 nhân sự</option>
+                            <option>200-500 nhân sự</option>
+                            <option>Trên 500 nhân sự</option>
+                        </select>
+                    </div>
+                    <div className="acct-field">
+                        <label>Khẩu hiệu / Slogan doanh nghiệp</label>
+                        <input
+                            type="text"
+                            placeholder="Ví dụ: Tiên phong ứng dụng công nghệ kết nối nhân tài trẻ"
+                            value={form.headline}
+                            onChange={(e) => setForm({ ...form, headline: e.target.value })}
+                        />
                     </div>
                 </div>
             </div>
@@ -227,15 +373,82 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
             </div>
 
             <div className="acct-section">
-                <h3 className="acct-section-title">Giới thiệu Doanh nghiệp</h3>
+                <h3 className="acct-section-title">Giới thiệu & Văn hóa doanh nghiệp</h3>
                 <div className="acct-field-row">
                     <div className="acct-field" style={{ gridColumn: '1 / -1' }}>
-                        <label>Mô tả ngắn về công ty & môi trường làm việc</label>
+                        <label>Mô tả chi tiết về công ty & môi trường làm việc</label>
                         <textarea
-                            rows={3}
-                            placeholder="Mô tả văn hóa, các dự án tiêu biểu để thu hút ứng viên tài năng..."
+                            rows={4}
+                            placeholder="Mô tả tầm nhìn, sứ mệnh, văn hóa làm việc và các giá trị mà sinh viên/ứng viên nhận được khi hợp tác cùng doanh nghiệp..."
                             value={form.bio}
                             onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                        />
+                    </div>
+                </div>
+
+                <div style={{ marginTop: 18 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, display: 'block', marginBottom: 8 }}>Chế độ & Phúc lợi nổi bật</label>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+                        <input
+                            type="text"
+                            placeholder="Nhập quyền lợi mới rồi bấm Thêm..."
+                            value={newBenefit}
+                            onChange={(e) => setNewBenefit(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBenefit(); } }}
+                            style={{ flex: 1 }}
+                        />
+                        <button type="button" className="btn btn-outline btn-sm" onClick={() => addBenefit()}>
+                            + Thêm
+                        </button>
+                    </div>
+
+                    {form.benefits.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                            {form.benefits.map((b, idx) => (
+                                <span key={idx} className="chip chip-lime" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', fontSize: 12 }}>
+                                    <Icon name="check" width="12" height="12" />
+                                    <span>{b}</span>
+                                    <span style={{ cursor: 'pointer', marginLeft: 4, fontWeight: 'bold' }} onClick={() => removeBenefit(idx)}>×</span>
+                                </span>
+                            ))}
+                        </div>
+                    )}
+
+                    <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                        <span>Gợi ý nhanh: </span>
+                        {SUGGESTED_BENEFITS.map((item, i) => (
+                            <button
+                                key={i}
+                                type="button"
+                                onClick={() => addBenefit(item)}
+                                style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', textDecoration: 'underline', marginRight: 8, padding: 0, fontSize: 12 }}
+                            >
+                                + {item}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+
+            <div className="acct-section">
+                <h3 className="acct-section-title">Mạng xã hội & Kênh truyền thông</h3>
+                <div className="acct-field-row">
+                    <div className="acct-field">
+                        <label>LinkedIn Doanh nghiệp</label>
+                        <input
+                            type="url"
+                            placeholder="https://linkedin.com/company/..."
+                            value={form.socialLinks?.linkedin || ''}
+                            onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, linkedin: e.target.value } })}
+                        />
+                    </div>
+                    <div className="acct-field">
+                        <label>Fanpage Facebook</label>
+                        <input
+                            type="url"
+                            placeholder="https://facebook.com/..."
+                            value={form.socialLinks?.facebook || ''}
+                            onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, facebook: e.target.value } })}
                         />
                     </div>
                 </div>
@@ -251,17 +464,72 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
 }
 
 // 2. Student Profile Tab
-function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
+function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCoverUpdated }) {
     const [form, setForm] = useState({
         fullName: currentUser.fullName || '',
+        headline: currentUser.headline || '',
         school: currentUser.school || '',
         industry: currentUser.industry || 'Lập trình web',
         phone: currentUser.phone || currentUser.phoneNumber || '',
         website: currentUser.website || '',
-        bio: currentUser.bio || '',
+        bio: currentUser.bio || currentUser.companyDescription || '',
+        skills: Array.isArray(currentUser.skills) ? currentUser.skills : [],
+        education: Array.isArray(currentUser.education) ? currentUser.education : [],
+        experiences: Array.isArray(currentUser.experiences) ? currentUser.experiences : [],
+        socialLinks: currentUser.socialLinks || { github: '', linkedin: '', behance: '', facebook: '' },
+        expectedHourlyRate: currentUser.expectedHourlyRate || ''
     });
+
+    const [newSkill, setNewSkill] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
+
+    // State thêm học vấn mới
+    const [showAddEdu, setShowAddEdu] = useState(false);
+    const [eduForm, setEduForm] = useState({ school: '', degree: 'Đại học', fieldOfStudy: '', startYear: 2022, endYear: 2026 });
+
+    // State thêm kinh nghiệm mới
+    const [showAddExp, setShowAddExp] = useState(false);
+    const [expForm, setExpForm] = useState({ role: '', company: '', period: '', description: '' });
+
+    const POPULAR_SKILLS = [
+        'React', 'Node.js', 'TypeScript', 'ASP.NET', 'Python', 'Figma',
+        'UI/UX Design', 'Canva Pro', 'Dựng Video TikTok/Reels', 'CapCut & Premiere',
+        'Viết bài SEO', 'Content Marketing', 'Dịch thuật Anh - Việt'
+    ];
+
+    const addSkill = (val) => {
+        const text = (val || newSkill).trim();
+        if (!text || form.skills.includes(text)) return;
+        setForm({ ...form, skills: [...form.skills, text] });
+        setNewSkill('');
+    };
+
+    const removeSkill = (index) => {
+        setForm({ ...form, skills: form.skills.filter((_, i) => i !== index) });
+    };
+
+    const handleAddEducation = () => {
+        if (!eduForm.school.trim()) return;
+        setForm({ ...form, education: [...form.education, { ...eduForm }] });
+        setEduForm({ school: '', degree: 'Đại học', fieldOfStudy: '', startYear: 2022, endYear: 2026 });
+        setShowAddEdu(false);
+    };
+
+    const removeEducation = (index) => {
+        setForm({ ...form, education: form.education.filter((_, i) => i !== index) });
+    };
+
+    const handleAddExperience = () => {
+        if (!expForm.role.trim() || !expForm.company.trim()) return;
+        setForm({ ...form, experiences: [...form.experiences, { ...expForm }] });
+        setExpForm({ role: '', company: '', period: '', description: '' });
+        setShowAddExp(false);
+    };
+
+    const removeExperience = (index) => {
+        setForm({ ...form, experiences: form.experiences.filter((_, i) => i !== index) });
+    };
 
     const save = async () => {
         setError('');
@@ -277,6 +545,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
         try {
             await updateProfile({
                 fullName: form.fullName.trim(),
+                headline: form.headline.trim(),
                 school: form.school.trim(),
                 industry: form.industry,
                 phone: form.phone || null,
@@ -284,6 +553,11 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
                 website: form.website.trim(),
                 bio: form.bio.trim(),
                 companyDescription: form.bio.trim(),
+                skills: form.skills,
+                education: form.education,
+                experiences: form.experiences,
+                socialLinks: form.socialLinks,
+                expectedHourlyRate: form.expectedHourlyRate ? Number(form.expectedHourlyRate) : null
             });
         } catch (err) {
             setError(err?.message || 'Không thể lưu thông tin hồ sơ.');
@@ -294,12 +568,13 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
 
     return (
         <>
-            <h1 className="acct-content-title">Hồ sơ Sinh viên</h1>
+            <h1 className="acct-content-title">Hồ sơ Sinh viên / Ứng viên</h1>
 
+            <CoverUploadCard currentUser={currentUser} onCoverUpdated={onCoverUpdated} />
             <AvatarUploadCard currentUser={currentUser} onAvatarUpdated={onAvatarUpdated} />
 
             <div className="acct-section">
-                <h3 className="acct-section-title">Thông tin cá nhân & Trường học</h3>
+                <h3 className="acct-section-title">Thông tin Cá nhân & Chức danh</h3>
                 <div className="acct-field-row">
                     <div className="acct-field">
                         <label>Họ và tên đầy đủ <span style={{ color: 'var(--coral)' }}>*</span></label>
@@ -315,19 +590,28 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
                         </div>
                     </div>
                     <div className="acct-field">
-                        <label>Trường Đại học / Cao đẳng</label>
+                        <label>Tiêu đề nghề nghiệp / Chức danh nổi bật</label>
                         <input
                             type="text"
-                            placeholder="Ví dụ: Đại học Bách Khoa, FPT..."
-                            value={form.school}
-                            onChange={(e) => setForm({ ...form, school: e.target.value })}
+                            placeholder="Ví dụ: Fullstack Web Developer · UI/UX Designer"
+                            value={form.headline}
+                            onChange={(e) => setForm({ ...form, headline: e.target.value })}
                         />
                     </div>
                 </div>
 
                 <div className="acct-field-row" style={{ marginTop: 12 }}>
                     <div className="acct-field">
-                        <label>Lĩnh vực chuyên môn</label>
+                        <label>Trường Đại học / Cao đẳng</label>
+                        <input
+                            type="text"
+                            placeholder="Ví dụ: Đại học FPT, Bách Khoa, Kinh Tế..."
+                            value={form.school}
+                            onChange={(e) => setForm({ ...form, school: e.target.value })}
+                        />
+                    </div>
+                    <div className="acct-field">
+                        <label>Lĩnh vực chuyên môn chính</label>
                         <select
                             value={form.industry}
                             onChange={(e) => setForm({ ...form, industry: e.target.value })}
@@ -339,6 +623,9 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
                             <option>Marketing & Quảng cáo số</option>
                         </select>
                     </div>
+                </div>
+
+                <div className="acct-field-row" style={{ marginTop: 12 }}>
                     <div className="acct-field">
                         <label>Số điện thoại liên hệ</label>
                         <input
@@ -350,6 +637,48 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
                             onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, '') })}
                         />
                     </div>
+                    <div className="acct-field">
+                        <label>Website cá nhân / Link Portfolio online</label>
+                        <input
+                            type="url"
+                            placeholder="https://myportfolio.dev"
+                            value={form.website}
+                            onChange={(e) => setForm({ ...form, website: e.target.value })}
+                        />
+                    </div>
+                </div>
+
+                <div className="acct-field-row" style={{ marginTop: 12 }}>
+                    <div className="acct-field" style={{ gridColumn: '1 / -1' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span>Thù lao mong muốn (VNĐ / giờ)</span>
+                            {form.expectedHourlyRate ? (
+                                <span style={{ color: '#4f46e5', fontWeight: 600, fontSize: '0.85rem' }}>
+                                    ≈ {Number(form.expectedHourlyRate).toLocaleString('vi-VN')} đ / giờ
+                                </span>
+                            ) : (
+                                <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Chưa thiết lập (hệ thống sẽ tự ước lượng)</span>
+                            )}
+                        </label>
+                        <div style={{ position: 'relative' }}>
+                            <input
+                                type="number"
+                                min={0}
+                                step={10000}
+                                placeholder="Ví dụ: 150000"
+                                value={form.expectedHourlyRate}
+                                onChange={(e) => setForm({ ...form, expectedHourlyRate: e.target.value })}
+                                style={{ paddingRight: 70 }}
+                            />
+                            <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: 13, fontWeight: 500, pointerEvents: 'none' }}>
+                                đ/giờ
+                            </span>
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Icon name="info" width="13" height="13" />
+                            <span>Mức thù lao mong muốn sẽ hiển thị trực tiếp trên trang Tìm kiếm ứng viên để Nhà tuyển dụng cân đối ngân sách. Mức đề xuất phổ biến: 80.000đ - 250.000đ/giờ.</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -357,12 +686,263 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
                 <h3 className="acct-section-title">Giới thiệu bản thân</h3>
                 <div className="acct-field-row">
                     <div className="acct-field" style={{ gridColumn: '1 / -1' }}>
-                        <label>Mô tả ngắn gọn về kỹ năng & mục tiêu nghề nghiệp</label>
+                        <label>Mô tả ngắn gọn về kinh nghiệm, điểm mạnh & cam kết tiến độ</label>
                         <textarea
-                            rows={3}
-                            placeholder="Sinh viên năm 3 chuyên ngành CNTT, có kinh nghiệm với React, ASP.NET..."
+                            rows={4}
+                            placeholder="Sinh viên nhiệt huyết, có kinh nghiệm thực chiến với các dự án thực tế. Cam kết giao bài đúng hạn và đảm bảo chất lượng theo brief của Nhà tuyển dụng..."
                             value={form.bio}
                             onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            <div className="acct-section">
+                <h3 className="acct-section-title">Kỹ năng chuyên môn (Skills)</h3>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                    <input
+                        type="text"
+                        placeholder="Nhập kỹ năng (ví dụ: React, Figma, Video Editing) rồi nhấn Thêm..."
+                        value={newSkill}
+                        onChange={(e) => setNewSkill(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill(); } }}
+                        style={{ flex: 1 }}
+                    />
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => addSkill()}>
+                        + Thêm kỹ năng
+                    </button>
+                </div>
+
+                {form.skills.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+                        {form.skills.map((s, idx) => (
+                            <span key={idx} className="chip chip-lime" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', fontSize: 12 }}>
+                                <Icon name="check" width="12" height="12" />
+                                <span>{s}</span>
+                                <span style={{ cursor: 'pointer', marginLeft: 4, fontWeight: 'bold' }} onClick={() => removeSkill(idx)}>×</span>
+                            </span>
+                        ))}
+                    </div>
+                )}
+
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                    <span>Gợi ý kỹ năng: </span>
+                    {POPULAR_SKILLS.map((item, i) => (
+                        <button
+                            key={i}
+                            type="button"
+                            onClick={() => addSkill(item)}
+                            style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', textDecoration: 'underline', marginRight: 8, padding: 0, fontSize: 12 }}
+                        >
+                            + {item}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
+            <div className="acct-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <h3 className="acct-section-title" style={{ margin: 0 }}>Quá trình Học vấn (Education)</h3>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowAddEdu(!showAddEdu)}>
+                        {showAddEdu ? 'Đóng' : '+ Thêm học vấn'}
+                    </button>
+                </div>
+
+                {showAddEdu && (
+                    <div style={{ padding: 14, background: 'var(--bg-subtle, #f8fafc)', borderRadius: 10, border: '1px solid var(--line, #e2e8f0)', marginBottom: 14 }}>
+                        <div className="acct-field-row">
+                            <div className="acct-field">
+                                <label>Trường đào tạo *</label>
+                                <input
+                                    type="text"
+                                    placeholder="Đại học FPT"
+                                    value={eduForm.school}
+                                    onChange={(e) => setEduForm({ ...eduForm, school: e.target.value })}
+                                />
+                            </div>
+                            <div className="acct-field">
+                                <label>Hệ / Bằng cấp</label>
+                                <input
+                                    type="text"
+                                    placeholder="Cử nhân / Kỹ sư"
+                                    value={eduForm.degree}
+                                    onChange={(e) => setEduForm({ ...eduForm, degree: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <div className="acct-field-row" style={{ marginTop: 10 }}>
+                            <div className="acct-field">
+                                <label>Chuyên ngành</label>
+                                <input
+                                    type="text"
+                                    placeholder="Kỹ thuật phần mềm / Thiết kế đồ họa"
+                                    value={eduForm.fieldOfStudy}
+                                    onChange={(e) => setEduForm({ ...eduForm, fieldOfStudy: e.target.value })}
+                                />
+                            </div>
+                            <div className="acct-field">
+                                <label>Năm học</label>
+                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                    <input
+                                        type="number"
+                                        placeholder="Bắt đầu"
+                                        value={eduForm.startYear}
+                                        onChange={(e) => setEduForm({ ...eduForm, startYear: Number(e.target.value) })}
+                                    />
+                                    <span>-</span>
+                                    <input
+                                        type="number"
+                                        placeholder="Kết thúc"
+                                        value={eduForm.endYear}
+                                        onChange={(e) => setEduForm({ ...eduForm, endYear: Number(e.target.value) })}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={handleAddEducation}>
+                            Lưu mốc học vấn
+                        </button>
+                    </div>
+                )}
+
+                {form.education.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {form.education.map((edu, idx) => (
+                            <div key={idx} style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid var(--line, #e2e8f0)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-card, #fff)' }}>
+                                <div>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{edu.school} {edu.degree ? `· ${edu.degree}` : ''}</div>
+                                    <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                                        {edu.fieldOfStudy} {edu.startYear && edu.endYear ? `(${edu.startYear} - ${edu.endYear})` : ''}
+                                    </div>
+                                </div>
+                                <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 13 }} onClick={() => removeEducation(idx)}>
+                                    Xóa
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', fontStyle: 'italic' }}>Chưa có thông tin học vấn. Bấm "+ Thêm học vấn" để hoàn thiện hồ sơ.</div>
+                )}
+            </div>
+
+            <div className="acct-section">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <h3 className="acct-section-title" style={{ margin: 0 }}>Kinh nghiệm làm việc & Dự án thực tế (Experiences)</h3>
+                    <button type="button" className="btn btn-outline btn-sm" onClick={() => setShowAddExp(!showAddExp)}>
+                        {showAddExp ? 'Đóng' : '+ Thêm kinh nghiệm'}
+                    </button>
+                </div>
+
+                {showAddExp && (
+                    <div style={{ padding: 14, background: 'var(--bg-subtle, #f8fafc)', borderRadius: 10, border: '1px solid var(--line, #e2e8f0)', marginBottom: 14 }}>
+                        <div className="acct-field-row">
+                            <div className="acct-field">
+                                <label>Vị trí / Vai trò *</label>
+                                <input
+                                    type="text"
+                                    placeholder="Frontend Developer Intern / Freelance Designer"
+                                    value={expForm.role}
+                                    onChange={(e) => setExpForm({ ...expForm, role: e.target.value })}
+                                />
+                            </div>
+                            <div className="acct-field">
+                                <label>Đơn vị / Dự án *</label>
+                                <input
+                                    type="text"
+                                    placeholder="FPT Software / Dự án Sàn thương mại điện tử"
+                                    value={expForm.company}
+                                    onChange={(e) => setExpForm({ ...expForm, company: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <div className="acct-field-row" style={{ marginTop: 10 }}>
+                            <div className="acct-field">
+                                <label>Thời gian</label>
+                                <input
+                                    type="text"
+                                    placeholder="06/2024 - Hiện tại"
+                                    value={expForm.period}
+                                    onChange={(e) => setExpForm({ ...expForm, period: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <div className="acct-field-row" style={{ marginTop: 10 }}>
+                            <div className="acct-field" style={{ gridColumn: '1 / -1' }}>
+                                <label>Mô tả đóng góp & kết quả</label>
+                                <textarea
+                                    rows={2}
+                                    placeholder="Xây dựng giao diện Responsive, tối ưu hóa tốc độ tải trang..."
+                                    value={expForm.description}
+                                    onChange={(e) => setExpForm({ ...expForm, description: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={handleAddExperience}>
+                            Lưu kinh nghiệm
+                        </button>
+                    </div>
+                )}
+
+                {form.experiences.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {form.experiences.map((exp, idx) => (
+                            <div key={idx} style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid var(--line, #e2e8f0)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--bg-card, #fff)' }}>
+                                <div>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{exp.role} · <span style={{ color: '#4f46e5' }}>{exp.company}</span></div>
+                                    <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{exp.period}</div>
+                                    {exp.description && <div style={{ fontSize: 12.5, marginTop: 4, color: 'var(--ink)' }}>{exp.description}</div>}
+                                </div>
+                                <button type="button" style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 13 }} onClick={() => removeExperience(idx)}>
+                                    Xóa
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', fontStyle: 'italic' }}>Chưa có kinh nghiệm thực tế. Bấm "+ Thêm kinh nghiệm" để tạo ấn tượng tốt hơn với Nhà tuyển dụng.</div>
+                )}
+            </div>
+
+            <div className="acct-section">
+                <h3 className="acct-section-title">Liên kết Mạng xã hội & Portfolio</h3>
+                <div className="acct-field-row">
+                    <div className="acct-field">
+                        <label>GitHub Profile</label>
+                        <input
+                            type="url"
+                            placeholder="https://github.com/username"
+                            value={form.socialLinks?.github || ''}
+                            onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, github: e.target.value } })}
+                        />
+                    </div>
+                    <div className="acct-field">
+                        <label>LinkedIn Profile</label>
+                        <input
+                            type="url"
+                            placeholder="https://linkedin.com/in/username"
+                            value={form.socialLinks?.linkedin || ''}
+                            onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, linkedin: e.target.value } })}
+                        />
+                    </div>
+                </div>
+                <div className="acct-field-row" style={{ marginTop: 12 }}>
+                    <div className="acct-field">
+                        <label>Behance / Dribbble Portfolio</label>
+                        <input
+                            type="url"
+                            placeholder="https://behance.net/username"
+                            value={form.socialLinks?.behance || ''}
+                            onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, behance: e.target.value } })}
+                        />
+                    </div>
+                    <div className="acct-field">
+                        <label>Facebook cá nhân</label>
+                        <input
+                            type="url"
+                            placeholder="https://facebook.com/username"
+                            value={form.socialLinks?.facebook || ''}
+                            onChange={(e) => setForm({ ...form, socialLinks: { ...form.socialLinks, facebook: e.target.value } })}
                         />
                     </div>
                 </div>
@@ -371,7 +951,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated }) {
             {error && <div className="field-error acct-error">{error}</div>}
 
             <button className="btn btn-primary acct-submit-btn" onClick={save} disabled={saving}>
-                {saving ? 'Đang lưu...' : 'Lưu thông tin'}
+                {saving ? 'Đang lưu...' : 'Lưu thông tin hồ sơ'}
             </button>
         </>
     );
@@ -1194,7 +1774,7 @@ function PasswordTab({ changePassword, logout, currentUser }) {
 const CURRENT_YEAR = new Date().getFullYear();
 const GRAD_YEARS = Array.from({ length: 7 }, (_, i) => CURRENT_YEAR + i);
 
-function KycVerificationTab({ isEmployer, currentUser }) {
+function KycVerificationTab({ isEmployer }) {
     const { addToast } = useToast();
     const [kycData, setKycData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -1802,6 +2382,12 @@ export default function AccountSettings({ forcedTab }) {
         }
     };
 
+    const handleCoverUpdated = (newCoverUrl) => {
+        if (updateProfile) {
+            updateProfile({ coverImageUrl: newCoverUrl }).catch(() => {});
+        }
+    };
+
     return (
         <div className="page active">
             <div className="acct-settings-layout">
@@ -1837,12 +2423,14 @@ export default function AccountSettings({ forcedTab }) {
                                     currentUser={safeUser}
                                     updateProfile={updateProfile}
                                     onAvatarUpdated={handleAvatarUpdated}
+                                    onCoverUpdated={handleCoverUpdated}
                                 />
                             ) : (
                                 <StudentProfileTab
                                     currentUser={safeUser}
                                     updateProfile={updateProfile}
                                     onAvatarUpdated={handleAvatarUpdated}
+                                    onCoverUpdated={handleCoverUpdated}
                                 />
                             )
                         )}

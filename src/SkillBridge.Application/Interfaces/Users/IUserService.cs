@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,9 +20,18 @@ public interface IUserService
         string contentType,
         CancellationToken cancellationToken = default);
 
+    Task<FileUploadResult> UploadCoverAsync(
+        int userId,
+        Stream stream,
+        string fileName,
+        string contentType,
+        CancellationToken cancellationToken = default);
+
     Task<UserPublicProfileDto> GetPublicStudentProfileAsync(int studentId, CancellationToken cancellationToken = default);
 
-    Task<System.Collections.Generic.List<PortfolioItemDto>> GetPortfolioAsync(int userId, CancellationToken cancellationToken = default);
+    Task<CompanyPublicProfileDto> GetPublicCompanyProfileAsync(int employerId, CancellationToken cancellationToken = default);
+
+    Task<List<PortfolioItemDto>> GetPortfolioAsync(int userId, CancellationToken cancellationToken = default);
 
     Task<PortfolioItemDto> UploadPortfolioAsync(
         int userId,
@@ -32,5 +42,5 @@ public interface IUserService
 
     Task DeletePortfolioAsync(int userId, int portfolioId, CancellationToken cancellationToken = default);
 
-    Task<System.Collections.Generic.List<UserBadgeItemDto>> GetUserBadgesAsync(int userId, CancellationToken cancellationToken = default);
+    Task<List<UserBadgeItemDto>> GetUserBadgesAsync(int userId, CancellationToken cancellationToken = default);
 }
