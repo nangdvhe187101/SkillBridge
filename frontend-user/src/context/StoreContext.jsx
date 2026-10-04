@@ -1,7 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useReducer, useCallback, useRef } from 'react';
 import { jobsSeed } from '../data/jobs';
 import { myJobsSeed } from '../data/myJobs';
-import { conversationsSeed, AUTO_REPLIES } from '../data/conversations';
 import { useToast } from './ToastContext';
 
 import { login as loginApi, googleLogin as googleLoginApi, register as registerApi, logout as logoutApi, refreshToken as refreshTokenApi, changePassword as changePasswordApi } from '../api/authApi';
@@ -30,7 +29,9 @@ export function mapConversationFromApi(c, existingConv = null) {
     id: c.id,
     name: c.otherUserName || 'Người dùng',
     subtitle: c.jobTitle ? `Dự án: ${c.jobTitle}` : roleLabel,
-    avatar: c.otherUserAvatar || null,
+    avatar: c.otherUserAvatar || c.otherUserAvatarUrl || c.avatar || c.avatarUrl || null,
+    avatarUrl: c.otherUserAvatar || c.otherUserAvatarUrl || c.avatar || c.avatarUrl || null,
+    otherUserAvatar: c.otherUserAvatar || c.otherUserAvatarUrl || c.avatar || c.avatarUrl || null,
     online: Boolean(c.isOnline),
     kind: isPendingRequest ? 'request' : 'chat',
     unread: c.unreadCount || 0,
@@ -111,12 +112,14 @@ export function normalizeUtcDate(dateStr) {
 }
 
 export function mapPublicJob(j) {
+  const avatar = j.employerAvatar || j.employerAvatarUrl || j.avatarUrl || j.employer?.avatarUrl || null;
   return {
     id: j.id,
     title: j.title,
     emp: j.employerName || 'Nhà tuyển dụng',
-    employerAvatar: j.employerAvatar || null,
-    empAvatar: j.employerAvatar || null,
+    employerAvatar: avatar,
+    empAvatar: avatar,
+    employerAvatarUrl: avatar,
     employerId: j.employerId,
     loc: j.location || 'Toàn quốc',
     cat: j.categoryName || 'Chung',
@@ -141,11 +144,13 @@ export function mapPublicJob(j) {
 }
 
 export function mapMyJob(j) {
+  const avatar = j.employerAvatar || j.employerAvatarUrl || j.avatarUrl || j.employer?.avatarUrl || null;
   return {
     id: j.id,
     title: j.title,
-    employerAvatar: j.employerAvatar || null,
-    empAvatar: j.employerAvatar || null,
+    employerAvatar: avatar,
+    empAvatar: avatar,
+    employerAvatarUrl: avatar,
     cat: j.categoryName || 'Chung',
     categoryId: j.categoryId,
     budget: j.budget,
@@ -168,6 +173,7 @@ export function mapMyJob(j) {
 }
 
 export function mapMyApplication(a) {
+  const avatar = a.employerAvatarUrl || a.employerAvatar || a.empAvatar || null;
   return {
     id: a.id,
     jobId: a.jobId,
@@ -175,8 +181,9 @@ export function mapMyApplication(a) {
     jobTitle: a.jobTitle || a.title || 'Công việc',
     emp: a.employerName || a.emp || 'Nhà tuyển dụng',
     employerName: a.employerName || a.emp || 'Nhà tuyển dụng',
-    employerAvatarUrl: a.employerAvatarUrl || a.employerAvatar || null,
-    empAvatar: a.employerAvatarUrl || a.employerAvatar || null,
+    employerAvatarUrl: avatar,
+    employerAvatar: avatar,
+    empAvatar: avatar,
     budget: a.budget || 0,
     employerId: a.employerId,
     studentId: a.studentId,
@@ -254,24 +261,6 @@ function fmtTimeNow() {
   return new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
 }
 
-const initialTransactionsSeed = [
-  { id: 1, type: 'topup', label: 'Nạp tiền qua Chuyển khoản QR MB Bank', amount: 500000, sign: 1, date: '21/08/2026 14:30' },
-  { id: 2, type: 'escrow_hold', label: 'Tạm giữ Ký quỹ Escrow — Job #12 Dựng video TikTok', amount: 250000, sign: -1, date: '21/08/2026 15:00' },
-  { id: 3, type: 'escrow_release', label: 'Nhận thù lao giải ngân — Thiết kế logo quán cafe', amount: 400000, sign: 1, date: '20/08/2026 18:45' },
-  { id: 4, type: 'insurance_payout', label: 'Bồi thường 40% Quỹ Bảo hiểm — Job #9 Sự cố hủy đơn', amount: 120000, sign: 1, date: '19/08/2026 10:15' },
-  { id: 5, type: 'withdraw', label: 'Rút tiền về MB Bank *6666', amount: 300000, sign: -1, date: '18/08/2026 09:20' },
-];
-
-const initialReceiptsSeed = [
-  { id: 'REC-901', code: 'SB-REC-2026-08901', jobTitle: 'Thiết kế logo & Menu A4 quán cafe', employer: 'Trà Sữa Mộc', student: 'Minh Anh', total: 400000, fee: 0, net: 400000, date: '20/08/2026 18:45', status: 'completed' },
-  { id: 'REC-902', code: 'SB-REC-2026-08902', jobTitle: 'Dịch thuật tài liệu Tiếng Anh 1500 từ', employer: 'Cỏ May Media', student: 'Hoàng Long', total: 350000, fee: 0, net: 350000, date: '17/08/2026 11:20', status: 'completed' },
-];
-
-const initialClaimsSeed = [
-  { id: 'CLM-101', jobTitle: 'Biên tập 5 bài viết SEO Website', desc: 'Nhà tuyển dụng không phản hồi sau khi nhận bài 7 ngày', payout: 150000, status: 'resolved', statusLabel: 'Đã bồi thường 40%', date: '19/08/2026' },
-  { id: 'CLM-102', jobTitle: 'Dựng motion graphic intro 10s', desc: 'Đang gửi bằng chứng đối soát video demo', payout: 0, status: 'pending', statusLabel: 'Đang chờ HĐ Bảo hiểm duyệt', date: '21/08/2026' },
-];
-
 const initialState = {
   balance: 0,
   escrowLocked: 0,
@@ -343,12 +332,16 @@ function reducer(state, action) {
     case 'AUTH_LOGIN_SUCCESS': {
       const { token, userId, fullName, email, roleCode, avatarUrl } = action.payload;
       setAccessToken(token);
+      const effectiveAvatar = avatarUrl !== undefined ? avatarUrl : (action.payload.avatar || state.currentUser?.avatarUrl || state.currentUser?.avatar || null);
+      const effectiveId = userId || action.payload.id || state.currentUser?.id || state.currentUser?.userId;
       const currentUser = {
-        userId,
+        id: effectiveId,
+        userId: effectiveId,
         fullName,
         email,
         roleCode,
-        avatarUrl: avatarUrl !== undefined ? avatarUrl : state.currentUser?.avatarUrl || null
+        avatar: effectiveAvatar,
+        avatarUrl: effectiveAvatar
       };
       localStorage.setItem('user', JSON.stringify(currentUser));
       return { ...state, token, currentUser, role: roleCode, isInitializing: false };
@@ -377,7 +370,17 @@ function reducer(state, action) {
 
     case 'UPDATE_PROFILE': {
       if (!state.currentUser) return state;
-      const currentUser = { ...state.currentUser, ...action.patch };
+      const patch = action.patch || {};
+      const patchedAvatar = patch.avatarUrl !== undefined ? patch.avatarUrl : (patch.avatar !== undefined ? patch.avatar : (state.currentUser.avatarUrl || state.currentUser.avatar || null));
+      const patchedId = patch.id || patch.userId || state.currentUser.id || state.currentUser.userId;
+      const currentUser = {
+        ...state.currentUser,
+        ...patch,
+        id: patchedId,
+        userId: patchedId,
+        avatar: patchedAvatar,
+        avatarUrl: patchedAvatar
+      };
       localStorage.setItem('user', JSON.stringify(currentUser));
       return { ...state, currentUser };
     }
@@ -529,19 +532,7 @@ function reducer(state, action) {
         transactions = addTxTo(transactions, 'escrow_hold', 'Ký quỹ thuê ' + selectedName + ' · ' + job.title + ' (Thanh toán trực tiếp)', hireAmount, -1, job.id);
       }
 
-      let myApplications = state.myApplications;
-      const existingIdx = myApplications.findIndex((x) => String(x.dashJobId) === String(jobId));
-      if (existingIdx >= 0) {
-        myApplications = myApplications.map((x, i) => (i === existingIdx ? { ...x, status: 'hired' } : x));
-      } else {
-        const publicJob = jobs.find((pj) => String(pj.id) === String(jobId));
-        myApplications = [
-          { id: 'ap' + Date.now(), jobId: publicJob ? publicJob.id : null, dashJobId: job.id, title: job.title, emp: publicJob ? publicJob.emp : 'Bạn', budget: job.budget, status: 'hired', appliedAt: 'Vừa xong' },
-          ...myApplications,
-        ];
-      }
-
-      return { ...state, myJobs, jobs, balance, transactions, myApplications };
+      return { ...state, myJobs, jobs, balance, transactions };
     }
 
     case 'MARK_JOB_COMPLETE': {
@@ -643,7 +634,12 @@ function reducer(state, action) {
       const version = wasUpdate && job?.deliverable ? (job.deliverable.version || 1) + 1 : 1;
       const deliverable = { mode, url: url || '', fileName: fileName || '', fileSize: fileSize || 0, previewDataUrl: previewDataUrl || null, finalDataUrl: finalDataUrl || null, note, submittedAt: fmtNow(), version, status: 'submitted' };
       const myJobs = state.myJobs.map((j) => (j.id === jobId ? { ...j, deliverable, status: 'submitted', hiredApplicantIsMe: true } : j));
-      let myApplications = state.myApplications.map((a) => (a.jobId === jobId || a.dashJobId === jobId ? { ...a, status: 'submitted', jobStatus: 'submitted' } : a));
+      let myApplications = (state.myApplications || []).map((a) => {
+        if ((a.jobId === jobId || a.dashJobId === jobId) && ['hired', 'revision_requested', 'submitted'].includes(a.status)) {
+          return { ...a, status: 'submitted', jobStatus: 'submitted' };
+        }
+        return a;
+      });
       return { ...state, myJobs, myApplications };
     }
 
@@ -1038,6 +1034,10 @@ const authBroadcast = typeof window !== 'undefined' && 'BroadcastChannel' in win
   ? new BroadcastChannel('skillbridge_auth_sync')
   : null;
 
+const jobSyncBroadcast = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('skillbridge_job_sync')
+  : null;
+
 export function StoreProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, initialState);
   const { showToast } = useToast();
@@ -1265,6 +1265,22 @@ export function StoreProvider({ children }) {
     return [];
   }, []);
 
+  // Lắng nghe sự kiện đồng bộ công việc giữa các tab của cùng trình duyệt
+  useEffect(() => {
+    if (!jobSyncBroadcast) return;
+    const handleJobSync = (e) => {
+      if (e.data?.type === 'JOB_HIRED') {
+        refreshMyApplications();
+        refreshNotifications();
+        refreshJobs();
+      }
+    };
+    jobSyncBroadcast.addEventListener('message', handleJobSync);
+    return () => {
+      jobSyncBroadcast.removeEventListener('message', handleJobSync);
+    };
+  }, [refreshMyApplications, refreshNotifications, refreshJobs]);
+
   const refreshConversations = useCallback(async (tab = 'chat') => {
     try {
       const list = await chatApi.getConversations(tab);
@@ -1380,8 +1396,25 @@ export function StoreProvider({ children }) {
       onOnlineUsersList: (onlineUserIds) => {
         dispatch({ type: 'ONLINE_USERS_SYNC', payload: { onlineUserIds } });
       },
+      onReceiveNotification: (notification) => {
+        refreshNotifications();
+        refreshMyApplications();
+        const text = notification?.messageText || notification?.text;
+        if (text) {
+          showToastRef.current?.(`🔔 ${text}`, notification?.icon || 'bell');
+        }
+      },
+      onApplicationStatusChanged: (payload) => {
+        refreshMyApplications();
+        refreshNotifications();
+        if (payload?.status === 'hired') {
+          showToastRef.current?.(`🎉 Chúc mừng! Bạn đã được chọn thực hiện công việc "${payload.jobTitle || 'mới'}"!`, 'award');
+        }
+      },
       onReconnected: () => {
         triggerRefreshConversations();
+        refreshNotifications();
+        refreshMyApplications();
       },
     });
 
@@ -1393,7 +1426,7 @@ export function StoreProvider({ children }) {
     };
   }, [state.currentUser, state.isInitializing, refreshConversations, triggerRefreshConversations]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Polling đồng bộ thông báo thời gian thực mỗi 30s khi người dùng đăng nhập
+  // Polling đồng bộ thông báo thời gian thực mỗi 8s khi người dùng đăng nhập và tab đang mở
   const prevUnreadCountRef = useRef(0);
   useEffect(() => {
     if (!state.currentUser) return;
@@ -1410,7 +1443,7 @@ export function StoreProvider({ children }) {
         }
         prevUnreadCountRef.current = unread;
       }
-    }, 30000);
+    }, 8000);
     return () => clearInterval(interval);
   }, [state.currentUser, refreshNotifications, showToast]);
 
@@ -1672,6 +1705,11 @@ export function StoreProvider({ children }) {
           }
         });
         await Promise.allSettled([refreshJobs(), refreshMyJobs(), refreshWallet()]);
+        jobSyncBroadcast?.postMessage({
+          type: 'JOB_HIRED',
+          jobId,
+          studentId: hireResult?.hiredStudentId
+        });
         showToast('Đã thuê ứng viên và ký quỹ thành công!', 'award');
       },
       markJobComplete: (id) => dispatch({ type: 'MARK_JOB_COMPLETE', id }),

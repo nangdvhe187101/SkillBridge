@@ -1,14 +1,29 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import LoginForm from './LoginForm';
 import RegisterForm from './RegisterForm';
 import ForgotPasswordFlow from './ForgotPasswordFlow';
+import { useStore } from '../../context/StoreContext';
 
 export default function Auth({ forcedTab }) {
+  const { state } = useStore();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    if (!state.isInitializing && state.currentUser) {
+      const from = location.state?.from;
+      if (from && from !== '/auth' && from !== '/login' && from !== '/register') {
+        navigate(from, { replace: true });
+      } else if (state.currentUser.roleCode === 'employer' || state.role === 'employer') {
+        navigate('/employer/dashboard', { replace: true });
+      } else {
+        navigate('/jobs', { replace: true });
+      }
+    }
+  }, [state.isInitializing, state.currentUser, state.role, navigate, location.state]);
 
   const tab = useMemo(() => {
     if (forcedTab) return forcedTab;

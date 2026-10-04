@@ -15,11 +15,16 @@ public class NotificationService : INotificationService
 {
     private readonly SkillBridgeDbContext _dbContext;
     private readonly ILogger<NotificationService> _logger;
+    private readonly INotificationRealtimeNotifier? _realtimeNotifier;
 
-    public NotificationService(SkillBridgeDbContext dbContext, ILogger<NotificationService> logger)
+    public NotificationService(
+        SkillBridgeDbContext dbContext,
+        ILogger<NotificationService> logger,
+        INotificationRealtimeNotifier? realtimeNotifier = null)
     {
         _dbContext = dbContext;
         _logger = logger;
+        _realtimeNotifier = realtimeNotifier;
     }
 
     public async Task SendAsync(int userId, string icon, string message, string? link = null, CancellationToken cancellationToken = default)
@@ -37,6 +42,26 @@ public class NotificationService : INotificationService
         await _dbContext.Notifications.AddAsync(notif, cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
         _logger.LogInformation("Đã tạo thông báo [{Icon}] cho UserId {UserId}: {Message}", icon, userId, message);
+
+        if (_realtimeNotifier != null)
+        {
+            try
+            {
+                await _realtimeNotifier.NotifyAsync(userId, new NotificationDto
+                {
+                    Id = notif.Id,
+                    Icon = notif.Icon,
+                    MessageText = notif.MessageText,
+                    Link = notif.Link,
+                    IsRead = false,
+                    CreatedAt = notif.CreatedAt
+                }, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Không thể phát thông báo realtime cho UserId {UserId}", userId);
+            }
+        }
     }
 
     public async Task<PaginatedNotificationsDto> GetUserNotificationsAsync(int userId, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)

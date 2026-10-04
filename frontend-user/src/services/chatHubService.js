@@ -23,6 +23,8 @@ export function connectChatRealtime({
   onConversationRead,
   onUserStatusChanged,
   onOnlineUsersList,
+  onReceiveNotification,
+  onApplicationStatusChanged,
   onReconnected,
   onError,
 } = {}) {
@@ -81,6 +83,20 @@ export function connectChatRealtime({
     if (isStopped) return;
     if (typeof onOnlineUsersList === 'function') {
       onOnlineUsersList(onlineUserIds);
+    }
+  });
+
+  connection.on('ReceiveNotification', (notification) => {
+    if (isStopped) return;
+    if (typeof onReceiveNotification === 'function') {
+      onReceiveNotification(notification);
+    }
+  });
+
+  connection.on('ApplicationStatusChanged', (payload) => {
+    if (isStopped) return;
+    if (typeof onApplicationStatusChanged === 'function') {
+      onApplicationStatusChanged(payload);
     }
   });
 
