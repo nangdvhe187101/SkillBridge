@@ -197,7 +197,8 @@ public static class DbInitializer
             ("experience_json", "TEXT NULL"),
             ("social_links_json", "TEXT NULL"),
             ("benefits_json", "TEXT NULL"),
-            ("office_images_json", "TEXT NULL")
+            ("office_images_json", "TEXT NULL"),
+            ("expected_hourly_rate", "DECIMAL(12,2) NULL")
         };
 
         foreach (var (colName, colType) in columns)
