@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,17 @@ namespace SkillBridge.Infrastructure.Services.Payments;
 
 public class WithdrawalService : IWithdrawalService
 {
+    public const decimal LargeWithdrawalThreshold = 5000000m;
+
+    private class WithdrawalMakerInfo
+    {
+        public int MakerUserId { get; set; }
+        public int? MakerMemberId { get; set; }
+        public string MakerName { get; set; } = string.Empty;
+        public DateTime MakerAt { get; set; }
+        public string? Note { get; set; }
+    }
+
     private readonly SkillBridgeDbContext _dbContext;
     private readonly ILogger<WithdrawalService> _logger;
     private readonly IEncryptionKeyProvider _keyProvider;
@@ -212,33 +224,160 @@ public class WithdrawalService : IWithdrawalService
             throw new KeyNotFoundException($"Không tìm thấy yêu cầu rút tiền #{withdrawalId}.");
         }
 
-        if (request.Status != "pending")
+        // [DT01-1] Chống tự phê duyệt (Self-Approval)
+        if (request.UserId == adminUserId)
         {
-            throw new BusinessException($"Chỉ có thể phê duyệt yêu cầu rút tiền đang ở trạng thái Chờ duyệt. Trạng thái hiện tại: {request.Status}.");
+            throw new BusinessException("[E-SEC-01] Cấm tự phê duyệt hoặc thao tác trên yêu cầu rút tiền của chính mình.");
         }
 
         var adminMemberId = await EnsureAdminMemberIdAsync(adminUserId, ct);
+        var adminUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == adminUserId, ct);
+        var adminName = adminUser?.FullName ?? "Admin";
         var now = DateTime.UtcNow;
-
-        request.Status = "completed";
-        request.ProcessedBy = adminMemberId;
-        request.ProcessedAt = now;
-        request.UpdatedAt = now;
-
         var cleanNote = CleanText(dto?.Note, 80);
         var refText = cleanNote != null ? $" - Mã UNC: {cleanNote}" : "";
 
-        if (request.Transaction != null)
+        // Quy tắc Maker-Checker dựa trên ngưỡng LargeWithdrawalThreshold (5.000.000 VNĐ theo DT-01)
+        var requiresMakerChecker = request.Amount > LargeWithdrawalThreshold;
+
+        if (!requiresMakerChecker)
         {
-            request.Transaction.Label = FitLabel($"Rút tiền về {request.BankAccount.BankName} · {request.BankAccount.AccountNumberMask} (Thành công{refText})");
+            // DT01-2: Rút tiền thông thường (<= 5.000.000đ) - Duyệt ngay 1 cấp
+            if (request.Status != "pending")
+            {
+                throw new BusinessException($"Chỉ có thể phê duyệt yêu cầu rút tiền đang ở trạng thái Chờ duyệt. Trạng thái hiện tại: {request.Status}.");
+            }
+
+            request.Status = "completed";
+            request.ProcessedBy = adminMemberId;
+            request.ProcessedAt = now;
+            request.UpdatedAt = now;
+
+            if (request.Transaction != null)
+            {
+                request.Transaction.Label = FitLabel($"Rút tiền về {request.BankAccount.BankName} · {request.BankAccount.AccountNumberMask} (Thành công{refText})");
+            }
+
+            await _dbContext.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Admin {AdminMemberId} đã phê duyệt yêu cầu rút tiền #{RequestId} ({Amount:N0}đ) cho User {UserId}.",
+                adminMemberId, withdrawalId, request.Amount, request.UserId);
+
+            var response = MapToDto(request, request.BankAccount);
+            response.RequiresMakerChecker = false;
+            response.AwaitingChecker = false;
+            response.Message = "Phê duyệt rút tiền thành công.";
+            return response;
         }
 
-        await _dbContext.SaveChangesAsync(ct);
+        // Trường hợp rút tiền lớn (> 5.000.000đ) - Áp dụng Maker-Checker 2 bước
+        var settingKey = $"withdrawal_maker_{withdrawalId}";
 
-        _logger.LogInformation("Admin {AdminMemberId} đã phê duyệt yêu cầu rút tiền #{RequestId} ({Amount:N0}đ) cho User {UserId}.",
-            adminMemberId, withdrawalId, request.Amount, request.UserId);
+        if (request.Status == "pending")
+        {
+            // DT01-3: Bước 1 - Maker duyệt/đề xuất cấp 1
+            var makerInfo = new WithdrawalMakerInfo
+            {
+                MakerUserId = adminUserId,
+                MakerMemberId = adminMemberId,
+                MakerName = adminName,
+                MakerAt = now,
+                Note = cleanNote
+            };
 
-        return MapToDto(request, request.BankAccount);
+            var makerSetting = await _dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == settingKey, ct);
+            if (makerSetting != null)
+            {
+                makerSetting.Value = JsonSerializer.Serialize(makerInfo);
+                makerSetting.UpdatedAt = now;
+            }
+            else
+            {
+                await _dbContext.SystemSettings.AddAsync(new SystemSetting
+                {
+                    Key = settingKey,
+                    Value = JsonSerializer.Serialize(makerInfo),
+                    Description = $"Maker metadata for withdrawal #{withdrawalId}",
+                    UpdatedAt = now
+                }, ct);
+            }
+
+            request.Status = "processing";
+            request.ProcessedBy = adminMemberId;
+            request.UpdatedAt = now;
+
+            if (request.Transaction != null)
+            {
+                request.Transaction.Label = FitLabel($"Rút tiền về {request.BankAccount.BankName} · {request.BankAccount.AccountNumberMask} (Chờ duyệt cấp 2 - Maker: {adminName}{refText})");
+            }
+
+            await _dbContext.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Maker {AdminMemberId} ({AdminName}) đã phê duyệt Bước 1 cho yêu cầu rút tiền lớn #{RequestId} ({Amount:N0}đ). Đang chờ Checker phê duyệt cấp 2.",
+                adminMemberId, adminName, withdrawalId, request.Amount);
+
+            var response = MapToDto(request, request.BankAccount);
+            response.RequiresMakerChecker = true;
+            response.AwaitingChecker = true;
+            response.Message = "Yêu cầu rút tiền lớn (> 5.000.000đ) đã được Maker duyệt bước 1. Đang chờ Checker phê duyệt cấp 2.";
+            return response;
+        }
+        else if (request.Status == "processing")
+        {
+            // DT01-4 & DT01-5: Bước 2 - Checker duyệt cấp 2
+            var makerSetting = await _dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == settingKey, ct);
+            WithdrawalMakerInfo? makerInfo = null;
+
+            if (makerSetting != null && !string.IsNullOrWhiteSpace(makerSetting.Value))
+            {
+                try
+                {
+                    makerInfo = JsonSerializer.Deserialize<WithdrawalMakerInfo>(makerSetting.Value);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Không thể giải mã dữ liệu Maker cho yêu cầu #{RequestId}", withdrawalId);
+                }
+            }
+
+            // DT01-4: Chặn Checker trùng Maker (Maker == Checker)
+            if (makerInfo != null && (makerInfo.MakerUserId == adminUserId || (makerInfo.MakerMemberId.HasValue && makerInfo.MakerMemberId == adminMemberId)))
+            {
+                throw new BusinessException("[E-SEC-02] Checker phải là Quản trị viên độc lập, khác với Maker đã duyệt bước 1. Cấm tự phê duyệt kép (Maker != Checker).");
+            }
+
+            // DT01-5: Duyệt thành công bởi Checker
+            request.Status = "completed";
+            request.ProcessedBy = adminMemberId;
+            request.ProcessedAt = now;
+            request.UpdatedAt = now;
+
+            var makerTag = makerInfo != null ? $"Maker: {makerInfo.MakerName}, " : "";
+            if (request.Transaction != null)
+            {
+                request.Transaction.Label = FitLabel($"Rút tiền về {request.BankAccount.BankName} · {request.BankAccount.AccountNumberMask} (Thành công - {makerTag}Checker: {adminName}{refText})");
+            }
+
+            if (makerSetting != null)
+            {
+                _dbContext.SystemSettings.Remove(makerSetting);
+            }
+
+            await _dbContext.SaveChangesAsync(ct);
+
+            _logger.LogInformation("Checker {AdminMemberId} ({AdminName}) đã phê duyệt Bước 2 cho yêu cầu rút tiền lớn #{RequestId} ({Amount:N0}đ). Maker: {MakerName}. Hoàn tất giải ngân.",
+                adminMemberId, adminName, withdrawalId, request.Amount, makerInfo?.MakerName ?? "N/A");
+
+            var response = MapToDto(request, request.BankAccount);
+            response.RequiresMakerChecker = true;
+            response.AwaitingChecker = false;
+            response.Message = "Checker đã phê duyệt cấp 2 thành công. Tiền đã được giải ngân.";
+            return response;
+        }
+        else
+        {
+            throw new BusinessException($"Chỉ có thể phê duyệt yêu cầu rút tiền đang ở trạng thái Chờ duyệt hoặc Chờ Checker duyệt cấp 2. Trạng thái hiện tại: {request.Status}.");
+        }
     }
 
     public async Task<WithdrawalResponseDto> RejectWithdrawalAsync(
@@ -287,16 +426,30 @@ public class WithdrawalService : IWithdrawalService
             throw new KeyNotFoundException($"Không tìm thấy yêu cầu rút tiền #{withdrawalId}.");
         }
 
-        if (request.Status != "pending")
+        // [DT01-1] Chống tự thao tác trên yêu cầu rút tiền của chính mình
+        if (request.UserId == adminUserId)
         {
-            throw new BusinessException($"Chỉ có thể từ chối yêu cầu rút tiền đang ở trạng thái Chờ duyệt. Trạng thái hiện tại: {request.Status}.");
+            throw new BusinessException("[E-SEC-01] Cấm tự phê duyệt hoặc thao tác trên yêu cầu rút tiền của chính mình.");
+        }
+
+        if (request.Status != "pending" && request.Status != "processing")
+        {
+            throw new BusinessException($"Chỉ có thể từ chối yêu cầu rút tiền đang ở trạng thái Chờ duyệt hoặc Chờ duyệt cấp 2. Trạng thái hiện tại: {request.Status}.");
         }
 
         var cleanReason = CleanText(rawReason, 150) ?? "Thông tin không hợp lệ";
         var adminMemberId = await EnsureAdminMemberIdAsync(adminUserId, ct);
         var now = DateTime.UtcNow;
 
-        // Khóa hàng ví và hoàn tiền lại cho người dùng
+        // Xóa thông tin Maker nếu có
+        var settingKey = $"withdrawal_maker_{withdrawalId}";
+        var makerSetting = await _dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == settingKey, ct);
+        if (makerSetting != null)
+        {
+            _dbContext.SystemSettings.Remove(makerSetting);
+        }
+
+        // Q-011: Khóa hàng ví và hoàn tiền lại 100% cho người dùng
         var wallet = await GetWalletWithLockAsync(request.UserId, ct);
 
         if (wallet != null)
@@ -335,7 +488,11 @@ public class WithdrawalService : IWithdrawalService
         _logger.LogInformation("Admin {AdminMemberId} đã từ chối yêu cầu rút #{RequestId} ({Amount:N0}đ), hoàn tiền về ví User {UserId}. Lý do: {Reason}",
             adminMemberId, request.Id, request.Amount, request.UserId, cleanReason);
 
-        return MapToDto(request, request.BankAccount);
+        var response = MapToDto(request, request.BankAccount);
+        response.RequiresMakerChecker = request.Amount > LargeWithdrawalThreshold;
+        response.AwaitingChecker = false;
+        response.Message = "Yêu cầu rút tiền đã bị từ chối và tiền đã được hoàn 100% về ví người dùng.";
+        return response;
     }
 
     public async Task<WithdrawalPagedResultDto<WithdrawalResponseDto>> GetMyWithdrawalsAsync(
@@ -405,6 +562,31 @@ public class WithdrawalService : IWithdrawalService
             .Take(pageSize)
             .ToListAsync(ct);
 
+        // Tải metadata Maker cho các yêu cầu
+        var processingIds = rawList.Where(r => r.Status == "processing" || r.Amount > LargeWithdrawalThreshold).Select(r => r.Id).ToList();
+        var makerKeys = processingIds.Select(id => $"withdrawal_maker_{id}").ToList();
+        var makerSettings = await _dbContext.SystemSettings
+            .AsNoTracking()
+            .Where(s => makerKeys.Contains(s.Key))
+            .ToListAsync(ct);
+
+        var makerDict = new Dictionary<int, WithdrawalMakerInfo>();
+        foreach (var s in makerSettings)
+        {
+            if (s.Key.StartsWith("withdrawal_maker_") && int.TryParse(s.Key.Replace("withdrawal_maker_", ""), out var wId))
+            {
+                try
+                {
+                    var info = JsonSerializer.Deserialize<WithdrawalMakerInfo>(s.Value);
+                    if (info != null) makerDict[wId] = info;
+                }
+                catch
+                {
+                    // Bỏ qua lỗi parse JSON metadata
+                }
+            }
+        }
+
         // Lấy key 1 lần ngoài vòng lặp
         var key = _keyProvider.GetKey();
 
@@ -433,6 +615,9 @@ public class WithdrawalService : IWithdrawalService
                 }
             }
 
+            var requiresMakerChecker = r.Amount > LargeWithdrawalThreshold;
+            makerDict.TryGetValue(r.Id, out var maker);
+
             return new AdminWithdrawalItemDto
             {
                 Id = r.Id,
@@ -450,7 +635,13 @@ public class WithdrawalService : IWithdrawalService
                 Status = r.Status,
                 RejectReason = r.RejectReason,
                 CreatedAt = r.CreatedAt,
-                ProcessedAt = r.ProcessedAt
+                ProcessedAt = r.ProcessedAt,
+                RequiresMakerChecker = requiresMakerChecker,
+                MakerId = maker?.MakerUserId,
+                MakerName = maker?.MakerName,
+                MakerAt = maker?.MakerAt,
+                MakerNote = maker?.Note,
+                AwaitingChecker = requiresMakerChecker && r.Status == "processing"
             };
         }).ToList();
 
@@ -465,6 +656,7 @@ public class WithdrawalService : IWithdrawalService
 
     private static WithdrawalResponseDto MapToDto(WithdrawalRequest r, BankAccount? b)
     {
+        var requiresMakerChecker = r.Amount > LargeWithdrawalThreshold;
         return new WithdrawalResponseDto
         {
             Id = r.Id,
@@ -478,7 +670,9 @@ public class WithdrawalService : IWithdrawalService
             AccountHolderName = b?.AccountHolderName ?? "CHỦ TÀI KHOẢN",
             RejectReason = r.RejectReason,
             CreatedAt = r.CreatedAt,
-            ProcessedAt = r.ProcessedAt
+            ProcessedAt = r.ProcessedAt,
+            RequiresMakerChecker = requiresMakerChecker,
+            AwaitingChecker = requiresMakerChecker && r.Status == "processing"
         };
     }
 

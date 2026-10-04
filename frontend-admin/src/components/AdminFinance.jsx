@@ -8,6 +8,7 @@ import { exportTransactionsToExcel, exportTransactionsToCSV } from '../utils/fil
 import { getAdminWithdrawals, approveWithdrawal, rejectWithdrawal } from '../api/adminApi';
 import Icon from './Icon';
 import AdminModal from './AdminModal';
+import Pagination from './Pagination';
 
 export default function AdminFinance() {
   const { subscriptions, renewSubscription, cancelSubscription } = useAdmin();
@@ -21,6 +22,19 @@ export default function AdminFinance() {
   const [actionModal, setActionModal] = useState(null); // { type: 'approve' | 'reject', item }
   const [actionNote, setActionNote] = useState('');
   const [submittingAction, setSubmittingAction] = useState(false);
+
+  const [withdrawalPage, setWithdrawalPage] = useState(1);
+  const [withdrawalPageSize, setWithdrawalPageSize] = useState(10);
+
+  useEffect(() => {
+    setWithdrawalPage(1);
+  }, [withdrawalStatus]);
+
+  const withdrawalTotalPages = Math.ceil(withdrawals.length / withdrawalPageSize) || 1;
+  const pagedWithdrawals = React.useMemo(() => {
+    const start = (withdrawalPage - 1) * withdrawalPageSize;
+    return withdrawals.slice(start, start + withdrawalPageSize);
+  }, [withdrawals, withdrawalPage, withdrawalPageSize]);
 
   const fetchWithdrawals = async (status = withdrawalStatus) => {
     setLoadingWithdrawals(true);
@@ -177,15 +191,21 @@ export default function AdminFinance() {
             </h4>
             <span className="sub">Xét duyệt yêu cầu rút tiền về tài khoản ngân hàng chính chủ của người dùng</span>
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {['pending', 'completed', 'rejected', 'all'].map((st) => (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {[
+              { id: 'pending', label: 'Chờ duyệt' },
+              { id: 'processing', label: 'Chờ Checker (> 5tr)' },
+              { id: 'completed', label: 'Đã duyệt' },
+              { id: 'rejected', label: 'Đã từ chối' },
+              { id: 'all', label: 'Tất cả' }
+            ].map(({ id: st, label }) => (
               <button
                 key={st}
                 type="button"
                 className={`btn btn-sm ${withdrawalStatus === st ? 'btn-primary' : 'btn-outline'}`}
                 onClick={() => setWithdrawalStatus(st)}
               >
-                {st === 'pending' ? 'Chờ duyệt' : st === 'completed' ? 'Đã duyệt' : st === 'rejected' ? 'Đã từ chối' : 'Tất cả'}
+                {label}
               </button>
             ))}
           </div>
@@ -200,7 +220,8 @@ export default function AdminFinance() {
             Không có yêu cầu rút tiền nào trong mục này.
           </div>
         ) : (
-          <div className="adm-table-wrap">
+          <>
+            <div className="adm-table-wrap">
             <table className="adm-table">
               <thead>
                 <tr>
@@ -210,14 +231,17 @@ export default function AdminFinance() {
                   <th>Tài khoản thụ hưởng</th>
                   <th>Thời gian tạo</th>
                   <th>Trạng thái</th>
-                  <th>Hành động</th>
+                  <th style={{ width: 170 }}>Hành động</th>
                 </tr>
               </thead>
               <tbody>
-                {withdrawals.map((w) => {
+                {pagedWithdrawals.map((w) => {
                   const isPending = w.status === 'pending';
+                  const isAwaitingChecker = w.status === 'processing';
                   const isCompleted = w.status === 'completed';
                   const isRejected = w.status === 'rejected';
+                  const canAct = isPending || isAwaitingChecker;
+
                   return (
                     <tr key={w.id}>
                       <td style={{ fontWeight: 600, fontFamily: 'monospace' }}>{w.code || `#W-${w.id}`}</td>
@@ -226,7 +250,12 @@ export default function AdminFinance() {
                         <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>{w.userEmail}</div>
                       </td>
                       <td style={{ fontWeight: 700, color: 'var(--ink)' }}>
-                        {fmtVND(w.amount)}
+                        <div>{fmtVND(w.amount)}</div>
+                        {w.requiresMakerChecker && (
+                          <span style={{ fontSize: 10.5, background: '#ede9fe', color: '#6d28d9', padding: '1px 5px', borderRadius: 4, fontWeight: 700 }}>
+                            Maker-Checker
+                          </span>
+                        )}
                       </td>
                       <td>
                         <div style={{ fontWeight: 600 }}>{w.bankName}</div>
@@ -251,25 +280,31 @@ export default function AdminFinance() {
                         <span
                           className="chip"
                           style={{
-                            background: isCompleted ? '#dcfce7' : isRejected ? '#fee2e2' : '#fef3c7',
-                            color: isCompleted ? '#166534' : isRejected ? '#991b1b' : '#92400e',
+                            background: isCompleted ? '#dcfce7' : isRejected ? '#fee2e2' : isAwaitingChecker ? '#ede9fe' : '#fef3c7',
+                            color: isCompleted ? '#166534' : isRejected ? '#991b1b' : isAwaitingChecker ? '#5b21b6' : '#92400e',
                             fontWeight: 600
                           }}
                         >
-                          {isCompleted ? '✓ Đã duyệt' : isRejected ? '✗ Đã từ chối' : '⏳ Chờ duyệt'}
+                          {isCompleted ? '✓ Đã duyệt' : isRejected ? '✗ Đã từ chối' : isAwaitingChecker ? '🛡️ Chờ Checker' : '⏳ Chờ duyệt'}
                         </span>
-                        {w.adminNote && (
-                          <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 4 }}>
-                            {w.adminNote}
+                        {w.makerName && (
+                          <div style={{ fontSize: 11, color: '#6d28d9', marginTop: 3 }}>
+                            Maker: <strong>{w.makerName}</strong>
+                          </div>
+                        )}
+                        {w.rejectReason && (
+                          <div style={{ fontSize: 11.5, color: '#b91c1c', marginTop: 4 }}>
+                            {w.rejectReason}
                           </div>
                         )}
                       </td>
                       <td>
-                        {isPending ? (
+                        {canAct ? (
                           <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
                             <button
                               type="button"
-                              className="btn btn-primary btn-sm"
+                              className="cf-btn-primary"
+                              style={{ padding: '4px 10px', fontSize: 12 }}
                               disabled={w.decryptError || !w.accountNumberFull}
                               title={w.decryptError ? 'Không thể duyệt vì STK bị lỗi giải mã' : (!w.accountNumberFull ? 'Không thể duyệt vì thiếu STK đầy đủ' : 'Duyệt chi')}
                               onClick={() => {
@@ -277,12 +312,12 @@ export default function AdminFinance() {
                                 setActionNote('');
                               }}
                             >
-                              Duyệt chi
+                              {isAwaitingChecker ? 'Checker duyệt' : (w.requiresMakerChecker ? 'Maker duyệt' : 'Duyệt chi')}
                             </button>
                             <button
                               type="button"
-                              className="btn btn-outline btn-sm"
-                              style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
+                              className="cf-btn-secondary"
+                              style={{ padding: '4px 8px', fontSize: 12, color: '#b91c1c' }}
                               onClick={() => {
                                 setActionModal({ type: 'reject', item: w });
                                 setActionNote('');
@@ -301,7 +336,23 @@ export default function AdminFinance() {
               </tbody>
             </table>
           </div>
-        )}
+
+          {withdrawals.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <Pagination
+                currentPage={withdrawalPage}
+                totalPages={withdrawalTotalPages}
+                totalItems={withdrawals.length}
+                pageSize={withdrawalPageSize}
+                onPageChange={setWithdrawalPage}
+                onPageSizeChange={(sz) => { setWithdrawalPageSize(sz); setWithdrawalPage(1); }}
+                pageSizeOptions={[5, 10, 20, 50]}
+                itemLabel="yêu cầu rút tiền"
+              />
+            </div>
+          )}
+        </>
+      )}
       </div>
 
       {actionModal && (
@@ -313,11 +364,27 @@ export default function AdminFinance() {
           iconColor={actionModal.type === 'approve' ? 'var(--emerald)' : 'var(--rose)'}
           maxWidth={520}
         >
-          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, marginBottom: 16 }}>
-            {actionModal.type === 'approve'
-              ? `Bạn đang chuẩn bị duyệt yêu cầu rút ${fmtVND(actionModal.item.amount)} cho ${actionModal.item.userName} (${actionModal.item.bankName} - STK: ${actionModal.item.accountNumberFull || `${actionModal.item.accountNumberMask || '—'} (CẢNH BÁO: Chỉ có số mặt nạ)`} | Chủ TK: ${actionModal.item.accountHolderName || '—'}). Hãy đảm bảo lệnh chuyển khoản ngân hàng đã được thực hiện.`
-              : `Khi từ chối, số tiền ${fmtVND(actionModal.item.amount)} sẽ được tự động hoàn lại 100% vào ví của ${actionModal.item.userName}.`}
-          </p>
+          <div style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.5, marginBottom: 16 }}>
+            {actionModal.type === 'approve' ? (
+              <>
+                {actionModal.item.requiresMakerChecker && (
+                  <div style={{ background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 8, padding: '10px 12px', marginBottom: 12, fontSize: 13, color: '#5b21b6' }}>
+                    <strong>🛡️ Quy tắc Phê duyệt kép Maker-Checker (&gt; 5.000.000đ):</strong>
+                    {actionModal.item.status === 'processing'
+                      ? ` Bạn đang duyệt với vai trò Checker cấp 2. Maker đã duyệt: ${actionModal.item.makerName || 'Admin'}. (Lưu ý: Checker phải là Quản trị viên độc lập, khác Maker).`
+                      : ' Bạn đang duyệt với vai trò Maker bước 1. Sau khi duyệt, lệnh sẽ chuyển sang trạng thái Chờ Checker phê duyệt cấp 2.'}
+                  </div>
+                )}
+                <p>
+                  Bạn đang chuẩn bị duyệt yêu cầu rút <strong>{fmtVND(actionModal.item.amount)}</strong> cho {actionModal.item.userName} ({actionModal.item.bankName} - STK: {actionModal.item.accountNumberFull || `${actionModal.item.accountNumberMask || '—'} (CẢNH BÁO: Chỉ có số mặt nạ)`} | Chủ TK: {actionModal.item.accountHolderName || '—'}). Hãy đảm bảo lệnh chuyển khoản ngân hàng đã được kiểm tra cẩn thận.
+                </p>
+              </>
+            ) : (
+              <p>
+                Khi từ chối, số tiền <strong>{fmtVND(actionModal.item.amount)}</strong> sẽ được tự động hoàn lại 100% vào ví của {actionModal.item.userName}.
+              </p>
+            )}
+          </div>
 
           <div style={{ marginBottom: 20 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>

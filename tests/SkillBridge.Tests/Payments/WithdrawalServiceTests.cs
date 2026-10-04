@@ -406,4 +406,285 @@ public class WithdrawalServiceTests
         Assert.Null(item.AccountNumberFull);
         Assert.Equal(bankAccount.AccountNumberMask, item.AccountNumberMask);
     }
+
+    [Fact]
+    public async Task ApproveWithdrawalAsync_ShouldThrow_E_SEC_01_WhenAdminApprovesOwnWithdrawal()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = CreateService(dbContext);
+
+        var adminUserId = 50;
+        dbContext.Users.Add(CreateValidUser(adminUserId, "admin50@skillbridge.vn", "Admin Fifty"));
+
+        var bankAccount = new BankAccount
+        {
+            Id = 50,
+            UserId = adminUserId,
+            BankName = "Vietcombank",
+            AccountNumberEncrypted = "enc",
+            AccountNumberMask = "****5050",
+            AccountHolderName = "ADMIN FIFTY",
+            IsVerified = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.BankAccounts.Add(bankAccount);
+
+        var request = new WithdrawalRequest
+        {
+            Id = 501,
+            UserId = adminUserId, // Cùng User ID với Admin đang thao tác
+            BankAccountId = 50,
+            Amount = 1000000m,
+            Status = "pending",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.WithdrawalRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        // Act & Assert (DT01-1)
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.ApproveWithdrawalAsync(adminUserId, 501, new AdminApproveWithdrawalDto()));
+
+        Assert.Contains("E-SEC-01", ex.Message);
+        Assert.Contains("Cấm tự phê duyệt", ex.Message);
+    }
+
+    [Fact]
+    public async Task ApproveWithdrawalAsync_LargeAmount_ShouldTransitionToProcessing_MakerStep1()
+    {
+        // Arrange (Số tiền > 5.000.000 VNĐ)
+        using var dbContext = CreateInMemoryDbContext();
+        var service = CreateService(dbContext);
+
+        var userId = 60;
+        var makerAdminId = 61;
+        dbContext.Users.Add(CreateValidUser(userId, "u60@test.com", "User Sixty"));
+        dbContext.Users.Add(CreateValidUser(makerAdminId, "maker@skillbridge.vn", "Maker Admin"));
+
+        var bankAccount = new BankAccount
+        {
+            Id = 60,
+            UserId = userId,
+            BankName = "MB Bank",
+            AccountNumberEncrypted = "enc",
+            AccountNumberMask = "****6060",
+            AccountHolderName = "USER SIXTY",
+            IsVerified = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.BankAccounts.Add(bankAccount);
+
+        var request = new WithdrawalRequest
+        {
+            Id = 601,
+            UserId = userId,
+            BankAccountId = 60,
+            Amount = 10000000m, // 10 triệu > 5 triệu
+            Status = "pending",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.WithdrawalRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        // Act - Maker duyệt Bước 1 (DT01-3)
+        var result = await service.ApproveWithdrawalAsync(makerAdminId, 601, new AdminApproveWithdrawalDto { Note = "Maker check ok" });
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("processing", result.Status);
+        Assert.True(result.RequiresMakerChecker);
+        Assert.True(result.AwaitingChecker);
+        Assert.Contains("duyệt bước 1", result.Message ?? "");
+
+        var inDb = await dbContext.WithdrawalRequests.FirstAsync(r => r.Id == 601);
+        Assert.Equal("processing", inDb.Status);
+
+        var setting = await dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == "withdrawal_maker_601");
+        Assert.NotNull(setting);
+        Assert.Contains("Maker Admin", setting.Value);
+    }
+
+    [Fact]
+    public async Task ApproveWithdrawalAsync_LargeAmount_ShouldThrow_E_SEC_02_WhenCheckerIsSameAsMaker()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = CreateService(dbContext);
+
+        var userId = 70;
+        var sameAdminId = 71;
+        dbContext.Users.Add(CreateValidUser(userId, "u70@test.com", "User Seventy"));
+        dbContext.Users.Add(CreateValidUser(sameAdminId, "sameadmin@skillbridge.vn", "Same Admin"));
+
+        var bankAccount = new BankAccount
+        {
+            Id = 70,
+            UserId = userId,
+            BankName = "Techcombank",
+            AccountNumberEncrypted = "enc",
+            AccountNumberMask = "****7070",
+            AccountHolderName = "USER SEVENTY",
+            IsVerified = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.BankAccounts.Add(bankAccount);
+
+        var request = new WithdrawalRequest
+        {
+            Id = 701,
+            UserId = userId,
+            BankAccountId = 70,
+            Amount = 8000000m,
+            Status = "pending",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.WithdrawalRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        // Maker duyệt bước 1
+        await service.ApproveWithdrawalAsync(sameAdminId, 701, new AdminApproveWithdrawalDto { Note = "Step 1" });
+
+        // Act & Assert - Cùng admin duyệt bước 2 (DT01-4)
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.ApproveWithdrawalAsync(sameAdminId, 701, new AdminApproveWithdrawalDto { Note = "Step 2" }));
+
+        Assert.Contains("E-SEC-02", ex.Message);
+        Assert.Contains("Checker phải là Quản trị viên độc lập", ex.Message);
+    }
+
+    [Fact]
+    public async Task ApproveWithdrawalAsync_LargeAmount_ShouldComplete_WhenCheckerIsDifferentAdmin()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = CreateService(dbContext);
+
+        var userId = 80;
+        var makerAdminId = 81;
+        var checkerAdminId = 82;
+        dbContext.Users.Add(CreateValidUser(userId, "u80@test.com", "User Eighty"));
+        dbContext.Users.Add(CreateValidUser(makerAdminId, "maker81@skillbridge.vn", "Maker EightyOne"));
+        dbContext.Users.Add(CreateValidUser(checkerAdminId, "checker82@skillbridge.vn", "Checker EightyTwo"));
+
+        var bankAccount = new BankAccount
+        {
+            Id = 80,
+            UserId = userId,
+            BankName = "VietinBank",
+            AccountNumberEncrypted = "enc",
+            AccountNumberMask = "****8080",
+            AccountHolderName = "USER EIGHTY",
+            IsVerified = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.BankAccounts.Add(bankAccount);
+
+        var request = new WithdrawalRequest
+        {
+            Id = 801,
+            UserId = userId,
+            BankAccountId = 80,
+            Amount = 15000000m,
+            Status = "pending",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.WithdrawalRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        // Maker duyệt bước 1
+        await service.ApproveWithdrawalAsync(makerAdminId, 801, new AdminApproveWithdrawalDto { Note = "UNC Step 1" });
+
+        // Act - Checker duyệt bước 2 (DT01-5)
+        var result = await service.ApproveWithdrawalAsync(checkerAdminId, 801, new AdminApproveWithdrawalDto { Note = "UNC Step 2 OK" });
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("completed", result.Status);
+        Assert.False(result.AwaitingChecker);
+        Assert.Contains("cấp 2 thành công", result.Message ?? "");
+
+        var inDb = await dbContext.WithdrawalRequests.FirstAsync(r => r.Id == 801);
+        Assert.Equal("completed", inDb.Status);
+        Assert.NotNull(inDb.ProcessedAt);
+
+        // Setting tạm thời được dọn dẹp
+        var setting = await dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == "withdrawal_maker_801");
+        Assert.Null(setting);
+    }
+
+    [Fact]
+    public async Task RejectWithdrawalAsync_ShouldRefundAndCleanMakerSetting_WhenRequestInProcessing()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = CreateService(dbContext);
+
+        var userId = 90;
+        var makerAdminId = 91;
+        var rejectAdminId = 92;
+        dbContext.Users.Add(CreateValidUser(userId, "u90@test.com", "User Ninety"));
+        dbContext.Users.Add(CreateValidUser(makerAdminId, "maker91@skillbridge.vn", "Maker NinetyOne"));
+        dbContext.Users.Add(CreateValidUser(rejectAdminId, "rejector92@skillbridge.vn", "Rejector NinetyTwo"));
+        dbContext.Wallets.Add(new Wallet { UserId = userId, Balance = 100000m });
+
+        var bankAccount = new BankAccount
+        {
+            Id = 90,
+            UserId = userId,
+            BankName = "ACB",
+            AccountNumberEncrypted = "enc",
+            AccountNumberMask = "****9090",
+            AccountHolderName = "USER NINETY",
+            IsVerified = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.BankAccounts.Add(bankAccount);
+
+        var request = new WithdrawalRequest
+        {
+            Id = 901,
+            UserId = userId,
+            BankAccountId = 90,
+            Amount = 6000000m,
+            Status = "pending",
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+        dbContext.WithdrawalRequests.Add(request);
+        await dbContext.SaveChangesAsync();
+
+        // Bước 1: Maker duyệt
+        await service.ApproveWithdrawalAsync(makerAdminId, 901, new AdminApproveWithdrawalDto { Note = "Step 1" });
+
+        // Act: Checker phát hiện sai lệch và từ chối ở bước 2
+        var rejectDto = new AdminRejectWithdrawalDto { Reason = "Phát hiện dấu hiệu gian lận tài khoản nhận tiền" };
+        var result = await service.RejectWithdrawalAsync(rejectAdminId, 901, rejectDto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal("rejected", result.Status);
+        Assert.Equal(rejectDto.Reason, result.RejectReason);
+
+        // Hoàn 100% tiền về ví
+        var wallet = await dbContext.Wallets.FirstAsync(w => w.UserId == userId);
+        Assert.Equal(6100000m, wallet.Balance); // 100.000 + 6.000.000
+
+        var refundTx = await dbContext.Transactions.FirstOrDefaultAsync(t => t.ReferenceId == 901 && t.Type == "withdraw_refund");
+        Assert.NotNull(refundTx);
+        Assert.Equal(6000000m, refundTx.Amount);
+
+        // Setting Maker được dọn dẹp
+        var setting = await dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == "withdrawal_maker_901");
+        Assert.Null(setting);
+    }
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { getPaymentOrderStatus } from '../../api/paymentApi';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { connectPaymentRealtime } from '../../services/paymentSignalR';
@@ -7,7 +7,6 @@ import Icon from '../../components/Icon';
 
 export default function PaymentResult() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const { refreshWallet } = useStore();
 
   const orderCode = searchParams.get('orderCode');
@@ -29,7 +28,7 @@ export default function PaymentResult() {
       }
     } catch {
       setOrder((prev) => ({
-        ...(prev || {}),
+        ...prev,
         status: 'paid',
         paidAt: payload?.paidAt || new Date().toISOString(),
       }));
