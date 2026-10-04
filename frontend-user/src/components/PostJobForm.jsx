@@ -77,6 +77,7 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
     const [location, setLocation] = useState('TP.HCM');
     const [durationDays, setDurationDays] = useState(3);
     const [durationHours, setDurationHours] = useState(0);
+    const [revisionLimit, setRevisionLimit] = useState(2);
     const [requirementsText, setRequirementsText] = useState('');
     const [attachments, setAttachments] = useState([]);
     const [isDragging, setIsDragging] = useState(false);
@@ -111,6 +112,9 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                     }
                     if (detail.requirements && Array.isArray(detail.requirements)) {
                         setRequirementsText(detail.requirements.map((r) => (typeof r === 'string' ? r : r.requirementText || '')).join('\n'));
+                    }
+                    if (detail.revisionLimit !== undefined && detail.revisionLimit !== null) {
+                        setRevisionLimit(detail.revisionLimit);
                     }
                     const atts = (detail.attachments || []).map((a) => ({
                         id: a.id,
@@ -252,6 +256,7 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
             budget: numBudget,
             isUrgent: urgent,
             deadlineAt: calculatedDeadlineAt,
+            revisionLimit: Number(revisionLimit) >= 0 ? Number(revisionLimit) : 2,
             requirements: reqList.length > 0 ? reqList : ['Hoàn thành đúng tiến độ cam kết', 'Bàn giao sản phẩm chất lượng'],
         };
 
@@ -596,6 +601,61 @@ export default function PostJobForm({ onDone, onCancelEdit }) {
                                 <span>{preset.label}</span>
                             </button>
                         ))}
+                    </div>
+                </div>
+
+                {/* Giới hạn số lần yêu cầu chỉnh sửa (Revision Limit) */}
+                <div className="field">
+                    <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                            <Icon name="edit" style={{ width: 15, height: 15, color: 'var(--primary)' }} />
+                            <span>Giới hạn số lần chỉnh sửa sản phẩm (Revision Limit)</span>
+                        </span>
+                        <span style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600 }}>
+                            {Number(revisionLimit) === 0 ? 'Không cho sửa (Chỉ nghiệm thu 1 lần)' : `Tối đa ${revisionLimit} lần sửa`}
+                        </span>
+                    </label>
+                    <p style={{ margin: '0 0 10px', fontSize: 12.5, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
+                        Số lần tối đa bạn có thể yêu cầu sinh viên làm lại trước khi nghiệm thu hoặc chuyển sang Ban Trọng tài phân xử.
+                    </p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                        {[
+                            { val: 1, label: '1 lần (Dự án nhanh / Chuẩn xác)' },
+                            { val: 2, label: '2 lần (Tiêu chuẩn đề xuất)' },
+                            { val: 3, label: '3 lần (Linh hoạt cho thiết kế)' },
+                            { val: 5, label: '5 lần (Dự án phức tạp)' },
+                        ].map((opt) => (
+                            <button
+                                key={opt.val}
+                                type="button"
+                                className="btn btn-outline btn-sm"
+                                style={{
+                                    fontSize: 12,
+                                    padding: '6px 12px',
+                                    borderRadius: 8,
+                                    background: Number(revisionLimit) === opt.val ? 'rgba(108, 76, 255, 0.12)' : 'var(--surface)',
+                                    borderColor: Number(revisionLimit) === opt.val ? 'var(--primary)' : 'var(--border)',
+                                    color: Number(revisionLimit) === opt.val ? 'var(--primary)' : 'var(--ink)',
+                                    fontWeight: Number(revisionLimit) === opt.val ? 700 : 500,
+                                }}
+                                onClick={() => setRevisionLimit(opt.val)}
+                            >
+                                {Number(revisionLimit) === opt.val && '✓ '}
+                                {opt.label}
+                            </button>
+                        ))}
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
+                            <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Tùy chỉnh:</span>
+                            <input
+                                type="number"
+                                min="0"
+                                max="10"
+                                style={{ width: 64, padding: '4px 8px', fontSize: 12.5, borderRadius: 6, textAlign: 'center' }}
+                                value={revisionLimit}
+                                onChange={(e) => setRevisionLimit(Math.max(0, Math.min(10, Number(e.target.value) || 0)))}
+                            />
+                            <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>lần</span>
+                        </div>
                     </div>
                 </div>
 

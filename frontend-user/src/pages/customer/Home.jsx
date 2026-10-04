@@ -5,6 +5,7 @@ import useCounter from '../../hooks/useCounter';
 import HomeAdCarousel from '../../components/HomeAdCarousel';
 import FaqItem from '../../components/FaqItem';
 import Avatar from '../../components/Avatar';
+import { useStore } from '../../context/StoreContext';
 
 function Counter({ target, suffix }) {
   const [ref, display] = useCounter(target, suffix);
@@ -32,7 +33,11 @@ const faqs = [
 
 export default function Home() {
   const navigate = useNavigate();
+  const { state } = useStore();
   useReveal();
+
+  const isLoggedIn = !!state.currentUser;
+  const isStudent = state.currentUser?.roleCode === 'student' || state.role === 'student';
 
   return (
     <div className="page active">
@@ -50,12 +55,36 @@ export default function Home() {
               email trường, minh bạch và không cần kinh nghiệm dày dạn để bắt đầu.
             </p>
             <div className="hero-ctas">
-              <button className="btn btn-lime" onClick={() => navigate('/auth?tab=register')}>
-                Tôi là sinh viên <Icon name="arrow" style={{ width: 16, height: 16 }} />
-              </button>
-              <button className="btn btn-outline" onClick={() => navigate('/post-job')}>
-                Tôi là nhà tuyển dụng
-              </button>
+              {isLoggedIn ? (
+                isStudent ? (
+                  <>
+                    <button className="btn btn-lime" onClick={() => navigate('/jobs')}>
+                      Khám phá việc làm <Icon name="arrow" style={{ width: 16, height: 16 }} />
+                    </button>
+                    <button className="btn btn-outline" onClick={() => navigate('/mywork')}>
+                      Công việc của tôi
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button className="btn btn-lime" onClick={() => navigate('/employer/post-job')}>
+                      Đăng tin tuyển dụng <Icon name="arrow" style={{ width: 16, height: 16 }} />
+                    </button>
+                    <button className="btn btn-outline" onClick={() => navigate('/employer/dashboard')}>
+                      Quản lý tuyển dụng
+                    </button>
+                  </>
+                )
+              ) : (
+                <>
+                  <button className="btn btn-lime" onClick={() => navigate('/auth?tab=register')}>
+                    Tôi là sinh viên <Icon name="arrow" style={{ width: 16, height: 16 }} />
+                  </button>
+                  <button className="btn btn-outline" onClick={() => navigate('/post-job')}>
+                    Tôi là nhà tuyển dụng
+                  </button>
+                </>
+              )}
             </div>
             <div className="stat-row">
               <div className="stat">
@@ -314,9 +343,21 @@ export default function Home() {
             <h3>Sẵn sàng biến kỹ năng thành thu nhập?</h3>
             <p>Tham gia cộng đồng sinh viên freelancer đầu tiên được xác thực toàn diện tại Việt Nam.</p>
           </div>
-          <button className="btn btn-lime" onClick={() => navigate('/auth?tab=register')}>
-            Đăng ký ngay — miễn phí
-          </button>
+          {isLoggedIn ? (
+            isStudent ? (
+              <button className="btn btn-lime" onClick={() => navigate('/jobs')}>
+                Khám phá việc làm ngay
+              </button>
+            ) : (
+              <button className="btn btn-lime" onClick={() => navigate('/employer/post-job')}>
+                Đăng tin tuyển dụng ngay
+              </button>
+            )
+          ) : (
+            <button className="btn btn-lime" onClick={() => navigate('/auth?tab=register')}>
+              Đăng ký ngay — miễn phí
+            </button>
+          )}
         </div>
       </section>
     </div>

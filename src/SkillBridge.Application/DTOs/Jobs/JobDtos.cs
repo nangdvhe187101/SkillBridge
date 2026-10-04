@@ -82,6 +82,7 @@ public class JobDetailDto
     public int RevisionCount { get; set; }
     public DateTime PostedAt { get; set; }
     public DateTime? DeadlineAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
     public int CategoryId { get; set; }
     public string CategoryName { get; set; } = string.Empty;
     public int EmployerId { get; set; }
