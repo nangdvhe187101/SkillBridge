@@ -182,6 +182,41 @@ public static class DbInitializer
         }
     }
 
+    public static async Task EnsureUserExtendedFieldsAsync(SkillBridgeDbContext context, ILogger? logger = null)
+    {
+        var columns = new (string Name, string Type)[]
+        {
+            ("headline", "VARCHAR(255) NULL"),
+            ("bio", "TEXT NULL"),
+            ("tax_code", "VARCHAR(50) NULL"),
+            ("representative", "VARCHAR(100) NULL"),
+            ("address", "VARCHAR(255) NULL"),
+            ("cover_image_url", "VARCHAR(500) NULL"),
+            ("skills_json", "TEXT NULL"),
+            ("education_json", "TEXT NULL"),
+            ("experience_json", "TEXT NULL"),
+            ("social_links_json", "TEXT NULL"),
+            ("benefits_json", "TEXT NULL"),
+            ("office_images_json", "TEXT NULL")
+        };
+
+        foreach (var (colName, colType) in columns)
+        {
+            try
+            {
+#pragma warning disable EF1002
+                var sql = $"ALTER TABLE `users` ADD COLUMN `{colName}` {colType};";
+                await context.Database.ExecuteSqlRawAsync(sql);
+#pragma warning restore EF1002
+                logger?.LogInformation("DbInitializer: Đã thêm cột {Column} vào bảng users thành công.", colName);
+            }
+            catch
+            {
+                // Bỏ qua nếu cột đã tồn tại hoặc lỗi tương thích
+            }
+        }
+    }
+
     public static async Task EnsureSubscriptionPlansSchemaAndSeedAsync(SkillBridgeDbContext context, ILogger? logger = null)
     {
         try

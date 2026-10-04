@@ -376,6 +376,7 @@ app.UseRateLimiter();
 
 app.MapControllers();
 app.MapGet("/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
 app.MapHub<SkillBridge.API.Hubs.PaymentHub>("/hubs/payment");
 app.MapHub<SkillBridge.API.Hubs.ChatHub>("/hubs/chat");
 
@@ -386,6 +387,7 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var dbContext = services.GetRequiredService<SkillBridge.Infrastructure.Data.SkillBridgeDbContext>();
+        await SkillBridge.Infrastructure.Data.DbInitializer.EnsureUserExtendedFieldsAsync(dbContext, logger);
         await SkillBridge.Infrastructure.Data.DbInitializer.SeedAdminAsync(dbContext, app.Configuration, logger);
         await SkillBridge.Infrastructure.Data.DbInitializer.EnsureChatSchemaAsync(dbContext, logger);
         await SkillBridge.Infrastructure.Data.DbInitializer.EnsureSubscriptionPlansSchemaAndSeedAsync(dbContext, logger);
