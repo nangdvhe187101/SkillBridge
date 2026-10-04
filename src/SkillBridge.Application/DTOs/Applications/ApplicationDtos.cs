@@ -36,6 +36,7 @@ public class JobApplicationResponseDto
     public DateTime AppliedAt { get; set; }
     public string? JobStatus { get; set; }
     public DateTime? DeadlineAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
     public int RevisionLimit { get; set; }
     public int RevisionCount { get; set; }
 }

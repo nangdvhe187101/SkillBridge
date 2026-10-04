@@ -8,7 +8,7 @@ import { submitKyc } from '../../api/kycApi';
 const CURRENT_YEAR = new Date().getFullYear();
 const GRAD_YEARS = Array.from({ length: 7 }, (_, i) => CURRENT_YEAR + i);
 
-export default function KycModal({ onClose, onSubmitted, currentKycStatus = null }) {
+export default function KycModal({ onClose, onSubmitted, currentKycStatus: _currentKycStatus = null }) {
     const toastCtx = useToast();
     const store = useStore();
     const showToast = toastCtx?.showToast || store?.showToast;

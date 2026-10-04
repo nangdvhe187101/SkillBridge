@@ -1,73 +1,150 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import Icon from './Icon';
-import { useAdmin } from '../context/AdminContext';
 import Pagination from './Pagination';
 import AdminModal from './AdminModal';
+import { useToast } from '../context/ToastContext';
+import {
+  getAdminUsers,
+  getAdminUserStats,
+  getAdminUserDetail,
+  toggleLockUser,
+  blacklistUser,
+  removeFromBlacklist,
+  adjustUserReliability,
+  verifyUserKyc,
+} from '../api/adminApi';
 
 const STATUS_CONFIG = {
-  active: { label: 'Đang hoạt động', color: '#16a34a', bg: 'rgba(22, 163, 74, 0.1)', border: 'rgba(22, 163, 74, 0.2)' },
-  pending: { label: 'Chờ xác thực', color: '#d97706', bg: 'rgba(234, 179, 8, 0.1)', border: 'rgba(234, 179, 8, 0.2)' },
-  locked: { label: 'Đã khoá', color: '#dc2626', bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.2)' },
-  blacklisted: { label: 'Blacklist', color: '#1f2937', bg: 'rgba(31, 41, 55, 0.1)', border: 'rgba(31, 41, 55, 0.2)' }
+  active: { label: 'Đang hoạt động', dot: '#16a34a', text: '#15803d' },
+  pending: { label: 'Chờ xác thực', dot: '#d97706', text: '#b45309' },
+  locked: { label: 'Đã khoá', dot: '#dc2626', text: '#b91c1c' },
+  blacklisted: { label: 'Blacklist', dot: '#4b5563', text: '#1f2937' },
 };
 
 export default function AdminUsers() {
-  const { users, blacklist, verifyUser, lockUser, blacklistUser, removeFromBlacklist, adjustReliability } = useAdmin();
+  const { showToast } = useToast();
+
+  // Filter & Pagination States
   const [activeSubTab, setActiveSubTab] = useState('all'); // 'all' | 'kyc' | 'blacklist'
   const [q, setQ] = useState('');
+  const [searchDebounce, setSearchDebounce] = useState('');
   const [roleF, setRoleF] = useState('all');
   const [statusF, setStatusF] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedIds, setSelectedIds] = useState([]);
 
+  // Data States
+  const [users, setUsers] = useState([]);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    studentsCount: 0,
+    employersCount: 0,
+    pendingKycCount: 0,
+    blacklistedCount: 0,
+    averageReliability: 0,
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
   // Modals state: { type: 'reliability' | 'history' | 'blacklist' | 'lockConfirm', user }
   const [modal, setModal] = useState(null);
+  const [userDetail, setUserDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  // Modal form states
   const [relValue, setRelValue] = useState(0);
   const [relNote, setRelNote] = useState('');
+  const [relError, setRelError] = useState('');
   const [blReason, setBlReason] = useState('');
   const [blError, setBlError] = useState('');
+  const [lockReason, setLockReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Debounce search input
   useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchDebounce(q.trim());
+      setCurrentPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [q]);
+
+  // Load stats
+  const fetchStats = useCallback(async () => {
+    try {
+      setStatsLoading(true);
+      const res = await getAdminUserStats();
+      if (res) {
+        setStats(res);
+      }
+    } catch (err) {
+      console.error('Lỗi tải thống kê người dùng:', err);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  // Load user list
+  const fetchUsers = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await getAdminUsers({
+        page: currentPage,
+        pageSize,
+        query: searchDebounce,
+        role: roleF,
+        status: statusF,
+        subTab: activeSubTab,
+      });
+
+      if (res) {
+        setUsers(res.items || []);
+        setTotalItems(res.totalItems || 0);
+        setTotalPages(res.totalPages || 1);
+      }
+    } catch (err) {
+      console.error('Lỗi tải danh sách người dùng:', err);
+      setError(err.message || 'Không thể tải danh sách tài khoản từ máy chủ.');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentPage, pageSize, searchDebounce, roleF, statusF, activeSubTab]);
+
+  useEffect(() => {
+    fetchStats();
+  }, [fetchStats]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
+
+  // Reset page when switching tabs or filters
+  const handleTabChange = (tab) => {
+    setActiveSubTab(tab);
     setCurrentPage(1);
-  }, [q, roleF, statusF, activeSubTab]);
+    setSelectedIds([]);
+  };
 
-  const list = useMemo(() => users.filter((u) => {
-    const matchesTab = activeSubTab === 'all'
-      ? true
-      : activeSubTab === 'kyc'
-      ? (u.kyc === 'pending' || u.status === 'pending')
-      : u.status === 'blacklisted';
+  const handleRoleChange = (e) => {
+    setRoleF(e.target.value);
+    setCurrentPage(1);
+  };
 
-    const matchesRole = roleF === 'all' || u.role === roleF;
-    const matchesStatus = statusF === 'all' || u.status === statusF;
-    const matchesQuery = q === '' ||
-      u.name.toLowerCase().includes(q.toLowerCase()) ||
-      u.email.toLowerCase().includes(q.toLowerCase()) ||
-      (u.school && u.school.toLowerCase().includes(q.toLowerCase()));
+  const handleStatusChange = (e) => {
+    setStatusF(e.target.value);
+    setCurrentPage(1);
+  };
 
-    return matchesTab && matchesRole && matchesStatus && matchesQuery;
-  }), [users, q, roleF, statusF, activeSubTab]);
-
-  const totalPages = Math.ceil(list.length / pageSize) || 1;
-  const pagedList = useMemo(() => {
-    const start = (currentPage - 1) * pageSize;
-    return list.slice(start, start + pageSize);
-  }, [list, currentPage, pageSize]);
-
-  // Cloudflare Horizontal Stats Bar
-  const stats = [
-    { label: 'Tổng người dùng', value: users.length, note: 'Tài khoản hoạt động' },
-    { label: 'Sinh viên (Talents)', value: users.filter((u) => u.role === 'student').length, note: 'Đã xác minh thẻ' },
-    { label: 'Nhà tuyển dụng', value: users.filter((u) => u.role === 'employer').length, note: 'Doanh nghiệp / Cá nhân' },
-    { label: 'Chờ duyệt eKYC', value: users.filter((u) => u.kyc === 'pending' || u.status === 'pending').length, note: 'Cần đối soát ngay' },
-    { label: 'Reliability TB', value: '88.5 / 100', note: 'Điểm tín nhiệm hệ thống' },
-  ];
-
+  // Selection Handlers
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedIds(pagedList.map((u) => u.id));
+      setSelectedIds(users.map((u) => u.id));
     } else {
       setSelectedIds([]);
     }
@@ -81,13 +158,27 @@ export default function AdminUsers() {
     }
   };
 
+  // Open Modals
   const openReliability = (u) => {
     setRelValue(u.reliability);
     setRelNote('');
+    setRelError('');
     setModal({ type: 'reliability', user: u });
   };
 
-  const openHistory = (u) => setModal({ type: 'history', user: u });
+  const openHistory = async (u) => {
+    setModal({ type: 'history', user: u });
+    setUserDetail(null);
+    setDetailLoading(true);
+    try {
+      const detail = await getAdminUserDetail(u.id);
+      setUserDetail(detail);
+    } catch (err) {
+      showToast(err.message || 'Không thể tải chi tiết người dùng.', 'ban');
+    } finally {
+      setDetailLoading(false);
+    }
+  };
 
   const openBlacklist = (u) => {
     setBlReason('');
@@ -96,28 +187,81 @@ export default function AdminUsers() {
   };
 
   const openLockConfirm = (u) => {
+    setLockReason('');
     setModal({ type: 'lockConfirm', user: u });
   };
 
+  // Actions
+  const handleVerifyKyc = async (userId) => {
+    try {
+      await verifyUserKyc(userId);
+      showToast('Đã phê duyệt eKYC thành công!', 'check');
+      fetchUsers();
+      fetchStats();
+    } catch (err) {
+      showToast(err.message || 'Lỗi phê duyệt eKYC.', 'ban');
+    }
+  };
+
+  const handleUnblacklist = async (userId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn gỡ tài khoản này khỏi danh sách Blacklist?')) return;
+    try {
+      await removeFromBlacklist(userId);
+      showToast('Đã gỡ khỏi Blacklist thành công!', 'check');
+      fetchUsers();
+      fetchStats();
+    } catch (err) {
+      showToast(err.message || 'Lỗi gỡ blacklist.', 'ban');
+    }
+  };
+
   const saveReliability = async () => {
+    setRelError('');
+    const newScore = Number(relValue);
+    const originalScore = modal?.user?.reliability ?? 100;
+    const delta = Math.abs(newScore - originalScore);
+
+    // Business Rule BR-ADM-07: Max change +-20
+    if (delta > 20) {
+      setRelError(`Quy tắc kiểm duyệt: Điểm điều chỉnh không được vượt quá ±20 điểm/lần (Hiện tại chênh lệch ${delta} điểm).`);
+      return;
+    }
+
+    if (!relNote.trim() || relNote.trim().length < 10) {
+      setRelError('Căn cứ điều chỉnh bắt buộc phải nhập tối thiểu 10 ký tự để lưu vết kiểm toán.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await adjustReliability(modal.user.id, Number(relValue), relNote.trim());
+      await adjustUserReliability(modal.user.id, newScore, relNote.trim());
+      showToast('Đã cập nhật Reliability Score thành công!', 'check');
       setModal(null);
+      fetchUsers();
+      fetchStats();
+    } catch (err) {
+      setRelError(err.message || 'Lỗi điều chỉnh điểm uy tín.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const saveBlacklist = async () => {
-    if (!blReason.trim()) {
-      setBlError('Vui lòng nhập lý do cụ thể để lưu vết vào nhật ký kiểm duyệt.');
+    setBlError('');
+    if (!blReason.trim() || blReason.trim().length < 10) {
+      setBlError('Vui lòng nêu rõ lý do vi phạm tối thiểu 10 ký tự để lưu vết vào nhật ký kiểm toán.');
       return;
     }
+
     setIsSubmitting(true);
     try {
       await blacklistUser(modal.user.id, blReason.trim());
+      showToast('Đã đưa tài khoản vào Blacklist Board!', 'ban');
       setModal(null);
+      fetchUsers();
+      fetchStats();
+    } catch (err) {
+      setBlError(err.message || 'Lỗi khi đưa vào Blacklist.');
     } finally {
       setIsSubmitting(false);
     }
@@ -126,12 +270,28 @@ export default function AdminUsers() {
   const confirmToggleLock = async () => {
     setIsSubmitting(true);
     try {
-      await lockUser(modal.user.id);
+      await toggleLockUser(modal.user.id, lockReason.trim());
+      const isLocking = modal?.user?.status !== 'locked';
+      showToast(isLocking ? 'Đã khóa tài khoản và hủy các phiên đăng nhập!' : 'Đã mở khóa tài khoản thành công.', 'check');
       setModal(null);
+      fetchUsers();
+      fetchStats();
+    } catch (err) {
+      showToast(err.message || 'Lỗi thay đổi trạng thái khóa tài khoản.', 'ban');
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Horizontal Stats Data Cards
+  const statsCards = [
+    { label: 'Tổng người dùng', value: statsLoading ? '—' : stats.totalUsers, note: 'Tổng số tài khoản trong hệ thống' },
+    { label: 'Sinh viên (Talents)', value: statsLoading ? '—' : stats.studentsCount, note: 'Tài khoản sinh viên tìm việc' },
+    { label: 'Nhà tuyển dụng', value: statsLoading ? '—' : stats.employersCount, note: 'Doanh nghiệp & cá nhân đăng tin' },
+    { label: 'Chờ duyệt eKYC', value: statsLoading ? '—' : stats.pendingKycCount, note: 'Hồ sơ chờ đối soát định danh' },
+    { label: 'Blacklist vi phạm', value: statsLoading ? '—' : stats.blacklistedCount, note: 'Bị cấm vĩnh viễn do vi phạm nghiêm trọng' },
+    { label: 'Reliability TB', value: statsLoading ? '—' : `${stats.averageReliability} / 100`, note: 'Điểm tín nhiệm trung bình toàn sàn' },
+  ];
 
   return (
     <div>
@@ -139,27 +299,27 @@ export default function AdminUsers() {
       <div className="cf-tabs-row">
         <button
           className={`cf-tab-btn ${activeSubTab === 'all' ? 'is-active' : ''}`}
-          onClick={() => setActiveSubTab('all')}
+          onClick={() => handleTabChange('all')}
         >
-          Danh sách tài khoản ({users.length})
+          Danh sách tài khoản ({stats.totalUsers})
         </button>
         <button
           className={`cf-tab-btn ${activeSubTab === 'kyc' ? 'is-active' : ''}`}
-          onClick={() => setActiveSubTab('kyc')}
+          onClick={() => handleTabChange('kyc')}
         >
-          Chờ duyệt eKYC ({users.filter((u) => u.kyc === 'pending' || u.status === 'pending').length})
+          Chờ duyệt eKYC ({stats.pendingKycCount})
         </button>
         <button
           className={`cf-tab-btn ${activeSubTab === 'blacklist' ? 'is-active' : ''}`}
-          onClick={() => setActiveSubTab('blacklist')}
+          onClick={() => handleTabChange('blacklist')}
         >
-          Blacklist vi phạm ({blacklist.length})
+          Blacklist vi phạm ({stats.blacklistedCount})
         </button>
       </div>
 
-      {/* Cloudflare Horizontal Stats Row (Hàng chỉ số ngang đặc trưng) */}
+      {/* Cloudflare Horizontal Stats Row */}
       <div className="cf-stats-row">
-        {stats.map((s) => (
+        {statsCards.map((s) => (
           <div className="cf-stat-col" key={s.label}>
             <span className="cf-stat-lbl">
               <span>{s.label}</span>
@@ -170,125 +330,136 @@ export default function AdminUsers() {
         ))}
       </div>
 
-      {/* Cloudflare Search Objects Toolbar */}
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, maxWidth: 540 }}>
-            <div style={{ position: 'relative', flex: 1 }}>
-              <input
-                type="text"
-                placeholder="Search accounts by name, email, university..."
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '7px 12px',
-                  borderRadius: 6,
-                  border: '1px solid #d1d5db',
-                  fontSize: 13,
-                  outline: 'none',
-                  background: '#ffffff'
-                }}
-              />
-            </div>
+      {/* Cloudflare Search & Filter Toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 280, maxWidth: 680 }}>
+          <div style={{ position: 'relative', flex: 1 }}>
+            <input
+              type="text"
+              placeholder="Tìm kiếm tài khoản theo tên, email, trường học..."
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '7px 12px',
+                borderRadius: 6,
+                border: '1px solid #d1d5db',
+                fontSize: 13,
+                outline: 'none',
+                background: '#ffffff',
+              }}
+            />
+          </div>
+          {q && (
             <button
               className="cf-btn-secondary"
-              onClick={() => {}}
-              style={{ padding: '7px 14px' }}
+              onClick={() => setQ('')}
+              style={{ padding: '7px 10px', fontSize: 12 }}
+              title="Xóa tìm kiếm"
             >
-              <span>🔍</span>
-              <span>Search</span>
+              ✕
             </button>
-          </div>
+          )}
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <select
-              value={roleF}
-              onChange={(e) => setRoleF(e.target.value)}
-              style={{
-                padding: '6px 10px',
-                borderRadius: 6,
-                border: '1px solid #d1d5db',
-                fontSize: 13,
-                background: '#ffffff',
-                color: '#374151'
-              }}
-            >
-              <option value="all">All Roles (Tất cả vai trò)</option>
-              <option value="student">Sinh viên</option>
-              <option value="employer">Nhà tuyển dụng</option>
-            </select>
+          <select
+            value={roleF}
+            onChange={handleRoleChange}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: '1px solid #d1d5db',
+              fontSize: 13,
+              background: '#ffffff',
+              color: '#374151',
+            }}
+          >
+            <option value="all">Tất cả vai trò</option>
+            <option value="student">Sinh viên</option>
+            <option value="employer">Nhà tuyển dụng</option>
+            <option value="admin">Quản trị viên</option>
+          </select>
 
-            <select
-              value={statusF}
-              onChange={(e) => setStatusF(e.target.value)}
-              style={{
-                padding: '6px 10px',
-                borderRadius: 6,
-                border: '1px solid #d1d5db',
-                fontSize: 13,
-                background: '#ffffff',
-                color: '#374151'
-              }}
-            >
-              <option value="all">All Statuses (Tất cả trạng thái)</option>
-              <option value="active">Đang hoạt động</option>
-              <option value="pending">Chờ xác thực</option>
-              <option value="locked">Đã khoá</option>
-              <option value="blacklisted">Blacklist</option>
-            </select>
-          </div>
+          <select
+            value={statusF}
+            onChange={handleStatusChange}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: '1px solid #d1d5db',
+              fontSize: 13,
+              background: '#ffffff',
+              color: '#374151',
+            }}
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="active">Đang hoạt động</option>
+            <option value="pending">Chờ xác thực</option>
+            <option value="locked">Đã khoá</option>
+            <option value="blacklisted">Blacklist</option>
+          </select>
         </div>
 
-        {/* Path Breadcrumb & Actions Bar */}
-        <div className="cf-action-toolbar">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, color: '#374151' }}>
-            <span style={{ fontWeight: 600 }}>skillbridge-users /</span>
-            <button
-              onClick={() => navigator.clipboard?.writeText('skillbridge-users')}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 12 }}
-              title="Copy path"
-            >
-              📋
-            </button>
-            <span style={{ fontSize: 12.5, color: '#6b7280', marginLeft: 8 }}>
-              ({list.length} accounts found)
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              className="cf-btn-secondary"
-              onClick={() => alert('Xuất danh sách tài khoản')}
-              title="Tải bảng tính Excel"
-            >
-              <span>📥</span>
-              <span>Export</span>
-            </button>
-
-            <button
-              className="cf-btn-primary"
-              onClick={() => alert('Tạo tài khoản mới')}
-            >
-              <span>+</span>
-              <span>Add account</span>
-            </button>
-
-            <button
-              className="cf-btn-secondary"
-              onClick={() => { setQ(''); setRoleF('all'); setStatusF('all'); }}
-              title="Làm mới dữ liệu"
-              style={{ padding: '7px 10px' }}
-            >
-              ↻
-            </button>
-          </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12.5, color: '#6b7280' }}>
+            Tìm thấy <b style={{ color: '#111827' }}>{totalItems}</b> tài khoản
+          </span>
+          <button
+            className="cf-btn-secondary"
+            onClick={() => {
+              fetchUsers();
+              fetchStats();
+            }}
+            title="Làm mới dữ liệu từ máy chủ"
+            style={{ padding: '6px 11px', fontSize: 12.5 }}
+            disabled={loading}
+          >
+            ↻ Làm mới
+          </button>
         </div>
       </div>
 
+      {/* Error Alert with Retry */}
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            marginBottom: 16,
+            borderRadius: 6,
+            background: '#fef2f2',
+            border: '1px solid #fecaca',
+            color: '#b91c1c',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            fontSize: 13,
+          }}
+        >
+          <span>⚠️ {error}</span>
+          <button
+            onClick={fetchUsers}
+            style={{
+              background: '#dc2626',
+              color: '#fff',
+              border: 'none',
+              borderRadius: 4,
+              padding: '4px 10px',
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
+          >
+            Thử lại
+          </button>
+        </div>
+      )}
+
       {/* Cloudflare Flat Data Table */}
       <div className="cf-table-container">
-        {pagedList.length === 0 ? (
+        {loading ? (
+          <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6b7280' }}>
+            <div style={{ fontSize: 24, marginBottom: 8, animation: 'spin 1s linear infinite' }}>⏳</div>
+            <div style={{ fontSize: 14 }}>Đang tải danh sách người dùng từ hệ thống...</div>
+          </div>
+        ) : users.length === 0 ? (
           <div style={{ padding: '48px 24px', textAlign: 'center', color: '#6b7280' }}>
             <div style={{ fontSize: 24, marginBottom: 8 }}>🔍</div>
             <div style={{ fontSize: 15, fontWeight: 600, color: '#111827', marginBottom: 4 }}>
@@ -311,21 +482,21 @@ export default function AdminUsers() {
                 <th style={{ width: 40, textAlign: 'center' }}>
                   <input
                     type="checkbox"
-                    checked={selectedIds.length === pagedList.length && pagedList.length > 0}
+                    checked={selectedIds.length === users.length && users.length > 0}
                     onChange={handleSelectAll}
                   />
                 </th>
-                <th style={{ minWidth: 260 }}>Objects (Tên / Email)</th>
+                <th style={{ minWidth: 260 }}>Objects (Tên / Email / SĐT)</th>
                 <th style={{ minWidth: 140 }}>Role</th>
                 <th style={{ minWidth: 130 }}>eKYC Status</th>
                 <th style={{ minWidth: 120 }}>Reliability</th>
                 <th style={{ minWidth: 140 }}>Account Status</th>
-                <th style={{ minWidth: 180, textAlign: 'right' }}>Actions</th>
+                <th style={{ minWidth: 200, textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {pagedList.map((u) => {
-                const statusConf = STATUS_CONFIG[u.status] || { label: u.status, color: '#4b5563', bg: '#f3f4f6' };
+              {users.map((u) => {
+                const statusConf = STATUS_CONFIG[u.status] || { label: u.status, color: '#4b5563', bg: '#f3f4f6', border: '#e5e7eb' };
                 const isSelected = selectedIds.includes(u.id);
 
                 return (
@@ -341,18 +512,34 @@ export default function AdminUsers() {
                     {/* Object Name (Folder link style) */}
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <span style={{ fontSize: 18, color: '#0051c3' }}>
-                          {u.role === 'employer' ? '🏢' : '👤'}
-                        </span>
+                        <div
+                          style={{
+                            width: 28,
+                            height: 28,
+                            borderRadius: '50%',
+                            background: u.role === 'admin' ? '#eff6ff' : u.role === 'employer' ? '#f0fdf4' : '#f9fafb',
+                            color: u.role === 'admin' ? '#1d4ed8' : u.role === 'employer' ? '#15803d' : '#4b5563',
+                            border: '1px solid #e5e7eb',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 12,
+                            fontWeight: 600,
+                            flexShrink: 0
+                          }}
+                        >
+                          {u.name?.charAt(0)?.toUpperCase() || 'U'}
+                        </div>
                         <div>
                           <span
                             className="cf-folder-link"
                             onClick={() => openHistory(u)}
+                            style={{ cursor: 'pointer', fontWeight: 600, color: '#0051c3' }}
                           >
                             {u.name}
                           </span>
                           <div style={{ fontSize: 12, color: '#6b7280', marginTop: 1 }}>
-                            {u.email} {u.school && u.school !== '—' ? `· ${u.school}` : ''}
+                            {u.email} {u.phone ? `· ${u.phone}` : ''} {u.school && u.school !== '—' ? `· ${u.school}` : ''}
                           </div>
                         </div>
                       </div>
@@ -361,7 +548,7 @@ export default function AdminUsers() {
                     {/* Role */}
                     <td>
                       <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>
-                        {u.role === 'student' ? 'Sinh viên' : 'Nhà tuyển dụng'}
+                        {u.role === 'student' ? 'Sinh viên' : u.role === 'employer' ? 'Nhà tuyển dụng' : 'Quản trị viên'}
                       </span>
                     </td>
 
@@ -371,14 +558,14 @@ export default function AdminUsers() {
                         style={{
                           display: 'inline-flex',
                           alignItems: 'center',
-                          gap: 4,
+                          gap: 5,
                           fontSize: 12,
-                          color: u.kyc === 'verified' ? '#16a34a' : '#d97706',
-                          fontWeight: 500
+                          color: u.kyc === 'verified' ? '#15803d' : u.kyc === 'rejected' ? '#b91c1c' : '#b45309',
+                          fontWeight: 500,
                         }}
                       >
-                        <span>{u.kyc === 'verified' ? '✓' : '⏳'}</span>
-                        <span>{u.kyc === 'verified' ? 'Verified' : 'Pending'}</span>
+                        <span style={{ fontSize: 11 }}>{u.kyc === 'verified' ? '●' : u.kyc === 'rejected' ? '●' : '○'}</span>
+                        <span>{u.kyc === 'verified' ? 'Verified' : u.kyc === 'rejected' ? 'Rejected' : 'Pending'}</span>
                       </span>
                     </td>
 
@@ -393,9 +580,9 @@ export default function AdminUsers() {
                           fontWeight: 600,
                           fontSize: 13,
                           cursor: 'pointer',
-                          padding: 0
+                          padding: 0,
                         }}
-                        title="Bấm để sửa điểm uy tín"
+                        title="Bấm để điều chỉnh điểm uy tín (±20 điểm)"
                       >
                         {u.reliability}/100 ✎
                       </button>
@@ -403,57 +590,60 @@ export default function AdminUsers() {
 
                     {/* Status Tag */}
                     <td>
-                      <span
-                        style={{
-                          display: 'inline-block',
-                          padding: '2px 8px',
-                          borderRadius: 4,
-                          fontSize: 11.5,
-                          fontWeight: 600,
-                          color: statusConf.color,
-                          background: statusConf.bg,
-                          border: `1px solid ${statusConf.border}`
-                        }}
-                      >
-                        {statusConf.label}
+                      <span className="cf-status-pill">
+                        <span className="cf-status-dot" style={{ background: statusConf.dot }} />
+                        <span style={{ color: statusConf.text }}>{statusConf.label}</span>
                       </span>
                     </td>
 
                     {/* Row Actions */}
                     <td style={{ textAlign: 'right' }}>
-                      <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                        {u.kyc !== 'verified' && (
+                      <div style={{ display: 'inline-flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
+                        <button
+                          className="cf-btn-ghost"
+                          onClick={() => openHistory(u)}
+                          title="Xem chi tiết & lịch sử tài khoản"
+                        >
+                          Chi tiết
+                        </button>
+
+                        {u.kyc === 'pending' && (
                           <button
                             className="cf-btn-secondary"
-                            onClick={() => verifyUser(u.id)}
-                            style={{ padding: '3px 8px', fontSize: 12, color: '#16a34a' }}
-                            title="Duyệt eKYC"
+                            onClick={() => handleVerifyKyc(u.id)}
+                            style={{ padding: '3px 8px', fontSize: 12 }}
+                            title="Duyệt eKYC hồ sơ"
                           >
-                            ✓ Duyệt
+                            Duyệt eKYC
                           </button>
                         )}
 
-                        <button
-                          className="cf-btn-secondary"
-                          onClick={() => openLockConfirm(u)}
-                          style={{
-                            padding: '3px 8px',
-                            fontSize: 12,
-                            color: u.status === 'locked' ? '#16a34a' : '#dc2626'
-                          }}
-                          title={u.status === 'locked' ? 'Mở khoá' : 'Khoá tài khoản'}
-                        >
-                          {u.status === 'locked' ? 'Mở khoá' : 'Khoá'}
-                        </button>
-
-                        <button
-                          className="cf-btn-secondary"
-                          onClick={() => openBlacklist(u)}
-                          style={{ padding: '3px 8px', fontSize: 12 }}
-                          title="Tùy chọn khác"
-                        >
-                          •••
-                        </button>
+                        {u.status === 'blacklisted' ? (
+                          <button
+                            className="cf-btn-secondary"
+                            onClick={() => handleUnblacklist(u.id)}
+                            style={{ padding: '3px 8px', fontSize: 12 }}
+                            title="Gỡ khỏi danh sách đen"
+                          >
+                            Ân xá
+                          </button>
+                        ) : (
+                          <div className="cf-btn-group">
+                            <button
+                              onClick={() => openLockConfirm(u)}
+                              title={u.status === 'locked' ? 'Mở khoá tài khoản' : 'Khoá tài khoản'}
+                            >
+                              {u.status === 'locked' ? 'Mở khoá' : 'Khoá'}
+                            </button>
+                            <button
+                              onClick={() => openBlacklist(u)}
+                              style={{ color: '#991b1b' }}
+                              title="Đưa vào danh sách đen"
+                            >
+                              Blacklist
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -462,40 +652,26 @@ export default function AdminUsers() {
             </tbody>
           </table>
         )}
-
-        {/* Drag and Drop Zone chuẩn Cloudflare */}
-        <div
-          style={{
-            padding: '22px 16px',
-            textAlign: 'center',
-            fontSize: 13,
-            color: '#6b7280',
-            borderTop: '1px dashed #e5e7eb',
-            background: '#fafafa',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8
-          }}
-        >
-          <span>☁️</span>
-          <span>Drag and drop CSV/Excel to import accounts or sync university batches</span>
-        </div>
       </div>
 
       {/* Pagination */}
       <Pagination
         currentPage={currentPage}
         totalPages={totalPages}
-        totalItems={list.length}
+        totalItems={totalItems}
         pageSize={pageSize}
         onPageChange={setCurrentPage}
-        onPageSizeChange={setPageSize}
+        onPageSizeChange={(newSize) => {
+          setPageSize(newSize);
+          setCurrentPage(1);
+        }}
         pageSizeOptions={[10, 20, 50]}
         itemLabel="accounts"
       />
 
       {/* --- Accessible Modals --- */}
+
+      {/* Modal Reliability */}
       <AdminModal
         isOpen={modal?.type === 'reliability'}
         onClose={() => setModal(null)}
@@ -504,7 +680,11 @@ export default function AdminUsers() {
         iconColor="#0051c3"
       >
         <p style={{ fontSize: 13.5, color: '#4b5563', marginBottom: 16 }}>
-          Điều chỉnh điểm uy tín của <b>{modal?.user?.name}</b> khi có khiếu nại hoặc đối soát lại. Điểm hiện tại: <b>{modal?.user?.reliability}/100</b>.
+          Điều chỉnh điểm uy tín của <b>{modal?.user?.name}</b>. Điểm hiện tại: <b>{modal?.user?.reliability}/100</b>.
+          <br />
+          <span style={{ fontSize: 12, color: '#b45309' }}>
+            ⚠️ Quy tắc kiểm duyệt BR-ADM-07: Biên độ thay đổi tối đa ±20 điểm/lần. Bắt buộc có lý do tối thiểu 10 ký tự.
+          </span>
         </p>
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
@@ -519,18 +699,25 @@ export default function AdminUsers() {
             style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#111827' }}
           />
         </div>
-        <div style={{ marginBottom: 20 }}>
+        <div style={{ marginBottom: 14 }}>
           <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-            Ghi chú căn cứ điều chỉnh
+            Ghi chú căn cứ điều chỉnh <span style={{ color: '#dc2626' }}>*</span>
           </label>
           <textarea
             value={relNote}
             onChange={(e) => setRelNote(e.target.value)}
-            placeholder="Ví dụ: Đã bồi thường và hoàn tất sản phẩm đúng cam kết..."
+            placeholder="Ví dụ: Đã khắc phục lỗi hoàn chỉnh sản phẩm và bồi thường đúng cam kết..."
             rows={3}
             style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#111827' }}
           />
         </div>
+
+        {relError && (
+          <div style={{ color: '#dc2626', fontSize: 12.5, marginBottom: 14, padding: '8px 12px', background: '#fef2f2', borderRadius: 6, border: '1px solid #fecaca' }}>
+            ⚠️ {relError}
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button className="cf-btn-secondary" onClick={() => setModal(null)} disabled={isSubmitting}>
             Huỷ
@@ -549,13 +736,27 @@ export default function AdminUsers() {
         icon={modal?.user?.status === 'locked' ? 'check' : 'lock'}
         iconColor={modal?.user?.status === 'locked' ? '#16a34a' : '#dc2626'}
       >
-        <p style={{ fontSize: 13.5, color: '#4b5563', marginBottom: 20, lineHeight: 1.5 }}>
+        <p style={{ fontSize: 13.5, color: '#4b5563', marginBottom: 14, lineHeight: 1.5 }}>
           {modal?.user?.status === 'locked' ? (
             <>Bạn có chắc chắn muốn mở khoá lại cho tài khoản <b>{modal?.user?.name}</b>? Người dùng này sẽ có thể đăng nhập và hoạt động bình thường.</>
           ) : (
-            <>Bạn có chắc chắn muốn khoá tài khoản của <b>{modal?.user?.name}</b> ({modal?.user?.email})? Tài khoản sẽ bị đình chỉ quyền đăng nhập và giao dịch trên sàn.</>
+            <>Bạn có chắc chắn muốn khoá tài khoản của <b>{modal?.user?.name}</b> ({modal?.user?.email})? Mọi phiên đăng nhập hiện tại sẽ bị thu hồi và hủy lập tức (`TokenVersion++`).</>
           )}
         </p>
+        {modal?.user?.status !== 'locked' && (
+          <div style={{ marginBottom: 16 }}>
+            <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+              Lý do khoá tài khoản (tuỳ chọn)
+            </label>
+            <input
+              type="text"
+              value={lockReason}
+              onChange={(e) => setLockReason(e.target.value)}
+              placeholder="Ví dụ: Nghi ngờ có hành vi gian lận thanh toán..."
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#111827' }}
+            />
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
           <button className="cf-btn-secondary" onClick={() => setModal(null)} disabled={isSubmitting}>
             Huỷ
@@ -580,16 +781,16 @@ export default function AdminUsers() {
         iconColor="#dc2626"
       >
         <p style={{ fontSize: 13.5, color: '#4b5563', marginBottom: 14 }}>
-          Bạn đang đưa tài khoản <b>{modal?.user?.name}</b> ({modal?.user?.email}) vào danh sách đen. Tài khoản này sẽ bị khoá quyền ứng tuyển và đăng tin.
+          Bạn đang đưa tài khoản <b>{modal?.user?.name}</b> ({modal?.user?.email}) vào danh sách đen vĩnh viễn. Tài khoản này sẽ bị cấm toàn diện mọi hành vi giao dịch và đăng tin.
         </p>
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-            Lý do vi phạm <span style={{ color: '#dc2626' }}>*</span>
+            Lý do vi phạm nghiêm trọng <span style={{ color: '#dc2626' }}>*</span>
           </label>
           <textarea
             value={blReason}
             onChange={(e) => { setBlReason(e.target.value); setBlError(''); }}
-            placeholder="Ví dụ: Quỵt tiền sinh viên sau khi nhận sản phẩm hoàn chỉnh, không phản hồi..."
+            placeholder="Ví dụ: Quỵt tiền lương dự án của sinh viên, giả mạo CCCD đối soát..."
             rows={3}
             style={{ width: '100%', padding: '8px 12px', borderRadius: 6, border: '1px solid #d1d5db', background: '#fff', color: '#111827' }}
           />
@@ -610,45 +811,87 @@ export default function AdminUsers() {
         </div>
       </AdminModal>
 
-      {/* Modal Profile / History */}
+      {/* Modal Profile / History Detail */}
       <AdminModal
         isOpen={modal?.type === 'history'}
         onClose={() => setModal(null)}
-        title="Hồ sơ & Chi tiết tài khoản"
+        title="Hồ sơ & Lịch sử tài khoản"
         icon="file-text"
         iconColor="#0051c3"
       >
-        <div style={{ padding: '4px 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-            <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#0051c3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 18 }}>
-              {modal?.user?.name?.charAt(0)}
+        {detailLoading ? (
+          <div style={{ padding: '32px 16px', textAlign: 'center', color: '#6b7280' }}>
+            <div style={{ fontSize: 20, marginBottom: 6 }}>⏳</div>
+            <div>Đang tải thông tin chi tiết hồ sơ...</div>
+          </div>
+        ) : (
+          <div style={{ padding: '4px 0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#0051c3', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 18 }}>
+                {modal?.user?.name?.charAt(0)}
+              </div>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>{modal?.user?.name}</div>
+                <div style={{ fontSize: 13, color: '#6b7280' }}>{modal?.user?.email}</div>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 700, color: '#111827' }}>{modal?.user?.name}</div>
-              <div style={{ fontSize: 13, color: '#6b7280' }}>{modal?.user?.email}</div>
+
+            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6b7280' }}>Số điện thoại (Unmasked)</span>
+                <b>{userDetail?.unmaskedPhone || modal?.user?.phone || '—'}</b>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6b7280' }}>Số CCCD / Định danh</span>
+                <b>{userDetail?.unmaskedIdCard || 'Chưa cung cấp'}</b>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6b7280' }}>Vai trò hệ thống</span>
+                <b>{modal?.user?.role === 'student' ? 'Sinh viên' : modal?.user?.role === 'employer' ? 'Nhà tuyển dụng' : 'Quản trị viên'}</b>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6b7280' }}>Số dư ví Escrow</span>
+                <b style={{ color: '#16a34a' }}>
+                  {userDetail?.walletBalance ? Number(userDetail.walletBalance).toLocaleString('vi-VN') + ' đ' : '0 đ'}
+                </b>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6b7280' }}>Trường ĐH / Tổ chức</span>
+                <b>{modal?.user?.school || userDetail?.companySize || '—'}</b>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6b7280' }}>Xác thực eKYC</span>
+                <b style={{ color: modal?.user?.kyc === 'verified' ? '#16a34a' : '#d97706' }}>
+                  {modal?.user?.kyc === 'verified' ? 'Đã xác thực' : 'Chờ xác thực'}
+                </b>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span style={{ color: '#6b7280' }}>Reliability Score</span>
+                <b style={{ color: '#0051c3' }}>{modal?.user?.reliability} / 100</b>
+              </div>
+            </div>
+
+            {/* Audit History Timeline */}
+            <div style={{ marginTop: 16, borderTop: '1px solid #e5e7eb', paddingTop: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 8 }}>
+                Lịch sử hoạt động & Kiểm toán:
+              </div>
+              {userDetail?.history && userDetail.history.length > 0 ? (
+                <div style={{ maxHeight: 150, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {userDetail.history.map((h, i) => (
+                    <div key={i} style={{ fontSize: 12, background: '#f9fafb', padding: '6px 10px', borderRadius: 4 }}>
+                      <span style={{ color: '#9ca3af', marginRight: 6 }}>[{h.time}]</span>
+                      <strong style={{ color: '#111827' }}>{h.action}</strong>
+                      {h.note && <span style={{ color: '#4b5563' }}>: {h.note}</span>}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: '#9ca3af' }}>Chưa có ghi nhận kiểm toán đặc biệt.</div>
+              )}
             </div>
           </div>
-          <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>Vai trò</span>
-              <b>{modal?.user?.role === 'student' ? 'Sinh viên' : 'Nhà tuyển dụng'}</b>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>Trường ĐH / Tổ chức</span>
-              <b>{modal?.user?.school || '—'}</b>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>Xác thực eKYC</span>
-              <b style={{ color: modal?.user?.kyc === 'verified' ? '#16a34a' : '#d97706' }}>
-                {modal?.user?.kyc === 'verified' ? 'Đã xác thực' : 'Chờ xác thực'}
-              </b>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: '#6b7280' }}>Reliability Score</span>
-              <b style={{ color: '#0051c3' }}>{modal?.user?.reliability} / 100</b>
-            </div>
-          </div>
-        </div>
+        )}
         <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end' }}>
           <button className="cf-btn-primary" onClick={() => setModal(null)}>
             Đóng

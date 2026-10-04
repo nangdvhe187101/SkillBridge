@@ -64,6 +64,7 @@ public class JobRepository : IJobRepository
             RevisionCount = job.Job.RevisionCount,
             PostedAt = job.Job.PostedAt,
             DeadlineAt = job.Job.DeadlineAt,
+            CompletedAt = (job.Job.Status == "completed" || job.Job.Status == "closed") ? job.Job.UpdatedAt : null,
             CategoryId = job.Job.CategoryId,
             CategoryName = job.CategoryName,
             EmployerId = job.Employer.Id,

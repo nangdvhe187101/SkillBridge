@@ -30,6 +30,7 @@ public class ApplicationService : IApplicationService
     private readonly IEscrowPaymentService _escrowPaymentService;
     private readonly IUserReliabilityService _reliabilityService;
     private readonly INotificationService _notificationService;
+    private readonly INotificationRealtimeNotifier? _realtimeNotifier;
     private readonly IEmailService? _emailService;
     private readonly ILogger<ApplicationService> _logger;
     private readonly ISubscriptionPlanConfigService? _planConfigService;
@@ -45,7 +46,8 @@ public class ApplicationService : IApplicationService
         INotificationService notificationService,
         ILogger<ApplicationService> logger,
         IEmailService? emailService = null,
-        ISubscriptionPlanConfigService? planConfigService = null)
+        ISubscriptionPlanConfigService? planConfigService = null,
+        INotificationRealtimeNotifier? realtimeNotifier = null)
     {
         _applicationRepository = applicationRepository;
         _jobRepository = jobRepository;
@@ -58,6 +60,7 @@ public class ApplicationService : IApplicationService
         _logger = logger;
         _emailService = emailService;
         _planConfigService = planConfigService;
+        _realtimeNotifier = realtimeNotifier;
     }
 
     public async Task<JobApplicationResponseDto> ApplyJobAsync(int studentId, ApplyJobRequest request)
@@ -275,6 +278,7 @@ public class ApplicationService : IApplicationService
             AppliedAt = a.AppliedAt,
             JobStatus = a.Job?.Status,
             DeadlineAt = a.Job?.DeadlineAt,
+            CompletedAt = (string.Equals(a.Job?.Status, "completed", StringComparison.OrdinalIgnoreCase) || string.Equals(a.Job?.Status, "closed", StringComparison.OrdinalIgnoreCase)) ? a.Job?.UpdatedAt : null,
             RevisionLimit = a.Job?.RevisionLimit ?? 2,
             RevisionCount = a.Job?.RevisionCount ?? 0
         }).ToList();
@@ -390,6 +394,15 @@ public class ApplicationService : IApplicationService
                         "🎉",
                         $"Chúc mừng! Bạn đã được chọn thực hiện công việc \"{currentJob.Title}\".",
                         "/mywork");
+
+                    if (_realtimeNotifier != null)
+                    {
+                        await _realtimeNotifier.NotifyApplicationStatusChangedAsync(
+                            currentApp.StudentId,
+                            currentJob.Id,
+                            "hired",
+                            currentJob.Title);
+                    }
                 }
                 catch (Exception ex)
                 {

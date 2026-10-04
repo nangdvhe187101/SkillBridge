@@ -152,6 +152,7 @@ if (!string.IsNullOrWhiteSpace(redisConnection))
 
 builder.Services.AddScoped<SkillBridge.Application.Interfaces.Payments.IPaymentRealtimeNotifier, SkillBridge.API.Services.SignalRPaymentRealtimeService>();
 builder.Services.AddScoped<SkillBridge.Application.Interfaces.Chat.IChatRealtimeNotifier, SkillBridge.API.Services.SignalRChatRealtimeService>();
+builder.Services.AddScoped<SkillBridge.Application.Interfaces.Notifications.INotificationRealtimeNotifier, SkillBridge.API.Services.SignalRNotificationRealtimeService>();
 builder.Services.AddSingleton<SkillBridge.Application.Interfaces.Chat.IUserPresenceService, SkillBridge.Infrastructure.Services.Chat.UserPresenceService>();
 builder.Services.AddSingleton<SkillBridge.Application.Common.IEncryptionKeyProvider, SkillBridge.Infrastructure.Services.Security.ConfigurationEncryptionKeyProvider>();
 builder.Services.AddHttpClient();

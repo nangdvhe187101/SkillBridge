@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import ModalShell from './ModalShell';
-import Icon from '../Icon';
 import { fmtVND } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { getDisputeDetail, addDisputeEvidence, getMyDisputes } from '../../api/disputeApi';

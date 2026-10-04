@@ -55,7 +55,7 @@ function ChatWindow({ conv, onClose }) {
     return (
         <div className={'msgr-window' + (minimized ? ' minimized' : '')}>
             <div className="msgr-window-head" onClick={() => minimized && setMinimized(false)}>
-                <Avatar src={conv.avatar} name={conv.name} fontSize={13} />
+                <Avatar src={conv.avatar || conv.avatarUrl || conv.otherUserAvatar} name={conv.name} fontSize={13} />
                 <div className="msgr-window-head-txt">
                     <b>{conv.name}</b>
                     <span>{conv.blocked ? 'Đã chặn' : conv.online ? '● Đang hoạt động' : 'Ngoại tuyến'}</span>
@@ -176,7 +176,7 @@ export default function MessengerWidget() {
                                 filtered.map((c) => (
                                     <button key={c.id} className="msgr-convo-item" onClick={() => openChat(c.id)}>
                                         <div className="msgr-convo-av">
-                                            <Avatar src={c.avatar} name={c.name} fontSize={13} />
+                                            <Avatar src={c.avatar || c.avatarUrl || c.otherUserAvatar} name={c.name} fontSize={13} />
                                             {c.online && <span className="msgr-online-dot" />}
                                         </div>
                                         <div className="msgr-convo-main">

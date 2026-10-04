@@ -57,7 +57,7 @@ export default function JobDetail() {
   const [searchParams, setSearchParams] = useSearchParams();
   const jobId = Number(id);
   const navigate = useNavigate();
-  const { state, applyJobAsync, toggleSaveJobAsync, uploadCvAsync, openChatWithPerson, startConversationWithUser } = useStore();
+  const { state, applyJobAsync, toggleSaveJobAsync, uploadCvAsync, openChatWithPerson, startConversationWithUser, refreshMyApplications } = useStore();
   const { openModal } = useModal();
   const { showToast } = useToast();
 
@@ -65,6 +65,8 @@ export default function JobDetail() {
   const [uploadCvModalOpen, setUploadCvModalOpen] = useState(false);
   const [selectedCvId, setSelectedCvId] = useState(null);
   const [coverLetter, setCoverLetter] = useState('');
+  const [proposedBudget, setProposedBudget] = useState('');
+  const [proposedDays, setProposedDays] = useState(3);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form upload CV nhanh
@@ -101,6 +103,10 @@ export default function JobDetail() {
     cat: apiJob.categoryName || 'Chung',
     categoryId: apiJob.categoryId,
     emp: apiJob.employerName || 'Nhà tuyển dụng',
+    employerId: apiJob.employerId || null,
+    employerAvatar: apiJob.employerAvatar || apiJob.employerAvatarUrl || apiJob.employer?.avatarUrl || null,
+    empAvatar: apiJob.employerAvatar || apiJob.employerAvatarUrl || apiJob.employer?.avatarUrl || null,
+    employerAvatarUrl: apiJob.employerAvatar || apiJob.employerAvatarUrl || apiJob.employer?.avatarUrl || null,
     loc: apiJob.location || 'Toàn quốc',
     budget: apiJob.budget || 0,
     urgent: !!apiJob.isUrgent,
@@ -122,6 +128,9 @@ export default function JobDetail() {
     attachments: Array.isArray(apiJob.attachments) ? apiJob.attachments : []
   } : (localJob ? {
     ...localJob,
+    employerAvatar: localJob.employerAvatar || localJob.empAvatar || localJob.employerAvatarUrl || null,
+    empAvatar: localJob.employerAvatar || localJob.empAvatar || localJob.employerAvatarUrl || null,
+    employerAvatarUrl: localJob.employerAvatar || localJob.empAvatar || localJob.employerAvatarUrl || null,
     deadlineAt: localJob.deadlineAt,
     postedAt: localJob.postedAt,
     req: Array.isArray(localJob.req) ? localJob.req : [],
@@ -205,6 +214,15 @@ export default function JobDetail() {
     } else {
       const defaultCv = cvList.find((c) => c.category === j.cat || c.categoryId === j.categoryId) || cvList[0];
       setSelectedCvId(defaultCv?.id || cvList[0].id);
+      if (j?.budget && !proposedBudget) {
+        setProposedBudget(String(j.budget));
+      }
+      if (j?.deadlineAt && j?.postedAt) {
+        const diffMs = new Date(j.deadlineAt).getTime() - new Date(j.postedAt).getTime();
+        if (diffMs > 0) {
+          setProposedDays(Math.max(1, Math.round(diffMs / 86400000)));
+        }
+      }
       setApplyModalOpen(true);
     }
   };
@@ -260,7 +278,14 @@ export default function JobDetail() {
     }
     setIsSubmitting(true);
     try {
-      await applyJobAsync(jobId, selectedCvId, coverLetter);
+      const numBudget = Number(proposedBudget) || j.budget;
+      const numDays = Number(proposedDays) || 3;
+      const proposalHeader = `[Đề xuất thù lao: ${fmtVND(numBudget)} · Tiến độ cam kết: ${numDays} ngày]`;
+      const finalCoverLetter = coverLetter?.trim()
+        ? `${proposalHeader}\n${coverLetter.trim()}`
+        : proposalHeader;
+
+      await applyJobAsync(jobId, selectedCvId, finalCoverLetter);
       setApplyModalOpen(false);
       const chosenCv = (state.cvFiles || []).find((c) => c.id === selectedCvId);
       showToast(`Đã gửi đơn ứng tuyển kèm ${chosenCv?.label || 'CV'} tới ${j.emp}!`, 'check');
@@ -359,6 +384,9 @@ export default function JobDetail() {
                     </span>
                   );
                 })()}
+                <span className="chip" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#059669', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Icon name="edit" width="14" height="14" /> Chỉnh sửa tối đa: {j.revisionLimit ?? apiJob?.revisionLimit ?? 2} lần
+                </span>
                 {j.urgent && <span className="chip chip-coral">Gấp</span>}
                 <span className="chip">{j.time}</span>
               </div>
@@ -675,6 +703,29 @@ export default function JobDetail() {
                     {applyLabel}
                   </button>
 
+                  {appStatus === 'completed' && (
+                    <button
+                      type="button"
+                      className="btn btn-lime btn-block"
+                      style={{ marginBottom: 10, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                      onClick={() => openModal('review', {
+                        jobTitle: j.title,
+                        withName: j.emp,
+                        direction: 'toEmployer',
+                        dashJobId: jobId,
+                        jobId: jobId,
+                        onReviewed: () => {
+                          if (typeof refreshMyApplications === 'function') {
+                            refreshMyApplications();
+                          }
+                        }
+                      })}
+                    >
+                      <Icon name="star" width={16} height={16} style={{ fill: '#eab308', stroke: '#eab308' }} />
+                      Đánh giá Nhà tuyển dụng
+                    </button>
+                  )}
+
                   <button
                     className="btn btn-outline btn-block"
                     style={{ marginBottom: 10 }}
@@ -949,15 +1000,78 @@ export default function JobDetail() {
             </button>
           </div>
 
+          {/* Bid Proposal: Thù lao và Thời gian cam kết */}
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(108, 76, 255, 0.05) 0%, rgba(22, 163, 74, 0.05) 100%)',
+            border: '1px solid rgba(108, 76, 255, 0.2)',
+            borderRadius: 12,
+            padding: '12px 14px',
+            marginBottom: 14
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="sparkles" width="15" height="15" style={{ color: 'var(--primary)' }} />
+                Đề xuất thù lao & Tiến độ hoàn thành
+              </span>
+              <span style={{ fontSize: 11.5, color: 'var(--ink-soft)' }}>
+                Ngân sách tin: <b>{fmtVND(j.budget)}</b>
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  Mức thù lao kỳ vọng (VNĐ)
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="number"
+                    min="10000"
+                    step="10000"
+                    className="input"
+                    style={{ width: '100%', padding: '6px 10px', fontSize: 13, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', boxSizing: 'border-box' }}
+                    value={proposedBudget}
+                    onChange={(e) => setProposedBudget(e.target.value)}
+                    placeholder={String(j.budget)}
+                  />
+                </div>
+                {Number(proposedBudget) !== Number(j.budget) && (
+                  <button
+                    type="button"
+                    style={{ background: 'none', border: 'none', color: 'var(--primary)', fontSize: 11, cursor: 'pointer', padding: '2px 0', marginTop: 2, textDecoration: 'underline' }}
+                    onClick={() => setProposedBudget(String(j.budget))}
+                  >
+                    Khớp ngân sách ({fmtVND(j.budget)})
+                  </button>
+                )}
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>
+                  Thời hạn hoàn thành (ngày)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="90"
+                  className="input"
+                  style={{ width: '100%', padding: '6px 10px', fontSize: 13, borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', boxSizing: 'border-box' }}
+                  value={proposedDays}
+                  onChange={(e) => setProposedDays(Math.max(1, Number(e.target.value) || 1))}
+                />
+              </div>
+            </div>
+          </div>
+
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
-              Lời nhắn / Đề xuất gửi nhà tuyển dụng (tùy chọn)
+              Lời nhắn / Kế hoạch triển khai gửi nhà tuyển dụng (tùy chọn)
             </label>
             <textarea
               className="input"
               rows={3}
-              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: 13 }}
-              placeholder="Nêu ngắn gọn thế mạnh hoặc kinh nghiệm liên quan của bạn đối với công việc này..."
+              style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--ink)', fontSize: 13, boxSizing: 'border-box' }}
+              placeholder="Nêu ngắn gọn thế mạnh, quy trình thực hiện hoặc kinh nghiệm liên quan của bạn đối với dự án này..."
               value={coverLetter}
               onChange={(e) => setCoverLetter(e.target.value)}
             />

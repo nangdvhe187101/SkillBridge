@@ -31,6 +31,9 @@ public class ReviewDto
     public string? Comment { get; set; }
     public DateTime CreatedAt { get; set; }
     public bool IsFromEmployer { get; set; }
+    public bool EarnedBonusPoints { get; set; }
+    public int BonusPoints { get; set; }
+    public string? BonusMessage { get; set; }
 }
 
 public class JobReviewsSummaryDto
@@ -39,4 +42,8 @@ public class JobReviewsSummaryDto
     public bool HasReviewed { get; set; }
     public ReviewDto? MyReview { get; set; }
     public List<ReviewDto> Reviews { get; set; } = new();
+    public DateTime? JobCompletedAt { get; set; }
+    public bool CanEarnBonusPoints { get; set; }
+    public int BonusPointsAvailable { get; set; } = 5;
+    public double HoursRemainingForBonus { get; set; }
 }

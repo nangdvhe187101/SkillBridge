@@ -21,8 +21,22 @@ export async function uploadAvatar(file) {
     });
 }
 
+export async function uploadCover(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return apiFetch('/users/cover', {
+        method: 'POST',
+        body: formData,
+    });
+}
+
 export async function getPublicStudentProfile(studentId) {
     return apiFetch(`/users/${studentId}/public-profile`, { method: 'GET' });
+}
+
+export async function getPublicCompanyProfile(employerId) {
+    return apiFetch(`/users/${employerId}/company-profile`, { method: 'GET' });
 }
 
 export async function getMyPortfolio() {
@@ -47,4 +61,3 @@ export async function deletePortfolioItem(id) {
 export async function getMyBadges() {
     return apiFetch('/users/badges', { method: 'GET' });
 }
-

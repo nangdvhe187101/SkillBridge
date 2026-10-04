@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Icon from '../Icon';
 import ModalShell from './ModalShell';
 import { useStore } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
-import { createReview } from '../../api/reviewApi';
+import { createReview, getJobReviews } from '../../api/reviewApi';
 
 const STAR_LABELS = {
   1: '1 sao - Kém / Không hài lòng',
@@ -21,7 +21,11 @@ export default function ReviewModal({
   dashJobId,
   jobId,
   onReviewed,
-  existingReview = null
+  existingReview = null,
+  completedAt = null,
+  isWithin3Days = undefined,
+  remainingHours = undefined,
+  canEarnBonus = undefined
 }) {
   const toastCtx = useToast();
   const store = useStore();
@@ -34,6 +38,47 @@ export default function ReviewModal({
   const [stars, setStars] = useState(existingReview ? existingReview.stars : 5);
   const [comment, setComment] = useState(existingReview ? (existingReview.comment || '') : '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [bonusState, setBonusState] = useState(() => {
+    if (canEarnBonus !== undefined || isWithin3Days !== undefined) {
+      return {
+        canEarn: Boolean(canEarnBonus ?? isWithin3Days),
+        hoursLeft: remainingHours ?? null,
+        loaded: true
+      };
+    }
+    if (completedAt) {
+      const elapsed = Math.max(0, Date.now() - new Date(completedAt).getTime());
+      const threeDaysMs = 72 * 3600000;
+      return {
+        canEarn: elapsed <= threeDaysMs,
+        hoursLeft: Math.max(0, (threeDaysMs - elapsed) / 3600000),
+        loaded: true
+      };
+    }
+    return {
+      canEarn: true,
+      hoursLeft: null,
+      loaded: false
+    };
+  });
+
+  useEffect(() => {
+    if (isToEmployer && actualJobId && !bonusState.loaded) {
+      getJobReviews(actualJobId)
+        .then((summary) => {
+          if (summary) {
+            setBonusState({
+              canEarn: summary.canEarnBonusPoints ?? true,
+              hoursLeft: summary.hoursRemainingForBonus ?? null,
+              loaded: true
+            });
+          }
+        })
+        .catch((err) => {
+          console.debug('Không thể tải thông tin điểm thưởng đánh giá:', err);
+        });
+    }
+  }, [isToEmployer, actualJobId, bonusState.loaded]);
 
   const handleSubmit = async () => {
     if (!actualJobId) {
@@ -47,13 +92,20 @@ export default function ReviewModal({
         ? 'Nhà tuyển dụng chuyên nghiệp, thanh toán sòng phẳng, phản hồi nhanh!'
         : 'Sinh viên làm việc rất có trách nhiệm, đúng tiến độ và chất lượng tốt!';
 
-      await createReview({
+      const res = await createReview({
         jobId: Number(actualJobId),
         stars: Number(stars),
         comment: comment.trim() || defaultComment,
       });
 
-      showToast?.('Gửi đánh giá thành công! Cảm ơn bạn đã phản hồi.', 'check');
+      if (res?.earnedBonusPoints) {
+        showToast?.('🎉 Đánh giá thành công! Bạn nhận được +5 điểm uy tín (Reliability Score).', 'check');
+      } else if (res?.bonusMessage) {
+        showToast?.(res.bonusMessage, 'check');
+      } else {
+        showToast?.('Gửi đánh giá thành công! Cảm ơn bạn đã phản hồi.', 'check');
+      }
+
       if (typeof refreshNotifications === 'function') {
         refreshNotifications();
       }
@@ -110,6 +162,24 @@ export default function ReviewModal({
           {existingReview.comment || 'Không có nhận xét thêm.'}
         </div>
 
+        {existingReview.earnedBonusPoints && (
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            background: 'rgba(21, 128, 61, 0.1)',
+            border: '1px solid rgba(21, 128, 61, 0.25)',
+            color: '#15803d',
+            fontSize: 12.5,
+            fontWeight: 600,
+            padding: '4px 10px',
+            borderRadius: 6,
+            marginBottom: 12
+          }}>
+            <span>⭐</span> Đã nhận +5 điểm uy tín (đánh giá trong thời hạn 3 ngày)
+          </div>
+        )}
+
         {existingReview.createdAt && (
           <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginBottom: 16, textAlign: 'right' }}>
             Đã gửi lúc: {new Date(existingReview.createdAt).toLocaleString('vi-VN')}
@@ -164,6 +234,39 @@ export default function ReviewModal({
           {STAR_LABELS[stars]}
         </div>
       </div>
+
+      {isToEmployer && (
+        <div style={{
+          background: bonusState.canEarn ? 'rgba(234, 179, 8, 0.08)' : 'rgba(100, 116, 139, 0.08)',
+          border: `1px solid ${bonusState.canEarn ? 'rgba(234, 179, 8, 0.3)' : 'rgba(100, 116, 139, 0.25)'}`,
+          borderRadius: 8,
+          padding: '10px 14px',
+          marginBottom: 14,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10
+        }}>
+          <span style={{ fontSize: 18, flexShrink: 0 }}>
+            {bonusState.canEarn ? '⚡' : '⏱️'}
+          </span>
+          <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>
+            {bonusState.canEarn ? (
+              <>
+                <b style={{ color: '#ca8a04' }}>Thưởng +5 điểm uy tín (Reliability Score):</b> Bạn đang gửi đánh giá trong thời hạn 3 ngày kể từ khi nghiệm thu dự án
+                {bonusState.hoursLeft !== null && bonusState.hoursLeft > 0 ? (
+                  <span> (còn khoảng {Math.ceil(bonusState.hoursLeft)} giờ để nhận thưởng)</span>
+                ) : (
+                  <span> (tối đa 72 giờ)</span>
+                )}.
+              </>
+            ) : (
+              <>
+                <b style={{ color: '#64748b' }}>Hết hạn nhận điểm thưởng (+5đ):</b> Đã quá thời hạn 3 ngày nhận điểm uy tín sau hoàn thành. Đánh giá của bạn vẫn sẽ được ghi nhận để phản hồi chất lượng đối tác!
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <textarea
         value={comment}

@@ -52,6 +52,15 @@ export async function adminLogin(email, password) {
     return handleResponse(res);
 }
 
+export async function adminVerify2Fa(tempToken, code) {
+    const res = await fetch(`${API_URL}/admin-auth/verify-2fa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tempToken, code: (code || '').trim() }),
+    });
+    return handleResponse(res);
+}
+
 export async function apiFetch(path, options = {}) {
     const isFormData = options.body instanceof FormData;
     const defaultHeaders = isFormData ? {} : { "Content-Type": "application/json" };

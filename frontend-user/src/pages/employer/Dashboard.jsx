@@ -70,6 +70,8 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, _go
       (j.applicants || []).forEach((a) => {
         list.push({
           ...a,
+          avatar: a.avatar || a.studentAvatarUrl || a.avatarUrl || null,
+          studentAvatarUrl: a.studentAvatarUrl || a.avatar || a.avatarUrl || null,
           jobId: j.id,
           jobTitle: j.title,
           jobBudget: j.budget,
@@ -385,7 +387,7 @@ function OverviewTab({ state, navigate, openModal, goToJobsTab, goToPostTab, _go
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <Avatar name={app.name} src={app.avatar} fontSize={15} style={{ width: 42, height: 42 }} />
+                  <Avatar name={app.name} src={app.avatar || app.studentAvatarUrl || app.avatarUrl} fontSize={15} style={{ width: 42, height: 42 }} />
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <b style={{ fontSize: 14.5, color: 'var(--ink)' }}>{app.name}</b>
@@ -907,7 +909,7 @@ function JobsTab({ state, navigate, goToPostTab }) {
                             <Avatar
                               key={i}
                               name={a.name}
-                              src={a.avatar}
+                              src={a.avatar || a.studentAvatarUrl || a.avatarUrl}
                               fontSize={10}
                               style={{ width: 22, height: 22, border: '2px solid #fff', marginLeft: i > 0 ? -6 : 0 }}
                             />
@@ -1414,7 +1416,7 @@ export default function Dashboard({ forcedTab }) {
 
   return (
     <div className="page active">
-      <div className="acct-settings-layout">
+      <div className="acct-settings-layout employer-dashboard-layout">
         <DashboardSidebar activeTab={activeSidebarTab} />
 
         <div className="acct-content">

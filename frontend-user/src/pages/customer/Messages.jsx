@@ -173,7 +173,7 @@ export default function Messages() {
                                     }}
                                 >
                                     <div className="msgr-convo-av">
-                                        <Avatar src={c.avatar} name={c.name} fontSize={16} style={{ width: 46, height: 46 }} />
+                                        <Avatar src={c.avatar || c.avatarUrl || c.otherUserAvatar} name={c.name} fontSize={16} style={{ width: 46, height: 46 }} />
                                         {c.online && <span className="msgr-online-dot" />}
                                     </div>
                                     <div className="msgr-convo-main">
@@ -208,7 +208,7 @@ export default function Messages() {
                                             ←
                                         </button>
                                     )}
-                                    <Avatar src={active.avatar} name={active.name} fontSize={16} style={{ width: 46, height: 46 }} />
+                                    <Avatar src={active.avatar || active.avatarUrl || active.otherUserAvatar} name={active.name} fontSize={16} style={{ width: 46, height: 46 }} />
                                     <div className="msgr-window-head-txt" style={{ minWidth: 0 }}>
                                         <b style={{ fontSize: 16.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>{active.name}</b>
                                         <span style={{ fontSize: 13 }}>{active.subtitle} · {active.blocked ? 'Đã chặn' : active.online ? 'Đang hoạt động' : 'Ngoại tuyến'}</span>
@@ -395,7 +395,7 @@ export default function Messages() {
                             {/* Partner Profile Summary */}
                             <div style={{ textAlign: 'center', paddingBottom: 16, borderBottom: '1px solid var(--border)' }}>
                                 <div style={{ display: 'inline-block', position: 'relative' }}>
-                                    <Avatar src={active.avatar} name={active.name} fontSize={24} style={{ width: 72, height: 72, margin: '0 auto' }} />
+                                    <Avatar src={active.avatar || active.avatarUrl || active.otherUserAvatar} name={active.name} fontSize={24} style={{ width: 72, height: 72, margin: '0 auto' }} />
                                     {active.online && (
                                         <span
                                             style={{

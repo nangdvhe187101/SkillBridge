@@ -28,12 +28,24 @@ export function ReceiptModal({ onClose, justCompletedId, job: propJob }) {
       jobId: job.id,
       jobTitle: job.title,
       student: job.hiredApplicant || 'Sinh viên thực hiện',
-      employer: job.employer || state.currentUser?.name || 'Nhà tuyển dụng',
+      studentSchool: job.studentSchool || 'Đại học FPT',
+      studentId: job.hiredApplicantId || 'VERIFIED',
+      employer: job.employer || state.currentUser?.fullName || state.currentUser?.companyName || 'Nhà tuyển dụng SkillBridge',
+      employerTaxCode: state.currentUser?.taxCode || '0109988776',
+      employerRepresentative: state.currentUser?.representative || state.currentUser?.fullName || 'Đại diện Doanh nghiệp',
       budget: job.budget || 0,
       commission: 0,
       total: job.budget || 0,
       net: job.budget || 0,
       date: job.completedAt ? new Date(job.completedAt).toLocaleString('vi-VN') : (job.date || new Date().toLocaleString('vi-VN')),
+    };
+  } else if (receipt) {
+    receipt = {
+      ...receipt,
+      employer: receipt.employer || state.currentUser?.fullName || state.currentUser?.companyName || 'Nhà tuyển dụng SkillBridge',
+      employerTaxCode: receipt.employerTaxCode || state.currentUser?.taxCode || '0109988776',
+      employerRepresentative: receipt.employerRepresentative || state.currentUser?.representative || state.currentUser?.fullName || 'Đại diện Doanh nghiệp',
+      studentSchool: receipt.studentSchool || (job && job.studentSchool) || 'Đại học đối tác',
     };
   }
 
@@ -57,43 +69,43 @@ export function ReceiptModal({ onClose, justCompletedId, job: propJob }) {
   return (
     <ModalShell onClose={onClose}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
-          <Icon name="receipt" width="22" height="22" /> Hóa đơn / Phiếu thu điện tử
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 18 }}>
+          <Icon name="receipt" width="22" height="22" /> Phiếu nghiệm thu & Hóa đơn điện tử
         </h3>
         <span className="badge badge-success" style={{ fontSize: 12, padding: '4px 8px' }}>
-          Đã quyết toán
+          Đã giải ngân
         </span>
       </div>
 
       <div style={{ background: 'rgba(2, 132, 199, 0.06)', border: '1px solid rgba(2, 132, 199, 0.2)', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-          <span style={{ color: 'var(--ink-soft)' }}>Mã hóa đơn / biên nhận:</span>
+          <span style={{ color: 'var(--ink-soft)' }}>Mã biên lai / Hóa đơn:</span>
           <b><code>{receipt.code || `SB-REC-${receipt.jobId || '2026'}`}</code></b>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-          <span style={{ color: 'var(--ink-soft)' }}>Ký hiệu mẫu:</span>
-          <span>01GTKT0/001 - SB/26E</span>
+          <span style={{ color: 'var(--ink-soft)' }}>Hồ sơ kế toán:</span>
+          <span style={{ color: '#0369a1', fontWeight: 600 }}>Biên bản nghiệm thu & Quyết toán ký quỹ</span>
         </div>
       </div>
 
       <div className="checkout-summary">
-        <div className="cs-row"><span>Công việc</span><span style={{ fontWeight: 600 }}>{receipt.jobTitle}</span></div>
-        <div className="cs-row"><span>Nhà tuyển dụng</span><span>{receipt.employer || state.currentUser?.name || 'Nhà tuyển dụng'}</span></div>
-        <div className="cs-row"><span>Sinh viên nhận</span><span>{receipt.student}</span></div>
-        <div className="cs-row"><span>Ngân sách hợp đồng</span><span>{fmtVND(receipt.budget)}</span></div>
+        <div className="cs-row"><span>Công việc / Dự án</span><span style={{ fontWeight: 600 }}>{receipt.jobTitle}</span></div>
+        <div className="cs-row"><span>Đơn vị chi trả (Bên A)</span><span>{receipt.employer}</span></div>
+        <div className="cs-row"><span>Sinh viên thụ hưởng (Bên B)</span><span>{receipt.student}</span></div>
+        <div className="cs-row"><span>Tổng giá trị hợp đồng</span><span>{fmtVND(receipt.budget)}</span></div>
         <div className="cs-row">
-          <span>Phí nền tảng</span>
+          <span>Phí nền tảng & ký quỹ</span>
           <span>{receipt.commission > 0 ? fmtVND(receipt.commission) : '0đ (Miễn phí nền tảng)'}</span>
         </div>
         <div className="cs-row total">
-          <span>Tổng thanh toán</span>
+          <span>Thực thanh toán</span>
           <span style={{ color: 'var(--primary)', fontSize: 16 }}>{fmtVND(receipt.total || receipt.budget)}</span>
         </div>
-        <div className="cs-row"><span>Thời gian lập</span><span>{receipt.date}</span></div>
+        <div className="cs-row"><span>Thời gian nghiệm thu</span><span>{receipt.date}</span></div>
       </div>
 
-      <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 10, marginBottom: 18 }}>
-        Phiếu thu điện tử có giá trị pháp lý theo chứng thực số hóa đơn của SkillBridge Escrow. Bạn có thể in hoặc tải về dưới dạng PDF để lưu trữ/kê khai thuế.
+      <p style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 10, marginBottom: 18, lineHeight: 1.5 }}>
+        Biên bản nghiệm thu và phiếu thu điện tử có đầy đủ chữ ký số điện tử của SkillBridge Platform. Nhà tuyển dụng có thể tải file PDF hoặc in trực tiếp để lưu trữ vào hồ sơ chứng từ kế toán nội bộ.
       </p>
 
       {/* Download / Print Actions */}
@@ -104,9 +116,9 @@ export function ReceiptModal({ onClose, justCompletedId, job: propJob }) {
             className="btn btn-primary" 
             style={{ flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
             onClick={() => printReceipt(receipt)}
-            title="Mở giao diện in và lưu file PDF tiêu chuẩn A4"
+            title="Mở giao diện in và lưu file PDF Phiếu nghiệm thu tiêu chuẩn A4"
           >
-            <Icon name="download" width="16" height="16" /> Tải về / In phiếu thu (PDF)
+            <Icon name="download" width="16" height="16" /> Tải về file PDF Phiếu nghiệm thu
           </button>
           <button 
             type="button" 

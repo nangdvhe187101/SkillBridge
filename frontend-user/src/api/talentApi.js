@@ -11,6 +11,12 @@ export const talentApi = {
     if (params.minReliabilityScore || params.minScore) qs.append('minReliabilityScore', params.minReliabilityScore || params.minScore);
     if (params.minRate) qs.append('minRate', params.minRate);
     if (params.maxRate) qs.append('maxRate', params.maxRate);
+    if (params.skill) qs.append('skill', params.skill);
+    if (params.skills && Array.isArray(params.skills)) {
+      params.skills.forEach(s => {
+        if (s && s.trim()) qs.append('skills', s.trim());
+      });
+    }
     const query = qs.toString();
     return apiFetch(`/talents${query ? '?' + query : ''}`, { method: 'GET' });
   },

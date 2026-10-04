@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Icon from './Icon';
+import Pagination from './Pagination';
 import { useToast } from '../context/ToastContext';
 import { getAdminDisputes, getDisputeChatEvidence, resolveDispute } from '../api/adminApi';
 import { downloadJobAttachment } from '../utils/fileDownloader';
@@ -71,6 +72,19 @@ export default function AdminDisputes() {
   const openList = disputes.filter((d) => (d.status || '').toLowerCase() === 'open');
   const closedList = disputes.filter((d) => (d.status || '').toLowerCase() === 'closed');
   const currentList = sub === 'open' ? openList : closedList;
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(5);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [sub]);
+
+  const totalPages = Math.ceil(currentList.length / pageSize) || 1;
+  const pagedList = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return currentList.slice(start, start + pageSize);
+  }, [currentList, currentPage, pageSize]);
 
   const kpis = [
     { label: 'Khiếu nại đang mở', value: openList.length },
@@ -198,75 +212,80 @@ export default function AdminDisputes() {
           <div className="adm-empty">Không có vụ tranh chấp nào trong mục này.</div>
         </div>
       ) : (
-        currentList.map((d) => (
-          <div className="adm-card" key={d.id} style={{ marginBottom: 16 }}>
+        pagedList.map((d) => (
+          <div className="adm-card" key={d.id} style={{ marginBottom: 16, background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 8 }}>
             <div className="adm-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <h4 style={{ margin: 0 }}>{d.jobTitle || `Dự án #${d.jobId}`}</h4>
-                  <span className="chip" style={{ fontSize: 11, background: 'rgba(108, 76, 255, 0.1)', color: 'var(--primary)', border: '1px solid rgba(108, 76, 255, 0.2)' }}>
+                  <h4 style={{ margin: 0, color: '#111827' }}>{d.jobTitle || `Dự án #${d.jobId}`}</h4>
+                  <span className="cf-status-pill" style={{ fontSize: 11 }}>
                     Mã vụ: #{d.id}
                   </span>
                 </div>
-                <span className="sub" style={{ display: 'block', marginTop: 4 }}>
-                  Thời điểm nộp khiếu nại: <b>{formatDate(d.filedAt)}</b> · Giá trị ký quỹ: <b style={{ color: 'var(--primary)' }}>{fmtVND(d.amount)}</b>
+                <span className="sub" style={{ display: 'block', marginTop: 4, color: '#6b7280' }}>
+                  Thời điểm nộp khiếu nại: <b>{formatDate(d.filedAt)}</b> · Giá trị ký quỹ: <b style={{ color: '#0051c3' }}>{fmtVND(d.amount)}</b>
                 </span>
               </div>
-              <span className={'djr-status ' + (d.status === 'open' ? 'in_progress' : 'completed')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Icon name={d.status === 'open' ? 'hourglass' : 'check'} style={{ width: 12, height: 12 }} />
-                <span>{d.status === 'open' ? 'Đang chờ phán quyết' : 'Đã đóng case'}</span>
+              <span className="cf-status-pill">
+                <span
+                  className="cf-status-dot"
+                  style={{ background: d.status === 'open' ? '#d97706' : '#16a34a' }}
+                />
+                <span style={{ color: d.status === 'open' ? '#b45309' : '#15803d' }}>
+                  {d.status === 'open' ? 'Đang chờ phán quyết' : 'Đã đóng case'}
+                </span>
               </span>
             </div>
 
             {/* Parties Bar */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, background: 'var(--surface)', padding: 12, borderRadius: 10, margin: '12px 0' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, background: '#f9fafb', border: '1px solid #f3f4f6', padding: 12, borderRadius: 8, margin: '12px 0' }}>
               <div>
-                <span style={{ fontSize: 11.5, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 11.5, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   <Icon name="graduation" style={{ width: 13, height: 13 }} />
                   <span>Bên khiếu nại (Sinh viên):</span>
                 </span>
-                <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827', marginTop: 2 }}>
                   {d.studentName || d.student || 'Sinh viên'}
                 </div>
                 {d.studentReliability && (
-                  <span className="chip chip-lime" style={{ fontSize: 11, marginTop: 4, padding: '1px 6px' }}>
-                    Reliability: {d.studentReliability}/100
+                  <span className="cf-status-pill" style={{ fontSize: 11, marginTop: 4 }}>
+                    Uy tín: {d.studentReliability}/100
                   </span>
                 )}
               </div>
 
               <div>
-                <span style={{ fontSize: 11.5, color: 'var(--ink-soft)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 11.5, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                   <Icon name="building" style={{ width: 13, height: 13 }} />
                   <span>Bên bị khiếu nại (NTD):</span>
                 </span>
-                <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 2 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: '#111827', marginTop: 2 }}>
                   {d.employerName || d.employer || 'Nhà tuyển dụng'}
                 </div>
                 {d.employerReliability && (
-                  <span className="chip" style={{ fontSize: 11, marginTop: 4, padding: '1px 6px' }}>
-                    Reliability: {d.employerReliability}/100
+                  <span className="cf-status-pill" style={{ fontSize: 11, marginTop: 4 }}>
+                    Uy tín: {d.employerReliability}/100
                   </span>
                 )}
               </div>
             </div>
 
-            <p style={{ fontSize: 13, color: 'var(--ink)', marginBottom: 8, lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13, color: '#374151', marginBottom: 8, lineHeight: 1.5 }}>
               <b>Lý do khiếu nại:</b> {d.reason || 'Chưa cung cấp lý do cụ thể'}
             </p>
 
             {/* Quick Evidence Pills */}
             {d.evidences?.length > 0 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Tệp bằng chứng ({d.evidences.length}):</span>
+                <span style={{ fontSize: 12, color: '#6b7280' }}>Bằng chứng ({d.evidences.length}):</span>
                 {d.evidences.map((ev, idx) => (
                   <a
                     key={idx}
                     href={ev.fileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="chip"
-                    style={{ fontSize: 11.5, background: 'var(--surface)', display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
+                    className="cf-btn-ghost"
+                    style={{ fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none', border: '1px solid #e5e7eb' }}
                     title="Bấm để xem tệp bằng chứng"
                   >
                     <Icon name={getFileIcon(ev.fileType, ev.fileUrl)} style={{ width: 13, height: 13 }} />
@@ -278,34 +297,34 @@ export default function AdminDisputes() {
             )}
 
             {/* Actions Bar */}
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 12, marginTop: 6 }}>
-              <button className="btn btn-outline btn-sm" onClick={() => setViewDossier(d)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', borderTop: '1px solid #f3f4f6', paddingTop: 12, marginTop: 6 }}>
+              <button className="cf-btn-secondary" onClick={() => setViewDossier(d)} style={{ padding: '5px 10px', fontSize: 12.5 }}>
                 <Icon name="search" style={{ width: 13, height: 13 }} />
-                <span>Xem toàn bộ hồ sơ</span>
+                <span>Xem hồ sơ</span>
               </button>
 
-              <button className="btn btn-outline btn-sm" onClick={() => openChatEvidence(d)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--primary)', borderColor: 'var(--primary)' }}>
+              <button className="cf-btn-secondary" onClick={() => openChatEvidence(d)} style={{ padding: '5px 10px', fontSize: 12.5 }}>
                 <Icon name="chat" style={{ width: 13, height: 13 }} />
-                <span>Đối soát tin nhắn Chat</span>
+                <span>Đối soát Chat</span>
               </button>
 
               {d.status === 'open' ? (
                 <>
-                  <button className="btn btn-primary btn-sm" onClick={() => openDecision(d, 'accept')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <button className="cf-btn-primary" onClick={() => openDecision(d, 'accept')} style={{ padding: '5px 12px', fontSize: 12.5 }}>
                     <Icon name="check" style={{ width: 13, height: 13 }} />
-                    <span>Giải ngân bồi thường cho SV</span>
+                    <span>Giải ngân cho SV</span>
                   </button>
-                  <button className="btn btn-outline btn-sm" style={{ color: 'var(--coral)', borderColor: 'var(--coral)', display: 'inline-flex', alignItems: 'center', gap: 4 }} onClick={() => openDecision(d, 'reject')}>
-                    <Icon name="refresh" style={{ width: 13, height: 13 }} />
-                    <span>Hoàn cọc lại cho NTD</span>
-                  </button>
-                  <button className="btn btn-outline btn-sm" onClick={() => openDecision(d, 'split')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    <Icon name="chart-bar" style={{ width: 13, height: 13 }} />
-                    <span>Phân chia tỷ lệ</span>
-                  </button>
+                  <div className="cf-btn-group">
+                    <button onClick={() => openDecision(d, 'reject')} style={{ color: '#b91c1c' }}>
+                      Hoàn cọc NTD
+                    </button>
+                    <button onClick={() => openDecision(d, 'split')}>
+                      Chia tỷ lệ
+                    </button>
+                  </div>
                 </>
               ) : (
-                <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>
+                <div style={{ fontSize: 12.5, color: '#6b7280' }}>
                   <b>Kết luận phán quyết:</b>{' '}
                   {d.decision === 'accept'
                     ? `Giải ngân 100% (${fmtVND(d.payoutAmount || d.amount)}) cho SV`
@@ -318,6 +337,21 @@ export default function AdminDisputes() {
             </div>
           </div>
         ))
+      )}
+
+      {currentList.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <Pagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={currentList.length}
+            pageSize={pageSize}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={(sz) => { setPageSize(sz); setCurrentPage(1); }}
+            pageSizeOptions={[5, 10, 20]}
+            itemLabel="vụ tranh chấp"
+          />
+        </div>
       )}
 
       {/* ========================================================================= */}

@@ -772,12 +772,23 @@ export function RevisionModal({ onClose, jobId, deliverable: propDeliverable, jo
     }
   };
 
+  const revLimit = job.revisionLimit ?? 2;
+  const revCount = job.revisionCount ?? 0;
+  const isLimitReached = revCount >= revLimit;
+
   return (
     <ModalShell onClose={onClose}>
       <h3>Yêu cầu chỉnh sửa sản phẩm</h3>
       <p style={{ fontSize: 13, color: 'var(--ink-soft)' }}>
-        Gửi yêu cầu chỉnh sửa cho <b>{job.hiredApplicant || 'sinh viên'}</b> (Lượt {(job.revisionCount || 0) + 1}/{job.revisionLimit || 2}).
+        Gửi yêu cầu chỉnh sửa cho <b>{job.hiredApplicant || 'sinh viên'}</b> {isLimitReached ? `(Đã dùng hết ${revCount}/${revLimit} lượt)` : `(Lượt ${revCount + 1}/${revLimit})`}.
       </p>
+
+      {isLimitReached && (
+        <div style={{ padding: '12px 14px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, fontSize: 13, color: '#be123c', marginBottom: 14, lineHeight: 1.5 }}>
+          ⚠️ <b>Đã đạt giới hạn tối đa ({revLimit} lần chỉnh sửa):</b> Không thể gửi thêm yêu cầu sửa đổi. Vui lòng đóng cửa sổ này và bấm <b>"Xem xét nghiệm thu & Giải ngân"</b> nếu sản phẩm đạt yêu cầu, hoặc mở <b>"Khiếu nại công việc"</b> nếu muốn Ban Trọng tài can thiệp.
+        </div>
+      )}
+
       {loading ? (
         <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--ink-soft)' }}>
           Đang tải dữ liệu...
@@ -789,15 +800,25 @@ export function RevisionModal({ onClose, jobId, deliverable: propDeliverable, jo
       ) : (
         <div className="field">
           <label>Nội dung cần chỉnh sửa</label>
-          <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Chi tiết các điểm cần chỉnh sửa hoặc bổ sung..." />
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={isLimitReached}
+            placeholder={isLimitReached ? "Đã đạt giới hạn số lần chỉnh sửa..." : "Chi tiết các điểm cần chỉnh sửa hoặc bổ sung..."}
+          />
         </div>
       )}
       {errorMsg && <div style={{ color: 'var(--coral)', fontSize: 13, marginBottom: 12 }}>{errorMsg}</div>}
       <div className="modal-actions">
-        <button className="btn btn-primary" style={{ background: 'var(--coral)' }} onClick={submit} disabled={isSubmitting || loading || !deliverable}>
+        <button
+          className="btn btn-primary"
+          style={{ background: isLimitReached ? '#94a3b8' : 'var(--coral)' }}
+          onClick={submit}
+          disabled={isSubmitting || loading || !deliverable || isLimitReached}
+        >
           {isSubmitting ? 'Đang gửi...' : 'Gửi yêu cầu'}
         </button>
-        <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Quay lại</button>
+        <button className="btn btn-outline" onClick={onClose} disabled={isSubmitting}>Đóng</button>
       </div>
     </ModalShell>
   );

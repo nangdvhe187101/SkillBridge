@@ -33,7 +33,7 @@ import { VIETNAM_BANKS } from '../../constants/banks';
 import { removeVietnameseTones } from '../../services/vietqrService';
 
 export default function Wallet() {
-  const { state, updateBankAccount, showToast, refreshWallet, refreshDisputes } = useStore();
+  const { state, showToast, refreshWallet, refreshDisputes } = useStore();
   const { openModal } = useModal();
   const navigate = useNavigate();
 
@@ -266,41 +266,6 @@ export default function Wallet() {
       setQrDecoding(false);
       if (qrFileInputRef.current) qrFileInputRef.current.value = '';
     }
-  };
-
-  const handleDownloadReceipt = (r) => {
-    const content = `=====================================================
-BIÊN NHẬN ĐIỆN TỬ - SKILLBRIDGE ESCROW SETTLEMENT
-=====================================================
-Mã biên nhận: ${r.code || 'SB-REC-2026'}
-Ngày giải ngân: ${r.date}
-Trạng thái: THÀNH CÔNG (ĐÃ GIẢI NGÂN)
-
-THÔNG TIN GIAO DỊCH:
-- Tên công việc: ${r.jobTitle}
-- Đơn vị chi trả (NTD): ${r.employer || 'Nhà tuyển dụng'}
-- Người thụ hưởng (Sinh viên): ${r.student || 'Sinh viên'}
-
-CHI TIẾT TÀI CHÍNH:
-- Tổng số tiền hợp đồng: ${fmtVND(r.total)}
-- Phí nền tảng SkillBridge: ${r.commission > 0 ? fmtVND(r.commission) : '0đ (Miễn phí 100%)'}
-- Thuế TNCN (khấu trừ tại nguồn): 0đ
------------------------------------------------------
-SỐ TIỀN THỰC NHẬN VÀO VÍ: ${fmtVND(r.net || (r.total - (r.commission || 0)))}
-=====================================================
-Căn cứ xác thực điện tử bởi Hệ thống Ký quỹ SkillBridge
-Hotline CSKH: 1900-8888 | Email: support@skillbridge.vn
-=====================================================`;
-
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `BienNhan_${r.code || 'SkillBridge'}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
   };
 
   const escrowLockedAmount = state.escrowLocked || 0;

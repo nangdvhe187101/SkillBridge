@@ -65,12 +65,48 @@ public class UserController : ControllerBase
         });
     }
 
+    [HttpPost("cover")]
+    [Consumes("multipart/form-data")]
+    [EnableRateLimiting("UploadPolicy")]
+    public async Task<IActionResult> UploadCover(IFormFile file)
+    {
+        if (file == null || file.Length == 0)
+        {
+            return BadRequest(new { message = "Vui lòng chọn file hình ảnh bìa để tải lên." });
+        }
+
+        var userId = User.GetRequiredUserId();
+        using var stream = file.OpenReadStream();
+        var result = await _userService.UploadCoverAsync(
+            userId,
+            stream,
+            file.FileName,
+            file.ContentType);
+
+        return Ok(new
+        {
+            message = "Cập nhật ảnh bìa thành công.",
+            coverImageUrl = result.FileUrl,
+            fileKey = result.FileKey
+        });
+    }
+
     [HttpGet("{id:int}/public-profile")]
+    [HttpGet("{id:int}/student-profile")]
     [AllowAnonymous]
     [EnableRateLimiting("GeneralApiPolicy")]
     public async Task<IActionResult> GetPublicProfile(int id)
     {
         var profile = await _userService.GetPublicStudentProfileAsync(id);
+        return Ok(profile);
+    }
+
+    [HttpGet("{id:int}/company-profile")]
+    [AllowAnonymous]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> GetCompanyProfile(int id)
+    {
+        var profile = await _userService.GetPublicCompanyProfileAsync(id);
         return Ok(profile);
     }
 

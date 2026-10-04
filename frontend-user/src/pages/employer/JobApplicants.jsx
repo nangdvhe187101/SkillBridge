@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
+import Pagination from '../../components/Pagination';
 import ModalShell from '../../components/modals/ModalShell';
 import DashboardSidebar from '../../components/DashboardSidebar';
 import UserTierBadge from '../../components/common/UserTierBadge';
@@ -96,6 +97,8 @@ export default function JobApplicants() {
   const [applicantFilter, setApplicantFilter] = useState('all'); // 'all' | 'pending' | 'shortlisted' | 'hired' | 'rejected'
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('score_desc'); // 'score_desc' | 'newest' | 'jobs_done'
+  const [applicantPage, setApplicantPage] = useState(1);
+  const [applicantPageSize, setApplicantPageSize] = useState(10);
   const [apiApplicants, setApiApplicants] = useState([]);
   const [apiJob, setApiJob] = useState(null);
   const [apiDeliverables, setApiDeliverables] = useState([]);
@@ -273,7 +276,8 @@ export default function JobApplicants() {
       name: a.studentName,
       email: a.studentEmail,
       phone: a.studentPhone,
-      avatar: a.studentAvatarUrl,
+      avatar: a.studentAvatarUrl || a.avatar || a.avatarUrl || null,
+      studentAvatarUrl: a.studentAvatarUrl || a.avatar || a.avatarUrl || null,
       school: a.school || 'Đại học FPT',
       tier: a.tier || 'gold',
       score: a.reliabilityScore || 95,
@@ -335,10 +339,20 @@ export default function JobApplicants() {
     return list;
   }, [allApplicants, applicantFilter, searchQuery, sortBy, shortlistedIds]);
 
+  useEffect(() => {
+    setApplicantPage(1);
+  }, [applicantFilter, searchQuery, sortBy]);
+
+  const applicantTotalPages = Math.ceil(filteredApplicants.length / applicantPageSize) || 1;
+  const pagedApplicants = useMemo(() => {
+    const start = (applicantPage - 1) * applicantPageSize;
+    return filteredApplicants.slice(start, start + applicantPageSize);
+  }, [filteredApplicants, applicantPage, applicantPageSize]);
+
   if (!job) {
     return (
       <div className="page active">
-        <div className="acct-settings-layout">
+        <div className="acct-settings-layout employer-dashboard-layout">
           <DashboardSidebar activeTab="jobs" />
           <div className="acct-content">
             <h1 className="acct-content-title">Không tìm thấy tin đăng</h1>
@@ -399,7 +413,7 @@ export default function JobApplicants() {
 
   return (
     <div className="page active">
-      <div className="acct-settings-layout">
+      <div className="acct-settings-layout employer-dashboard-layout">
         <DashboardSidebar activeTab="jobs" />
 
         <div className="acct-content">
@@ -470,16 +484,24 @@ export default function JobApplicants() {
 
               {/* Action Toolbar */}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                {/* Xuất hóa đơn / Biên lai ký quỹ */}
+                {/* Xuất hóa đơn / Biên lai ký quỹ & nghiệm thu */}
                 {(wasEscrowed || job.status === 'completed') && (
                   <button
                     className="btn btn-outline btn-sm"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      borderColor: job.status === 'completed' ? '#0284c7' : undefined,
+                      color: job.status === 'completed' ? '#0284c7' : undefined,
+                      background: job.status === 'completed' ? 'rgba(2, 132, 199, 0.06)' : undefined,
+                      fontWeight: job.status === 'completed' ? 600 : undefined,
+                    }}
                     onClick={() => openModal('receipt', { justCompletedId: job.id, job })}
-                    title="Xem và tải về biên nhận thanh toán / hóa đơn điện tử"
+                    title="Tải file PDF Biên bản nghiệm thu và giải ngân tiền dự án để lưu trữ hồ sơ kế toán nội bộ"
                   >
                     <Icon name="receipt" width="14" height="14" />
-                    Xuất hóa đơn / Phiếu thu
+                    Xuất phiếu nghiệm thu / Hóa đơn (PDF)
                   </button>
                 )}
 
@@ -729,32 +751,56 @@ export default function JobApplicants() {
                     </div>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  style={{
-                    background: '#ca8a04',
-                    color: '#ffffff',
-                    fontWeight: 700,
-                    border: 'none',
-                    padding: '8px 18px',
-                    borderRadius: 8,
-                    cursor: 'pointer',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}
-                  onClick={() => openModal('review', {
-                    jobId: job.id,
-                    jobTitle: job.title,
-                    withName: job.hiredApplicant,
-                    direction: 'toStudent',
-                    onReviewed: () => loadData()
-                  })}
-                >
-                  <Icon name="star" width={14} height={14} style={{ fill: '#fff', stroke: '#fff' }} />
-                  Đánh giá sinh viên
-                </button>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{
+                      background: '#ffffff',
+                      color: '#0369a1',
+                      border: '1px solid #bae6fd',
+                      fontWeight: 600,
+                      padding: '8px 14px',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                    onClick={() => openModal('receipt', { justCompletedId: job.id, job })}
+                    title="Tải về file PDF Biên bản nghiệm thu và chứng từ giải ngân"
+                  >
+                    <Icon name="receipt" width={14} height={14} />
+                    Xuất phiếu nghiệm thu (PDF)
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    style={{
+                      background: '#ca8a04',
+                      color: '#ffffff',
+                      fontWeight: 700,
+                      border: 'none',
+                      padding: '8px 18px',
+                      borderRadius: 8,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                    onClick={() => openModal('review', {
+                      jobId: job.id,
+                      jobTitle: job.title,
+                      withName: job.hiredApplicant,
+                      direction: 'toStudent',
+                      onReviewed: () => loadData()
+                    })}
+                  >
+                    <Icon name="star" width={14} height={14} style={{ fill: '#fff', stroke: '#fff' }} />
+                    Đánh giá sinh viên
+                  </button>
+                </div>
               </div>
             )}
 
@@ -865,19 +911,46 @@ export default function JobApplicants() {
                   >
                     Xem xét nghiệm thu & Giải ngân
                   </button>
-                  <button
-                    className="btn btn-outline"
-                    style={{ color: '#e11d48', borderColor: '#fecdd3' }}
-                    onClick={() => openModal('revision', {
-                      job,
-                      jobId: job.id,
-                      deliverable: job.deliverable,
-                      onReviewed: loadData,
-                      onRequested: loadData
-                    })}
-                  >
-                    Yêu cầu chỉnh sửa lại
-                  </button>
+
+                  {(() => {
+                    const revLimit = job.revisionLimit ?? 2;
+                    const revCount = job.revisionCount ?? 0;
+                    const isLimitReached = revCount >= revLimit;
+
+                    if (isLimitReached) {
+                      return (
+                        <>
+                          <button
+                            className="btn btn-outline"
+                            disabled
+                            style={{ color: '#94a3b8', borderColor: '#cbd5e1', opacity: 0.6, cursor: 'not-allowed' }}
+                            title={`Đã sử dụng hết ${revLimit} lần chỉnh sửa cho phép.`}
+                          >
+                            Đã hết lượt sửa ({revCount}/{revLimit})
+                          </button>
+                          <div style={{ width: '100%', marginTop: 8, padding: '10px 14px', background: '#fff1f2', border: '1px solid #fecdd3', borderRadius: 8, fontSize: 13, color: '#be123c', lineHeight: 1.5 }}>
+                            ⚠️ <b>Đã đạt giới hạn chỉnh sửa tối đa ({revLimit} lần):</b> Bạn không thể yêu cầu sửa đổi thêm. Nếu sản phẩm đạt chất lượng, vui lòng bấm <b>"Xem xét nghiệm thu & Giải ngân"</b>. Nếu sản phẩm không đạt chất lượng cam kết, bạn có thể bấm <b>"Khiếu nại công việc"</b> để gửi Ban Trọng tài phân xử.
+                          </div>
+                        </>
+                      );
+                    }
+
+                    return (
+                      <button
+                        className="btn btn-outline"
+                        style={{ color: '#e11d48', borderColor: '#fecdd3' }}
+                        onClick={() => openModal('revision', {
+                          job,
+                          jobId: job.id,
+                          deliverable: job.deliverable,
+                          onReviewed: loadData,
+                          onRequested: loadData
+                        })}
+                      >
+                        Yêu cầu chỉnh sửa lại (Lượt {revCount + 1}/{revLimit})
+                      </button>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -927,7 +1000,7 @@ export default function JobApplicants() {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Avatar src={rev.reviewerAvatar} name={rev.reviewerName} size="sm" />
+                        <Avatar src={rev.reviewerAvatar || rev.reviewerAvatarUrl} name={rev.reviewerName} size="sm" />
                         <div>
                           <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--ink)' }}>
                             {rev.reviewerName}
@@ -1140,7 +1213,7 @@ export default function JobApplicants() {
                 Không tìm thấy ứng viên nào phù hợp với bộ lọc hiện tại.
               </div>
             ) : (
-              filteredApplicants.map((a, idx) => {
+              pagedApplicants.map((a, idx) => {
                 const isHiredOne = a.isHired;
                 const isLocked = hasHired && !isHiredOne;
                 const isShortlisted = shortlistedIds.includes(a.id || a.name);
@@ -1405,11 +1478,40 @@ export default function JobApplicants() {
                           gap: 8,
                         }}
                       >
-                        {a.coverLetter && (
-                          <div style={{ color: 'var(--ink)', lineHeight: 1.5 }}>
-                            <b>Lời nhắn từ sinh viên:</b> "{a.coverLetter}"
-                          </div>
-                        )}
+                        {(() => {
+                          if (!a.coverLetter) return null;
+                          const proposalMatch = a.coverLetter.match(/^\[(.*?)\]\s*([\s\S]*)$/);
+                          const proposalTag = proposalMatch ? proposalMatch[1] : null;
+                          const messageBody = proposalMatch ? proposalMatch[2]?.trim() : a.coverLetter;
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {proposalTag && (
+                                <div style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  alignSelf: 'flex-start',
+                                  padding: '4px 10px',
+                                  borderRadius: 8,
+                                  background: 'linear-gradient(135deg, rgba(108, 76, 255, 0.1) 0%, rgba(22, 163, 74, 0.1) 100%)',
+                                  border: '1px solid rgba(108, 76, 255, 0.25)',
+                                  fontSize: 12.5,
+                                  fontWeight: 700,
+                                  color: 'var(--primary)'
+                                }}>
+                                  <Icon name="sparkles" width={13} height={13} />
+                                  <span>{proposalTag}</span>
+                                </div>
+                              )}
+                              {messageBody && (
+                                <div style={{ color: 'var(--ink)', lineHeight: 1.5 }}>
+                                  <b>Lời nhắn từ sinh viên:</b> "{messageBody}"
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                         {(a.cvFileName || a.cvFileId) && (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, paddingTop: a.coverLetter ? 8 : 0, borderTop: a.coverLetter ? '1px dashed var(--border)' : 'none' }}>
                             <div>
@@ -1435,6 +1537,21 @@ export default function JobApplicants() {
               })
             )}
           </div>
+
+          {filteredApplicants.length > 0 && (
+            <div style={{ marginTop: 20 }}>
+              <Pagination
+                currentPage={applicantPage}
+                totalPages={applicantTotalPages}
+                totalItems={filteredApplicants.length}
+                pageSize={applicantPageSize}
+                onPageChange={setApplicantPage}
+                onPageSizeChange={(sz) => { setApplicantPageSize(sz); setApplicantPage(1); }}
+                pageSizeOptions={[5, 10, 20, 50]}
+                itemLabel="ứng viên"
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -1491,7 +1608,7 @@ export default function JobApplicants() {
         <ModalShell onClose={() => setViewStudentModal(null)}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16 }}>
             <Avatar
-              src={viewStudentModal.avatar || viewStudentModal.studentAvatarUrl}
+              src={viewStudentModal.avatar || viewStudentModal.studentAvatarUrl || viewStudentModal.avatarUrl}
               name={viewStudentModal.name}
               fontSize={22}
               style={{ width: 56, height: 56, borderRadius: '50%' }}

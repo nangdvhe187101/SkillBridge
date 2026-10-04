@@ -1,19 +1,19 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
+import Pagination from '../../components/Pagination';
 import ModalShell from '../../components/modals/ModalShell';
-import UserTierBadge from '../../components/common/UserTierBadge';
 import { useStore } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { talentApi } from '../../api/talentApi';
 import { getMyJobs } from '../../api/jobApi';
-import { studentsSeed } from '../../data/studentDirectory';
+import { getPublicStudentProfile } from '../../api/userApi';
 import { slugify } from '../../data/companies';
 
 function tierFromScore(score) {
-  if (score >= 90) return 'gold';
-  if (score >= 70) return 'silver';
+  if (score >= 95) return 'gold';
+  if (score >= 85) return 'silver';
   return 'bronze';
 }
 const TIER_LABEL = { gold: 'Gold Tier', silver: 'Silver Tier', bronze: 'Bronze Tier' };
@@ -23,7 +23,10 @@ export default function StudentProfile() {
   const navigate = useNavigate();
   const { state, openChatWithPerson } = useStore();
   const { showToast } = useToast();
+  const [tab, setTab] = useState('overview'); // 'overview' | 'experience' | 'portfolio' | 'reviews'
   const [selectedPf, setSelectedPf] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [apiStudent, setApiStudent] = useState(null);
 
   // Invite Talent State
   const [inviteModalOpen, setInviteModalOpen] = useState(false);
@@ -35,89 +38,155 @@ export default function StudentProfile() {
 
   const currentUser = state?.currentUser;
   const isSelf = currentUser && (
+    String(currentUser.id) === slug ||
     slugify(currentUser.fullName || '') === slug ||
-    slugify(state.displayName || '') === slug ||
-    slug === 'dao-van-nang'
+    slugify(state.displayName || '') === slug
   );
 
-  const matchedSeed = studentsSeed.find((s) => slugify(s.name) === slug);
+  useEffect(() => {
+    let isMounted = true;
+    const fetchStudent = async () => {
+      setLoading(true);
+      let targetId = null;
+      if (/^\d+$/.test(slug)) {
+        targetId = parseInt(slug, 10);
+      } else if (isSelf && currentUser?.id) {
+        targetId = currentUser.id;
+      }
 
-  let formattedName = 'Sinh viên SkillBridge';
-  if (slug === 'dao-van-nang') {
-    formattedName = 'Đào Văn Năng';
-  } else if (slug) {
-    formattedName = slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-  }
-
-  let student;
-  if (isSelf) {
-    student = {
-      name: currentUser?.fullName || state?.displayName || 'Đào Văn Năng',
-      school: currentUser?.schoolName || currentUser?.education || 'Đại học FPT Hà Nội',
-      email: currentUser?.email || `${slug}@edu.vn`,
-      phone: currentUser?.phoneNumber || '0327 724 169',
-      reliability: currentUser?.reliabilityScore ?? state?.myReliability ?? 98,
-      completedJobs: currentUser?.jobsDoneCount ?? (state?.myApplications?.filter((a) => a.status === 'completed')?.length || 8),
-      avgRating: currentUser?.avgRating || 5.0,
-      skills: (Array.isArray(currentUser?.skills) && currentUser?.skills.length > 0)
-        ? currentUser.skills.map(s => typeof s === 'string' ? s : (s.skillName || s.name || 'Kỹ năng'))
-        : ['Lập trình Fullstack Web', 'Thiết kế UI/UX Figma', 'Verified Canva Operator'],
-      bio: currentUser?.bio || 'Sinh viên Đại học FPT, chuyên môn Lập trình Web và Thiết kế giao diện. Cam kết hoàn thành công việc đúng tiến độ với tinh thần trách nhiệm cao nhất trên nền tảng SkillBridge.',
-      avatar: currentUser?.avatarUrl,
-      portfolio: (Array.isArray(currentUser?.portfolios) && currentUser?.portfolios.length > 0)
-        ? currentUser.portfolios.map(p => p.title || p)
-        : ['Hệ thống Sàn giao dịch SkillBridge', 'Bộ ấn phẩm thiết kế thương hiệu FPT', 'Video sáng tạo nội dung ngắn'],
-      planCode: currentUser?.planCode || state?.activePlanCode || 'STU_MASTER',
-      reviews: currentUser?.reviews || [
-        { name: 'Công ty Cổ phần Sáng Tạo FPT', stars: 5, comment: 'Sinh viên Đào Văn Năng làm việc rất có trách nhiệm, chủ động giao bài đúng hạn và sản phẩm đạt chất lượng cao.' },
-        { name: 'Studio Thiết kế Alpha', stars: 5, comment: 'Kỹ năng chuyên môn tốt, phản hồi tin nhắn nhanh và tiếp thu góp ý rất cầu thị.' }
-      ]
+      if (targetId) {
+        try {
+          const data = await getPublicStudentProfile(targetId);
+          if (isMounted) setApiStudent(data);
+        } catch (err) {
+          console.warn('Lỗi khi lấy thông tin sinh viên từ API:', err);
+        }
+      }
+      if (isMounted) setLoading(false);
     };
-  } else if (matchedSeed) {
-    student = matchedSeed;
-  } else {
-    student = {
+
+    fetchStudent();
+    return () => { isMounted = false; };
+  }, [slug, isSelf, currentUser?.id]);
+
+  // Hợp nhất dữ liệu: API thật > currentUser (nếu isSelf) > Fallback
+  const student = useMemo(() => {
+    if (apiStudent) {
+      return {
+        id: apiStudent.id,
+        name: apiStudent.fullName,
+        headline: apiStudent.headline || 'Sinh viên tài năng · SkillBridge Freelancer',
+        school: apiStudent.school || 'Đang cập nhật trường',
+        industry: apiStudent.industry || 'Lập trình & Thiết kế',
+        email: apiStudent.email,
+        phone: apiStudent.phoneNumber,
+        avatar: apiStudent.avatarUrl || apiStudent.avatar || null,
+        cover: apiStudent.coverImageUrl,
+        reliability: apiStudent.reliabilityScore || 95,
+        completedJobs: apiStudent.completedJobsCount || 0,
+        avgRating: apiStudent.averageRating || 5.0,
+        totalReviews: apiStudent.totalReviewsCount || 0,
+        isKycVerified: apiStudent.isKycVerified,
+        expectedHourlyRate: apiStudent.expectedHourlyRate,
+        skills: apiStudent.skills || [],
+        education: apiStudent.education || [],
+        experiences: apiStudent.experiences || [],
+        socialLinks: apiStudent.socialLinks || {},
+        bio: apiStudent.bio || 'Sinh viên nhiệt huyết, cam kết chất lượng sản phẩm và tiến độ hoàn thành đúng hạn trên SkillBridge.',
+        portfolios: apiStudent.portfolios || [],
+        reviews: apiStudent.reviews || [],
+        badges: apiStudent.badges || []
+      };
+    }
+
+    if (isSelf && currentUser) {
+      return {
+        id: currentUser.id,
+        name: currentUser.fullName || state?.displayName || 'Sinh viên SkillBridge',
+        headline: currentUser.headline || 'Sinh viên tài năng · SkillBridge Freelancer',
+        school: currentUser.school || 'Đại học FPT',
+        industry: currentUser.industry || 'Lập trình web',
+        email: currentUser.email,
+        phone: currentUser.phone || currentUser.phoneNumber,
+        avatar: currentUser.avatarUrl || currentUser.avatar || null,
+        cover: currentUser.coverImageUrl,
+        reliability: currentUser.reliabilityScore ?? state?.myReliability ?? 98,
+        completedJobs: currentUser.jobsDoneCount ?? (state?.myApplications?.filter((a) => a.status === 'completed')?.length || 0),
+        avgRating: 5.0,
+        totalReviews: 0,
+        isKycVerified: currentUser.kycStatus === 'verified',
+        expectedHourlyRate: currentUser.expectedHourlyRate,
+        skills: Array.isArray(currentUser.skills) && currentUser.skills.length > 0
+          ? currentUser.skills
+          : ['Kỹ năng chuyên môn', 'Làm việc nhóm', 'Đúng hạn deadline'],
+        education: Array.isArray(currentUser.education) ? currentUser.education : [],
+        experiences: Array.isArray(currentUser.experiences) ? currentUser.experiences : [],
+        socialLinks: currentUser.socialLinks || {},
+        bio: currentUser.bio || currentUser.companyDescription || 'Sinh viên nhiệt huyết, cam kết hoàn thành công việc đúng tiến độ với tinh thần trách nhiệm cao nhất.',
+        portfolios: [],
+        reviews: [],
+        badges: []
+      };
+    }
+
+    let formattedName = slug ? slug.split('-').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Sinh viên SkillBridge';
+    return {
+      id: /^\d+$/.test(slug) ? parseInt(slug, 10) : 0,
       name: formattedName,
-      school: slug === 'dao-van-nang' ? 'Đại học FPT Hà Nội' : 'Đại học FPT / Bách Khoa',
-      email: slug === 'dao-van-nang' ? 'nangdv@fpt.edu.vn' : `${slug || 'student'}@edu.vn`,
-      phone: slug === 'dao-van-nang' ? '0327 724 169' : '0988 123 456',
-      reliability: 98,
-      completedJobs: 8,
+      headline: 'Ứng viên tiềm năng trên SkillBridge',
+      school: 'Đại học đối tác SkillBridge',
+      industry: 'Chuyên môn ứng dụng',
+      email: null,
+      phone: null,
+      avatar: null,
+      cover: null,
+      reliability: 95,
+      completedJobs: 4,
       avgRating: 5.0,
-      skills: ['Lập trình Fullstack Web', 'Thiết kế UI/UX Figma', 'Verified Canva Operator'],
-      bio: 'Sinh viên năng động, cam kết hoàn thành công việc đúng tiến độ với tinh thần trách nhiệm cao nhất trên nền tảng SkillBridge.',
-      portfolio: ['Hệ thống Sàn giao dịch SkillBridge', 'Bộ ấn phẩm thiết kế nhận diện thương hiệu', 'Website thương mại điện tử'],
-      planCode: 'STU_MASTER',
-      reviews: [
-        { name: 'Doanh nghiệp Đối tác', stars: 5, comment: 'Sinh viên làm việc rất có trách nhiệm, giao bài đúng hạn và chất lượng sản phẩm tốt.' }
-      ]
+      totalReviews: 1,
+      isKycVerified: true,
+      skills: ['Kỹ năng chuyên môn', 'Giao tiếp tốt', 'Trách nhiệm cao'],
+      education: [],
+      experiences: [],
+      socialLinks: {},
+      bio: 'Sinh viên năng động, cam kết chất lượng sản phẩm và tiến độ hoàn thành đúng hạn trên SkillBridge.',
+      portfolios: [],
+      reviews: [],
+      badges: []
     };
-  }
+  }, [apiStudent, isSelf, currentUser, slug, state?.displayName, state?.myReliability, state?.myApplications]);
 
   const tier = tierFromScore(student.reliability || 95);
   const skillsList = student.skills || [];
-  const portfolioList = student.portfolio || [];
+  const portfoliosList = student.portfolios || [];
   const reviewsList = student.reviews || [];
-  const studentPlanCode = student.planCode || (student.reliability >= 95 ? 'STU_MASTER' : (student.reliability >= 85 ? 'STU_PRO' : 'STU_STARTER'));
 
-  // Calculate expected rate
-  const expectedRate = studentPlanCode === 'STU_MASTER'
-    ? 400000
-    : studentPlanCode === 'STU_PRO'
-      ? 250000
-      : studentPlanCode === 'STU_STARTER'
-        ? 160000
-        : (student.reliability >= 90 ? 200000 : (student.reliability >= 75 ? 150000 : 100000));
-  const expectedRateFormatted = expectedRate.toLocaleString('vi-VN');
+  const [portfolioPage, setPortfolioPage] = useState(1);
+  const [portfolioPageSize, setPortfolioPageSize] = useState(6);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviewsPageSize, setReviewsPageSize] = useState(5);
 
-  // Open invite modal
+  const portfolioTotalPages = Math.ceil(portfoliosList.length / portfolioPageSize) || 1;
+  const pagedPortfolios = useMemo(() => {
+    const start = (portfolioPage - 1) * portfolioPageSize;
+    return portfoliosList.slice(start, start + portfolioPageSize);
+  }, [portfoliosList, portfolioPage, portfolioPageSize]);
+
+  const reviewsTotalPages = Math.ceil(reviewsList.length / reviewsPageSize) || 1;
+  const pagedReviews = useMemo(() => {
+    const start = (reviewsPage - 1) * reviewsPageSize;
+    return reviewsList.slice(start, start + reviewsPageSize);
+  }, [reviewsList, reviewsPage, reviewsPageSize]);
+
+  // Mở modal mời ứng tuyển
   const handleOpenInvite = async () => {
     if (!currentUser) {
       showToast('Vui lòng đăng nhập tài khoản Nhà tuyển dụng để mời nhận việc.', 'info');
       navigate('/login');
       return;
     }
-    if (currentUser.role !== 'employer') {
+    const role = (currentUser.roleCode || currentUser.role || '').toLowerCase();
+    if (role !== 'employer' && role !== 'recruiter' && role !== 'business') {
       showToast('Chỉ tài khoản Nhà tuyển dụng mới có thể gửi lời mời làm việc trực tiếp.', 'warning');
       return;
     }
@@ -141,7 +210,12 @@ export default function StudentProfile() {
     }
   };
 
-  // Submit invite
+  const copyLink = () => {
+    const shareUrl = window.location.href;
+    if (navigator.clipboard) navigator.clipboard.writeText(shareUrl).catch(() => {});
+    showToast('Đã sao chép đường dẫn hồ sơ ứng viên!', 'copy');
+  };
+
   const handleSendInvite = async (e) => {
     e.preventDefault();
     if (!selectedJobId) {
@@ -151,19 +225,10 @@ export default function StudentProfile() {
 
     try {
       setInviting(true);
-      let targetId = student?.id || matchedSeed?.id;
+      const targetId = student?.id;
       if (!targetId) {
-        try {
-          const resSearch = await talentApi.getTalents({ keyword: student.name, pageSize: 1 });
-          const found = resSearch?.data?.items?.[0] || resSearch?.items?.[0];
-          if (found?.id) {
-            targetId = found.id;
-          } else {
-            targetId = 1;
-          }
-        } catch {
-          targetId = 1;
-        }
+        showToast('Không xác định được mã ứng viên để gửi lời mời.', 'error');
+        return;
       }
 
       const res = await talentApi.inviteTalent(targetId, {
@@ -184,443 +249,570 @@ export default function StudentProfile() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="page active">
+        <div className="wrap" style={{ padding: '80px 0', textAlign: 'center' }}>
+          <div style={{ display: 'inline-block', width: 40, height: 40, border: '3px solid #e2e8f0', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          <p style={{ marginTop: 14, color: 'var(--ink-soft)' }}>Đang tải hồ sơ ứng viên...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="page active">
-      <div className="profile-hero">
-        <div className="wrap">
-          <a href="#" className="back-home" style={{ marginBottom: 14, display: 'inline-flex' }} onClick={(e) => { e.preventDefault(); navigate(-1); }}>
-            <Icon name="chevleft" style={{ width: 14, height: 14 }} /> Quay lại
+    <div className="page active" style={{ background: 'var(--bg-subtle, #f8fafc)', minHeight: '100vh', paddingBottom: 80 }}>
+      {/* Cover Banner */}
+      <div
+        style={{
+          height: 220,
+          background: student.cover
+            ? `url(${student.cover}) center/cover no-repeat`
+            : 'linear-gradient(135deg, #1e1b4b 0%, #4338ca 50%, #7c3aed 100%)',
+          position: 'relative'
+        }}
+      >
+        <div className="wrap" style={{ position: 'relative', height: '100%' }}>
+          <a
+            href="#"
+            className="back-link"
+            onClick={(e) => { e.preventDefault(); navigate(-1); }}
+            style={{
+              position: 'absolute',
+              top: 20,
+              left: 0,
+              color: '#fff',
+              background: 'rgba(0,0,0,0.4)',
+              padding: '6px 14px',
+              borderRadius: 20,
+              backdropFilter: 'blur(6px)',
+              textDecoration: 'none',
+              fontSize: 13,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <Icon name="chevleft" width="14" height="14" /> Quay lại
           </a>
-          <div className="ph-row">
-            <Avatar
-              src={student.avatar || student.avatarUrl}
-              name={student.name}
-              fontSize={32}
-              style={{ width: 88, height: 88, borderRadius: '22px' }}
-            />
-            <div>
-              <div className="ph-name" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                <span>{student.name}</span>
-                <UserTierBadge planCode={studentPlanCode} userRole="student" variant="pill" size="sm" />
-                <div className={'stamp stamp-sm stamp-' + tier} title={`Xếp hạng: ${tier.toUpperCase()}`}><Icon name="check" /></div>
-              </div>
-              <div className="ph-sub" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Icon name="graduation" width="15" height="15" />
-                  <span>Sinh viên {student.school} · SkillBridge</span>
-                </span>
-                <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Icon name="check" width="11" height="11" />
-                  <span>Đã xác thực eKYC Sinh viên</span>
-                </span>
-              </div>
-              <div className="ph-meta" style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                {skillsList.slice(0, 3).map((s, i) => (
-                  <span className="chip" key={i} style={{ background: 'rgba(255,255,255,.1)', color: '#fff', borderColor: 'rgba(255,255,255,.2)' }}>{s}</span>
-                ))}
-                <span className="chip chip-lime">{TIER_LABEL[tier]}</span>
-                <span
-                  className="chip"
-                  style={{
-                    background: 'rgba(245, 158, 11, 0.22)',
-                    color: '#fef08a',
-                    borderColor: 'rgba(245, 158, 11, 0.45)',
-                    fontWeight: 700,
-                  }}
-                  title="Mức thù lao mong muốn tham khảo của sinh viên"
-                >
-                  🏷️ Thù lao kỳ vọng: ~{expectedRateFormatted}đ/giờ
-                </span>
-              </div>
-            </div>
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, position: 'relative', zIndex: 1, alignItems: 'center' }}>
-              <button className="btn btn-outline btn-sm" style={{ background: 'rgba(255,255,255,.08)', color: '#fff', borderColor: 'rgba(255,255,255,.3)' }}
-                onClick={() => openChatWithPerson(student.name)}>
-                <Icon name="chat" style={{ width: 14, height: 14 }} /> Nhắn tin
-              </button>
-              <button
-                className="btn btn-lime btn-sm"
-                style={{
-                  fontWeight: 700,
-                  boxShadow: '0 4px 14px rgba(34, 197, 94, 0.4)',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 5
-                }}
-                onClick={handleOpenInvite}
-              >
-                <Icon name="briefcase" style={{ width: 14, height: 14 }} />
-                Mời nhận việc
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
-      <div className="wrap profile-body">
-        <div className="pb-grid">
-          <div>
-            <div className="pcard">
-              <h4>Giới thiệu</h4>
-              <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.7 }}>{student.bio}</p>
-            </div>
+      <div className="wrap" style={{ position: 'relative', zIndex: 10, marginTop: -65 }}>
+        {/* Profile Identity Card */}
+        <div
+          style={{
+            background: 'var(--bg-card, #fff)',
+            borderRadius: 18,
+            padding: '28px 32px',
+            border: '1px solid var(--line, #e2e8f0)',
+            boxShadow: '0 8px 30px rgba(0,0,0,0.06)'
+          }}
+        >
+          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <Avatar
+              src={student.avatar}
+              name={student.name}
+              fontSize={34}
+              style={{
+                width: 96,
+                height: 96,
+                borderRadius: '50%',
+                border: '4px solid #fff',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                flexShrink: 0
+              }}
+            />
 
-            <div className="pcard">
-              <h4>Điểm Reliability (Độ uy tín)</h4>
-              <div className="score-wrap">
-                <div className="score-num">{student.reliability} / 100</div>
-                <div className="score-bar"><div className="score-fill" style={{ width: `${student.reliability}%` }} /></div>
+            <div style={{ flex: 1, minWidth: 260 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: 'var(--ink, #0f172a)' }}>{student.name}</h1>
+                <span className={'stamp stamp-sm stamp-' + tier} title={`Xếp hạng: ${tier.toUpperCase()}`}>
+                  <Icon name="check" width="12" height="12" />
+                </span>
+                <span className="chip chip-lime" style={{ fontSize: 11, padding: '3px 8px' }}>
+                  {TIER_LABEL[tier]}
+                </span>
+                {student.isKycVerified && (
+                  <span className="chip" style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6', borderColor: 'rgba(59, 130, 246, 0.3)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                    <Icon name="shield-check" width="12" height="12" />
+                    <span>Đã xác thực eKYC</span>
+                  </span>
+                )}
               </div>
-              <div className="score-note">Bắt đầu ở 100 điểm · trừ điểm nếu bỏ dở công việc</div>
-            </div>
 
-            <div className="pcard">
-              <h4>Chỉ số năng lực</h4>
-              <div className="stat-list">
-                <div className="si"><b>{student.completedJobs}</b><span>Công việc hoàn thành</span></div>
-                <div className="si">
-                  <b style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                    {student.avgRating.toFixed(1)} <Icon name="star" width="12" height="12" style={{ color: '#eab308' }} />
-                  </b>
-                  <span>Đánh giá trung bình</span>
-                </div>
-                <div className="si"><b>99%</b><span>Giao đúng hạn</span></div>
-                <div className="si"><b>&lt; 10p</b><span>Phản hồi tin nhắn</span></div>
+              <div style={{ fontSize: 14.5, color: '#4f46e5', fontWeight: 600, marginTop: 4 }}>
+                {student.headline}
+              </div>
+
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 10, fontSize: 13, color: 'var(--ink-soft, #64748b)' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Icon name="graduation" width="14" height="14" /> {student.school}
+                </span>
+                {student.industry && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <Icon name="briefcase" width="14" height="14" /> {student.industry}
+                  </span>
+                )}
+                {student.expectedHourlyRate ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: '#059669', fontWeight: 600, background: '#ecfdf5', padding: '2px 8px', borderRadius: 6, border: '1px solid #a7f3d0' }}>
+                    <Icon name="coins" width="14" height="14" /> {Number(student.expectedHourlyRate).toLocaleString('vi-VN')} đ/giờ
+                  </span>
+                ) : null}
+                {student.phone && isSelf && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                    <Icon name="phone" width="14" height="14" /> {student.phone}
+                  </span>
+                )}
+                {student.website && (
+                  <a
+                    href={student.website.startsWith('http') ? student.website : `https://${student.website}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#4f46e5', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <Icon name="link" width="13" height="13" /> Portfolio online
+                  </a>
+                )}
               </div>
             </div>
 
-            <div className="pcard">
-              <h4>Huy hiệu kỹ năng</h4>
-              {skillsList.length === 0 ? (
-                <div className="empty-state">Chưa có huy hiệu kỹ năng nào.</div>
+            {/* Actions */}
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={copyLink}
+                title="Chia sẻ hồ sơ"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <Icon name="share" width="14" height="14" />
+                <span>Chia sẻ</span>
+              </button>
+
+              {!isSelf && (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => openChatWithPerson(student.name)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Icon name="chat" width="14" height="14" />
+                  <span>Nhắn tin</span>
+                </button>
+              )}
+
+              {isSelf ? (
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => navigate('/settings/profile')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                >
+                  <Icon name="settings" width="14" height="14" />
+                  <span>Chỉnh sửa hồ sơ</span>
+                </button>
               ) : (
-                <div className="badge-row">
-                  {skillsList.map((b) => <span className="chip chip-dark" key={b}>{b}</span>)}
-                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={handleOpenInvite}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600 }}
+                >
+                  <Icon name="briefcase" width="14" height="14" />
+                  <span>Mời nhận việc</span>
+                </button>
               )}
             </div>
           </div>
 
-          <div>
-            {/* Employer View: Submitted CV Card */}
-            <div className="pcard" style={{ border: '1px solid rgba(108, 76, 255, 0.25)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Icon name="file-text" width="17" height="17" style={{ color: 'var(--primary)' }} />
-                  <span>CV Ứng tuyển chuyên môn</span>
-                </h4>
-                <span className="chip chip-lime" style={{ fontSize: 10.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Icon name="check" width="10" height="10" />
-                  <span>Đã kiểm định</span>
-                </span>
+          {/* Quick Metrics Bento */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: 12,
+              marginTop: 24,
+              paddingTop: 20,
+              borderTop: '1px solid var(--line, #e2e8f0)'
+            }}
+          >
+            <div style={{ padding: '12px 16px', background: 'var(--bg-subtle, #f8fafc)', borderRadius: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Điểm tín nhiệm Freelancer</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#16a34a', marginTop: 2 }}>{student.reliability} / 100</div>
+            </div>
+            <div style={{ padding: '12px 16px', background: 'var(--bg-subtle, #f8fafc)', borderRadius: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Dự án đã hoàn thành</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#4f46e5', marginTop: 2 }}>{student.completedJobs} công việc</div>
+            </div>
+            <div style={{ padding: '12px 16px', background: 'var(--bg-subtle, #f8fafc)', borderRadius: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Đánh giá trung bình</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#ea580c', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Icon name="star" width="16" height="16" color="#f59e0b" />
+                <span>{student.avgRating}</span>
+                <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-soft)' }}>({student.totalReviews} đánh giá)</span>
               </div>
-              <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 12, lineHeight: 1.5 }}>
-                Bản CV phù hợp nhất do sinh viên chia sẻ trực tiếp với Nhà tuyển dụng.
+            </div>
+            <div style={{ padding: '12px 16px', background: 'var(--bg-subtle, #f8fafc)', borderRadius: 10 }}>
+              <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Tác phẩm Portfolio</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#0284c7', marginTop: 2 }}>{portfoliosList.length} dự án</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div style={{ display: 'flex', gap: 10, marginTop: 24, borderBottom: '1px solid var(--line, #e2e8f0)', paddingBottom: 10 }}>
+          <button
+            type="button"
+            className={'btn btn-sm ' + (tab === 'overview' ? 'btn-primary' : 'btn-outline')}
+            onClick={() => setTab('overview')}
+            style={{ borderRadius: 20 }}
+          >
+            Tổng quan & Kỹ năng
+          </button>
+          <button
+            type="button"
+            className={'btn btn-sm ' + (tab === 'experience' ? 'btn-primary' : 'btn-outline')}
+            onClick={() => setTab('experience')}
+            style={{ borderRadius: 20 }}
+          >
+            Học vấn & Kinh nghiệm
+          </button>
+          <button
+            type="button"
+            className={'btn btn-sm ' + (tab === 'portfolio' ? 'btn-primary' : 'btn-outline')}
+            onClick={() => setTab('portfolio')}
+            style={{ borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <span>Tác phẩm Portfolio</span>
+            <span style={{ background: tab === 'portfolio' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: tab === 'portfolio' ? '#fff' : '#475569', padding: '1px 7px', borderRadius: 10, fontSize: 11 }}>
+              {portfoliosList.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            className={'btn btn-sm ' + (tab === 'reviews' ? 'btn-primary' : 'btn-outline')}
+            onClick={() => setTab('reviews')}
+            style={{ borderRadius: 20 }}
+          >
+            Đánh giá từ đối tác ({reviewsList.length})
+          </button>
+        </div>
+
+        {/* Tab 1: Overview */}
+        {tab === 'overview' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, marginTop: 20 }}>
+            <div style={{ background: 'var(--bg-card, #fff)', borderRadius: 14, padding: 24, border: '1px solid var(--line, #e2e8f0)' }}>
+              <h3 style={{ margin: '0 0 14px', fontSize: 17, fontWeight: 700 }}>Giới thiệu bản thân</h3>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, color: 'var(--ink, #1e293b)', whiteSpace: 'pre-line' }}>
+                {student.bio}
               </p>
 
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '12px 14px',
-                  background: 'var(--surface-2, rgba(0,0,0,0.02))',
-                  border: '1px solid var(--border)',
-                  borderRadius: 12,
-                  marginBottom: 10
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div className="tx-ic" style={{ background: 'rgba(99, 102, 241, 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <Icon name="file-text" width="20" height="20" />
-                  </div>
-                  <div>
-                    <b style={{ display: 'block', fontSize: 13.5 }}>CV_{student.name.replace(/\s+/g, '')}_ChuyenMon.pdf</b>
-                    <span style={{ fontSize: 11, color: 'var(--ink-soft)' }}>
-                      Khối ngành: {skillsList[0] || 'Chuyên môn'} · 420 KB
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  className="btn btn-primary btn-sm"
-                  style={{ fontSize: 12, padding: '5px 12px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                  onClick={() => {
-                    const blob = new Blob([`HỒ SƠ NĂNG LỰC / CV ỨNG TUYỂN\nSinh viên: ${student.name}\nTrường: ${student.school}\nKỹ năng: ${skillsList.join(', ')}\nReliability Score: ${student.reliability}/100\nĐược xác thực qua SkillBridge`], { type: 'text/plain;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `CV_${student.name.replace(/\s+/g, '')}.txt`;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                  }}
-                >
-                  <Icon name="download" width="13" height="13" />
-                  <span>Tải CV</span>
-                </button>
-              </div>
-
-              <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', background: 'var(--surface)', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Icon name="lock" width="13" height="13" style={{ flexShrink: 0, color: 'var(--primary)' }} />
-                <span><b>Bảo vệ quyền riêng tư:</b> Các bản CV chuyên ngành khác của sinh viên được bảo mật và ẩn tự động đối với nhà tuyển dụng.</span>
+              <h4 style={{ margin: '24px 0 12px', fontSize: 15, fontWeight: 600 }}>Kỹ năng chuyên môn</h4>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {skillsList.map((s, idx) => (
+                  <span key={idx} className="chip chip-lime" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', fontSize: 12.5 }}>
+                    <Icon name="check" width="12" height="12" />
+                    <span>{s}</span>
+                  </span>
+                ))}
               </div>
             </div>
 
-            <div className="pcard">
-              <h4>Portfolio & Dự án ({portfolioList.length})</h4>
-              <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 12 }}>Bấm vào từng dự án để xem chi tiết.</p>
-              {portfolioList.length === 0 ? (
-                <div className="empty-state">Sinh viên chưa thêm mục portfolio nào.</div>
-              ) : (
-                <div className="portfolio-grid">
-                  {portfolioList.map((cap, i) => (
-                    <div
-                      className="pf-item"
-                      key={i}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => setSelectedPf({ title: cap, desc: `Dự án thực tế do ${student.name} thực hiện và hoàn thành xuất sắc trên SkillBridge.` })}
-                    >
-                      <div
-                        className="pf-thumb"
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'linear-gradient(135deg, rgba(108,76,255,0.18), rgba(87,199,255,0.18))',
-                          borderRadius: 8
-                        }}
-                      >
-                        <Icon name="brush" width="24" height="24" style={{ color: 'var(--primary)' }} />
+            <div style={{ background: 'var(--bg-card, #fff)', borderRadius: 14, padding: 24, border: '1px solid var(--line, #e2e8f0)' }}>
+              <h3 style={{ margin: '0 0 14px', fontSize: 17, fontWeight: 700 }}>Liên kết & Mạng xã hội</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13.5 }}>
+                {student.socialLinks?.github && (
+                  <a href={student.socialLinks.github} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#334155', textDecoration: 'none' }}>
+                    <Icon name="link" width="15" height="15" />
+                    <span>GitHub: {student.socialLinks.github.replace('https://github.com/', '')}</span>
+                  </a>
+                )}
+                {student.socialLinks?.linkedin && (
+                  <a href={student.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#0284c7', textDecoration: 'none' }}>
+                    <Icon name="link" width="15" height="15" />
+                    <span>LinkedIn Profile</span>
+                  </a>
+                )}
+                {student.socialLinks?.behance && (
+                  <a href={student.socialLinks.behance} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#4f46e5', textDecoration: 'none' }}>
+                    <Icon name="link" width="15" height="15" />
+                    <span>Behance / Dribbble Portfolio</span>
+                  </a>
+                )}
+                {(!student.socialLinks?.github && !student.socialLinks?.linkedin && !student.socialLinks?.behance) && (
+                  <div style={{ color: 'var(--ink-soft)', fontStyle: 'italic', fontSize: 13 }}>
+                    Chưa liên kết mạng xã hội công khai.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 2: Education & Experiences */}
+        {tab === 'experience' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, marginTop: 20 }}>
+            {/* Education Timeline */}
+            <div style={{ background: 'var(--bg-card, #fff)', borderRadius: 14, padding: 24, border: '1px solid var(--line, #e2e8f0)' }}>
+              <h3 style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="graduation" width="18" height="18" color="#4f46e5" />
+                <span>Quá trình Học vấn</span>
+              </h3>
+
+              {student.education && student.education.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {student.education.map((edu, i) => (
+                    <div key={i} style={{ borderLeft: '2px solid #6366f1', paddingLeft: 14 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14.5 }}>{edu.school}</div>
+                      <div style={{ color: '#4f46e5', fontSize: 13, fontWeight: 500 }}>
+                        {edu.degree} · {edu.fieldOfStudy}
                       </div>
-                      <div className="pf-cap">{cap}</div>
+                      {edu.startYear && edu.endYear && (
+                        <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
+                          {edu.startYear} - {edu.endYear}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
+              ) : (
+                <div style={{ color: 'var(--ink-soft)', fontStyle: 'italic', fontSize: 13 }}>
+                  Đang theo học tại {student.school}.
+                </div>
               )}
             </div>
 
-            <div className="pcard">
-              <h4>Đánh giá từ Nhà tuyển dụng ({reviewsList.length})</h4>
-              {reviewsList.length === 0 ? (
-                <div className="empty-state">Chưa có đánh giá nào.</div>
-              ) : (
-                reviewsList.map((r, i) => (
-                  <div className="review-item" key={i}>
-                    <div className="ri-top" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <b>{r.author || r.name}</b>
-                      <span className="stars" style={{ display: 'inline-flex', gap: 2 }}>
-                        {Array.from({ length: 5 }).map((_, idx) => (
-                          <Icon
-                            key={idx}
-                            name="star"
-                            style={{
-                              width: 13,
-                              height: 13,
-                              color: idx < r.stars ? '#eab308' : 'var(--border)'
-                            }}
-                          />
-                        ))}
-                      </span>
+            {/* Experience Timeline */}
+            <div style={{ background: 'var(--bg-card, #fff)', borderRadius: 14, padding: 24, border: '1px solid var(--line, #e2e8f0)' }}>
+              <h3 style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="briefcase" width="18" height="18" color="#16a34a" />
+                <span>Kinh nghiệm & Dự án thực tế</span>
+              </h3>
+
+              {student.experiences && student.experiences.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {student.experiences.map((exp, i) => (
+                    <div key={i} style={{ borderLeft: '2px solid #16a34a', paddingLeft: 14 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14.5 }}>{exp.role}</div>
+                      <div style={{ color: '#16a34a', fontSize: 13, fontWeight: 500 }}>{exp.company}</div>
+                      {exp.period && (
+                        <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{exp.period}</div>
+                      )}
+                      {exp.description && (
+                        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink, #1e293b)', lineHeight: 1.6 }}>
+                          {exp.description}
+                        </p>
+                      )}
                     </div>
-                    {r.job && <div className="ri-sub">{r.job}{r.time ? ` · ${r.time}` : ''}</div>}
-                    <p>{r.comment}</p>
-                  </div>
-                ))
+                  ))}
+                </div>
+              ) : (
+                <div style={{ color: 'var(--ink-soft)', fontStyle: 'italic', fontSize: 13 }}>
+                  Chưa cập nhật kinh nghiệm chi tiết.
+                </div>
               )}
             </div>
           </div>
-        </div>
+        )}
+
+        {/* Tab 3: Portfolio */}
+        {tab === 'portfolio' && (
+          <div style={{ marginTop: 20 }}>
+            {portfoliosList.length > 0 ? (
+              <>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 18 }}>
+                {pagedPortfolios.map((pf) => (
+                  <div
+                    key={pf.id}
+                    onClick={() => setSelectedPf(pf)}
+                    style={{
+                      background: 'var(--bg-card, #fff)',
+                      borderRadius: 14,
+                      overflow: 'hidden',
+                      border: '1px solid var(--line, #e2e8f0)',
+                      cursor: 'pointer',
+                      transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+                    }}
+                  >
+                    <div style={{ height: 160, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      {['jpg', 'jpeg', 'png', 'webp'].includes((pf.fileType || '').toLowerCase()) ? (
+                        <img src={pf.fileUrl} alt={pf.fileName} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ textAlign: 'center' }}>
+                          <Icon name="folder" width="40" height="40" color="#6366f1" />
+                          <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>{(pf.fileType || 'FILE').toUpperCase()}</div>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ padding: 14 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {pf.fileName}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 4 }}>
+                        Bấm để xem chi tiết
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 20 }}>
+                  <Pagination
+                    currentPage={portfolioPage}
+                    totalPages={portfolioTotalPages}
+                    totalItems={portfoliosList.length}
+                    pageSize={portfolioPageSize}
+                    onPageChange={setPortfolioPage}
+                    onPageSizeChange={(sz) => { setPortfolioPageSize(sz); setPortfolioPage(1); }}
+                    pageSizeOptions={[6, 12, 24]}
+                    itemLabel="tác phẩm"
+                  />
+                </div>
+              </>
+            ) : (
+              <div style={{ background: 'var(--bg-card, #fff)', padding: '50px 20px', textAlign: 'center', borderRadius: 14, border: '1px solid var(--line, #e2e8f0)' }}>
+                <Icon name="folder" width="36" height="36" style={{ color: 'var(--ink-soft)', margin: '0 auto 12px' }} />
+                <h4 style={{ margin: 0, fontSize: 16 }}>Chưa có tác phẩm nào trong Portfolio</h4>
+                <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-soft)' }}>Tác phẩm tải lên sẽ xuất hiện tại đây để chứng minh năng lực thực tế.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 4: Reviews */}
+        {tab === 'reviews' && (
+          <div style={{ marginTop: 20 }}>
+            {reviewsList.length > 0 ? (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {pagedReviews.map((r, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      background: 'var(--bg-card, #fff)',
+                      borderRadius: 14,
+                      padding: 18,
+                      border: '1px solid var(--line, #e2e8f0)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <Avatar src={r.reviewerAvatar || r.reviewerAvatarUrl} name={r.reviewerName} fontSize={14} style={{ width: 36, height: 36, borderRadius: '50%' }} />
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{r.reviewerName}</div>
+                          <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Dự án: {r.jobTitle}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 2 }}>
+                        {Array.from({ length: r.stars || 5 }).map((_, i) => (
+                          <Icon key={i} name="star" width="14" height="14" color="#f59e0b" />
+                        ))}
+                      </div>
+                    </div>
+                    {r.comment && (
+                      <p style={{ margin: '10px 0 0', fontSize: 13.5, color: 'var(--ink, #1e293b)', lineHeight: 1.6 }}>
+                        "{r.comment}"
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 20 }}>
+                  <Pagination
+                    currentPage={reviewsPage}
+                    totalPages={reviewsTotalPages}
+                    totalItems={reviewsList.length}
+                    pageSize={reviewsPageSize}
+                    onPageChange={setReviewsPage}
+                    onPageSizeChange={(sz) => { setReviewsPageSize(sz); setReviewsPage(1); }}
+                    pageSizeOptions={[5, 10, 20]}
+                    itemLabel="đánh giá"
+                  />
+                </div>
+              </>
+            ) : (
+              <div style={{ background: 'var(--bg-card, #fff)', padding: '50px 20px', textAlign: 'center', borderRadius: 14, border: '1px solid var(--line, #e2e8f0)' }}>
+                <Icon name="star" width="36" height="36" style={{ color: 'var(--ink-soft)', margin: '0 auto 12px' }} />
+                <h4 style={{ margin: 0, fontSize: 16 }}>Chưa có đánh giá nào</h4>
+                <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-soft)' }}>Nhận xét từ các Nhà tuyển dụng sẽ được cập nhật sau khi hoàn thành dự án.</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Portfolio Lightbox Modal */}
+      {/* Lightbox Preview Modal */}
       {selectedPf && (
-        <ModalShell onClose={() => setSelectedPf(null)}>
-          <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, rgba(108,76,255,0.15), rgba(87,199,255,0.15))', borderRadius: 12, marginBottom: 14 }}>
-            <Icon name="brush" width="48" height="48" style={{ color: 'var(--primary)' }} />
-          </div>
-          <h3 style={{ fontSize: 18, marginBottom: 6 }}>{selectedPf.title}</h3>
-          <span className="chip chip-lime" style={{ marginBottom: 10, display: 'inline-block' }}>Dự án đã kiểm định</span>
-          <p style={{ fontSize: 13.5, color: 'var(--ink-soft)', lineHeight: 1.6 }}>{selectedPf.desc}</p>
-          <div className="modal-actions" style={{ marginTop: 18 }}>
-            <button className="btn btn-primary" onClick={() => setSelectedPf(null)}>Đóng</button>
+        <ModalShell open={!!selectedPf} onClose={() => setSelectedPf(null)} title={selectedPf.fileName}>
+          <div style={{ textAlign: 'center', padding: 10 }}>
+            {['jpg', 'jpeg', 'png', 'webp'].includes((selectedPf.fileType || '').toLowerCase()) ? (
+              <img src={selectedPf.fileUrl} alt={selectedPf.fileName} style={{ maxWidth: '100%', maxHeight: '70vh', borderRadius: 8 }} />
+            ) : (
+              <div style={{ padding: 40 }}>
+                <Icon name="folder" width="60" height="60" color="#6366f1" />
+                <p style={{ marginTop: 12 }}>Định dạng file: {selectedPf.fileType}</p>
+                {selectedPf.fileUrl && (
+                  <a href={selectedPf.fileUrl} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
+                    Tải về tác phẩm
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </ModalShell>
       )}
 
-      {/* Direct Invite Modal */}
+      {/* Invite Modal */}
       {inviteModalOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="invite-modal-title"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            backgroundColor: 'rgba(15, 23, 42, 0.65)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 16,
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: 'var(--surface)',
-              borderRadius: 16,
-              maxWidth: 520,
-              width: '100%',
-              padding: '28px 24px',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.25)',
-              border: '1px solid var(--border)',
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 }}>
-              <div>
-                <h3 id="invite-modal-title" style={{ fontSize: 18, fontWeight: 800, margin: '0 0 4px', color: 'var(--ink)' }}>
-                  Mời nhận việc trực tiếp
-                </h3>
-                <p style={{ fontSize: 13, color: 'var(--ink-soft)', margin: 0 }}>
-                  Gửi lời mời tham gia dự án đến <b>{student.name}</b>
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setInviteModalOpen(false)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: 20,
-                  cursor: 'pointer',
-                  color: 'var(--ink-soft)',
-                  lineHeight: 1,
-                }}
-              >
-                ✕
-              </button>
+        <ModalShell open={inviteModalOpen} onClose={() => setInviteModalOpen(false)} title={`Mời ${student.name} ứng tuyển`}>
+          <form onSubmit={handleSendInvite} style={{ padding: '4px 0' }}>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                Chọn công việc của bạn <span style={{ color: 'var(--coral)' }}>*</span>
+              </label>
+              {loadingJobs ? (
+                <div style={{ fontSize: 13, color: 'var(--ink-soft)' }}>Đang tải danh sách công việc...</div>
+              ) : employerJobs.length > 0 ? (
+                <select
+                  value={selectedJobId}
+                  onChange={(e) => setSelectedJobId(e.target.value)}
+                  style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--line)' }}
+                >
+                  {employerJobs.map((j) => (
+                    <option key={j.id} value={j.id}>{j.title}</option>
+                  ))}
+                </select>
+              ) : (
+                <div style={{ fontSize: 13, color: 'var(--coral)' }}>
+                  Bạn chưa có công việc nào đang mở tuyển. Vui lòng đăng việc mới trước khi gửi lời mời.
+                </div>
+              )}
             </div>
 
-            <form onSubmit={handleSendInvite}>
-              {/* Job Select */}
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--ink)' }}>
-                  Chọn dự án / công việc đang tuyển:
-                </label>
-                {loadingJobs ? (
-                  <div style={{ fontSize: 13, color: 'var(--ink-soft)', padding: '8px 0' }}>
-                    Đang tải danh sách công việc của bạn...
-                  </div>
-                ) : employerJobs.length === 0 ? (
-                  <div
-                    style={{
-                      background: 'rgba(239, 68, 68, 0.08)',
-                      borderRadius: 10,
-                      padding: '12px 14px',
-                      fontSize: 13,
-                      color: '#dc2626',
-                    }}
-                  >
-                    Bạn hiện chưa có công việc nào đang mở tuyển. Vui lòng đăng tin tuyển dụng trước khi gửi lời mời.
-                    <div style={{ marginTop: 8 }}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setInviteModalOpen(false);
-                          navigate('/employer/post-job');
-                        }}
-                        className="btn btn-primary"
-                        style={{ fontSize: 12.5, padding: '6px 14px' }}
-                      >
-                        + Đăng tin mới ngay
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <select
-                    value={selectedJobId}
-                    onChange={(e) => setSelectedJobId(e.target.value)}
-                    required
-                    style={{
-                      width: '100%',
-                      padding: '11px 14px',
-                      borderRadius: 10,
-                      border: '1.5px solid var(--border)',
-                      fontSize: 13.5,
-                      background: 'var(--surface)',
-                      color: 'var(--ink)',
-                    }}
-                  >
-                    {employerJobs.map((j) => (
-                      <option key={j.id} value={j.id}>
-                        {j.title} {j.budget ? `— Ngân sách: ${Number(j.budget).toLocaleString('vi-VN')}đ` : ''}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+                Tin nhắn gửi ứng viên
+              </label>
+              <textarea
+                rows={3}
+                value={inviteMessage}
+                onChange={(e) => setInviteMessage(e.target.value)}
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--line)' }}
+              />
+            </div>
 
-              {/* Message Textarea */}
-              <div style={{ marginBottom: 24 }}>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 700, marginBottom: 8, color: 'var(--ink)' }}>
-                  Lời nhắn gửi đến sinh viên:
-                </label>
-                <textarea
-                  rows={4}
-                  value={inviteMessage}
-                  onChange={(e) => setInviteMessage(e.target.value)}
-                  placeholder="Nhập lời chào hoặc điểm nổi bật của dự án để thu hút ứng viên..."
-                  style={{
-                    width: '100%',
-                    padding: '11px 14px',
-                    borderRadius: 10,
-                    border: '1.5px solid var(--border)',
-                    fontSize: 13.5,
-                    lineHeight: 1.5,
-                    background: 'var(--surface)',
-                    color: 'var(--ink)',
-                    resize: 'vertical',
-                  }}
-                />
-                <div style={{ fontSize: 11.5, color: 'var(--ink-soft)', marginTop: 5 }}>
-                  Sinh viên sẽ nhận được thông báo tức thì kèm liên kết ứng tuyển trực tiếp vào dự án.
-                </div>
-              </div>
-
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  onClick={() => setInviteModalOpen(false)}
-                  disabled={inviting}
-                  className="btn btn-ghost"
-                  style={{ borderRadius: 10, padding: '10px 18px', border: '1px solid var(--border)' }}
-                >
-                  Hủy bỏ
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={inviting || employerJobs.length === 0}
-                  className="btn btn-primary"
-                  style={{
-                    borderRadius: 10,
-                    padding: '10px 22px',
-                    fontWeight: 700,
-                    background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                    border: 'none',
-                    color: '#fff',
-                    boxShadow: '0 4px 16px rgba(99, 102, 241, 0.35)',
-                  }}
-                >
-                  {inviting ? 'Đang gửi...' : 'Gửi lời mời ngay'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setInviteModalOpen(false)}>
+                Hủy
+              </button>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={inviting || employerJobs.length === 0}>
+                {inviting ? 'Đang gửi...' : 'Gửi lời mời'}
+              </button>
+            </div>
+          </form>
+        </ModalShell>
       )}
     </div>
   );

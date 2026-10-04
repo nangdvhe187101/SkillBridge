@@ -131,7 +131,7 @@ export default function TopNav() {
                 onClick={() => { navigate('/profile'); setNavOpen(false); }}
               >
                 <Avatar
-                  src={state.currentUser.avatarUrl}
+                  src={state.currentUser.avatarUrl || state.currentUser.avatar}
                   name={state.currentUser.fullName}
                   fontSize={15}
                   style={{ width: 40, height: 40, borderRadius: '50%' }}
@@ -363,7 +363,7 @@ export default function TopNav() {
                   style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}
                 >
                   <Avatar
-                    src={state.currentUser.avatarUrl}
+                    src={state.currentUser.avatarUrl || state.currentUser.avatar}
                     name={state.currentUser.fullName}
                     fontSize={12}
                     style={{ width: 26, height: 26, borderRadius: '50%' }}
@@ -392,7 +392,7 @@ export default function TopNav() {
                 >
                   <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid var(--border)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 12 }}>
                     <Avatar
-                      src={state.currentUser.avatarUrl}
+                      src={state.currentUser.avatarUrl || state.currentUser.avatar}
                       name={state.currentUser.fullName}
                       fontSize={15}
                       style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0 }}

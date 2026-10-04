@@ -71,6 +71,18 @@ public class TalentService : ITalentService
             query = query.Where(u => u.Industry != null && EF.Functions.Like(u.Industry, $"%{ind}%"));
         }
 
+        var filterSkills = new List<string>();
+        if (!string.IsNullOrWhiteSpace(request.Skill)) filterSkills.Add(request.Skill.Trim());
+        if (request.Skills != null) filterSkills.AddRange(request.Skills.Where(s => !string.IsNullOrWhiteSpace(s)).Select(s => s.Trim()));
+        var distinctFilterSkills = filterSkills.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        if (distinctFilterSkills.Count > 0)
+        {
+            query = query.Where(u =>
+                (u.SkillsJson != null && distinctFilterSkills.Any(s => EF.Functions.Like(u.SkillsJson, $"%{s}%"))) ||
+                _dbContext.CvFiles.Any(c => c.StudentId == u.Id && distinctFilterSkills.Any(s => EF.Functions.Like(c.Label, $"%{s}%") || (c.Category != null && EF.Functions.Like(c.Category.Name, $"%{s}%")))));
+        }
+
         if (request.MinReliabilityScore.HasValue)
         {
             query = query.Where(u => u.ReliabilityScore >= request.MinReliabilityScore.Value);
@@ -116,24 +128,49 @@ public class TalentService : ITalentService
                 else if (p.Contains("STARTER")) { tier = 1; planCode = "STU_STARTER"; }
             }
 
-            var skills = userCvs
+            // Trích xuất kỹ năng từ cả profile skills_json và CV files
+            List<string> userCustomSkills = new();
+            if (!string.IsNullOrWhiteSpace(u.SkillsJson))
+            {
+                try
+                {
+                    userCustomSkills = System.Text.Json.JsonSerializer.Deserialize<List<string>>(u.SkillsJson) ?? new();
+                }
+                catch {}
+            }
+
+            var cvSkills = userCvs
                 .Where(c => c.StudentId == u.Id)
                 .SelectMany(c => new[] { c.Label, c.Name })
                 .Where(s => !string.IsNullOrWhiteSpace(s))
-                .Distinct()
-                .Take(4)
                 .ToList();
 
-            decimal expectedRate = 120_000m;
-            if (tier == 3) expectedRate = 400_000m;
-            else if (tier == 2) expectedRate = 250_000m;
-            else if (tier == 1) expectedRate = 160_000m;
+            var skills = userCustomSkills
+                .Concat(cvSkills)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(6)
+                .ToList();
+
+            // Thù lao mong muốn: Ưu tiên lấy từ database (sinh viên tự thiết lập)
+            decimal expectedRate;
+            if (u.ExpectedHourlyRate.HasValue && u.ExpectedHourlyRate.Value > 0)
+            {
+                expectedRate = u.ExpectedHourlyRate.Value;
+            }
             else
             {
-                if (u.ReliabilityScore >= 95 && u.JobsDoneCount >= 10) expectedRate = 200_000m;
-                else if (u.ReliabilityScore >= 85 && u.JobsDoneCount >= 3) expectedRate = 140_000m;
-                else if (u.JobsDoneCount > 0) expectedRate = 100_000m;
-                else expectedRate = 80_000m;
+                // Fallback tính toán ước tính dựa theo Gói hội viên hoặc độ uy tín / kinh nghiệm
+                if (tier == 3) expectedRate = 400_000m;
+                else if (tier == 2) expectedRate = 250_000m;
+                else if (tier == 1) expectedRate = 160_000m;
+                else
+                {
+                    if (u.ReliabilityScore >= 95 && u.JobsDoneCount >= 10) expectedRate = 200_000m;
+                    else if (u.ReliabilityScore >= 85 && u.JobsDoneCount >= 3) expectedRate = 140_000m;
+                    else if (u.JobsDoneCount > 0) expectedRate = 100_000m;
+                    else expectedRate = 80_000m;
+                }
             }
 
             if (request.MinRate.HasValue && expectedRate < request.MinRate.Value) return null;

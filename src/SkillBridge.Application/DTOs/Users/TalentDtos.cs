@@ -8,6 +8,8 @@ public class TalentFilterRequest
     public string? Keyword { get; set; }
     public string? School { get; set; }
     public string? Industry { get; set; }
+    public string? Skill { get; set; }
+    public List<string>? Skills { get; set; }
     public int? MinReliabilityScore { get; set; }
     public decimal? MinRate { get; set; }
     public decimal? MaxRate { get; set; }

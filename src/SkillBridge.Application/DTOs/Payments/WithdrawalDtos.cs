@@ -23,6 +23,9 @@ public class WithdrawalResponseDto
     public string? RejectReason { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ProcessedAt { get; set; }
+    public bool RequiresMakerChecker { get; set; }
+    public bool AwaitingChecker { get; set; }
+    public string? Message { get; set; }
 }
 
 public class AdminWithdrawalItemDto
@@ -43,6 +46,12 @@ public class AdminWithdrawalItemDto
     public string? RejectReason { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime? ProcessedAt { get; set; }
+    public bool RequiresMakerChecker { get; set; }
+    public int? MakerId { get; set; }
+    public string? MakerName { get; set; }
+    public DateTime? MakerAt { get; set; }
+    public string? MakerNote { get; set; }
+    public bool AwaitingChecker { get; set; }
 }
 
 public class AdminRejectWithdrawalDto

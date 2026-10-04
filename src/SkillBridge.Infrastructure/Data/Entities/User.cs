@@ -61,6 +61,47 @@ public partial class User
     [Column("company_description", TypeName = "text")]
     public string? CompanyDescription { get; set; }
 
+    [Column("headline")]
+    [StringLength(255)]
+    public string? Headline { get; set; }
+
+    [Column("bio", TypeName = "text")]
+    public string? Bio { get; set; }
+
+    [Column("tax_code")]
+    [StringLength(50)]
+    public string? TaxCode { get; set; }
+
+    [Column("representative")]
+    [StringLength(100)]
+    public string? Representative { get; set; }
+
+    [Column("address")]
+    [StringLength(255)]
+    public string? Address { get; set; }
+
+    [Column("cover_image_url")]
+    [StringLength(500)]
+    public string? CoverImageUrl { get; set; }
+
+    [Column("skills_json", TypeName = "text")]
+    public string? SkillsJson { get; set; }
+
+    [Column("education_json", TypeName = "text")]
+    public string? EducationJson { get; set; }
+
+    [Column("experience_json", TypeName = "text")]
+    public string? ExperienceJson { get; set; }
+
+    [Column("social_links_json", TypeName = "text")]
+    public string? SocialLinksJson { get; set; }
+
+    [Column("benefits_json", TypeName = "text")]
+    public string? BenefitsJson { get; set; }
+
+    [Column("office_images_json", TypeName = "text")]
+    public string? OfficeImagesJson { get; set; }
+
     [Column("kyc_status", TypeName = "enum('pending','verified','rejected')")]
     public string KycStatus { get; set; } = null!;
 
@@ -81,6 +122,9 @@ public partial class User
 
     [Column("jobs_done_count")]
     public int JobsDoneCount { get; set; }
+
+    [Column("expected_hourly_rate", TypeName = "decimal(12,2)")]
+    public decimal? ExpectedHourlyRate { get; set; }
 
     [Column("blacklist_reason", TypeName = "text")]
     public string? BlacklistReason { get; set; }

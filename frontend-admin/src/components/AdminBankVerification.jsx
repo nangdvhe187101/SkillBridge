@@ -7,6 +7,7 @@ import {
 } from '../api/adminApi';
 import { useToast } from '../context/ToastContext';
 import Icon from './Icon';
+import Pagination from './Pagination';
 
 export default function AdminBankVerification() {
   const { showToast } = useToast();
@@ -22,6 +23,19 @@ export default function AdminBankVerification() {
   const [rejectionReason, setRejectionReason] = useState('');
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter]);
+
+  const totalPages = Math.ceil(requests.length / pageSize) || 1;
+  const pagedRequests = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return requests.slice(start, start + pageSize);
+  }, [requests, currentPage, pageSize]);
 
   const fetchList = async (status = statusFilter) => {
     setLoading(true);
@@ -158,7 +172,7 @@ export default function AdminBankVerification() {
               </tr>
             </thead>
             <tbody>
-              {requests.map((r) => (
+              {pagedRequests.map((r) => (
                 <tr key={r.id}>
                   <td>#{r.id}</td>
                   <td>
@@ -213,6 +227,21 @@ export default function AdminBankVerification() {
               ))}
             </tbody>
           </table>
+        )}
+
+        {requests.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              totalItems={requests.length}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onPageSizeChange={(sz) => { setPageSize(sz); setCurrentPage(1); }}
+              pageSizeOptions={[5, 10, 20, 50]}
+              itemLabel="yêu cầu"
+            />
+          </div>
         )}
       </div>
 

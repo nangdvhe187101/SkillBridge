@@ -6,7 +6,7 @@ import Pagination from '../../components/Pagination';
 import UserTierBadge from '../../components/common/UserTierBadge';
 import { useStore } from '../../context/StoreContext';
 import { talentApi } from '../../api/talentApi';
-import { getMyJobs } from '../../api/jobApi';
+import { getMyJobs, getCategories } from '../../api/jobApi';
 import { slugify } from '../../data/companies';
 
 const POPULAR_UNIVERSITIES = [
@@ -20,14 +20,21 @@ const POPULAR_UNIVERSITIES = [
   'Đại học Sư phạm Kỹ thuật',
 ];
 
-const POPULAR_INDUSTRIES = [
-  'Thiết kế đồ họa / UI-UX',
-  'Công nghệ thông tin / Lập trình',
-  'Video Editing / Motion Graphics',
-  'Content Marketing / Viết bài',
-  'Dịch thuật / Biên tập',
-  'Quản trị Fanpage / Mạng xã hội',
-  'Trợ lý ảo / Nhập liệu',
+const POPULAR_SKILLS = [
+  'React',
+  'Figma',
+  'NodeJS',
+  'Video Editing',
+  'Canva',
+  'Python',
+  'CapCut',
+  'UI/UX Design',
+  'Content Marketing',
+  'Viết bài SEO',
+  'TypeScript',
+  'Dịch thuật',
+  'Illustrator',
+  'ASP.NET'
 ];
 
 export default function Talents() {
@@ -50,12 +57,29 @@ export default function Talents() {
   const [totalCount, setTotalCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
+  // Danh mục chuyên ngành từ Database
+  const [dbCategories, setDbCategories] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    getCategories()
+      .then((res) => {
+        const list = res?.data || res || [];
+        if (isMounted && Array.isArray(list) && list.length > 0) {
+          setDbCategories(list);
+        }
+      })
+      .catch((err) => console.warn('Lỗi khi tải danh mục từ DB:', err));
+    return () => { isMounted = false; };
+  }, []);
+
   // Filters
   const [keyword, setKeyword] = useState('');
   const [school, setSchool] = useState('');
   const [industry, setIndustry] = useState('');
   const [minScore, setMinScore] = useState('');
   const [rateRange, setRateRange] = useState('');
+  const [selectedSkills, setSelectedSkills] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
 
@@ -100,6 +124,7 @@ export default function Talents() {
         minReliabilityScore: minScore ? parseInt(minScore, 10) : undefined,
         minRate,
         maxRate,
+        skills: selectedSkills.length > 0 ? selectedSkills : undefined,
         page,
         pageSize,
       });
@@ -114,7 +139,7 @@ export default function Talents() {
     } finally {
       setLoading(false);
     }
-  }, [keyword, school, industry, minScore, rateRange, page, showToast]);
+  }, [keyword, school, industry, minScore, rateRange, selectedSkills, page, showToast]);
 
   useEffect(() => {
     fetchTalents();
@@ -126,12 +151,29 @@ export default function Talents() {
     fetchTalents();
   };
 
+  const handleToggleSkill = (skillName) => {
+    setSelectedSkills((prev) => {
+      const exists = prev.includes(skillName);
+      if (exists) {
+        return prev.filter((s) => s !== skillName);
+      }
+      return [...prev, skillName];
+    });
+    setPage(1);
+  };
+
+  const handleClearSkills = () => {
+    setSelectedSkills([]);
+    setPage(1);
+  };
+
   const handleResetFilters = () => {
     setKeyword('');
     setSchool('');
     setIndustry('');
     setMinScore('');
     setRateRange('');
+    setSelectedSkills([]);
     setPage(1);
   };
 
@@ -347,9 +389,23 @@ export default function Talents() {
                 }}
               >
                 <option value="">Tất cả lĩnh vực</option>
-                {POPULAR_INDUSTRIES.map((ind) => (
-                  <option key={ind} value={ind}>{ind}</option>
-                ))}
+                {dbCategories.length > 0
+                  ? dbCategories.map((cat) => (
+                      <option key={cat.id || cat.name} value={cat.name}>
+                        {cat.name}
+                      </option>
+                    ))
+                  : [
+                      'Lập trình Web & Ứng dụng',
+                      'Thiết kế Đồ họa & UI/UX',
+                      'Video & Animation',
+                      'Viết bài & Dịch thuật',
+                      'Marketing & Bán hàng',
+                    ].map((ind) => (
+                      <option key={ind} value={ind}>
+                        {ind}
+                      </option>
+                    ))}
               </select>
             </div>
 
@@ -445,7 +501,7 @@ export default function Talents() {
               >
                 Lọc kết quả
               </button>
-              {(keyword || school || industry || minScore || rateRange) && (
+              {(keyword || school || industry || minScore || rateRange || selectedSkills.length > 0) && (
                 <button
                   type="button"
                   onClick={handleResetFilters}
@@ -460,6 +516,118 @@ export default function Talents() {
                   <Icon name="x" width="16" height="16" />
                 </button>
               )}
+            </div>
+          </div>
+
+          {/* Bộ lọc Kỹ năng chuyên sâu dạng Tag Checkbox */}
+          <div
+            style={{
+              marginTop: 18,
+              paddingTop: 16,
+              borderTop: '1px solid var(--border, #e2e8f0)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 8,
+                marginBottom: 10,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>
+                <Icon name="tag" width="14" height="14" />
+                <span>Bộ lọc Kỹ năng chuyên sâu:</span>
+                {selectedSkills.length > 0 && (
+                  <span
+                    style={{
+                      background: '#e0e7ff',
+                      color: '#4338ca',
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      fontSize: 11,
+                      fontWeight: 600,
+                    }}
+                  >
+                    Đã chọn {selectedSkills.length}
+                  </span>
+                )}
+              </div>
+              {selectedSkills.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleClearSkills}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#ef4444',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    padding: 0,
+                  }}
+                >
+                  <Icon name="x" width="12" height="12" />
+                  <span>Bỏ chọn tất cả</span>
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {POPULAR_SKILLS.map((skill) => {
+                const isSelected = selectedSkills.includes(skill);
+                return (
+                  <button
+                    key={skill}
+                    type="button"
+                    onClick={() => handleToggleSkill(skill)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      fontSize: 12.5,
+                      fontWeight: isSelected ? 600 : 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      border: isSelected
+                        ? '1.5px solid #6366f1'
+                        : '1px solid var(--border, #cbd5e1)',
+                      background: isSelected
+                        ? '#eff6ff'
+                        : 'var(--surface, #ffffff)',
+                      color: isSelected ? '#3b82f6' : 'var(--ink-soft, #475569)',
+                      boxShadow: isSelected
+                        ? '0 2px 8px rgba(59, 130, 246, 0.15)'
+                        : 'none',
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: 14,
+                        height: 14,
+                        borderRadius: 3,
+                        border: isSelected ? '1px solid #3b82f6' : '1px solid #94a3b8',
+                        background: isSelected ? '#3b82f6' : '#fff',
+                        color: '#fff',
+                        fontSize: 10,
+                      }}
+                    >
+                      {isSelected ? '✓' : ''}
+                    </span>
+                    <span>{skill}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </form>
@@ -594,7 +762,7 @@ export default function Talents() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14 }}>
                       <div style={{ position: 'relative' }}>
                         <Avatar
-                          src={talent.avatarUrl}
+                          src={talent.avatarUrl || talent.avatar}
                           name={talent.fullName}
                           size="lg"
                           style={{
@@ -863,7 +1031,7 @@ export default function Talents() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <div style={{ position: 'relative' }}>
                   <Avatar
-                    src={selectedStudent.avatarUrl}
+                    src={selectedStudent.avatarUrl || selectedStudent.avatar}
                     name={selectedStudent.fullName}
                     size="md"
                     style={{ width: 44, height: 44 }}
