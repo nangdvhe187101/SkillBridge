@@ -12,14 +12,16 @@ import AdminRoles from '../components/AdminRoles';
 import AdminMessages from '../components/AdminMessages';
 import AdminBankVerification from '../components/AdminBankVerification';
 import AdminPlans from '../components/AdminPlans';
+import AdminContracts from '../components/AdminContracts';
+import IdleLockOverlay from '../components/security/IdleLockOverlay';
 import Icon from '../components/Icon';
 import { adminLogout } from '../api/authApi';
 
 const ROLE_MODULES = {
-  super: ['users', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'ops', 'roles'],
+  super: ['users', 'contracts', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'ops', 'roles'],
   moderator: ['content', 'messages'],
-  dispute: ['disputes', 'messages'],
-  finance: ['finance', 'plans', 'bank-verification'],
+  dispute: ['contracts', 'disputes', 'messages'],
+  finance: ['contracts', 'finance', 'plans', 'bank-verification'],
 };
 
 const ROLE_WHOAMI = {
@@ -35,6 +37,7 @@ const CF_NAV_SECTIONS = [
     title: 'Recents',
     items: [
       { id: 'users', path: '/users', icon: 'users', label: 'Người dùng & eKYC', sub: 'Talents & Employers' },
+      { id: 'contracts', path: '/contracts', icon: 'file-text', label: 'Hợp đồng & Escrow', sub: 'Live Contracts & Escrow' },
       { id: 'finance', path: '/finance', icon: 'bank', label: 'Tài chính & Rút tiền', sub: 'Payouts & Balance' },
       { id: 'disputes', path: '/disputes', icon: 'scale', label: 'Xử lý tranh chấp', sub: 'Claims & Escrow' },
     ]
@@ -66,6 +69,7 @@ const CF_NAV_SECTIONS = [
 
 const MODULE_TITLES = {
   users: 'Người dùng & eKYC',
+  contracts: 'Giám sát Hợp đồng & Ký quỹ Escrow',
   'bank-verification': 'Duyệt tài khoản ngân hàng',
   finance: 'Tài chính & Lệnh rút tiền',
   disputes: 'Trung tâm xử lý tranh chấp',
@@ -114,6 +118,9 @@ function AdminInner({ forcedTab }) {
 
   return (
     <div className="cf-layout">
+      {/* Tự động khóa màn hình mờ sau 15 phút không thao tác theo Q-002 */}
+      <IdleLockOverlay />
+
       {/* Cột Sidebar bên trái (Full-Height phong cách Cloudflare) */}
       <aside className="cf-sidebar" style={{ width: isSidebarCollapsed ? 64 : 260 }}>
         {/* Account Selector Pill */}
@@ -291,26 +298,6 @@ function AdminInner({ forcedTab }) {
 
           {/* Right Toolbar Actions */}
           <div className="cf-topbar-actions">
-            {/* Ask AI Button */}
-            <button
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '4px 10px',
-                borderRadius: 6,
-                border: '1px solid #e5e7eb',
-                background: '#ffffff',
-                fontSize: 12.5,
-                fontWeight: 500,
-                color: '#374151',
-                cursor: 'pointer'
-              }}
-            >
-              <span>✨</span>
-              <span>Hỏi AI</span>
-            </button>
-
             {/* Role Switcher */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#4b5563' }}>
               <span>Vai trò:</span>
@@ -328,33 +315,32 @@ function AdminInner({ forcedTab }) {
             </div>
 
             {/* User Profile Info & Logout */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 8, borderLeft: '1px solid #e5e7eb' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingLeft: 10, borderLeft: '1px solid #e5e7eb' }}>
               <div
                 style={{
                   width: 26,
                   height: 26,
                   borderRadius: '50%',
-                  background: '#0051c3',
-                  color: '#fff',
+                  background: '#f3f4f6',
+                  color: '#374151',
+                  border: '1px solid #e5e7eb',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 12,
-                  fontWeight: 700
+                  fontSize: 11,
+                  fontWeight: 600
                 }}
+                title="Tài khoản quản trị viên"
               >
                 AD
               </div>
               <button
                 onClick={adminLogout}
+                className="cf-btn-secondary"
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  color: '#ef4444',
-                  fontSize: 12.5,
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  padding: '2px 4px'
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  color: '#4b5563'
                 }}
                 title="Đăng xuất khỏi hệ thống"
               >
@@ -367,6 +353,7 @@ function AdminInner({ forcedTab }) {
         {/* Main Content Area */}
         <main className="cf-main">
           {activeTab === 'users' && <AdminUsers />}
+          {activeTab === 'contracts' && <AdminContracts />}
           {activeTab === 'bank-verification' && (
             <div>
               <div style={{ marginBottom: 20 }}>

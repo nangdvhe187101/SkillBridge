@@ -1,13 +1,25 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import Icon from './Icon';
-import { useAdmin } from '../context/AdminContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
 import Pagination from './Pagination';
 import { rolesSeed } from '../data/adminSeed';
+import {
+  getAdminTeamMembers,
+  addAdminTeamMember,
+  updateAdminTeamMember,
+  deleteAdminTeamMember,
+  getAdminRolesList,
+  getAdminPermissionMatrix,
+  addAdminPermissionRoute,
+  toggleAdminRolePermission,
+  deleteAdminPermissionRoute
+} from '../api/adminApi';
 
 const ROLE_NAME = {
+  super_admin: 'Super Admin',
   super: 'Super Admin',
+  admin: 'Super Admin',
   moderator: 'Content Moderator',
   dispute: 'Dispute Officer',
   finance: 'Finance Viewer'
@@ -16,10 +28,6 @@ const ROLE_NAME = {
 const GROUPS = ['Tất cả', 'Việc làm', 'Tuyển dụng', 'Sinh viên', 'Tài chính', 'Giao tiếp', 'Doanh nghiệp', 'Hệ thống', 'Quản trị'];
 
 export default function AdminRoles() {
-  const {
-    team, removeTeamMember, changeTeamRole, addTeamMember,
-    features, toggleFeatureRole, addFeature, removeFeature
-  } = useAdmin();
   const confirm = useConfirm();
   const { showToast } = useToast();
 
@@ -29,28 +37,82 @@ export default function AdminRoles() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(8);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [q, groupF]);
+  // RBAC State từ Backend
+  const [features, setFeatures] = useState([]);
+  const [loadingFeatures, setLoadingFeatures] = useState(true);
+
+  // Team State từ Backend
+  const [team, setTeam] = useState([]);
+  const [loadingTeam, setLoadingTeam] = useState(true);
+  const [rolesList, setRolesList] = useState(rolesSeed);
 
   // Add Feature Modal
   const [newFeatModal, setNewFeatModal] = useState(false);
   const [featName, setFeatName] = useState('');
   const [featUrl, setFeatUrl] = useState('');
-  const [featGroup, setfeatGroup] = useState('Tuyển dụng');
+  const [featGroup, setFeatGroup] = useState('Tuyển dụng');
   const [featRoles, setFeatRoles] = useState(['employer', 'admin']);
+  const [submittingFeat, setSubmittingFeat] = useState(false);
 
   // Add Team Member Form
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('moderator');
+  const [submittingTeam, setSubmittingTeam] = useState(false);
+
+  // Load RBAC Matrix từ Backend
+  const loadMatrix = useCallback(async () => {
+    setLoadingFeatures(true);
+    try {
+      const res = await getAdminPermissionMatrix();
+      if (res && Array.isArray(res)) {
+        setFeatures(res);
+      }
+    } catch (err) {
+      console.warn('Lỗi khi tải ma trận phân quyền RBAC:', err);
+    } finally {
+      setLoadingFeatures(false);
+    }
+  }, []);
+
+  // Load Team Members từ Backend
+  const loadTeam = useCallback(async () => {
+    setLoadingTeam(true);
+    try {
+      const res = await getAdminTeamMembers();
+      if (res && Array.isArray(res)) {
+        setTeam(res);
+      }
+      const rolesRes = await getAdminRolesList();
+      if (rolesRes && Array.isArray(rolesRes) && rolesRes.length > 0) {
+        setRolesList(rolesRes);
+      }
+    } catch (err) {
+      console.warn('Lỗi khi tải danh sách đội ngũ quản trị:', err);
+    } finally {
+      setLoadingTeam(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadMatrix();
+    loadTeam();
+  }, [loadMatrix, loadTeam]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [q, groupF]);
 
   const filteredFeatures = useMemo(() => {
     return features.filter((f) => {
       if (groupF !== 'Tất cả' && f.group !== groupF) return false;
       if (q) {
         const query = q.toLowerCase();
-        return f.name.toLowerCase().includes(query) || f.url.toLowerCase().includes(query) || f.group.toLowerCase().includes(query);
+        return (
+          (f.name && f.name.toLowerCase().includes(query)) ||
+          (f.url && f.url.toLowerCase().includes(query)) ||
+          (f.group && f.group.toLowerCase().includes(query))
+        );
       }
       return true;
     });
@@ -62,43 +124,134 @@ export default function AdminRoles() {
     return filteredFeatures.slice(start, start + pageSize);
   }, [filteredFeatures, currentPage, pageSize]);
 
-  const handleRemoveTeam = async (m, i) => {
-    if (await confirm(`Xoá thành viên ${m.name} khỏi đội ngũ quản trị?`, { danger: true, confirmLabel: 'Xoá thành viên' })) {
-      removeTeamMember(i);
+  // Toggle Role Permission Checkbox
+  const handleToggleFeatureRole = async (featureId, roleCode) => {
+    const feat = features.find((f) => f.id === featureId);
+    if (!feat) return;
+    const isCurrentlyGranted = (feat.roles || []).includes(roleCode);
+    const newGranted = !isCurrentlyGranted;
+
+    // Optimistic UI update
+    setFeatures((prev) =>
+      prev.map((f) => {
+        if (f.id !== featureId) return f;
+        const currentRoles = f.roles || [];
+        const nextRoles = newGranted
+          ? [...currentRoles, roleCode]
+          : currentRoles.filter((r) => r !== roleCode);
+        return { ...f, roles: nextRoles };
+      })
+    );
+
+    try {
+      await toggleAdminRolePermission({
+        permissionId: featureId,
+        roleCode,
+        isGranted: newGranted
+      });
+      showToast(`Đã ${newGranted ? 'cấp quyền' : 'thu hồi quyền'} [${roleCode}] cho '${feat.name}'.`, 'check');
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi cập nhật quyền.', 'error');
+      loadMatrix(); // Rollback
     }
   };
 
-  const submitAddTeam = (e) => {
-    e.preventDefault();
-    if (!name.trim() || !email.trim()) return;
-    addTeamMember({ name: name.trim(), email: email.trim(), role });
-    setName('');
-    setEmail('');
+  // Remove Feature Route
+  const handleRemoveFeature = async (featureId, featureName) => {
+    if (await confirm(`Xóa tính năng '${featureName}' khỏi ma trận RBAC?`, { danger: true, confirmLabel: 'Xóa tính năng' })) {
+      try {
+        await deleteAdminPermissionRoute(featureId);
+        showToast(`Đã xóa tính năng '${featureName}' thành công.`, 'check');
+        setFeatures((prev) => prev.filter((f) => f.id !== featureId));
+      } catch (err) {
+        showToast(err.message || 'Lỗi khi xóa tính năng.', 'error');
+      }
+    }
   };
 
-  const handleSaveNewFeature = (e) => {
+  // Save New Feature
+  const handleSaveNewFeature = async (e) => {
     e.preventDefault();
     if (!featName.trim() || !featUrl.trim()) {
       showToast('Vui lòng nhập đầy đủ tên tính năng và URL route.', 'error');
       return;
     }
-    addFeature({
-      name: featName.trim(),
-      url: featUrl.trim(),
-      group: featGroup,
-      roles: featRoles
-    });
-    setNewFeatModal(false);
-    setFeatName('');
-    setFeatUrl('');
+
+    setSubmittingFeat(true);
+    try {
+      const created = await addAdminPermissionRoute({
+        name: featName.trim(),
+        url: featUrl.trim(),
+        group: featGroup,
+        roles: featRoles
+      });
+      showToast(`Đã thêm tính năng '${created.name}' vào ma trận RBAC!`, 'check');
+      setFeatures((prev) => [created, ...prev]);
+      setNewFeatModal(false);
+      setFeatName('');
+      setFeatUrl('');
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi thêm tính năng mới.', 'error');
+    } finally {
+      setSubmittingFeat(false);
+    }
   };
 
   const toggleModalRole = (r) => {
     setFeatRoles((prev) => prev.includes(r) ? prev.filter((x) => x !== r) : [...prev, r]);
   };
 
-  const handleSaveMatrix = () => {
-    showToast('Đã lưu cấu hình Ma trận Phân quyền URL & Tính năng thành công!', 'check');
+  // Change Team Member Role
+  const handleChangeTeamRole = async (memberId, newRoleCode) => {
+    try {
+      await updateAdminTeamMember(memberId, { roleCode: newRoleCode });
+      showToast('Đã cập nhật vai trò quản trị viên thành công.', 'check');
+      setTeam((prev) =>
+        prev.map((m) => (m.id === memberId ? { ...m, roleCode: newRoleCode } : m))
+      );
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi cập nhật vai trò.', 'error');
+      loadTeam();
+    }
+  };
+
+  // Remove Team Member
+  const handleRemoveTeam = async (m) => {
+    if (await confirm(`Xóa thành viên ${m.name} khỏi đội ngũ quản trị?`, { danger: true, confirmLabel: 'Xóa thành viên' })) {
+      try {
+        await deleteAdminTeamMember(m.id);
+        showToast(`Đã xóa thành viên ${m.name} khỏi đội ngũ.`, 'check');
+        setTeam((prev) => prev.filter((t) => t.id !== m.id));
+      } catch (err) {
+        showToast(err.message || 'Lỗi khi xóa thành viên.', 'error');
+      }
+    }
+  };
+
+  // Add Team Member
+  const submitAddTeam = async (e) => {
+    e.preventDefault();
+    if (!name.trim() || !email.trim()) {
+      showToast('Vui lòng nhập họ tên và email thành viên.', 'warning');
+      return;
+    }
+
+    setSubmittingTeam(true);
+    try {
+      const newMember = await addAdminTeamMember({
+        name: name.trim(),
+        email: email.trim(),
+        roleCode: role
+      });
+      showToast(`Đã thêm ${newMember.name} vào đội ngũ quản trị thành công!`, 'check');
+      setTeam((prev) => [...prev, newMember]);
+      setName('');
+      setEmail('');
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi thêm thành viên.', 'error');
+    } finally {
+      setSubmittingTeam(false);
+    }
   };
 
   return (
@@ -106,16 +259,12 @@ export default function AdminRoles() {
       <div className="adm-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2>Phân quyền Truy cập & Ma trận URL (RBAC)</h2>
-          <p>Kiểm soát quyền truy cập từng URL route/tính năng cho các vai trò (Khách, Sinh viên, Doanh nghiệp, Admin) và quản lý đội ngũ.</p>
+          <p>Kiểm soát quyền truy cập từng URL route/tính năng cho các vai trò (Khách, Sinh viên, Doanh nghiệp, Admin) và quản lý đội ngũ quản trị.</p>
         </div>
         {activeSubTab === 'rbac' && (
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-primary btn-sm" onClick={() => setNewFeatModal(true)}>
+            <button className="cf-btn-primary" onClick={() => setNewFeatModal(true)} style={{ padding: '6px 12px', fontSize: 13 }}>
               + Thêm URL / Tính năng mới
-            </button>
-            <button className="btn btn-lime btn-sm" onClick={handleSaveMatrix} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Icon name="check" style={{ width: 13, height: 13 }} />
-              <span>Lưu ma trận phân quyền</span>
             </button>
           </div>
         )}
@@ -138,7 +287,7 @@ export default function AdminRoles() {
       {activeSubTab === 'rbac' && (
         <div className="adm-card">
           <div className="adm-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h4 style={{ margin: 0 }}>Bảng điều khiển phân quyền Tính năng / URL (Table: Feature)</h4>
+            <h4 style={{ margin: 0 }}>Bảng điều khiển phân quyền Tính năng / URL (Table: permissions)</h4>
             <span className="sub">Đang hiển thị {filteredFeatures.length} / {features.length} tính năng</span>
           </div>
 
@@ -155,123 +304,129 @@ export default function AdminRoles() {
             </select>
           </div>
 
-          <div className="adm-table-wrap">
-            <table className="adm-table">
-              <thead>
-                <tr>
-                  <th style={{ minWidth: 230 }}>Chức năng / Tính năng</th>
-                  <th style={{ minWidth: 160 }}>URL Route</th>
-                  <th style={{ minWidth: 100, textAlign: 'center' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                      <Icon name="users" style={{ width: 13, height: 13 }} />
-                      <span>Khách</span>
-                    </span>
-                  </th>
-                  <th style={{ minWidth: 120, textAlign: 'center' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                      <Icon name="graduation" style={{ width: 13, height: 13 }} />
-                      <span>Sinh viên</span>
-                    </span>
-                  </th>
-                  <th style={{ minWidth: 130, textAlign: 'center' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                      <Icon name="building" style={{ width: 13, height: 13 }} />
-                      <span>Doanh nghiệp</span>
-                    </span>
-                  </th>
-                  <th style={{ minWidth: 90, textAlign: 'center' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                      <Icon name="shield-check" style={{ width: 13, height: 13 }} />
-                      <span>Admin</span>
-                    </span>
-                  </th>
-                  <th style={{ minWidth: 80, textAlign: 'center' }}>Xoá</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagedFeatures.map((f) => (
-                  <tr key={f.id}>
-                    {/* Feature Name & Group */}
-                    <td>
-                      <b style={{ fontSize: 13, color: 'var(--ink)' }}>{f.name}</b>
-                      <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
-                        Nhóm: <span className="chip" style={{ fontSize: 10, padding: '1px 6px' }}>{f.group}</span>
-                      </div>
-                    </td>
-
-                    {/* URL Route */}
-                    <td>
-                      <code style={{ fontSize: 12, background: 'rgba(0,0,0,0.04)', padding: '2px 6px', borderRadius: 4, color: 'var(--primary)', wordBreak: 'break-all' }}>
-                        {f.url}
-                      </code>
-                    </td>
-
-                    {/* Role 1: Guest */}
-                    <td style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={f.roles.includes('guest')}
-                        onChange={() => toggleFeatureRole(f.id, 'guest')}
-                        style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
-                        title="Cho phép Khách truy cập"
-                      />
-                    </td>
-
-                    {/* Role 2: Student */}
-                    <td style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={f.roles.includes('student')}
-                        onChange={() => toggleFeatureRole(f.id, 'student')}
-                        style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
-                        title="Cho phép Sinh viên truy cập"
-                      />
-                    </td>
-
-                    {/* Role 3: Employer */}
-                    <td style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={f.roles.includes('employer')}
-                        onChange={() => toggleFeatureRole(f.id, 'employer')}
-                        style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
-                        title="Cho phép Doanh nghiệp truy cập"
-                      />
-                    </td>
-
-                    {/* Role 4: Admin */}
-                    <td style={{ textAlign: 'center' }}>
-                      <input
-                        type="checkbox"
-                        checked={f.roles.includes('admin')}
-                        onChange={() => toggleFeatureRole(f.id, 'admin')}
-                        style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
-                        title="Cho phép Admin truy cập"
-                      />
-                    </td>
-
-                    {/* Actions */}
-                    <td style={{ textAlign: 'center' }}>
-                      <button
-                        onClick={() => removeFeature(f.id)}
-                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--coral)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                        title="Xoá tính năng"
-                      >
-                        <Icon name="trash" style={{ width: 14, height: 14 }} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-                {filteredFeatures.length === 0 && (
+          {loadingFeatures ? (
+            <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--ink-soft)' }}>
+              Đang tải ma trận phân quyền...
+            </div>
+          ) : (
+            <div className="adm-table-wrap">
+              <table className="adm-table">
+                <thead>
                   <tr>
-                    <td colSpan={7} className="adm-empty" style={{ textAlign: 'center', padding: '24px 0' }}>
-                      Không tìm thấy chức năng hoặc URL route nào phù hợp.
-                    </td>
+                    <th style={{ minWidth: 230 }}>Chức năng / Tính năng</th>
+                    <th style={{ minWidth: 160 }}>URL Route</th>
+                    <th style={{ minWidth: 100, textAlign: 'center' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                        <Icon name="users" style={{ width: 13, height: 13 }} />
+                        <span>Khách</span>
+                      </span>
+                    </th>
+                    <th style={{ minWidth: 120, textAlign: 'center' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                        <Icon name="graduation" style={{ width: 13, height: 13 }} />
+                        <span>Sinh viên</span>
+                      </span>
+                    </th>
+                    <th style={{ minWidth: 130, textAlign: 'center' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                        <Icon name="building" style={{ width: 13, height: 13 }} />
+                        <span>Doanh nghiệp</span>
+                      </span>
+                    </th>
+                    <th style={{ minWidth: 90, textAlign: 'center' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
+                        <Icon name="shield-check" style={{ width: 13, height: 13 }} />
+                        <span>Admin</span>
+                      </span>
+                    </th>
+                    <th style={{ minWidth: 80, textAlign: 'center' }}>Xoá</th>
                   </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {pagedFeatures.map((f) => (
+                    <tr key={f.id}>
+                      {/* Feature Name & Group */}
+                      <td>
+                        <b style={{ fontSize: 13, color: 'var(--ink)' }}>{f.name}</b>
+                        <div style={{ fontSize: 11, color: 'var(--ink-soft)', marginTop: 2 }}>
+                          Nhóm: <span className="chip" style={{ fontSize: 10, padding: '1px 6px' }}>{f.group}</span>
+                        </div>
+                      </td>
+
+                      {/* URL Route */}
+                      <td>
+                        <code style={{ fontSize: 12, background: 'rgba(0,0,0,0.04)', padding: '2px 6px', borderRadius: 4, color: 'var(--primary)', wordBreak: 'break-all' }}>
+                          {f.url}
+                        </code>
+                      </td>
+
+                      {/* Role 1: Guest */}
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={(f.roles || []).includes('guest')}
+                          onChange={() => handleToggleFeatureRole(f.id, 'guest')}
+                          style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
+                          title="Cho phép Khách truy cập"
+                        />
+                      </td>
+
+                      {/* Role 2: Student */}
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={(f.roles || []).includes('student')}
+                          onChange={() => handleToggleFeatureRole(f.id, 'student')}
+                          style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
+                          title="Cho phép Sinh viên truy cập"
+                        />
+                      </td>
+
+                      {/* Role 3: Employer */}
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={(f.roles || []).includes('employer')}
+                          onChange={() => handleToggleFeatureRole(f.id, 'employer')}
+                          style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
+                          title="Cho phép Doanh nghiệp truy cập"
+                        />
+                      </td>
+
+                      {/* Role 4: Admin */}
+                      <td style={{ textAlign: 'center' }}>
+                        <input
+                          type="checkbox"
+                          checked={(f.roles || []).includes('admin')}
+                          onChange={() => handleToggleFeatureRole(f.id, 'admin')}
+                          style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
+                          title="Cho phép Admin truy cập"
+                        />
+                      </td>
+
+                      {/* Actions */}
+                      <td style={{ textAlign: 'center' }}>
+                        <button
+                          onClick={() => handleRemoveFeature(f.id, f.name)}
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: 'var(--coral)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                          title="Xoá tính năng"
+                        >
+                          <Icon name="trash" style={{ width: 14, height: 14 }} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredFeatures.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="adm-empty" style={{ textAlign: 'center', padding: '24px 0' }}>
+                        Không tìm thấy chức năng hoặc URL route nào phù hợp.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Reusable Pagination */}
           <Pagination
@@ -293,42 +448,60 @@ export default function AdminRoles() {
       {activeSubTab === 'team' && (
         <>
           <div className="adm-role-grid">
-            {rolesSeed.map((r) => (
+            {rolesList.map((r) => (
               <div className="adm-role-card" key={r.id}>
                 <h4>{r.name}</h4>
-                <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '6px 0 10px' }}>{r.desc}</p>
+                <p style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '6px 0 10px' }}>{r.desc || r.description}</p>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {r.modules.map((m) => <span className="chip" key={m} style={{ fontSize: 11 }}>{m}</span>)}
+                  {(r.modules || []).map((m) => <span className="chip" key={m} style={{ fontSize: 11 }}>{m}</span>)}
                 </div>
               </div>
             ))}
           </div>
 
           <div className="adm-card" style={{ marginTop: 20 }}>
-            <div className="adm-card-head"><h4>Thành viên đội ngũ quản trị</h4></div>
-            <div className="adm-table-wrap">
-              <table className="adm-table">
-                <thead><tr><th>Thành viên</th><th>Email</th><th>Vai trò nội bộ</th><th>Hành động</th></tr></thead>
-                <tbody>
-                  {team.map((m, i) => (
-                    <tr key={i}>
-                      <td><b>{m.name}</b></td>
-                      <td>{m.email}</td>
-                      <td>
-                        <select value={m.role} onChange={(e) => changeTeamRole(i, e.target.value)}>
-                          {Object.entries(ROLE_NAME).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
-                        </select>
-                      </td>
-                      <td>
-                        <button className="btn btn-outline btn-sm" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }} onClick={() => handleRemoveTeam(m, i)}>
-                          Xoá khỏi đội ngũ
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="adm-card-head">
+              <h4 style={{ margin: 0 }}>Thành viên đội ngũ quản trị ({team.length})</h4>
             </div>
+            {loadingTeam ? (
+              <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--ink-soft)' }}>
+                Đang tải danh sách thành viên...
+              </div>
+            ) : (
+              <div className="adm-table-wrap">
+                <table className="adm-table">
+                  <thead><tr><th>Thành viên</th><th>Email</th><th>Vai trò nội bộ</th><th>Hành động</th></tr></thead>
+                  <tbody>
+                    {team.map((m) => (
+                      <tr key={m.id}>
+                        <td><b>{m.name}</b></td>
+                        <td>{m.email}</td>
+                        <td>
+                          <select
+                            value={m.roleCode || m.role}
+                            onChange={(e) => handleChangeTeamRole(m.id, e.target.value)}
+                          >
+                            <option value="super_admin">Super Admin</option>
+                            <option value="moderator">Content Moderator</option>
+                            <option value="dispute">Dispute Officer</option>
+                            <option value="finance">Finance Viewer</option>
+                          </select>
+                        </td>
+                        <td>
+                          <button
+                            className="btn btn-outline btn-sm"
+                            style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
+                            onClick={() => handleRemoveTeam(m)}
+                          >
+                            Xoá khỏi đội ngũ
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <div className="adm-card" style={{ marginTop: 20 }}>
@@ -336,19 +509,36 @@ export default function AdminRoles() {
             <form onSubmit={submitAddTeam} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, alignItems: 'end' }}>
               <div className="field" style={{ marginBottom: 0 }}>
                 <label>Họ tên</label>
-                <input type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nguyễn Văn A" />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Nguyễn Văn A"
+                  required
+                />
               </div>
               <div className="field" style={{ marginBottom: 0 }}>
                 <label>Email nội bộ</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ten@skillbridge.vn" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="ten@skillbridge.vn"
+                  required
+                />
               </div>
               <div className="field" style={{ marginBottom: 0 }}>
                 <label>Vai trò đảm nhiệm</label>
                 <select value={role} onChange={(e) => setRole(e.target.value)}>
-                  {Object.entries(ROLE_NAME).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                  <option value="super_admin">Super Admin</option>
+                  <option value="moderator">Content Moderator</option>
+                  <option value="dispute">Dispute Officer</option>
+                  <option value="finance">Finance Viewer</option>
                 </select>
               </div>
-              <button type="submit" className="btn btn-primary btn-sm">Thêm thành viên</button>
+              <button type="submit" className="btn btn-primary btn-sm" disabled={submittingTeam}>
+                {submittingTeam ? 'Đang thêm...' : 'Thêm thành viên'}
+              </button>
             </form>
           </div>
         </>
@@ -376,6 +566,7 @@ export default function AdminRoles() {
                   value={featName}
                   onChange={(e) => setFeatName(e.target.value)}
                   placeholder="Ví dụ: Báo cáo đối soát thu nhập Escrow..."
+                  required
                 />
               </div>
 
@@ -386,6 +577,7 @@ export default function AdminRoles() {
                   value={featUrl}
                   onChange={(e) => setFeatUrl(e.target.value)}
                   placeholder="Ví dụ: /wallet/statements hoặc /api/v1/jobs/export..."
+                  required
                 />
               </div>
 
@@ -423,11 +615,11 @@ export default function AdminRoles() {
               </div>
 
               <div className="modal-actions" style={{ marginTop: 18 }}>
-                <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <button type="submit" className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }} disabled={submittingFeat}>
                   <Icon name="check" style={{ width: 13, height: 13 }} />
-                  <span>Thêm vào Ma trận</span>
+                  <span>{submittingFeat ? 'Đang thêm...' : 'Thêm vào Ma trận'}</span>
                 </button>
-                <button type="button" className="btn btn-outline" onClick={() => setNewFeatModal(false)}>
+                <button type="button" className="btn btn-outline" onClick={() => setNewFeatModal(false)} disabled={submittingFeat}>
                   Hủy
                 </button>
               </div>
