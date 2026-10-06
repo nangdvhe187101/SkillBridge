@@ -34,7 +34,6 @@ public class StorageController : ControllerBase
     [HttpGet("file")]
     [AllowAnonymous]
     [EnableRateLimiting("GeneralApiPolicy")]
-    [ResponseCache(Duration = 86400, Location = ResponseCacheLocation.Client)]
     public async Task<IActionResult> GetFile([FromQuery] string key, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(key))
@@ -63,6 +62,12 @@ public class StorageController : ControllerBase
         var result = await _storageService.DownloadFileAsync(normalizedKey, cancellationToken);
         if (result == null)
         {
+            if (normalizedKey.StartsWith("avatars/", StringComparison.OrdinalIgnoreCase))
+            {
+                // Fallback SVG avatar vector khi file avatar chưa có trên máy local để không gây lỗi 404 console
+                const string fallbackSvg = "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\"><rect width=\"100\" height=\"100\" rx=\"24\" fill=\"#6366f1\"/><circle cx=\"50\" cy=\"42\" r=\"20\" fill=\"#ffffff\" opacity=\"0.9\"/><path d=\"M22 88 c0 -18 14 -28 28 -28 s28 10 28 28 z\" fill=\"#ffffff\" opacity=\"0.9\"/></svg>";
+                return Content(fallbackSvg, "image/svg+xml");
+            }
             return NotFound(new { message = "Không tìm thấy file trên hệ thống lưu trữ." });
         }
 
