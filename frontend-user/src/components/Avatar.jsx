@@ -39,6 +39,8 @@ export default function Avatar({ src, name = '?', className, style, fontSize = 1
         src={resolvedSrc}
         alt={name}
         className={className}
+        referrerPolicy="no-referrer"
+        crossOrigin="anonymous"
         style={{
           objectFit: 'cover',
           userSelect: 'none',

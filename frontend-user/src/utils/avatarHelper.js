@@ -10,6 +10,10 @@ export function resolveAvatarUrl(src) {
   if (!src || typeof src !== 'string') return null;
   const s = src.trim();
   if (!s || s.length <= 2 || s.toLowerCase() === 'null' || s.toLowerCase() === 'undefined') return null;
+  const lower = s.toLowerCase();
+  if (lower === 'file' || lower === 'avatar' || lower === 'default' || lower === 'image') return null;
+  // Nếu là chuỗi đơn không có dấu / hoặc đuôi mở rộng hợp lệ thì không phải file key
+  if (!s.includes('/') && !s.includes('.')) return null;
 
 
   // 1. Data URI hoặc Blob URL (upload preview)

@@ -158,10 +158,10 @@ export default function RegisterForm({ onSwitchTab }) {
             </div>
 
             <div className={'field' + (emailError ? ' has-error' : '')}>
-                <label>{role === 'student' ? 'Email đại học' : 'Email công ty'}</label>
+                <label>{role === 'student' ? 'Email sinh viên / cá nhân' : 'Email công ty'}</label>
                 <input
                     type="email"
-                    placeholder={role === 'student' ? 'ban@fpt.edu.vn' : 'hr@congty.vn'}
+                    placeholder={role === 'student' ? 'ban@fpt.edu.vn hoặc ban@gmail.com' : 'hr@congty.vn'}
                     value={regForm.email}
                     onChange={(e) => updateField({ email: e.target.value })}
                     onBlur={(e) => validateEmail(e.target.value)}
@@ -235,17 +235,19 @@ export default function RegisterForm({ onSwitchTab }) {
                 {loading ? 'Đang tạo tài khoản...' : 'Tạo tài khoản'}
             </button>
 
-            {role === 'student' && (
-                <>
-                    <div className="auth-separator" style={{ display: 'flex', alignItems: 'center', margin: '20px 0 14px', color: 'var(--text-muted, #94a3b8)', fontSize: 13 }}>
-                        <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
-                        <span style={{ padding: '0 12px' }}>hoặc tiếp tục với</span>
-                        <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
-                    </div>
+            <div className="auth-separator" style={{ display: 'flex', alignItems: 'center', margin: '20px 0 14px', color: 'var(--text-muted, #94a3b8)', fontSize: 13 }}>
+                <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
+                <span style={{ padding: '0 12px' }}>hoặc tiếp tục với</span>
+                <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
+            </div>
 
-                    <GoogleLoginButton roleCode="student" text="Đăng ký nhanh với Google" onError={(msg) => setFormError(msg)} />
-                </>
-            )}
+            <GoogleLoginButton
+                key={role}
+                roleCode={role}
+                mode="register"
+                text={role === 'employer' ? "Đăng ký Nhà tuyển dụng với Google" : "Đăng ký Sinh viên với Google"}
+                onError={(msg) => setFormError(msg)}
+            />
 
             <div className="auth-foot">
                 Đã có tài khoản? <a onClick={() => onSwitchTab('login')}>Đăng nhập</a>

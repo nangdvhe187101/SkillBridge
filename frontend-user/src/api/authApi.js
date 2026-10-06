@@ -100,12 +100,12 @@ export async function login(email, password) {
     return handleResponse(res);
 }
 
-export async function googleLogin(idToken, roleCode = 'student') {
+export async function googleLogin(idToken, roleCode = 'student', mode = 'login') {
     const res = await fetch(`${API_URL}/auth/google`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken, roleCode }),
+        body: JSON.stringify({ idToken, roleCode, mode }),
     });
     return handleResponse(res);
 }

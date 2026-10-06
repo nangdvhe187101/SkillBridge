@@ -26,6 +26,7 @@ public class GoogleLoginDto
 {
     public string IdToken { get; set; } = string.Empty;
     public string RoleCode { get; set; } = "student";
+    public string Mode { get; set; } = "login"; // "login" | "register"
 }
 
 public class AuthResponseDto

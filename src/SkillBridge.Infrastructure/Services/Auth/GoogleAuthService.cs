@@ -77,80 +77,15 @@ namespace SkillBridge.Infrastructure.Services.Auth
             }
 
             var email = payload.Email.Trim().ToLowerInvariant();
-
-            // Ràng buộc bảo mật tối cao: Đăng nhập Google CHỈ DÀNH RIÊNG cho sinh viên trường FPT
-            var isFptStudent = email.EndsWith("@fpt.edu.vn", StringComparison.OrdinalIgnoreCase) ||
-                               email.EndsWith("@fe.edu.vn", StringComparison.OrdinalIgnoreCase);
-
-            if (!isFptStudent)
-            {
-                throw new BusinessException("Tính năng Đăng nhập bằng Google chỉ dành riêng cho sinh viên FPT (@fpt.edu.vn hoặc @fe.edu.vn). Nhà tuyển dụng hoặc các tài khoản khác vui lòng đăng nhập bằng Email và Mật khẩu bên dưới.");
-            }
+            var mode = string.IsNullOrWhiteSpace(dto.Mode) ? "login" : dto.Mode.Trim().ToLowerInvariant();
 
             var user = await userRepository.GetByEmailWithRoleAsync(email);
 
-            if (user == null)
+            if (mode == "login")
             {
-                // Người dùng mới đăng ký lần đầu bằng Google -> Luôn luôn gán vai trò Sinh viên (Student)
-                var role = await roleRepository.GetByCodeAsync(RoleCode.Student);
-                if (role == null)
+                if (user == null)
                 {
-                    throw new BusinessException("Không tìm thấy cấu hình vai trò sinh viên trong hệ thống.");
-                }
-
-                user = new User
-                {
-                    FullName = string.IsNullOrWhiteSpace(payload.Name) ? email.Split('@')[0] : payload.Name,
-                    Email = email,
-                    AvatarUrl = payload.Picture,
-                    PasswordHash = "GOOGLE_SSO:" + BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N")),
-                    RoleId = role.Id,
-                    KycStatus = "pending",
-                    AccountStatus = "active", // Google đã xác minh chính chủ -> Kích hoạt ngay
-                    ReliabilityScore = 100,
-                    JobsDoneCount = 0,
-                    JoinedAt = DateTime.UtcNow
-                };
-
-                await userRepository.AddAsync(user);
-                await userRepository.SaveChangesAsync();
-
-                // Nạp lại User cùng Role
-                user = await userRepository.GetByEmailWithRoleAsync(email);
-
-                // Gửi email chào mừng sinh viên mới (Non-blocking / Background)
-                if (user != null)
-                {
-                    var targetEmail = user.Email;
-                    var targetName = user.FullName;
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await emailService.SendStudentWelcomeEmailAsync(targetEmail, targetName);
-                        }
-                        catch (Exception ex)
-                        {
-                            logger.LogWarning(ex, "Không thể gửi email chào mừng sinh viên FPT tới {Email}", targetEmail);
-                        }
-                    });
-                }
-            }
-            else
-            {
-                // Người dùng đã tồn tại -> Kiểm tra trạng thái và vai trò (Bảo vệ 2 lớp qua cả Navigation Property và RoleId)
-                var studentRole = await roleRepository.GetByCodeAsync(RoleCode.Student);
-                if (user.Role == null && studentRole != null && user.RoleId == studentRole.Id)
-                {
-                    user.Role = studentRole;
-                }
-
-                var isStudent = (user.Role != null && string.Equals(user.Role.Code, RoleCode.Student, StringComparison.OrdinalIgnoreCase))
-                                || (studentRole != null && user.RoleId == studentRole.Id);
-
-                if (!isStudent)
-                {
-                    throw new BusinessException("Tài khoản này thuộc vai trò Nhà tuyển dụng, không hỗ trợ đăng nhập qua Google SSO sinh viên. Vui lòng đăng nhập bằng Email và Mật khẩu.");
+                    throw new BusinessException("Tài khoản chưa được đăng ký trong hệ thống. Vui lòng chuyển sang tab Đăng ký để tạo tài khoản mới.");
                 }
 
                 if (user.AccountStatus == "locked" || user.AccountStatus == "blacklisted")
@@ -160,7 +95,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
 
                 var updated = false;
 
-                // Tự động kích hoạt nếu trước đó bị pending
+                // Tự động kích hoạt nếu trước đó bị pending (vì Google SSO đã xác thực email chính chủ)
                 if (user.AccountStatus == "pending")
                 {
                     user.AccountStatus = "active";
@@ -181,10 +116,98 @@ namespace SkillBridge.Infrastructure.Services.Auth
                     updated = true;
                 }
 
+                // Tự động liên kết tài khoản Google ID (REQ-AUTH-01)
+                if (!string.IsNullOrWhiteSpace(payload.Subject))
+                {
+                    var hasGoogleLogin = user.ExternalLogins.Any(el => el.Provider == "google" && el.ProviderUserId == payload.Subject);
+                    if (!hasGoogleLogin)
+                    {
+                        user.ExternalLogins.Add(new ExternalLogin
+                        {
+                            UserId = user.Id,
+                            Provider = "google",
+                            ProviderUserId = payload.Subject,
+                            ProviderEmail = email,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                        updated = true;
+                    }
+                }
+
                 if (updated)
                 {
                     await userRepository.SaveChangesAsync();
                 }
+            }
+            else if (mode == "register")
+            {
+                if (user != null)
+                {
+                    throw new BusinessException("Email này đã được đăng ký tài khoản trong hệ thống. Vui lòng chuyển sang tab Đăng nhập.");
+                }
+
+                var targetRoleCode = string.Equals(dto.RoleCode, RoleCode.Employer, StringComparison.OrdinalIgnoreCase)
+                    ? RoleCode.Employer
+                    : RoleCode.Student;
+
+                var role = await roleRepository.GetByCodeAsync(targetRoleCode);
+                if (role == null)
+                {
+                    throw new BusinessException($"Không tìm thấy cấu hình vai trò '{targetRoleCode}' trong hệ thống.");
+                }
+
+                user = new User
+                {
+                    FullName = string.IsNullOrWhiteSpace(payload.Name) ? email.Split('@')[0] : payload.Name,
+                    Email = email,
+                    AvatarUrl = payload.Picture,
+                    PasswordHash = "GOOGLE_SSO:" + BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N")),
+                    RoleId = role.Id,
+                    KycStatus = "pending",
+                    AccountStatus = "active", // Google đã xác minh chính chủ -> Kích hoạt ngay
+                    ReliabilityScore = 100,
+                    JobsDoneCount = 0,
+                    JoinedAt = DateTime.UtcNow
+                };
+
+                if (!string.IsNullOrWhiteSpace(payload.Subject))
+                {
+                    user.ExternalLogins.Add(new ExternalLogin
+                    {
+                        Provider = "google",
+                        ProviderUserId = payload.Subject,
+                        ProviderEmail = email,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                await userRepository.AddAsync(user);
+                await userRepository.SaveChangesAsync();
+
+                // Nạp lại User cùng Role
+                user = await userRepository.GetByEmailWithRoleAsync(email);
+
+                // Gửi email chào mừng nếu là sinh viên
+                if (user != null && targetRoleCode == RoleCode.Student)
+                {
+                    var targetEmail = user.Email;
+                    var targetName = user.FullName;
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await emailService.SendStudentWelcomeEmailAsync(targetEmail, targetName);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex, "Không thể gửi email chào mừng sinh viên tới {Email}", targetEmail);
+                        }
+                    });
+                }
+            }
+            else
+            {
+                throw new BusinessException("Chế độ xác thực Google không hợp lệ (hỗ trợ 'login' hoặc 'register').");
             }
 
             if (user == null || user.Role == null)

@@ -1071,7 +1071,7 @@ export function StoreProvider({ children }) {
   }, []);
 
   const refreshWallet = useCallback(async () => {
-    if (!stateRef.current?.currentUser && !getAccessToken()) {
+    if (!stateRef.current?.currentUser || !getAccessToken()) {
       return;
     }
     try {
@@ -1117,7 +1117,7 @@ export function StoreProvider({ children }) {
   }, []);
 
   const refreshDisputes = useCallback(async () => {
-    if (!stateRef.current?.currentUser && !getAccessToken()) {
+    if (!stateRef.current?.currentUser || !getAccessToken()) {
       return;
     }
     try {
@@ -1155,6 +1155,8 @@ export function StoreProvider({ children }) {
           if (isMounted) {
             await refreshWallet();
             await refreshDisputes();
+            await refreshNotifications();
+            await refreshMyApplications();
           }
         } catch (e) {
           console.warn('Không thể tải hồ sơ hoặc ví chi tiết khi khởi động:', e);
@@ -1203,6 +1205,9 @@ export function StoreProvider({ children }) {
   }, []);
 
   const refreshMyJobs = useCallback(async () => {
+    if (!stateRef.current?.currentUser || !getAccessToken()) {
+      return;
+    }
     try {
       const res = await jobApi.getMyJobs(null, 1, 50);
       const items = res?.items || (Array.isArray(res) ? res : []);
@@ -1214,6 +1219,9 @@ export function StoreProvider({ children }) {
 
 
   const refreshMyApplications = useCallback(async () => {
+    if (!stateRef.current?.currentUser || !getAccessToken()) {
+      return [];
+    }
     try {
       const res = await applicationApi.getMyApplications(1, 50);
       const list = Array.isArray(res) ? res : (res?.items || []);
@@ -1227,7 +1235,7 @@ export function StoreProvider({ children }) {
   }, []);
 
   const refreshNotifications = useCallback(async () => {
-    if (!stateRef.current?.currentUser && !getAccessToken()) {
+    if (!stateRef.current?.currentUser || !getAccessToken()) {
       return;
     }
     try {
@@ -1975,8 +1983,8 @@ export function StoreProvider({ children }) {
         })();
         return result;
       },
-      googleLogin: async (idToken, roleCode = 'student') => {
-        const result = await googleLoginApi(idToken, roleCode);
+      googleLogin: async (idToken, roleCode = 'student', mode = 'login') => {
+        const result = await googleLoginApi(idToken, roleCode, mode);
         setAccessToken(result.token);
         dispatch({ type: "AUTH_LOGIN_SUCCESS", payload: result });
         authBroadcast?.postMessage({ type: 'AUTH_LOGIN_SUCCESS', payload: result });

@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 const DEFAULT_CLIENT_ID = '275431712095-73cfhprsdt4seghbdrjr4clpl9f7j6g7.apps.googleusercontent.com';
 
-export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp tục với Google', onError }) {
+export default function GoogleLoginButton({ roleCode = 'student', mode = 'login', text = 'Tiếp tục với Google', onError }) {
     const { googleLogin } = useStore();
     const navigate = useNavigate();
     const location = useLocation();
@@ -23,6 +23,9 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
     const roleCodeRef = useRef(roleCode);
     roleCodeRef.current = roleCode;
 
+    const modeRef = useRef(mode);
+    modeRef.current = mode;
+
     const navigateRef = useRef(navigate);
     navigateRef.current = navigate;
 
@@ -36,6 +39,7 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
 
     useEffect(() => {
         let isMounted = true;
+        hasRenderedRef.current = false;
 
         const handleCredentialResponse = async (response) => {
             if (!response?.credential) {
@@ -45,7 +49,7 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
 
             setLoading(true);
             try {
-                await googleLoginRef.current(response.credential, roleCodeRef.current);
+                await googleLoginRef.current(response.credential, roleCodeRef.current, modeRef.current);
                 const redirect = searchParamsRef.current?.get('redirect') || locationRef.current?.state?.from;
                 if (redirect) {
                     navigateRef.current(redirect, { replace: true });
@@ -54,7 +58,7 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
                 }
             } catch (err) {
                 if (onErrorRef.current) {
-                    onErrorRef.current(err.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.');
+                    onErrorRef.current(err.message || (modeRef.current === 'register' ? 'Đăng ký Google thất bại. Vui lòng thử lại.' : 'Đăng nhập Google thất bại. Vui lòng thử lại.'));
                 }
             } finally {
                 if (isMounted) setLoading(false);
@@ -74,15 +78,14 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
                         callback: handleCredentialResponse,
                         auto_select: false,
                         cancel_on_tap_outside: true,
-                        hosted_domain: 'fpt.edu.vn',
                     });
 
                     googleButtonRef.current.innerHTML = '';
                     window.google.accounts.id.renderButton(googleButtonRef.current, {
                         theme: 'outline',
                         size: 'large',
-                        width: '100%',
-                        text: text.includes('Đăng ký') ? 'signup_with' : 'signin_with',
+                        width: 360,
+                        text: mode === 'register' ? 'signup_with' : 'signin_with',
                         shape: 'rectangular',
                         logo_alignment: 'left',
                         locale: 'vi',
@@ -118,7 +121,7 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
         return () => {
             isMounted = false;
         };
-    }, [clientId, text]);
+    }, [clientId, text, mode, roleCode]);
 
     return (
         <div className="google-sso-container" style={{ width: '100%', marginTop: 12, marginBottom: 12 }}>
@@ -135,11 +138,19 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
                 }}
             />
             <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted, #64748b)', marginTop: 6 }}>
-                🎓 <i>Chỉ hỗ trợ tài khoản trường <b>@fpt.edu.vn</b></i>
+                {mode === 'register' ? (
+                    roleCode === 'employer' ? (
+                        <i>🏢 Đăng ký tài khoản Nhà tuyển dụng nhanh bằng Google</i>
+                    ) : (
+                        <i>🎓 Đăng ký tài khoản Sinh viên bằng Google (Gmail hoặc Email trường)</i>
+                    )
+                ) : (
+                    <i>🔐 Đăng nhập nhanh bằng Google cho Sinh viên & Nhà tuyển dụng</i>
+                )}
             </div>
             {loading && (
                 <div style={{ textAlign: 'center', fontSize: 13, color: '#2563eb', marginTop: 4 }}>
-                    Đang xác thực tài khoản sinh viên FPT...
+                    Đang xác thực tài khoản Google...
                 </div>
             )}
         </div>

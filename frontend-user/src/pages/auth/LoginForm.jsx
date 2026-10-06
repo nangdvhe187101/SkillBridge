@@ -144,7 +144,7 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
         <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
       </div>
 
-      <GoogleLoginButton roleCode="student" onError={(msg) => setFormError(msg)} />
+      <GoogleLoginButton mode="login" onError={(msg) => setFormError(msg)} />
 
       <div className="auth-foot">
         Chưa có tài khoản? <a onClick={() => onSwitchTab('register')}>Đăng ký ngay</a>

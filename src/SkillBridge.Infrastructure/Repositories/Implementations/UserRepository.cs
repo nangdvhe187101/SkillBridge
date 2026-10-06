@@ -24,7 +24,7 @@ namespace SkillBridge.Infrastructure.Services
         => await context.Users.FirstOrDefaultAsync(u => u.Email == email);
 
         public async Task<User?> GetByEmailWithRoleAsync(string email)
-        => await context.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Email == email);
+        => await context.Users.Include(u => u.Role).Include(u => u.ExternalLogins).FirstOrDefaultAsync(u => u.Email == email);
 
         public async Task<bool> EmailExistsAsync(string email)
         => await context.Users.AnyAsync(u => u.Email == email);
