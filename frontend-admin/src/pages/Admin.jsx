@@ -11,6 +11,7 @@ import AdminOps from '../components/AdminOps';
 import AdminRoles from '../components/AdminRoles';
 import AdminMessages from '../components/AdminMessages';
 import AdminBankVerification from '../components/AdminBankVerification';
+import AdminStudentVerification from '../components/AdminStudentVerification';
 import AdminPlans from '../components/AdminPlans';
 import AdminContracts from '../components/AdminContracts';
 import IdleLockOverlay from '../components/security/IdleLockOverlay';
@@ -18,8 +19,8 @@ import Icon from '../components/Icon';
 import { adminLogout } from '../api/authApi';
 
 const ROLE_MODULES = {
-  super: ['users', 'contracts', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'ops', 'roles'],
-  moderator: ['content', 'messages'],
+  super: ['users', 'contracts', 'student-verification', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'ops', 'roles'],
+  moderator: ['content', 'messages', 'student-verification'],
   dispute: ['contracts', 'disputes', 'messages'],
   finance: ['contracts', 'finance', 'plans', 'bank-verification'],
 };
@@ -45,6 +46,7 @@ const CF_NAV_SECTIONS = [
   {
     title: 'Observe & Manage',
     items: [
+      { id: 'student-verification', path: '/student-verification', icon: 'shield-check', label: 'Duyệt thẻ sinh viên' },
       { id: 'bank-verification', path: '/bank-verification', icon: 'shield-check', label: 'Duyệt ngân hàng' },
       { id: 'content', path: '/content', icon: 'file-text', label: 'Kiểm duyệt bài đăng' },
       { id: 'messages', path: '/messages', icon: 'chat', label: 'Giám sát tin nhắn' },
@@ -70,6 +72,7 @@ const CF_NAV_SECTIONS = [
 const MODULE_TITLES = {
   users: 'Người dùng & eKYC',
   contracts: 'Giám sát Hợp đồng & Ký quỹ Escrow',
+  'student-verification': 'Duyệt thẻ sinh viên & Đối soát MSSV',
   'bank-verification': 'Duyệt tài khoản ngân hàng',
   finance: 'Tài chính & Lệnh rút tiền',
   disputes: 'Trung tâm xử lý tranh chấp',
@@ -354,6 +357,7 @@ function AdminInner({ forcedTab }) {
         <main className="cf-main">
           {activeTab === 'users' && <AdminUsers />}
           {activeTab === 'contracts' && <AdminContracts />}
+          {activeTab === 'student-verification' && <AdminStudentVerification />}
           {activeTab === 'bank-verification' && (
             <div>
               <div style={{ marginBottom: 20 }}>

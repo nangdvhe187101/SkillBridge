@@ -37,6 +37,8 @@ public class UserService : IUserService
     {
         var user = await _dbContext.Users
             .Include(u => u.Role)
+            .Include(u => u.StudentProfile)
+            .ThenInclude(p => p!.School)
             .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
 
         if (user == null)
@@ -54,6 +56,8 @@ public class UserService : IUserService
     {
         var user = await _dbContext.Users
             .Include(u => u.Role)
+            .Include(u => u.StudentProfile)
+            .ThenInclude(p => p!.School)
             .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
 
         if (user == null)
@@ -61,8 +65,37 @@ public class UserService : IUserService
             throw new BusinessException("Người dùng không tồn tại.");
         }
 
-        if (!string.IsNullOrWhiteSpace(request.FullName))
-            user.FullName = request.FullName.Trim();
+        var isStudentVerified = string.Equals(user.KycStatus, "verified", StringComparison.OrdinalIgnoreCase);
+
+        if (!isStudentVerified)
+        {
+            if (!string.IsNullOrWhiteSpace(request.FullName))
+                user.FullName = request.FullName.Trim();
+
+            if (request.SchoolId.HasValue && request.SchoolId.Value > 0)
+            {
+                user.SchoolId = request.SchoolId.Value;
+                var matchedSchool = await _dbContext.Schools.FindAsync(new object[] { request.SchoolId.Value }, cancellationToken);
+                if (matchedSchool != null)
+                {
+                    user.School = matchedSchool.Name;
+                }
+            }
+            else if (request.School != null)
+            {
+                user.School = string.IsNullOrWhiteSpace(request.School) ? null : request.School.Trim();
+            }
+
+            if (request.StudentCode != null)
+            {
+                user.StudentCode = string.IsNullOrWhiteSpace(request.StudentCode) ? null : request.StudentCode.Trim().ToUpperInvariant();
+            }
+
+            if (request.GraduationYear.HasValue)
+            {
+                user.GraduationYear = request.GraduationYear.Value > 0 ? request.GraduationYear.Value : null;
+            }
+        }
 
         if (request.PhoneNumber != null)
         {
@@ -88,9 +121,6 @@ public class UserService : IUserService
                 user.PhoneNumber = rawPhone;
             }
         }
-
-        if (request.School != null)
-            user.School = string.IsNullOrWhiteSpace(request.School) ? null : request.School.Trim();
 
         if (request.Industry != null)
             user.Industry = string.IsNullOrWhiteSpace(request.Industry) ? null : request.Industry.Trim();
@@ -614,7 +644,10 @@ public class UserService : IUserService
             Bio = user.Bio,
             RoleCode = user.Role?.Code ?? "student",
             RoleName = user.Role?.Name ?? "student",
-            School = user.School,
+            School = user.School ?? user.StudentProfile?.School?.Name,
+            SchoolId = user.SchoolId ?? user.StudentProfile?.SchoolId,
+            StudentCode = user.StudentCode ?? user.StudentProfile?.StudentCode,
+            GraduationYear = user.GraduationYear ?? user.StudentProfile?.GraduationYear,
             Industry = user.Industry,
             CompanySize = user.CompanySize,
             Website = user.Website,

@@ -99,6 +99,32 @@ public class ApplicationService : IApplicationService
             }
         }
 
+        // Kiểm tra tư cách sinh viên và trạng thái xác minh thẻ sinh viên
+        var isVerifiedStudent = await _dbContext.StudentProfiles
+            .AnyAsync(sp => sp.UserId == studentId && sp.ExpiresAt > DateTime.UtcNow);
+
+        string appInitialStatus = "pending";
+        if (!isVerifiedStudent)
+        {
+            var hasPendingVerification = await _dbContext.StudentVerificationRequests
+                .AnyAsync(r => r.UserId == studentId && r.Status == "pending");
+
+            if (!hasPendingVerification)
+            {
+                throw new BusinessException("Bạn cần hoàn tất hoặc nộp hồ sơ xác minh thẻ sinh viên trước khi ứng tuyển vào công việc này.");
+            }
+
+            var awaitingVerificationCount = await _dbContext.Applications
+                .CountAsync(a => a.StudentId == studentId && a.Status == "awaiting_verification");
+
+            if (awaitingVerificationCount >= 5)
+            {
+                throw new BusinessException("Bạn chỉ được giữ tối đa 5 đơn ứng tuyển ở trạng thái chờ duyệt thẻ sinh viên. Vui lòng chờ kết quả duyệt từ Quản trị viên.");
+            }
+
+            appInitialStatus = "awaiting_verification";
+        }
+
         var existingApp = await _applicationRepository.GetByJobAndStudentAsync(request.JobId, studentId);
         if (existingApp != null)
         {
@@ -117,7 +143,7 @@ public class ApplicationService : IApplicationService
 
             existingApp.CvFileId = request.CvFileId;
             existingApp.CoverLetter = string.IsNullOrWhiteSpace(request.CoverLetter) ? null : request.CoverLetter.Trim();
-            existingApp.Status = "pending";
+            existingApp.Status = appInitialStatus;
             existingApp.AppliedAt = DateTime.UtcNow;
             existingApp.UpdatedAt = DateTime.UtcNow;
 
@@ -156,7 +182,7 @@ public class ApplicationService : IApplicationService
             StudentId = studentId,
             CvFileId = request.CvFileId,
             CoverLetter = string.IsNullOrWhiteSpace(request.CoverLetter) ? null : request.CoverLetter.Trim(),
-            Status = "pending",
+            Status = appInitialStatus,
             AppliedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };

@@ -43,6 +43,13 @@ public partial class Wallet
     [Column("bank_linked_at")]
     public DateTime? BankLinkedAt { get; set; }
 
+    [Column("withdraw_hold_reason")]
+    [StringLength(100)]
+    public string? WithdrawHoldReason { get; set; }
+
+    [Column("withdraw_hold_until", TypeName = "datetime")]
+    public DateTime? WithdrawHoldUntil { get; set; }
+
     [ForeignKey("UserId")]
     [InverseProperty("Wallet")]
     public virtual User User { get; set; } = null!;

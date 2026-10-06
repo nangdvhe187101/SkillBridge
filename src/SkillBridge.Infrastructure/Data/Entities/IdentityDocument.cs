@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -42,7 +42,28 @@ public partial class IdentityDocument
     [Column("uploaded_at", TypeName = "datetime")]
     public DateTime UploadedAt { get; set; }
 
+    [Column("verification_request_id")]
+    public int? VerificationRequestId { get; set; }
+
+    [Column("side")]
+    [StringLength(10)]
+    public string? Side { get; set; }
+
+    [Column("file_sha256")]
+    [StringLength(64)]
+    public string? FileSha256 { get; set; }
+
+    [Column("purge_after", TypeName = "datetime")]
+    public DateTime? PurgeAfter { get; set; }
+
+    [Column("purged_at", TypeName = "datetime")]
+    public DateTime? PurgedAt { get; set; }
+
     [ForeignKey("UserId")]
     [InverseProperty("IdentityDocuments")]
     public virtual User User { get; set; } = null!;
+
+    [ForeignKey("VerificationRequestId")]
+    [InverseProperty("Documents")]
+    public virtual StudentVerificationRequest? VerificationRequest { get; set; }
 }

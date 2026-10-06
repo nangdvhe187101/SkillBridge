@@ -391,6 +391,7 @@ using (var scope = app.Services.CreateScope())
         await SkillBridge.Infrastructure.Data.DbInitializer.SeedAdminAsync(dbContext, app.Configuration, logger);
         await SkillBridge.Infrastructure.Data.DbInitializer.EnsureChatSchemaAsync(dbContext, logger);
         await SkillBridge.Infrastructure.Data.DbInitializer.EnsureSubscriptionPlansSchemaAndSeedAsync(dbContext, logger);
+        await SkillBridge.Infrastructure.Data.DbInitializer.EnsureStudentVerificationSchemaAsync(dbContext, logger);
     }
     catch (Exception ex)
     {

@@ -158,6 +158,18 @@ export async function verifyUserKyc(userId) {
   });
 }
 
+// Student Verification APIs
+export async function getPendingStudentVerifications() {
+  return apiFetch('/admin/student-verifications/pending', { method: 'GET' });
+}
+
+export async function reviewStudentVerification(id, dto) {
+  return apiFetch(`/admin/student-verifications/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
 // Content Moderation & Category APIs
 export async function getAdminModerationQueue(params = {}) {
   const query = new URLSearchParams();

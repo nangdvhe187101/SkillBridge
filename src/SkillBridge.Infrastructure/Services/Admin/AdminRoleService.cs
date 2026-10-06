@@ -320,7 +320,7 @@ public class AdminRoleService : IAdminRoleService
 
         var normalizedCode = NormalizeRoleCode(dto.RoleCode);
         var role = await _dbContext.Roles.FirstOrDefaultAsync(r =>
-            r.Code.ToLower() == normalizedCode.ToLower() ||
+            string.Equals(r.Code, normalizedCode, StringComparison.OrdinalIgnoreCase) ||
             (normalizedCode == "admin" && (r.Code == "admin" || r.Code == "super_admin")) ||
             (normalizedCode == "student" && (r.Code == "talent" || r.Code == "student")), ct);
 

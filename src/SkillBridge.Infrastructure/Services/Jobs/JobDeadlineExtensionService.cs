@@ -128,7 +128,7 @@ public class JobDeadlineExtensionService : IJobDeadlineExtensionService
 
         if (job.EmployerId != userId && job.HiredApplicantId != userId)
         {
-            throw new UnauthorizedAccessException("Bạn không có quyền xem thông tin gia hạn của công việc này.");
+            return null;
         }
 
         var activeExt = await _dbContext.JobDeadlineExtensions

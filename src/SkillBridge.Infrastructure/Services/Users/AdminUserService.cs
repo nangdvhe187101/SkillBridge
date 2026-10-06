@@ -35,26 +35,25 @@ public class AdminUserService : IAdminUserService
         // 1. Lọc theo SubTab (all | kyc | blacklist)
         if (!string.IsNullOrWhiteSpace(filter.SubTab))
         {
-            var subTab = filter.SubTab.ToLowerInvariant();
-            if (subTab == "kyc")
+            if (string.Equals(filter.SubTab, "kyc", StringComparison.OrdinalIgnoreCase))
             {
                 query = query.Where(u => u.KycStatus == "pending" || u.AccountStatus == "pending");
             }
-            else if (subTab == "blacklist")
+            else if (string.Equals(filter.SubTab, "blacklist", StringComparison.OrdinalIgnoreCase))
             {
                 query = query.Where(u => u.AccountStatus == "blacklisted");
             }
         }
 
         // 2. Lọc theo Role (student | employer | admin)
-        if (!string.IsNullOrWhiteSpace(filter.Role) && filter.Role.ToLowerInvariant() != "all")
+        if (!string.IsNullOrWhiteSpace(filter.Role) && !string.Equals(filter.Role, "all", StringComparison.OrdinalIgnoreCase))
         {
             var roleFilter = filter.Role.ToLowerInvariant();
             query = query.Where(u => u.Role.Code.ToLower() == roleFilter || u.Role.Type.ToLower() == roleFilter);
         }
 
         // 3. Lọc theo Status (active | pending | locked | blacklisted)
-        if (!string.IsNullOrWhiteSpace(filter.Status) && filter.Status.ToLowerInvariant() != "all")
+        if (!string.IsNullOrWhiteSpace(filter.Status) && !string.Equals(filter.Status, "all", StringComparison.OrdinalIgnoreCase))
         {
             var statusFilter = filter.Status.ToLowerInvariant();
             query = query.Where(u => u.AccountStatus.ToLower() == statusFilter);

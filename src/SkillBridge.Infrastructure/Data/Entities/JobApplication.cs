@@ -24,7 +24,7 @@ public partial class JobApplication
     [Column("cv_file_id")]
     public int? CvFileId { get; set; }
 
-    [Column("status", TypeName = "enum('pending','hired','submitted','completed','rejected','cancelled')")]
+    [Column("status", TypeName = "enum('pending','hired','submitted','completed','rejected','cancelled','awaiting_verification')")]
     public string Status { get; set; } = null!;
 
     [Column("applied_at", TypeName = "datetime")]

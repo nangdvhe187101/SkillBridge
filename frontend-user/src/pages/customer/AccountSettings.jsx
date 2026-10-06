@@ -11,10 +11,14 @@ import { downloadCandidateCv } from '../../utils/fileDownloader';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
 import ModalShell from '../../components/modals/ModalShell';
+import StudentVerificationTab from '../../components/StudentVerificationTab';
+import { getSchools } from '../../api/studentVerificationApi';
 import '../../styles/account-settings.css';
 
 const PHONE_REGEX = /^0\d{9}$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+const CURRENT_YEAR = new Date().getFullYear();
+const GRAD_YEARS = Array.from({ length: 8 }, (_, i) => CURRENT_YEAR + i - 1);
 
 // Avatar Upload Component
 function AvatarUploadCard({ currentUser, onAvatarUpdated }) {
@@ -465,11 +469,23 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCov
 
 // 2. Student Profile Tab
 function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCoverUpdated }) {
+    const isStudentVerified = currentUser?.kycStatus === 'verified';
+    const [schools, setSchools] = useState([]);
+
+    useEffect(() => {
+        getSchools().then((res) => {
+            if (Array.isArray(res)) setSchools(res);
+        }).catch(() => {});
+    }, []);
+
     const [form, setForm] = useState({
         fullName: currentUser.fullName || '',
         headline: currentUser.headline || '',
         school: currentUser.school || '',
-        industry: currentUser.industry || 'Lập trình web',
+        schoolId: currentUser.schoolId || '',
+        studentCode: currentUser.studentCode || '',
+        graduationYear: currentUser.graduationYear || (CURRENT_YEAR + 2),
+        industry: currentUser.industry || 'Lập trình web & App',
         phone: currentUser.phone || currentUser.phoneNumber || '',
         website: currentUser.website || '',
         bio: currentUser.bio || currentUser.companyDescription || '',
@@ -479,6 +495,20 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
         socialLinks: currentUser.socialLinks || { github: '', linkedin: '', behance: '', facebook: '' },
         expectedHourlyRate: currentUser.expectedHourlyRate || ''
     });
+
+    // Đồng bộ nếu currentUser cập nhật
+    useEffect(() => {
+        if (currentUser) {
+            setForm((prev) => ({
+                ...prev,
+                fullName: currentUser.fullName || prev.fullName,
+                school: currentUser.school || prev.school,
+                schoolId: currentUser.schoolId || prev.schoolId,
+                studentCode: currentUser.studentCode || prev.studentCode,
+                graduationYear: currentUser.graduationYear || prev.graduationYear
+            }));
+        }
+    }, [currentUser]);
 
     const [newSkill, setNewSkill] = useState('');
     const [saving, setSaving] = useState(false);
@@ -547,6 +577,9 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                 fullName: form.fullName.trim(),
                 headline: form.headline.trim(),
                 school: form.school.trim(),
+                schoolId: form.schoolId ? Number(form.schoolId) : null,
+                studentCode: form.studentCode ? form.studentCode.trim().toUpperCase() : null,
+                graduationYear: form.graduationYear ? Number(form.graduationYear) : null,
                 industry: form.industry,
                 phone: form.phone || null,
                 phoneNumber: form.phone || null,
@@ -574,19 +607,32 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
             <AvatarUploadCard currentUser={currentUser} onAvatarUpdated={onAvatarUpdated} />
 
             <div className="acct-section">
-                <h3 className="acct-section-title">Thông tin Cá nhân & Chức danh</h3>
+                <h3 className="acct-section-title">Thông tin Định danh & Cá nhân</h3>
                 <div className="acct-field-row">
                     <div className="acct-field">
-                        <label>Họ và tên đầy đủ <span style={{ color: 'var(--coral)' }}>*</span></label>
+                        <label>
+                            Họ và tên đầy đủ <span style={{ color: 'var(--coral)' }}>*</span>
+                            {isStudentVerified && (
+                                <span style={{ marginLeft: 8, fontSize: 11.5, color: '#10b981', fontWeight: 600 }}>
+                                    🔒 Đã xác minh
+                                </span>
+                            )}
+                        </label>
                         <input
                             type="text"
                             placeholder="Nguyễn Văn A"
                             value={form.fullName}
+                            disabled={isStudentVerified}
                             onChange={(e) => setForm({ ...form, fullName: e.target.value })}
+                            style={isStudentVerified ? { background: 'var(--surface-sunken)', color: 'var(--ink-soft)', cursor: 'not-allowed' } : {}}
                         />
-                        <div style={{ fontSize: '0.78rem', color: '#6366f1', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span>💡</span>
-                            <span>Vui lòng nhập đúng Họ và Tên theo CCCD để trùng khớp với tài khoản ngân hàng khi rút tiền.</span>
+                        <div style={{ fontSize: '0.78rem', color: isStudentVerified ? '#10b981' : '#6366f1', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span>{isStudentVerified ? '✅' : '💡'}</span>
+                            <span>
+                                {isStudentVerified
+                                    ? 'Họ tên đã được xác thực chính chủ theo thẻ sinh viên và khóa chỉnh sửa.'
+                                    : 'Vui lòng nhập đúng Họ và Tên theo CCCD/Thẻ sinh viên để trùng khớp khi rút tiền.'}
+                            </span>
                         </div>
                     </div>
                     <div className="acct-field">
@@ -601,15 +647,111 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                 </div>
 
                 <div className="acct-field-row" style={{ marginTop: 12 }}>
+                    {/* Trường Đại học */}
                     <div className="acct-field">
-                        <label>Trường Đại học / Cao đẳng</label>
+                        <label>
+                            Trường Đại học / Cao đẳng <span style={{ color: 'var(--coral)' }}>*</span>
+                            {isStudentVerified && (
+                                <span style={{ marginLeft: 8, fontSize: 11.5, color: '#10b981', fontWeight: 600 }}>
+                                    🔒 Đã xác minh
+                                </span>
+                            )}
+                        </label>
+                        {isStudentVerified ? (
+                            <input
+                                type="text"
+                                value={form.school || 'Đại học FPT'}
+                                disabled
+                                style={{ background: 'var(--surface-sunken)', color: 'var(--ink-soft)', cursor: 'not-allowed' }}
+                            />
+                        ) : (
+                            <select
+                                value={form.schoolId || (schools[0]?.id || 1)}
+                                onChange={(e) => {
+                                    const sid = Number(e.target.value);
+                                    const matched = schools.find((s) => s.id === sid);
+                                    setForm({
+                                        ...form,
+                                        schoolId: sid,
+                                        school: matched ? matched.name : form.school
+                                    });
+                                }}
+                            >
+                                {schools.length > 0 ? (
+                                    schools.map((s) => (
+                                        <option key={s.id} value={s.id}>
+                                            {s.name} ({s.shortName || 'FPTU'})
+                                        </option>
+                                    ))
+                                ) : (
+                                    <option value={1}>Đại học FPT (FPT University)</option>
+                                )}
+                            </select>
+                        )}
+                        {!isStudentVerified && (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--ink-soft)', marginTop: 4, display: 'block' }}>
+                                Trường học bạn đang theo học để đối soát xác minh thẻ sinh viên.
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Mã số sinh viên (MSSV) */}
+                    <div className="acct-field">
+                        <label>
+                            Mã số sinh viên (MSSV) <span style={{ color: 'var(--coral)' }}>*</span>
+                            {isStudentVerified && (
+                                <span style={{ marginLeft: 8, fontSize: 11.5, color: '#10b981', fontWeight: 600 }}>
+                                    🔒 Đã xác minh
+                                </span>
+                            )}
+                        </label>
                         <input
                             type="text"
-                            placeholder="Ví dụ: Đại học FPT, Bách Khoa, Kinh Tế..."
-                            value={form.school}
-                            onChange={(e) => setForm({ ...form, school: e.target.value })}
+                            placeholder="Ví dụ: SE187101, HE187101..."
+                            value={form.studentCode}
+                            disabled={isStudentVerified}
+                            onChange={(e) => setForm({ ...form, studentCode: e.target.value.toUpperCase() })}
+                            style={isStudentVerified ? { background: 'var(--surface-sunken)', color: 'var(--ink-soft)', cursor: 'not-allowed', textTransform: 'uppercase' } : { textTransform: 'uppercase' }}
                         />
+                        <span style={{ fontSize: '0.78rem', color: 'var(--ink-soft)', marginTop: 4, display: 'block' }}>
+                            {isStudentVerified ? 'Mã số sinh viên đã liên kết chính thức với hồ sơ.' : 'Dùng để đối soát với ảnh chụp thẻ sinh viên tại trang Xác minh.'}
+                        </span>
                     </div>
+                </div>
+
+                <div className="acct-field-row" style={{ marginTop: 12 }}>
+                    {/* Năm tốt nghiệp dự kiến */}
+                    <div className="acct-field">
+                        <label>
+                            Năm tốt nghiệp dự kiến <span style={{ color: 'var(--coral)' }}>*</span>
+                            {isStudentVerified && (
+                                <span style={{ marginLeft: 8, fontSize: 11.5, color: '#10b981', fontWeight: 600 }}>
+                                    🔒 Đã xác minh
+                                </span>
+                            )}
+                        </label>
+                        {isStudentVerified ? (
+                            <input
+                                type="text"
+                                value={`Năm ${form.graduationYear || (CURRENT_YEAR + 2)} (Hiệu lực thẻ đến 31/12/${form.graduationYear || (CURRENT_YEAR + 2)})`}
+                                disabled
+                                style={{ background: 'var(--surface-sunken)', color: 'var(--ink-soft)', cursor: 'not-allowed' }}
+                            />
+                        ) : (
+                            <select
+                                value={form.graduationYear || (CURRENT_YEAR + 2)}
+                                onChange={(e) => setForm({ ...form, graduationYear: Number(e.target.value) })}
+                            >
+                                {GRAD_YEARS.map((y) => (
+                                    <option key={y} value={y}>
+                                        Năm {y} (Hiệu lực thẻ đến 31/12/{y})
+                                    </option>
+                                ))}
+                            </select>
+                        )}
+                    </div>
+
+                    {/* Lĩnh vực chuyên môn */}
                     <div className="acct-field">
                         <label>Lĩnh vực chuyên môn chính</label>
                         <select
@@ -1771,9 +1913,6 @@ function PasswordTab({ changePassword, logout, currentUser }) {
 }
 
 // 5. KYC & Verification Tab
-const CURRENT_YEAR = new Date().getFullYear();
-const GRAD_YEARS = Array.from({ length: 7 }, (_, i) => CURRENT_YEAR + i);
-
 function KycVerificationTab({ isEmployer }) {
     const { addToast } = useToast();
     const [kycData, setKycData] = useState(null);
@@ -2436,10 +2575,14 @@ export default function AccountSettings({ forcedTab }) {
                         )}
 
                         {tab === 'kyc' && (
-                            <KycVerificationTab
-                                isEmployer={isEmployer}
-                                currentUser={safeUser}
-                            />
+                            !isEmployer ? (
+                                <StudentVerificationTab isEmployer={isEmployer} currentUser={safeUser} />
+                            ) : (
+                                <KycVerificationTab
+                                    isEmployer={isEmployer}
+                                    currentUser={safeUser}
+                                />
+                            )
                         )}
 
                         {tab === 'cv_manager' && !isEmployer && (
