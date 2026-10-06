@@ -687,4 +687,103 @@ public class WithdrawalServiceTests
         var setting = await dbContext.SystemSettings.FirstOrDefaultAsync(s => s.Key == "withdrawal_maker_901");
         Assert.Null(setting);
     }
+
+    [Fact]
+    public async Task RequestWithdrawalAsync_Student_ThrowsWhenAccountHolderDoesNotMatchStudentCard()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = CreateService(dbContext);
+
+        var userId = 50;
+        var studentRole = new Role { Id = 3, Code = "student", Name = "Sinh viên", Type = "student", IsActive = true };
+        dbContext.Roles.Add(studentRole);
+
+        var user = CreateValidUser(userId, "student50@test.com", "Đặng Văn Năng");
+        user.RoleId = studentRole.Id;
+        user.Role = studentRole;
+        dbContext.Users.Add(user);
+
+        dbContext.StudentProfiles.Add(new StudentProfile
+        {
+            UserId = userId,
+            SchoolId = 1,
+            StudentCode = "SE187101",
+            StudentCodeNormalized = "SE187101",
+            VerifiedFullName = "Đặng Văn Năng",
+            GraduationYear = 2026,
+            VerifiedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddYears(1),
+            SourceRequestId = 1
+        });
+
+        dbContext.Wallets.Add(new Wallet
+        {
+            UserId = userId,
+            Balance = 1000000m,
+            IsBankVerified = true,
+            BankName = "MBBank",
+            AccountNumber = "0987654321",
+            AccountHolder = "NGUYEN VAN KHAC" // KHÔNG KHỚP
+        });
+        await dbContext.SaveChangesAsync();
+
+        var dto = new CreateWithdrawalDto { Amount = 100000m };
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.RequestWithdrawalAsync(userId, dto));
+
+        Assert.Contains("không khớp với tên trên thẻ sinh viên", ex.Message);
+    }
+
+    [Fact]
+    public async Task RequestWithdrawalAsync_Student_SucceedsWhenAccountHolderMatchesStudentCard()
+    {
+        // Arrange
+        using var dbContext = CreateInMemoryDbContext();
+        var service = CreateService(dbContext);
+
+        var userId = 51;
+        var studentRole = new Role { Id = 3, Code = "student", Name = "Sinh viên", Type = "student", IsActive = true };
+        dbContext.Roles.Add(studentRole);
+
+        var user = CreateValidUser(userId, "student51@test.com", "Đặng Văn Năng");
+        user.RoleId = studentRole.Id;
+        user.Role = studentRole;
+        dbContext.Users.Add(user);
+
+        dbContext.StudentProfiles.Add(new StudentProfile
+        {
+            UserId = userId,
+            SchoolId = 1,
+            StudentCode = "SE187101",
+            StudentCodeNormalized = "SE187101",
+            VerifiedFullName = "Đặng Văn Năng",
+            GraduationYear = 2026,
+            VerifiedAt = DateTime.UtcNow,
+            ExpiresAt = DateTime.UtcNow.AddYears(1),
+            SourceRequestId = 1
+        });
+
+        dbContext.Wallets.Add(new Wallet
+        {
+            UserId = userId,
+            Balance = 1000000m,
+            IsBankVerified = true,
+            BankName = "MBBank",
+            AccountNumber = "0987654321",
+            AccountHolder = "DANG VAN NANG" // KHỚP (sau chuẩn hóa không dấu)
+        });
+        await dbContext.SaveChangesAsync();
+
+        var dto = new CreateWithdrawalDto { Amount = 100000m };
+
+        // Act
+        var result = await service.RequestWithdrawalAsync(userId, dto);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(100000m, result.Amount);
+    }
 }
