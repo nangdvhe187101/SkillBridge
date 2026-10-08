@@ -261,7 +261,22 @@ public class R2StorageService : IStorageService
                 var key = trimmed.Substring(idx + 8).TrimStart('/');
                 return BuildStorageFileUrl(key);
             }
+            if (trimmed.Contains("/api/storage/file?key=", StringComparison.OrdinalIgnoreCase))
+            {
+                var idx = trimmed.IndexOf("key=", StringComparison.OrdinalIgnoreCase);
+                var rawKey = trimmed.Substring(idx + 4).Split('&')[0];
+                var decodedKey = Uri.UnescapeDataString(rawKey);
+                return BuildStorageFileUrl(decodedKey);
+            }
             return trimmed;
+        }
+
+        if (trimmed.StartsWith("/api/storage/file?key=", StringComparison.OrdinalIgnoreCase))
+        {
+            var idx = trimmed.IndexOf("key=", StringComparison.OrdinalIgnoreCase);
+            var rawKey = trimmed.Substring(idx + 4).Split('&')[0];
+            var decodedKey = Uri.UnescapeDataString(rawKey);
+            return BuildStorageFileUrl(decodedKey);
         }
 
         if (string.IsNullOrWhiteSpace(_publicBaseUrl) || _publicBaseUrl.Contains(".r2.dev", StringComparison.OrdinalIgnoreCase))

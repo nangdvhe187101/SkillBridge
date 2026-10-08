@@ -4,14 +4,61 @@ import { useToast } from '../context/ToastContext';
 import Icon from './Icon';
 import Pagination from './Pagination';
 
-function getCardImageUrl(url) {
-  if (!url) return '';
-  if (url.startsWith('http://') || url.startsWith('https://')) return url;
-  if (url.startsWith('/api/storage')) {
-    const mainApi = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_MAIN_API_URL || import.meta.env?.VITE_USER_API_URL)) || 'http://localhost:5004';
-    return `${mainApi.replace(/\/api\/?$/, '')}${url}`;
+import { getAccessToken } from '../api/tokenStore';
+
+function getAuthToken() {
+  let token = getAccessToken();
+  if (!token && typeof window !== 'undefined') {
+    try {
+      const saved = localStorage.getItem('admin_user');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        token = parsed?.token || null;
+      }
+    } catch { }
   }
-  return url.startsWith('/') ? url : `/${url}`;
+  return token;
+}
+
+function getCardImageUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) return trimmed;
+
+  const isClientProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+  const defaultApiUrl = isClientProd ? 'https://api.skillbridge.id.vn/api' : 'http://localhost:5005/api';
+  const envApiUrl = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) || defaultApiUrl;
+  const backendBaseUrl = (isClientProd && envApiUrl.includes('localhost') ? 'https://api.skillbridge.id.vn' : envApiUrl).replace(/\/api\/?$/, '');
+
+  let targetUrl = trimmed;
+
+  // 1. Chuyển đổi localhost sang domain production nếu đang truy cập trên production
+  if (isClientProd && /https?:\/\/localhost(:\d+)?/i.test(targetUrl)) {
+    targetUrl = targetUrl.replace(/https?:\/\/localhost(:\d+)?/i, 'https://api.skillbridge.id.vn');
+  }
+
+  // 2. Chuẩn hóa đường dẫn tương đối hoặc storage key
+  if (targetUrl.startsWith('/api/storage')) {
+    targetUrl = `${backendBaseUrl}${targetUrl}`;
+  } else if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+    if (targetUrl.startsWith('identity_documents/')) {
+      targetUrl = `${backendBaseUrl}/api/storage/file?key=${encodeURIComponent(targetUrl)}`;
+    } else {
+      targetUrl = `${backendBaseUrl}${targetUrl.startsWith('/') ? targetUrl : `/${targetUrl}`}`;
+    }
+  }
+
+  // 3. Tự động đính kèm access_token cho các tệp giấy tờ định danh bảo mật (Nghị định 13/2023/NĐ-CP & SEC-02)
+  if (targetUrl.includes('identity_documents') || targetUrl.includes('/api/storage/file')) {
+    const token = getAuthToken();
+    if (token && !targetUrl.includes('access_token=')) {
+      const sep = targetUrl.includes('?') ? '&' : '?';
+      targetUrl = `${targetUrl}${sep}access_token=${encodeURIComponent(token)}`;
+    }
+  }
+
+  return targetUrl;
 }
 
 export default function AdminStudentVerification() {
