@@ -259,3 +259,13 @@ export async function logout() {
     } catch {
     }
 }
+
+export async function getPublicSystemConfigs() {
+    try {
+        const res = await fetch(`${API_URL}/public/system-configs`);
+        if (!res.ok) return null;
+        return await res.json();
+    } catch {
+        return null;
+    }
+}

@@ -4,7 +4,16 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 const DEFAULT_CLIENT_ID = '275431712095-73cfhprsdt4seghbdrjr4clpl9f7j6g7.apps.googleusercontent.com';
 
-export default function GoogleLoginButton({ roleCode = 'student', mode = 'login', text = 'Tiếp tục với Google', onError }) {
+let globalResponseHandler = null;
+let lastInitClientId = null;
+
+function onGoogleCredentialResponse(response) {
+    if (globalResponseHandler) {
+        globalResponseHandler(response);
+    }
+}
+
+export default function GoogleLoginButton({ roleCode = 'student', mode = 'login', text = 'Tiếp tục với Google', referralCode, onError }) {
     const { googleLogin } = useStore();
     const navigate = useNavigate();
     const location = useLocation();
@@ -25,6 +34,9 @@ export default function GoogleLoginButton({ roleCode = 'student', mode = 'login'
 
     const modeRef = useRef(mode);
     modeRef.current = mode;
+
+    const referralCodeRef = useRef(referralCode);
+    referralCodeRef.current = referralCode;
 
     const navigateRef = useRef(navigate);
     navigateRef.current = navigate;
@@ -49,7 +61,31 @@ export default function GoogleLoginButton({ roleCode = 'student', mode = 'login'
 
             setLoading(true);
             try {
-                await googleLoginRef.current(response.credential, roleCodeRef.current, modeRef.current);
+                const loginResult = await googleLoginRef.current(response.credential, roleCodeRef.current, modeRef.current);
+
+                // Tự động liên kết mã bạn đồng hành 1-1 nếu có mã giới thiệu từ link hoặc ô nhập
+                try {
+                    const pendingRef = referralCodeRef.current || searchParamsRef.current?.get('ref') || sessionStorage.getItem('sb_pending_referral_code');
+                    if (pendingRef) {
+                        const cleanRef = String(pendingRef).trim().toUpperCase();
+                        if (/^[A-Z]{6}$/.test(cleanRef)) {
+                            const uId = loginResult?.userId || 'guest';
+                            const storageKey = `sb_linked_friend_${uId}`;
+                            if (!localStorage.getItem(storageKey)) {
+                                localStorage.setItem(storageKey, JSON.stringify({
+                                    code: cleanRef,
+                                    linkedAt: new Date().toLocaleDateString('vi-VN'),
+                                    status: 'pending_verify',
+                                    source: 'google_oauth'
+                                }));
+                            }
+                            sessionStorage.removeItem('sb_pending_referral_code');
+                        }
+                    }
+                } catch (refErr) {
+                    console.warn('Lỗi ghi nhận mã giới thiệu khi đăng nhập Google:', refErr);
+                }
+
                 const redirect = searchParamsRef.current?.get('redirect') || locationRef.current?.state?.from;
                 if (redirect) {
                     navigateRef.current(redirect, { replace: true });
@@ -65,6 +101,8 @@ export default function GoogleLoginButton({ roleCode = 'student', mode = 'login'
             }
         };
 
+        globalResponseHandler = handleCredentialResponse;
+
         // Hàm khởi tạo Google Identity Services
         const initGsi = () => {
             if (window.google?.accounts?.id && googleButtonRef.current) {
@@ -73,12 +111,15 @@ export default function GoogleLoginButton({ roleCode = 'student', mode = 'login'
                 }
 
                 try {
-                    window.google.accounts.id.initialize({
-                        client_id: clientId,
-                        callback: handleCredentialResponse,
-                        auto_select: false,
-                        cancel_on_tap_outside: true,
-                    });
+                    if (lastInitClientId !== clientId) {
+                        window.google.accounts.id.initialize({
+                            client_id: clientId,
+                            callback: onGoogleCredentialResponse,
+                            auto_select: false,
+                            cancel_on_tap_outside: true,
+                        });
+                        lastInitClientId = clientId;
+                    }
 
                     googleButtonRef.current.innerHTML = '';
                     window.google.accounts.id.renderButton(googleButtonRef.current, {
@@ -120,6 +161,9 @@ export default function GoogleLoginButton({ roleCode = 'student', mode = 'login'
 
         return () => {
             isMounted = false;
+            if (globalResponseHandler === handleCredentialResponse) {
+                globalResponseHandler = null;
+            }
         };
     }, [clientId, text, mode, roleCode]);
 

@@ -241,7 +241,6 @@ export default function Login() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@skillbridge.vn"
                   required
                   autoFocus
                   style={{
@@ -281,7 +280,6 @@ export default function Login() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
                   required
                   style={{
                     width: '100%',

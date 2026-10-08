@@ -163,7 +163,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
                     AvatarUrl = payload.Picture,
                     PasswordHash = "GOOGLE_SSO:" + BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N")),
                     RoleId = role.Id,
-                    KycStatus = "pending",
+                    KycStatus = "unverified",
                     AccountStatus = "active", // Google đã xác minh chính chủ -> Kích hoạt ngay
                     ReliabilityScore = 100,
                     JobsDoneCount = 0,

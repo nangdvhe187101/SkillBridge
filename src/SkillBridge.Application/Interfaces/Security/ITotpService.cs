@@ -40,7 +40,7 @@ public interface ITotpService
     /// <summary>
     /// Xác nhận mã OTP đầu tiên để chính thức kích hoạt 2FA cho tài khoản
     /// </summary>
-    Task<bool> Confirm2FaSetupAsync(int adminUserId, string code, CancellationToken ct = default);
+    Task<bool> Confirm2FaSetupAsync(int adminUserId, string code, string? secretKeyFromClient = null, CancellationToken ct = default);
 
     /// <summary>
     /// Hủy kích hoạt 2FA cho tài khoản quản trị viên
@@ -75,4 +75,5 @@ public class Verify2FaRequestDto
 public class Confirm2FaSetupRequestDto
 {
     public string Code { get; set; } = string.Empty;
+    public string? SecretKey { get; set; }
 }

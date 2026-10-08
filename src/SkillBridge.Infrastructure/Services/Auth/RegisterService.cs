@@ -88,7 +88,7 @@ public class RegisterService : IRegisterService
             PhoneNumber = dto.PhoneNumber,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             RoleId = role.Id,
-            KycStatus = "pending",
+            KycStatus = "unverified",
             AccountStatus = initialAccountStatus,
             ReliabilityScore = 100,
             JobsDoneCount = 0,
