@@ -11,8 +11,10 @@ public interface ISubscriptionPlanConfigService
     Task<List<SubscriptionPlanConfigDto>> GetAllPlansForAdminAsync(CancellationToken ct = default);
     Task<SubscriptionPlanConfigDto> GetPlanByIdAsync(int id, CancellationToken ct = default);
     Task<SubscriptionPlanConfigDto> GetPlanByCodeAsync(string code, CancellationToken ct = default);
+    Task<SubscriptionPlanConfigDto> CreatePlanAsync(CreateSubscriptionPlanConfigRequest request, CancellationToken ct = default);
     Task<SubscriptionPlanConfigDto> UpdatePlanAsync(int id, UpdateSubscriptionPlanConfigRequest request, CancellationToken ct = default);
     Task<bool> TogglePlanActiveAsync(int id, CancellationToken ct = default);
+    Task DeletePlanAsync(int id, CancellationToken ct = default);
     Task<decimal> GetEffectiveCommissionRateAsync(int userId, CancellationToken ct = default);
     Task<int?> GetMaxActiveJobsAsync(int employerId, CancellationToken ct = default);
     Task<int?> GetMaxWeeklyApplicationsAsync(int studentId, CancellationToken ct = default);

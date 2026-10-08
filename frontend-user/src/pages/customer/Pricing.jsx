@@ -164,6 +164,45 @@ function renderFeatureItem(feat) {
   });
 }
 
+const PALETTES = [
+  { themeColor: '#64748b', themeBg: 'rgba(100, 116, 139, 0.08)', borderColor: 'var(--border)', btnBg: 'var(--surface-2)' },
+  { themeColor: '#0ea5e9', themeBg: 'rgba(14, 165, 233, 0.12)', borderColor: 'rgba(14, 165, 233, 0.45)', btnBg: 'linear-gradient(135deg, #0ea5e9, #0284c7)' },
+  { themeColor: '#7c3aed', themeBg: 'rgba(124, 58, 237, 0.14)', borderColor: '#7c3aed', btnBg: 'linear-gradient(135deg, #7c3aed, #6d28d9)' },
+  { themeColor: '#f59e0b', themeBg: 'rgba(245, 158, 11, 0.18)', borderColor: '#f59e0b', btnBg: 'linear-gradient(135deg, #f59e0b, #d97706)' },
+  { themeColor: '#ec4899', themeBg: 'rgba(236, 72, 153, 0.18)', borderColor: '#ec4899', btnBg: 'linear-gradient(135deg, #ec4899, #be185d)' },
+  { themeColor: '#10b981', themeBg: 'rgba(16, 185, 129, 0.18)', borderColor: '#10b981', btnBg: 'linear-gradient(135deg, #10b981, #059669)' },
+];
+
+function createDynamicPlanCard(dbPlan, currentPlanCode) {
+  const palette = PALETTES[Math.min(dbPlan.tierRank || 1, PALETTES.length - 1)];
+  const isFree = Number(dbPlan.price) === 0;
+  return {
+    code: dbPlan.code,
+    name: dbPlan.name,
+    tagline: dbPlan.tagline || (isFree ? 'Khởi đầu an toàn' : 'Gói dịch vụ chuyên nghiệp'),
+    badge: dbPlan.badgeText || (isFree ? 'Miễn phí' : (dbPlan.isPopular ? 'Khuyên dùng' : 'Nổi bật')),
+    popular: !!dbPlan.isPopular,
+    ribbonText: dbPlan.isPopular ? 'PHỔ BIẾN' : null,
+    iconComponent: <DynamicBoltIcon />,
+    themeColor: palette.themeColor,
+    themeBg: palette.themeBg,
+    borderColor: palette.borderColor,
+    cardBg: `linear-gradient(180deg, ${palette.themeBg} 0%, var(--surface) 100%)`,
+    glowShadow: `0 8px 24px ${palette.themeBg}`,
+    btnStyle: isFree
+      ? { background: 'transparent', color: 'var(--ink)', borderColor: 'var(--border)' }
+      : { background: palette.btnBg, color: '#fff', border: 'none' },
+    price: Number(dbPlan.price) || 0,
+    priceSub: dbPlan.priceSub || (isFree ? 'Miễn phí' : 'tháng'),
+    commissionRate: dbPlan.commissionRate,
+    features: Array.isArray(dbPlan.features) ? dbPlan.features : [],
+    btnLabel: isFree ? 'Bắt đầu miễn phí' : `Kích hoạt ${dbPlan.name}`,
+    isCurrent: currentPlanCode === dbPlan.code,
+    tierRank: dbPlan.tierRank || 1,
+    isActive: dbPlan.isActive !== false,
+  };
+}
+
 function mergePlanWithDb(defaultPlan, dbPlan) {
   if (!dbPlan) return defaultPlan;
   return {
@@ -175,6 +214,7 @@ function mergePlanWithDb(defaultPlan, dbPlan) {
     price: typeof dbPlan.price === 'number' ? dbPlan.price : defaultPlan.price,
     priceSub: dbPlan.priceSub || defaultPlan.priceSub,
     commissionRate: dbPlan.commissionRate ?? defaultPlan.commissionRate,
+    tierRank: dbPlan.tierRank ?? defaultPlan.tierRank,
     maxWeeklyApplications: dbPlan.maxWeeklyApplications,
     maxActiveJobs: dbPlan.maxActiveJobs,
     revisionLimit: dbPlan.revisionLimit,
@@ -258,7 +298,7 @@ export default function Pricing() {
       return;
     }
 
-    const planRank = PLAN_RANKS[plan.code] ?? 0;
+    const planRank = plan.tierRank ?? (PLAN_RANKS[plan.code] ?? 0);
 
     // Chặn người dùng mua gói thấp hơn khi đang có gói cao hơn
     if (currentRank > 0 && planRank < currentRank) {
@@ -390,13 +430,20 @@ export default function Pricing() {
       isCurrent: currentPlanCode === 'STU_MASTER',
     },
     ];
-    return raw.map(p => {
+    const mappedStandard = raw.map(p => {
       const db = dbPlans.find(d => 
         (d.targetRole === 'student' || d.role === 'student') && 
         (d.planCode === p.code || d.code === p.code || (p.code === 'FREE' && d.code === 'FREE_STUDENT'))
       );
       return mergePlanWithDb(p, db);
     }).filter(p => p.isActive !== false);
+
+    const dynamicExtras = dbPlans
+      .filter(d => (d.targetRole === 'student' || d.role === 'student') && d.isActive !== false)
+      .filter(d => !raw.some(p => p.code === d.code || (p.code === 'FREE' && d.code === 'FREE_STUDENT')))
+      .map(d => createDynamicPlanCard(d, currentPlanCode));
+
+    return [...mappedStandard, ...dynamicExtras];
   }, [currentPlanCode, state.subscriptionPro, dbPlans]);
 
   // DANH SÁCH GÓI NHÀ TUYỂN DỤNG: Trực diện hiệu quả tuyển dụng
@@ -500,13 +547,20 @@ export default function Pricing() {
       isCurrent: currentPlanCode === 'EMP_VIP' || (state.vipBusiness && !currentPlanCode),
     },
     ];
-    return raw.map(p => {
+    const mappedStandard = raw.map(p => {
       const db = dbPlans.find(d => 
         (d.targetRole === 'employer' || d.role === 'employer') && 
         (d.planCode === p.code || d.code === p.code || (p.code === 'FREE' && d.code === 'FREE_EMPLOYER'))
       );
       return mergePlanWithDb(p, db);
     }).filter(p => p.isActive !== false);
+
+    const dynamicExtras = dbPlans
+      .filter(d => (d.targetRole === 'employer' || d.role === 'employer') && d.isActive !== false)
+      .filter(d => !raw.some(p => p.code === d.code || (p.code === 'FREE' && d.code === 'FREE_EMPLOYER')))
+      .map(d => createDynamicPlanCard(d, currentPlanCode));
+
+    return [...mappedStandard, ...dynamicExtras];
   }, [currentPlanCode, state.vipBusiness, dbPlans]);
 
   const currentPlans = activeTab === 'student' ? studentPlans : employerPlans;

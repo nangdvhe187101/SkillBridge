@@ -1,20 +1,58 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
+import { useCompanyInfo } from '../../hooks/useCompanyInfo';
 
 export default function Contact() {
-  const { showToast } = useStore();
-  const [form, setForm] = useState({ name: '', email: '', phone: '', subject: 'support', message: '' });
+  const { user, showToast } = useStore();
+  const { companyInfo } = useCompanyInfo();
+  const [form, setForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    subject: 'support',
+    message: ''
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e) => {
+  useEffect(() => {
+    if (user) {
+      setForm((prev) => ({
+        ...prev,
+        name: prev.name || user.fullName || user.name || '',
+        email: prev.email || user.email || '',
+        phone: prev.phone || user.phone || user.phoneNumber || ''
+      }));
+    }
+  }, [user]);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.name || !form.email || !form.message) {
       showToast('Vui lòng điền đầy đủ các thông tin bắt buộc.', 'x');
       return;
     }
-    setSubmitted(true);
-    showToast('Yêu cầu hỗ trợ đã được gửi thành công!', 'check');
+
+    setIsSubmitting(true);
+    try {
+      // Giả lập gửi qua network và lưu lịch sử liên hệ cục bộ
+      await new Promise((res) => setTimeout(res, 600));
+
+      const contactHistory = JSON.parse(localStorage.getItem('skillbridge_contact_messages') || '[]');
+      contactHistory.push({
+        ...form,
+        createdAt: new Date().toISOString()
+      });
+      localStorage.setItem('skillbridge_contact_messages', JSON.stringify(contactHistory));
+
+      setSubmitted(true);
+      showToast('Yêu cầu hỗ trợ đã được gửi thành công!', 'check');
+    } catch {
+      showToast('Có lỗi xảy ra, vui lòng liên hệ hotline hoặc gửi email trực tiếp.', 'x');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -42,44 +80,47 @@ export default function Contact() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13.5, lineHeight: 1.6 }}>
             <div>
               <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Đơn vị chủ quản:</span>
-              <b style={{ color: 'var(--primary)', fontSize: 15 }}>CÔNG TY CỔ PHẦN CÔNG NGHỆ SKILLBRIDGE VIỆT NAM</b>
+              <b style={{ color: 'var(--primary)', fontSize: 15 }}>{companyInfo.companyName}</b>
             </div>
 
             <div>
               <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Mã số doanh nghiệp (MST):</span>
               <b style={{ color: '#d97706', fontSize: 13 }}>Đang hoàn tất thủ tục cấp phép & đăng ký kinh doanh</b>
               <span style={{ display: 'block', fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>
-                Dự án Khởi nghiệp Sáng tạo Sinh viên · FPT University EXE Capstone Project
+                {companyInfo.projectName}
               </span>
             </div>
 
             <div>
               <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Đại diện dự án / Phụ trách vận hành:</span>
-              <b>ĐÀO VĂN NĂNG</b> — Chức vụ: Trưởng dự án (Project Lead)
+              <b>{companyInfo.projectLead}</b> — Chức vụ: {companyInfo.projectLeadTitle}
             </div>
 
             <div>
-              <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Địa chỉ trụ sở chính:</span>
-              <span>Tòa nhà FPT Polytechnic, Phố Trịnh Văn Bô, Phường Phương Canh, Quận Nam Từ Liêm, TP. Hà Nội, Việt Nam</span>
+              <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Phụ trách kỹ thuật & Công nghệ:</span>
+              <b>{companyInfo.techLead}</b> — Chức vụ: {companyInfo.techLeadTitle}
             </div>
 
             <div>
-              <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Văn phòng giao dịch:</span>
-              <span>Tầng 5, Tòa nhà Innovation Hub, Quận Cầu Giấy, TP. Hà Nội</span>
+              <span style={{ color: 'var(--ink-soft)', display: 'block', fontSize: 12 }}>Địa chỉ:</span>
+              <span>{companyInfo.address}</span>
             </div>
 
             <div style={{ background: 'var(--bg-subtle, rgba(0,0,0,0.03))', padding: 12, borderRadius: 10, marginTop: 4 }}>
               <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Icon name="phone" width="15" height="15" style={{ color: 'var(--primary)' }} />
-                <b>Hotline & Khiếu nại:</b> <span style={{ color: 'var(--primary)', fontWeight: 700 }}>0327 724 169</span> / 1900 6828
+                <b>Hotline & Hỗ trợ:</b>{' '}
+                <span style={{ color: 'var(--primary)', fontWeight: 700 }}>
+                  {companyInfo.hotline1} {companyInfo.hotline2 ? `/ ${companyInfo.hotline2}` : ''}
+                </span>
               </div>
               <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Icon name="mail" width="15" height="15" style={{ color: 'var(--primary)' }} />
-                <b>Email chung:</b> <code>support@skillbridge.vn</code>
+                <b>Email:</b> <code>{companyInfo.email}</code>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Icon name="clock" width="15" height="15" style={{ color: 'var(--primary)' }} />
-                <b>Giờ làm việc:</b> 08:00 - 18:00 (Thứ 2 đến Thứ 7)
+                <b>Giờ làm việc:</b> {companyInfo.workingHours}
               </div>
             </div>
           </div>
@@ -98,7 +139,7 @@ export default function Contact() {
           </h3>
 
           {submitted ? (
-            <div style={{ textAlign: 'center', padding: '40px 16px' }}>
+            <div style={{ textAlign: 'center', padding: '36px 16px' }}>
               <div style={{
                 width: 64,
                 height: 64,
@@ -113,13 +154,37 @@ export default function Contact() {
               }}>
                 <Icon name="check" width="34" height="34" />
               </div>
-              <h4 style={{ color: '#16a34a', margin: '0 0 8px 0' }}>Đã tiếp nhận yêu cầu!</h4>
-              <p style={{ color: 'var(--ink-soft)', fontSize: 13.5 }}>
-                Đội ngũ Hỗ trợ khách hàng của SkillBridge sẽ xem xét và phản hồi đến email <b>{form.email}</b> trong vòng 24 giờ làm việc.
+              <h4 style={{ color: '#16a34a', margin: '0 0 8px 0', fontSize: 18 }}>Đã tiếp nhận yêu cầu!</h4>
+              <p style={{ color: 'var(--ink-soft)', fontSize: 13.5, maxWidth: 360, margin: '0 auto 16px auto', lineHeight: 1.6 }}>
+                Hệ thống đã ghi nhận nội dung hỗ trợ từ bạn. Ban quản trị sẽ phản hồi sớm nhất qua email <b>{form.email}</b> trong vòng 24 giờ làm việc.
               </p>
-              <button className="btn btn-outline btn-sm" style={{ marginTop: 16 }} onClick={() => setSubmitted(false)}>
-                Gửi phản hồi khác
-              </button>
+              
+              <div style={{ background: 'var(--bg-subtle, #f8fafc)', padding: '14px', borderRadius: 10, marginBottom: 20, textAlign: 'left', fontSize: 13 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6, color: 'var(--ink)' }}>Cần hỗ trợ gấp ngay lập tức?</div>
+                <div style={{ color: 'var(--ink-soft)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div>📞 Gọi Hotline: <a href={`tel:${companyInfo.hotline1}`} style={{ color: 'var(--primary)', fontWeight: 600 }}>{companyInfo.hotline1}</a> {companyInfo.hotline2 ? <>hoặc <a href={`tel:${companyInfo.hotline2}`} style={{ color: 'var(--primary)', fontWeight: 600 }}>{companyInfo.hotline2}</a></> : null}</div>
+                  <div>✉️ Email trực tiếp: <a href={`mailto:${companyInfo.email}?subject=[Hỗ trợ khẩn cấp] ${encodeURIComponent(form.name)}&body=${encodeURIComponent(form.message)}`} style={{ color: 'var(--primary)', fontWeight: 600 }}>{companyInfo.email}</a></div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <a
+                  href={`mailto:${companyInfo.email}?subject=[Yêu cầu hỗ trợ] ${encodeURIComponent(form.name)} - ${form.subject}&body=Họ tên: ${encodeURIComponent(form.name)}%0D%0ASĐT: ${encodeURIComponent(form.phone)}%0D%0ANội dung: ${encodeURIComponent(form.message)}`}
+                  className="btn btn-outline btn-sm"
+                  style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Icon name="mail" width="14" height="14" /> Mở Email gửi trực tiếp
+                </a>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setSubmitted(false);
+                    setForm((prev) => ({ ...prev, message: '' }));
+                  }}
+                >
+                  Gửi phản hồi khác
+                </button>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -195,8 +260,20 @@ export default function Contact() {
                 />
               </div>
 
-              <button type="submit" className="btn btn-primary" style={{ marginTop: 6 }}>
-                Gửi yêu cầu hỗ trợ
+              <button
+                type="submit"
+                className="btn btn-primary"
+                style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? (
+                  <>
+                    <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                    Đang gửi yêu cầu...
+                  </>
+                ) : (
+                  'Gửi yêu cầu hỗ trợ'
+                )}
               </button>
             </form>
           )}

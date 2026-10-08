@@ -65,30 +65,11 @@ public class RegisterService : IRegisterService
         if (dto.RoleCode != RoleCode.Student && dto.RoleCode != RoleCode.Employer)
             throw new BusinessException("Vai trò phải là 'student' hoặc 'employer'");
 
-        if (dto.RoleCode == RoleCode.Student)
-        {
-            var allowedDomains = config.GetSection("Auth:AllowedStudentEmailDomains")
-                .GetChildren()
-                .Select(c => c.Value)
-                .Where(v => !string.IsNullOrWhiteSpace(v))
-                .ToArray();
+        var isEduEmail = dto.RoleCode == RoleCode.Student &&
+                         (dto.Email.EndsWith("@fpt.edu.vn", StringComparison.OrdinalIgnoreCase) ||
+                          dto.Email.EndsWith("@fe.edu.vn", StringComparison.OrdinalIgnoreCase));
 
-            if (allowedDomains.Length == 0)
-            {
-                logger.LogError("Cấu hình 'Auth:AllowedStudentEmailDomains' bị thiếu hoặc rỗng. Từ chối đăng ký tài khoản sinh viên.");
-                throw new BusinessException("Hệ thống chưa cấu hình danh sách domain email sinh viên hợp lệ. Vui lòng liên hệ quản trị viên.");
-            }
-
-            var emailParts = dto.Email.Split('@');
-            var domain = emailParts.Length > 1 ? emailParts[1] : string.Empty;
-
-            var isAllowed = allowedDomains.Any(allowed =>
-                domain.Equals(allowed, StringComparison.OrdinalIgnoreCase) ||
-                domain.EndsWith("." + allowed, StringComparison.OrdinalIgnoreCase));
-
-            if (!isAllowed)
-                throw new BusinessException("Sinh viên phải đăng ký bằng email trường (ví dụ: @fpt.edu.vn hoặc @fe.edu.vn)");
-        }
+        var initialAccountStatus = isEduEmail ? "active" : "pending";
 
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new BusinessException("Email này đã được đăng ký");
@@ -107,8 +88,8 @@ public class RegisterService : IRegisterService
             PhoneNumber = dto.PhoneNumber,
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
             RoleId = role.Id,
-            KycStatus = "pending",
-            AccountStatus = dto.RoleCode == RoleCode.Student ? "active" : "pending",
+            KycStatus = "unverified",
+            AccountStatus = initialAccountStatus,
             ReliabilityScore = 100,
             JobsDoneCount = 0,
             JoinedAt = DateTime.UtcNow
@@ -153,7 +134,7 @@ public class RegisterService : IRegisterService
             }
         });
 
-        var message = dto.RoleCode == RoleCode.Student
+        var message = initialAccountStatus == "active"
             ? "Đăng ký thành công! Tài khoản sinh viên của bạn đã được kích hoạt. Bạn có thể đăng nhập ngay."
             : "Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản trước khi đăng nhập.";
 

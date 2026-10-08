@@ -4,7 +4,16 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 const DEFAULT_CLIENT_ID = '275431712095-73cfhprsdt4seghbdrjr4clpl9f7j6g7.apps.googleusercontent.com';
 
-export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp tục với Google', onError }) {
+let globalResponseHandler = null;
+let lastInitClientId = null;
+
+function onGoogleCredentialResponse(response) {
+    if (globalResponseHandler) {
+        globalResponseHandler(response);
+    }
+}
+
+export default function GoogleLoginButton({ roleCode = 'student', mode = 'login', text = 'Tiếp tục với Google', referralCode, onError }) {
     const { googleLogin } = useStore();
     const navigate = useNavigate();
     const location = useLocation();
@@ -23,6 +32,12 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
     const roleCodeRef = useRef(roleCode);
     roleCodeRef.current = roleCode;
 
+    const modeRef = useRef(mode);
+    modeRef.current = mode;
+
+    const referralCodeRef = useRef(referralCode);
+    referralCodeRef.current = referralCode;
+
     const navigateRef = useRef(navigate);
     navigateRef.current = navigate;
 
@@ -36,6 +51,7 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
 
     useEffect(() => {
         let isMounted = true;
+        hasRenderedRef.current = false;
 
         const handleCredentialResponse = async (response) => {
             if (!response?.credential) {
@@ -45,7 +61,31 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
 
             setLoading(true);
             try {
-                await googleLoginRef.current(response.credential, roleCodeRef.current);
+                const loginResult = await googleLoginRef.current(response.credential, roleCodeRef.current, modeRef.current);
+
+                // Tự động liên kết mã bạn đồng hành 1-1 nếu có mã giới thiệu từ link hoặc ô nhập
+                try {
+                    const pendingRef = referralCodeRef.current || searchParamsRef.current?.get('ref') || sessionStorage.getItem('sb_pending_referral_code');
+                    if (pendingRef) {
+                        const cleanRef = String(pendingRef).trim().toUpperCase();
+                        if (/^[A-Z]{6}$/.test(cleanRef)) {
+                            const uId = loginResult?.userId || 'guest';
+                            const storageKey = `sb_linked_friend_${uId}`;
+                            if (!localStorage.getItem(storageKey)) {
+                                localStorage.setItem(storageKey, JSON.stringify({
+                                    code: cleanRef,
+                                    linkedAt: new Date().toLocaleDateString('vi-VN'),
+                                    status: 'pending_verify',
+                                    source: 'google_oauth'
+                                }));
+                            }
+                            sessionStorage.removeItem('sb_pending_referral_code');
+                        }
+                    }
+                } catch (refErr) {
+                    console.warn('Lỗi ghi nhận mã giới thiệu khi đăng nhập Google:', refErr);
+                }
+
                 const redirect = searchParamsRef.current?.get('redirect') || locationRef.current?.state?.from;
                 if (redirect) {
                     navigateRef.current(redirect, { replace: true });
@@ -54,12 +94,14 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
                 }
             } catch (err) {
                 if (onErrorRef.current) {
-                    onErrorRef.current(err.message || 'Đăng nhập Google thất bại. Vui lòng thử lại.');
+                    onErrorRef.current(err.message || (modeRef.current === 'register' ? 'Đăng ký Google thất bại. Vui lòng thử lại.' : 'Đăng nhập Google thất bại. Vui lòng thử lại.'));
                 }
             } finally {
                 if (isMounted) setLoading(false);
             }
         };
+
+        globalResponseHandler = handleCredentialResponse;
 
         // Hàm khởi tạo Google Identity Services
         const initGsi = () => {
@@ -69,20 +111,22 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
                 }
 
                 try {
-                    window.google.accounts.id.initialize({
-                        client_id: clientId,
-                        callback: handleCredentialResponse,
-                        auto_select: false,
-                        cancel_on_tap_outside: true,
-                        hosted_domain: 'fpt.edu.vn',
-                    });
+                    if (lastInitClientId !== clientId) {
+                        window.google.accounts.id.initialize({
+                            client_id: clientId,
+                            callback: onGoogleCredentialResponse,
+                            auto_select: false,
+                            cancel_on_tap_outside: true,
+                        });
+                        lastInitClientId = clientId;
+                    }
 
                     googleButtonRef.current.innerHTML = '';
                     window.google.accounts.id.renderButton(googleButtonRef.current, {
                         theme: 'outline',
                         size: 'large',
-                        width: '100%',
-                        text: text.includes('Đăng ký') ? 'signup_with' : 'signin_with',
+                        width: 360,
+                        text: mode === 'register' ? 'signup_with' : 'signin_with',
                         shape: 'rectangular',
                         logo_alignment: 'left',
                         locale: 'vi',
@@ -117,8 +161,11 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
 
         return () => {
             isMounted = false;
+            if (globalResponseHandler === handleCredentialResponse) {
+                globalResponseHandler = null;
+            }
         };
-    }, [clientId, text]);
+    }, [clientId, text, mode, roleCode]);
 
     return (
         <div className="google-sso-container" style={{ width: '100%', marginTop: 12, marginBottom: 12 }}>
@@ -135,11 +182,19 @@ export default function GoogleLoginButton({ roleCode = 'student', text = 'Tiếp
                 }}
             />
             <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--text-muted, #64748b)', marginTop: 6 }}>
-                🎓 <i>Chỉ hỗ trợ tài khoản trường <b>@fpt.edu.vn</b></i>
+                {mode === 'register' ? (
+                    roleCode === 'employer' ? (
+                        <i>🏢 Đăng ký tài khoản Nhà tuyển dụng nhanh bằng Google</i>
+                    ) : (
+                        <i>🎓 Đăng ký tài khoản Sinh viên bằng Google (Gmail hoặc Email trường)</i>
+                    )
+                ) : (
+                    <i>🔐 Đăng nhập nhanh bằng Google cho Sinh viên & Nhà tuyển dụng</i>
+                )}
             </div>
             {loading && (
                 <div style={{ textAlign: 'center', fontSize: 13, color: '#2563eb', marginTop: 4 }}>
-                    Đang xác thực tài khoản sinh viên FPT...
+                    Đang xác thực tài khoản Google...
                 </div>
             )}
         </div>

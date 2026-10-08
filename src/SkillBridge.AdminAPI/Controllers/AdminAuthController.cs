@@ -212,7 +212,7 @@ public class AdminAuthController : ControllerBase
         var adminUserId = User.GetRequiredUserId();
         try
         {
-            var success = await _totpService.Confirm2FaSetupAsync(adminUserId, dto.Code, ct);
+            var success = await _totpService.Confirm2FaSetupAsync(adminUserId, dto.Code, dto.SecretKey, ct);
             return Ok(new { success, message = "Đã kích hoạt xác thực 2 bước (2FA) thành công cho tài khoản." });
         }
         catch (BusinessException ex)

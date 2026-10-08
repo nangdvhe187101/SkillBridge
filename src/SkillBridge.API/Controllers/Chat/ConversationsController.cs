@@ -67,6 +67,18 @@ public class ConversationsController : ControllerBase
     }
 
     /// <summary>
+    /// Bắt đầu hoặc mở cuộc trò chuyện trực tiếp với Ban Quản Trị / Admin Hệ Thống
+    /// </summary>
+    [HttpPost("support")]
+    [EnableRateLimiting("ResourceCreationPolicy")]
+    public async Task<IActionResult> StartSupportConversation(CancellationToken cancellationToken = default)
+    {
+        var userId = User.GetRequiredUserId();
+        var result = await _chatService.StartSupportConversationAsync(userId, cancellationToken);
+        return Ok(result);
+    }
+
+    /// <summary>
     /// Gửi tin nhắn mới vào cuộc trò chuyện
     /// </summary>
     [HttpPost("{id:int}/messages")]

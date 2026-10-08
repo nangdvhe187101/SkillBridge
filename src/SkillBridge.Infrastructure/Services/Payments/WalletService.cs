@@ -21,17 +21,20 @@ public class WalletService : IWalletService
     private readonly ILogger<WalletService> _logger;
     private readonly IConfiguration? _configuration;
     private readonly HttpClient? _httpClient;
+    private readonly ISubscriptionPlanConfigService? _planConfigService;
 
     public WalletService(
         SkillBridgeDbContext dbContext,
         ILogger<WalletService> logger,
         IConfiguration? configuration = null,
-        HttpClient? httpClient = null)
+        HttpClient? httpClient = null,
+        ISubscriptionPlanConfigService? planConfigService = null)
     {
         _dbContext = dbContext;
         _logger = logger;
         _configuration = configuration;
         _httpClient = httpClient;
+        _planConfigService = planConfigService;
     }
 
     public async Task<WalletResponseDto> GetMyWalletAsync(int userId, CancellationToken cancellationToken = default)
@@ -109,7 +112,42 @@ public class WalletService : IWalletService
         DateTime? expiresAt = activeSub?.RenewalDate.HasValue == true
             ? activeSub.RenewalDate.Value.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
             : null;
-        decimal effectiveCommissionRate = PaymentConstants.DefaultCommissionRate; // 10%
+        decimal effectiveCommissionRate;
+        if (_planConfigService != null)
+        {
+            effectiveCommissionRate = await _planConfigService.GetEffectiveCommissionRateAsync(userId, cancellationToken);
+        }
+        else
+        {
+            effectiveCommissionRate = PaymentConstants.DefaultCommissionRate;
+            if (activeSub != null)
+            {
+                var pName = activeSub.PlanName;
+                if (userRoleCode == "employer")
+                {
+                    if (pName.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                    {
+                        effectiveCommissionRate = PaymentConstants.ProOrVipCommissionRate;
+                    }
+                }
+                else
+                {
+                    if (pName.Contains(PaymentConstants.MasterPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                    {
+                        effectiveCommissionRate = PaymentConstants.MasterCommissionRate;
+                    }
+                    else if (pName.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                    {
+                        effectiveCommissionRate = PaymentConstants.ProOrVipCommissionRate;
+                    }
+                    else if (pName.Contains(PaymentConstants.StarterPlanKeyword, StringComparison.OrdinalIgnoreCase))
+                    {
+                        effectiveCommissionRate = PaymentConstants.StarterCommissionRate;
+                    }
+                }
+            }
+        }
+
         string? badge = null;
 
         if (activeSub != null)
@@ -120,7 +158,6 @@ public class WalletService : IWalletService
                 if (pName.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase))
                 {
                     planCode = PaymentConstants.PlanEmpVip;
-                    effectiveCommissionRate = PaymentConstants.ProOrVipCommissionRate; // 5%
                     badge = "vip";
                 }
                 else if (pName.Contains(PaymentConstants.GrowthPlanKeyword, StringComparison.OrdinalIgnoreCase))
@@ -140,19 +177,16 @@ public class WalletService : IWalletService
                 if (pName.Contains(PaymentConstants.MasterPlanKeyword, StringComparison.OrdinalIgnoreCase))
                 {
                     planCode = PaymentConstants.PlanStuMaster;
-                    effectiveCommissionRate = PaymentConstants.MasterCommissionRate; // 3%
                     badge = "master";
                 }
                 else if (pName.Contains(PaymentConstants.ProPlanKeyword, StringComparison.OrdinalIgnoreCase))
                 {
                     planCode = PaymentConstants.PlanStuPro;
-                    effectiveCommissionRate = PaymentConstants.ProOrVipCommissionRate; // 5%
                     badge = "pro";
                 }
                 else if (pName.Contains(PaymentConstants.StarterPlanKeyword, StringComparison.OrdinalIgnoreCase))
                 {
                     planCode = PaymentConstants.PlanStuStarter;
-                    effectiveCommissionRate = PaymentConstants.StarterCommissionRate; // 8%
                     badge = "starter";
                 }
                 else if (pName.Contains(PaymentConstants.VipPlanKeyword, StringComparison.OrdinalIgnoreCase))

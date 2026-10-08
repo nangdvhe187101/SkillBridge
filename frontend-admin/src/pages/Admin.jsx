@@ -10,22 +10,31 @@ import AdminAnalytics from '../components/AdminAnalytics';
 import AdminOps from '../components/AdminOps';
 import AdminRoles from '../components/AdminRoles';
 import AdminMessages from '../components/AdminMessages';
+import AdminChat from '../components/AdminChat';
 import AdminBankVerification from '../components/AdminBankVerification';
+import AdminStudentVerification from '../components/AdminStudentVerification';
 import AdminPlans from '../components/AdminPlans';
 import AdminContracts from '../components/AdminContracts';
 import IdleLockOverlay from '../components/security/IdleLockOverlay';
+import TwoFactorAuthModal from '../components/security/TwoFactorAuthModal';
 import Icon from '../components/Icon';
 import { adminLogout } from '../api/authApi';
 
 const ROLE_MODULES = {
-  super: ['users', 'contracts', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'ops', 'roles'],
-  moderator: ['content', 'messages'],
-  dispute: ['contracts', 'disputes', 'messages'],
-  finance: ['contracts', 'finance', 'plans', 'bank-verification'],
+  super: ['users', 'contracts', 'student-verification', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'ops', 'roles'],
+  super_admin: ['users', 'contracts', 'student-verification', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'ops', 'roles'],
+  business_admin: ['student-verification', 'content', 'plans', 'partners', 'messages', 'support-chat', 'analytics'],
+  business: ['student-verification', 'content', 'plans', 'partners', 'messages', 'support-chat', 'analytics'],
+  moderator: ['content', 'messages', 'support-chat', 'student-verification'],
+  dispute: ['contracts', 'disputes', 'messages', 'support-chat'],
+  finance: ['contracts', 'finance', 'plans', 'bank-verification', 'support-chat'],
 };
 
 const ROLE_WHOAMI = {
   super: 'Super Admin',
+  super_admin: 'Super Admin',
+  business_admin: 'Business Admin',
+  business: 'Business Admin',
   moderator: 'Content Moderator',
   dispute: 'Dispute Officer',
   finance: 'Finance Viewer',
@@ -45,6 +54,8 @@ const CF_NAV_SECTIONS = [
   {
     title: 'Observe & Manage',
     items: [
+      { id: 'support-chat', path: '/support-chat', icon: 'chat', label: 'Tin nhắn hỗ trợ (CSKH)', sub: 'Hội thoại trực tiếp với User/NTD' },
+      { id: 'student-verification', path: '/student-verification', icon: 'shield-check', label: 'Duyệt thẻ sinh viên' },
       { id: 'bank-verification', path: '/bank-verification', icon: 'shield-check', label: 'Duyệt ngân hàng' },
       { id: 'content', path: '/content', icon: 'file-text', label: 'Kiểm duyệt bài đăng' },
       { id: 'messages', path: '/messages', icon: 'chat', label: 'Giám sát tin nhắn' },
@@ -70,10 +81,12 @@ const CF_NAV_SECTIONS = [
 const MODULE_TITLES = {
   users: 'Người dùng & eKYC',
   contracts: 'Giám sát Hợp đồng & Ký quỹ Escrow',
+  'student-verification': 'Duyệt thẻ sinh viên & Đối soát MSSV',
   'bank-verification': 'Duyệt tài khoản ngân hàng',
   finance: 'Tài chính & Lệnh rút tiền',
   disputes: 'Trung tâm xử lý tranh chấp',
   content: 'Kiểm duyệt bài đăng tuyển dụng',
+  'support-chat': 'Tin nhắn hỗ trợ trực tuyến (CSKH)',
   messages: 'Giám sát tin nhắn & cảnh báo',
   analytics: 'Báo cáo số liệu & phân tích',
   plans: 'Quản lý gói bán & bảng giá',
@@ -83,13 +96,28 @@ const MODULE_TITLES = {
 };
 
 function AdminInner({ forcedTab }) {
-  const { viewRole, setViewRole, queue, disputes, tickets, adminChats } = useAdmin();
+  const { viewRole, queue, disputes, tickets, adminChats } = useAdmin();
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [twoFactorModalOpen, setTwoFactorModalOpen] = useState(false);
+
+  const currentAdmin = useMemo(() => {
+    try {
+      const raw = localStorage.getItem('admin_user');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const avatarInitials = useMemo(() => {
+    const name = currentAdmin?.fullName || currentAdmin?.email || 'AD';
+    return name.substring(0, 2).toUpperCase();
+  }, [currentAdmin]);
 
   const allowed = ROLE_MODULES[viewRole] || ROLE_MODULES.super;
 
@@ -105,13 +133,6 @@ function AdminInner({ forcedTab }) {
 
   const activeTab = allowed.includes(currentTabId) ? currentTabId : allowed[0];
 
-  const counts = {
-    content: queue.length,
-    disputes: disputes.filter((d) => d.status === 'open').length,
-    ops: tickets.filter((t) => t.status === 'open').length,
-    messages: adminChats.filter((c) => c.status === 'warned').length,
-  };
-
   const handleTabClick = (item) => {
     navigate(item.path);
   };
@@ -121,43 +142,37 @@ function AdminInner({ forcedTab }) {
       {/* Tự động khóa màn hình mờ sau 15 phút không thao tác theo Q-002 */}
       <IdleLockOverlay />
 
+      {/* Modal Cài đặt Xác thực 2 bước (Google Authenticator) */}
+      <TwoFactorAuthModal isOpen={twoFactorModalOpen} onClose={() => setTwoFactorModalOpen(false)} />
+
       {/* Cột Sidebar bên trái (Full-Height phong cách Cloudflare) */}
       <aside className="cf-sidebar" style={{ width: isSidebarCollapsed ? 64 : 260 }}>
-        {/* Account Selector Pill */}
-        <div className="cf-sidebar-header">
-          {!isSidebarCollapsed ? (
-            <div className="cf-account-pill" title="Tài khoản Quản trị SkillBridge">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-                <span
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 5,
-                    background: '#f38020',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: '#fff',
-                    fontWeight: 700,
-                    fontSize: 12,
-                    flexShrink: 0
-                  }}
-                >
-                  ⚡
-                </span>
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    admin@skillbridge.vn
-                  </span>
-                  <span style={{ fontSize: 11, color: '#6b7280' }}>SkillBridge Production</span>
-                </div>
-              </div>
-              <span style={{ fontSize: 10, color: '#9ca3af' }}>▲▼</span>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', justifyContent: 'center' }}>
-              <span style={{ width: 28, height: 28, borderRadius: 6, background: '#f38020', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700 }}>
-                ⚡
+        {/* Brand Header */}
+        <div className="cf-sidebar-header" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: isSidebarCollapsed ? '12px 0' : '14px 16px', justifyContent: isSidebarCollapsed ? 'center' : 'flex-start' }}>
+          <span
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 7,
+              background: 'linear-gradient(135deg, #0051c3, #2563eb)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              fontWeight: 800,
+              fontSize: 13,
+              flexShrink: 0
+            }}
+          >
+            ⚡
+          </span>
+          {!isSidebarCollapsed && (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: 14.5, fontWeight: 700, color: '#111827', letterSpacing: '-0.2px', lineHeight: 1.2 }}>
+                SkillBridge
+              </span>
+              <span style={{ fontSize: 11, color: '#6b7280' }}>
+                Hệ thống Quản trị
               </span>
             </div>
           )}
@@ -212,14 +227,13 @@ function AdminInner({ forcedTab }) {
                 )}
                 {visibleItems.map((item) => {
                   const isActive = activeTab === item.id;
-                  const count = counts[item.id] || 0;
 
                   return (
                     <button
                       key={item.id}
                       className={`cf-nav-item ${isActive ? 'is-active' : ''}`}
                       onClick={() => handleTabClick(item)}
-                      title={item.label}
+                      title={isSidebarCollapsed ? item.label : undefined}
                     >
                       <div className="cf-nav-item-left">
                         <Icon
@@ -241,10 +255,6 @@ function AdminInner({ forcedTab }) {
                           </div>
                         )}
                       </div>
-
-                      {!isSidebarCollapsed && count > 0 && (
-                        <span className="cf-nav-badge">{count}</span>
-                      )}
                     </button>
                   );
                 })}
@@ -274,9 +284,6 @@ function AdminInner({ forcedTab }) {
             <span>{isSidebarCollapsed ? '▶' : '◀'}</span>
             {!isSidebarCollapsed && <span>Thu gọn</span>}
           </button>
-          {!isSidebarCollapsed && (
-            <span style={{ fontSize: 11, color: '#9ca3af' }}>SkillBridge v2.2</span>
-          )}
         </div>
       </aside>
 
@@ -298,20 +305,25 @@ function AdminInner({ forcedTab }) {
 
           {/* Right Toolbar Actions */}
           <div className="cf-topbar-actions">
-            {/* Role Switcher */}
+            {/* Role Badge (Cố định theo tài khoản đăng nhập) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#4b5563' }}>
               <span>Vai trò:</span>
-              <select
-                className="cf-role-select"
-                value={viewRole}
-                onChange={(e) => setViewRole(e.target.value)}
-                aria-label="Mô phỏng vai trò"
+              <span
+                style={{
+                  fontWeight: 600,
+                  fontSize: 12,
+                  background: viewRole === 'super' || viewRole === 'super_admin' ? '#eff6ff' : '#ecfdf5',
+                  color: viewRole === 'super' || viewRole === 'super_admin' ? '#1d4ed8' : '#047857',
+                  border: viewRole === 'super' || viewRole === 'super_admin' ? '1px solid #bfdbfe' : '1px solid #a7f3d0',
+                  padding: '3px 10px',
+                  borderRadius: 6,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4
+                }}
               >
-                <option value="super">Super Admin</option>
-                <option value="moderator">Content Moderator</option>
-                <option value="dispute">Dispute Officer</option>
-                <option value="finance">Finance Viewer</option>
-              </select>
+                {ROLE_WHOAMI[viewRole] || currentAdmin?.roleName || 'Quản trị viên'}
+              </span>
             </div>
 
             {/* User Profile Info & Logout */}
@@ -330,10 +342,33 @@ function AdminInner({ forcedTab }) {
                   fontSize: 11,
                   fontWeight: 600
                 }}
-                title="Tài khoản quản trị viên"
+                title={currentAdmin?.email || 'Tài khoản quản trị viên'}
               >
-                AD
+                {avatarInitials}
               </div>
+              <span style={{ fontSize: 12.5, fontWeight: 500, color: '#374151', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {currentAdmin?.fullName || currentAdmin?.email || 'Quản trị viên'}
+              </span>
+              <button
+                onClick={() => setTwoFactorModalOpen(true)}
+                className="cf-btn-secondary"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  padding: '4px 10px',
+                  fontSize: 12,
+                  color: '#1d4ed8',
+                  background: '#eff6ff',
+                  border: '1px solid #bfdbfe',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+                title="Cài đặt xác thực 2 bước Google Authenticator"
+              >
+                <span>🛡️</span>
+                <span>Bảo mật 2FA</span>
+              </button>
               <button
                 onClick={adminLogout}
                 className="cf-btn-secondary"
@@ -354,6 +389,7 @@ function AdminInner({ forcedTab }) {
         <main className="cf-main">
           {activeTab === 'users' && <AdminUsers />}
           {activeTab === 'contracts' && <AdminContracts />}
+          {activeTab === 'student-verification' && <AdminStudentVerification />}
           {activeTab === 'bank-verification' && (
             <div>
               <div style={{ marginBottom: 20 }}>
@@ -374,6 +410,7 @@ function AdminInner({ forcedTab }) {
           {activeTab === 'analytics' && <AdminAnalytics />}
           {activeTab === 'partners' && <AdminPartners />}
           {activeTab === 'messages' && <AdminMessages />}
+          {activeTab === 'support-chat' && <AdminChat />}
           {activeTab === 'ops' && <AdminOps />}
           {activeTab === 'roles' && <AdminRoles />}
         </main>

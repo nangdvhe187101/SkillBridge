@@ -25,6 +25,7 @@ public class CreateAdminTeamMemberDto
 {
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
+    public string? Password { get; set; }
     public int? RoleId { get; set; }
     public string? RoleCode { get; set; }
 }
@@ -37,6 +38,7 @@ public class UpdateAdminTeamMemberRoleDto
     public int? RoleId { get; set; }
     public string? RoleCode { get; set; }
     public bool? IsActive { get; set; }
+    public string? Password { get; set; }
 }
 
 /// <summary>

@@ -78,7 +78,7 @@ builder.Services.AddAuthentication(options =>
         {
             var accessToken = context.Request.Query["access_token"];
             var path = context.HttpContext.Request.Path;
-            if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
+            if (!string.IsNullOrEmpty(accessToken) && (path.StartsWithSegments("/hubs") || path.StartsWithSegments("/api/storage/file")))
             {
                 context.Token = accessToken;
             }
@@ -365,6 +365,7 @@ app.Use(async (context, next) =>
     context.Response.Headers.Append("X-Frame-Options", "DENY");
     context.Response.Headers.Append("Referrer-Policy", "strict-origin-when-cross-origin");
     context.Response.Headers.Append("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    context.Response.Headers.Append("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
     await next();
 });
 
@@ -388,9 +389,10 @@ using (var scope = app.Services.CreateScope())
     {
         var dbContext = services.GetRequiredService<SkillBridge.Infrastructure.Data.SkillBridgeDbContext>();
         await SkillBridge.Infrastructure.Data.DbInitializer.EnsureUserExtendedFieldsAsync(dbContext, logger);
-        await SkillBridge.Infrastructure.Data.DbInitializer.SeedAdminAsync(dbContext, app.Configuration, logger);
         await SkillBridge.Infrastructure.Data.DbInitializer.EnsureChatSchemaAsync(dbContext, logger);
+        await SkillBridge.Infrastructure.Data.DbInitializer.EnsureStudentVerificationSchemaAsync(dbContext, logger);
         await SkillBridge.Infrastructure.Data.DbInitializer.EnsureSubscriptionPlansSchemaAndSeedAsync(dbContext, logger);
+        await SkillBridge.Infrastructure.Data.DbInitializer.SeedAdminAsync(dbContext, app.Configuration, logger);
     }
     catch (Exception ex)
     {

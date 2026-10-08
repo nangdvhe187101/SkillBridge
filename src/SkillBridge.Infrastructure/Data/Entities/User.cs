@@ -46,6 +46,16 @@ public partial class User
     [StringLength(150)]
     public string? School { get; set; }
 
+    [Column("school_id")]
+    public int? SchoolId { get; set; }
+
+    [Column("student_code")]
+    [StringLength(50)]
+    public string? StudentCode { get; set; }
+
+    [Column("graduation_year")]
+    public short? GraduationYear { get; set; }
+
     [Column("industry")]
     [StringLength(100)]
     public string? Industry { get; set; }
@@ -275,4 +285,13 @@ public partial class User
 
     [InverseProperty("Student")]
     public virtual ICollection<JobDeadlineExtension> StudentDeadlineExtensions { get; set; } = new List<JobDeadlineExtension>();
+
+    [InverseProperty("User")]
+    public virtual ICollection<StudentVerificationRequest> StudentVerificationRequests { get; set; } = new List<StudentVerificationRequest>();
+
+    [InverseProperty("User")]
+    public virtual StudentProfile? StudentProfile { get; set; }
+
+    [InverseProperty("User")]
+    public virtual ICollection<ExternalLogin> ExternalLogins { get; set; } = new List<ExternalLogin>();
 }

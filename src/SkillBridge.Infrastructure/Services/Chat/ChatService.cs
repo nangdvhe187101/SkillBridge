@@ -263,7 +263,11 @@ public class ChatService : IChatService
                     (a.StudentId == request.TargetUserId && a.Job.EmployerId == currentUserId && a.Status == "accepted"), ct);
             }
 
-            var initialStatus = hasActiveWorkRelationship ? "active" : "pending";
+            var isWithAdmin = await _dbContext.Users.AnyAsync(u =>
+                (u.Id == currentUserId || u.Id == request.TargetUserId) &&
+                (u.Email == "skillbridge.vn@gmail.com" || (u.Role != null && u.Role.Type == "admin")), ct);
+
+            var initialStatus = (hasActiveWorkRelationship || isWithAdmin) ? "active" : "pending";
 
             conversation = new Conversation
             {
@@ -784,5 +788,69 @@ public class ChatService : IChatService
             IsRequestSender = (c.RequestInitiatedBy == currentUserId),
             RequestInitiatedBy = c.RequestInitiatedBy
         };
+    }
+
+    public async Task<ConversationDto> StartSupportConversationAsync(int currentUserId, CancellationToken ct = default)
+    {
+        var adminUser = await _dbContext.Users
+            .Include(u => u.Role)
+            .FirstOrDefaultAsync(u => u.Email == "skillbridge.vn@gmail.com" || (u.Role != null && u.Role.Type == "admin"), ct);
+
+        if (adminUser == null)
+        {
+            throw new KeyNotFoundException("Tài khoản Quản trị viên Hỗ trợ chưa được thiết lập trên hệ thống.");
+        }
+
+        if (adminUser.Id == currentUserId)
+        {
+            throw new BusinessException("Bạn đang đăng nhập bằng tài khoản Quản trị viên.");
+        }
+
+        var startDto = new StartConversationRequestDto
+        {
+            TargetUserId = adminUser.Id,
+            JobId = null
+        };
+
+        var convoDto = await GetOrCreateConversationAsync(currentUserId, startDto, ct);
+
+        // Kiểm tra nếu cuộc hội thoại chưa có tin nhắn nào, gửi tin nhắn chào mừng từ Admin
+        var hasMessages = await _dbContext.ChatMessages.AnyAsync(m => m.ConversationId == convoDto.Id, ct);
+        if (!hasMessages)
+        {
+            var now = DateTime.UtcNow;
+            var welcomeText = "Xin chào! 👋 Cảm ơn bạn đã liên hệ với Ban Quản trị SkillBridge. Chúng tôi luôn sẵn sàng hỗ trợ bạn. Bạn cần giúp đỡ về ứng tuyển, thanh toán, hồ sơ hay có thắc mắc gì không?";
+            var welcomeMsg = new ChatMessage
+            {
+                ConversationId = convoDto.Id,
+                SenderId = adminUser.Id,
+                MessageText = welcomeText,
+                SentAt = now
+            };
+
+            _dbContext.ChatMessages.Add(welcomeMsg);
+
+            var dbConvo = await _dbContext.Conversations.FirstOrDefaultAsync(c => c.Id == convoDto.Id, ct);
+            if (dbConvo != null)
+            {
+                dbConvo.LastMessageAt = now;
+                if (dbConvo.UserAId == currentUserId)
+                {
+                    dbConvo.UnreadCountUserA = 1;
+                }
+                else
+                {
+                    dbConvo.UnreadCountUserB = 1;
+                }
+            }
+
+            await _dbContext.SaveChangesAsync(ct);
+
+            convoDto.LastMessageAt = now;
+            convoDto.LastMessageText = welcomeText;
+            convoDto.UnreadCount = 1;
+        }
+
+        return convoDto;
     }
 }

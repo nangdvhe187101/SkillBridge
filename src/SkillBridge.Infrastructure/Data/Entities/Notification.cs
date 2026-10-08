@@ -29,11 +29,26 @@ public partial class Notification
     [StringLength(255)]
     public string? Link { get; set; }
 
+    [Column("title")]
+    [StringLength(200)]
+    public string? Title { get; set; }
+
+    [Column("type")]
+    [StringLength(50)]
+    public string? Type { get; set; }
+
+    [Column("related_entity_type")]
+    [StringLength(50)]
+    public string? RelatedEntityType { get; set; }
+
+    [Column("related_entity_id")]
+    public int? RelatedEntityId { get; set; }
+
     [Column("is_read")]
     public bool IsRead { get; set; }
 
     [Column("created_at", TypeName = "datetime")]
-    public DateTime CreatedAt { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     [ForeignKey("UserId")]
     [InverseProperty("Notifications")]

@@ -184,7 +184,7 @@ public static class DbInitializer
 
     public static async Task EnsureUserExtendedFieldsAsync(SkillBridgeDbContext context, ILogger? logger = null)
     {
-        var columns = new (string Name, string Type)[]
+        var targetColumns = new (string Name, string Type)[]
         {
             ("headline", "VARCHAR(255) NULL"),
             ("bio", "TEXT NULL"),
@@ -197,23 +197,95 @@ public static class DbInitializer
             ("experience_json", "TEXT NULL"),
             ("social_links_json", "TEXT NULL"),
             ("benefits_json", "TEXT NULL"),
-            ("office_images_json", "TEXT NULL")
+            ("office_images_json", "TEXT NULL"),
+            ("expected_hourly_rate", "DECIMAL(12,2) NULL"),
+            ("school_id", "INT NULL"),
+            ("student_code", "VARCHAR(50) NULL"),
+            ("graduation_year", "SMALLINT NULL")
         };
 
-        foreach (var (colName, colType) in columns)
+        try
         {
+            var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var connection = context.Database.GetDbConnection();
+            var wasOpen = connection.State == System.Data.ConnectionState.Open;
+            if (!wasOpen) await connection.OpenAsync();
+
             try
             {
-#pragma warning disable EF1002
-                var sql = $"ALTER TABLE `users` ADD COLUMN `{colName}` {colType};";
-                await context.Database.ExecuteSqlRawAsync(sql);
-#pragma warning restore EF1002
-                logger?.LogInformation("DbInitializer: Đã thêm cột {Column} vào bảng users thành công.", colName);
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = @"
+                    SELECT COLUMN_NAME 
+                    FROM INFORMATION_SCHEMA.COLUMNS 
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users';";
+                using var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    existingColumns.Add(reader.GetString(0));
+                }
             }
-            catch
+            finally
             {
-                // Bỏ qua nếu cột đã tồn tại hoặc lỗi tương thích
+                if (!wasOpen) await connection.CloseAsync();
             }
+
+            foreach (var (colName, colType) in targetColumns)
+            {
+                if (!existingColumns.Contains(colName))
+                {
+                    try
+                    {
+#pragma warning disable EF1002
+                        var sql = $"ALTER TABLE `users` ADD COLUMN `{colName}` {colType};";
+                        await context.Database.ExecuteSqlRawAsync(sql);
+#pragma warning restore EF1002
+                        logger?.LogInformation("DbInitializer: Đã thêm cột {Column} vào bảng users thành công.", colName);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger?.LogWarning(ex, "DbInitializer: Không thể thêm cột {Column}.", colName);
+                    }
+                }
+            }
+            // Đảm bảo applications.status có giá trị 'awaiting_verification'
+            try
+            {
+                var appConn = context.Database.GetDbConnection();
+                var appWasOpen = appConn.State == System.Data.ConnectionState.Open;
+                if (!appWasOpen) await appConn.OpenAsync();
+                string? columnType = null;
+                try
+                {
+                    using var cmd = appConn.CreateCommand();
+                    cmd.CommandText = @"
+                        SELECT COLUMN_TYPE 
+                        FROM INFORMATION_SCHEMA.COLUMNS 
+                        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'applications' AND COLUMN_NAME = 'status';";
+                    var res = await cmd.ExecuteScalarAsync();
+                    columnType = res?.ToString();
+                }
+                finally
+                {
+                    if (!appWasOpen) await appConn.CloseAsync();
+                }
+
+                if (columnType != null && !columnType.Contains("awaiting_verification", StringComparison.OrdinalIgnoreCase))
+                {
+                    await context.Database.ExecuteSqlRawAsync(@"
+                        ALTER TABLE `applications` MODIFY COLUMN `status` ENUM('pending','hired','submitted','completed','rejected','cancelled','awaiting_verification') NOT NULL DEFAULT 'pending';
+                    ");
+                    logger?.LogInformation("DbInitializer: Đã mở rộng ENUM status bảng applications với 'awaiting_verification'.");
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "DbInitializer: Không thể cập nhật ENUM status bảng applications.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "DbInitializer: Lỗi kiểm tra schema cột mở rộng của bảng users.");
         }
     }
 
@@ -423,6 +495,236 @@ public static class DbInitializer
         catch (Exception ex)
         {
             logger?.LogWarning(ex, "DbInitializer: Lỗi cập nhật schema bảng subscription_plan_configs.");
+        }
+    }
+
+    public static async Task EnsureStudentVerificationSchemaAsync(SkillBridgeDbContext context, ILogger? logger = null)
+    {
+        try
+        {
+            await context.Database.ExecuteSqlRawAsync(@"
+                SET @dbname = DATABASE();
+
+                -- 1. wallets.withdraw_hold_reason
+                SET @tablename = 'wallets';
+                SET @col = 'withdraw_hold_reason';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE wallets ADD COLUMN withdraw_hold_reason VARCHAR(100) NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- 1. wallets.withdraw_hold_until
+                SET @col = 'withdraw_hold_until';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE wallets ADD COLUMN withdraw_hold_until DATETIME NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- 2. identity_documents.verification_request_id
+                SET @tablename = 'identity_documents';
+                SET @col = 'verification_request_id';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE identity_documents ADD COLUMN verification_request_id INT NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- 2. identity_documents.side
+                SET @col = 'side';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE identity_documents ADD COLUMN side VARCHAR(10) NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- 2. identity_documents.file_sha256
+                SET @col = 'file_sha256';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE identity_documents ADD COLUMN file_sha256 VARCHAR(64) NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- 2. identity_documents.purge_after
+                SET @col = 'purge_after';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE identity_documents ADD COLUMN purge_after DATETIME NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- 2. identity_documents.purged_at
+                SET @col = 'purged_at';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE identity_documents ADD COLUMN purged_at DATETIME NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- 3. schools
+                CREATE TABLE IF NOT EXISTS `schools` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `code` VARCHAR(50) NULL,
+                    `name` VARCHAR(150) NOT NULL,
+                    `short_name` VARCHAR(50) NULL,
+                    `domain` VARCHAR(100) NULL,
+                    `is_active` TINYINT(1) NOT NULL DEFAULT 1,
+                    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+                -- Đảm bảo các cột short_name, code, domain tồn tại nếu bảng schools đã được tạo trước đó
+                SET @tablename = 'schools';
+                SET @col = 'short_name';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE schools ADD COLUMN short_name VARCHAR(50) NULL DEFAULT NULL AFTER name'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                SET @col = 'code';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE schools ADD COLUMN code VARCHAR(50) NULL DEFAULT NULL AFTER id'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                SET @col = 'domain';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE schools ADD COLUMN domain VARCHAR(100) NULL DEFAULT NULL AFTER short_name'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                INSERT IGNORE INTO `schools` (`id`, `code`, `name`, `short_name`, `domain`, `is_active`)
+                VALUES (1, 'FPT_UNIVERSITY', 'Đại học FPT', 'FPTU', 'fpt.edu.vn', 1);
+                UPDATE `schools` SET `short_name` = 'FPTU' WHERE `id` = 1 AND (`short_name` IS NULL OR `short_name` = '');
+
+                -- 4. student_verification_requests
+                CREATE TABLE IF NOT EXISTS `student_verification_requests` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `user_id` INT NOT NULL,
+                    `request_type` VARCHAR(30) NOT NULL DEFAULT 'initial',
+                    `status` VARCHAR(30) NOT NULL DEFAULT 'pending',
+                    `school_id` INT NOT NULL,
+                    `student_code` VARCHAR(50) NOT NULL,
+                    `student_code_normalized` VARCHAR(50) NOT NULL,
+                    `full_name_on_card` VARCHAR(150) NOT NULL,
+                    `graduation_year` SMALLINT NOT NULL,
+                    `ocr_result_json` JSON NULL,
+                    `risk_flags_json` JSON NULL,
+                    `reason_code` VARCHAR(50) NULL,
+                    `user_message` TEXT NULL,
+                    `rejection_reason` TEXT NULL,
+                    `admin_note` TEXT NULL,
+                    `need_info_deadline` DATETIME NULL,
+                    `resubmit_allowed` TINYINT(1) NOT NULL DEFAULT 1,
+                    `resubmit_after` DATETIME NULL,
+                    `submitted_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `reviewed_by_admin_id` INT NULL,
+                    `reviewed_at` DATETIME NULL,
+                    `PendingUserId` INT GENERATED ALWAYS AS (CASE WHEN `status` = 'pending' THEN `user_id` ELSE NULL END) VIRTUAL,
+                    KEY `idx_svr_user` (`user_id`),
+                    KEY `idx_svr_school_code` (`school_id`, `student_code_normalized`),
+                    KEY `idx_svr_status_submitted` (`status`, `submitted_at`),
+                    UNIQUE KEY `uq_svr_pending_user` (`PendingUserId`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+                -- Đảm bảo PendingUserId và uq_svr_pending_user nếu bảng đã tạo trước đó
+                SET @tablename = 'student_verification_requests';
+                SET @col = 'PendingUserId';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE student_verification_requests ADD COLUMN PendingUserId INT GENERATED ALWAYS AS (CASE WHEN `status` = ''pending'' THEN `user_id` ELSE NULL END) VIRTUAL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                SET @idx = 'uq_svr_pending_user';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND INDEX_NAME = @idx) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE student_verification_requests ADD UNIQUE KEY uq_svr_pending_user (PendingUserId)'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- 5. student_profiles
+                CREATE TABLE IF NOT EXISTS `student_profiles` (
+                    `user_id` INT PRIMARY KEY,
+                    `school_id` INT NOT NULL,
+                    `student_code` VARCHAR(50) NOT NULL,
+                    `student_code_normalized` VARCHAR(50) NOT NULL,
+                    `verified_full_name` VARCHAR(150) NOT NULL,
+                    `graduation_year` SMALLINT NOT NULL,
+                    `verified_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    `expires_at` DATETIME NULL,
+                    `source_request_id` INT NOT NULL,
+                    UNIQUE KEY `uq_student_profiles_school_code` (`school_id`, `student_code_normalized`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+                SET @tablename = 'student_profiles';
+                SET @idx = 'uq_student_profiles_school_code';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND INDEX_NAME = @idx) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE student_profiles ADD UNIQUE KEY uq_student_profiles_school_code (school_id, student_code_normalized)'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- 6. external_logins
+                CREATE TABLE IF NOT EXISTS `external_logins` (
+                    `id` INT AUTO_INCREMENT PRIMARY KEY,
+                    `user_id` INT NOT NULL,
+                    `provider` VARCHAR(30) NOT NULL,
+                    `provider_user_id` VARCHAR(100) NOT NULL,
+                    `provider_email` VARCHAR(150) NULL,
+                    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    KEY `idx_el_user` (`user_id`),
+                    UNIQUE KEY `uq_provider_uid` (`provider`, `provider_user_id`)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+                -- 7. users: school_id, student_code, graduation_year
+                SET @tablename = 'users';
+                SET @col = 'school_id';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE users ADD COLUMN school_id INT NULL DEFAULT NULL AFTER school'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                SET @col = 'student_code';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE users ADD COLUMN student_code VARCHAR(50) NULL DEFAULT NULL AFTER school_id'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                SET @col = 'graduation_year';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE users ADD COLUMN graduation_year SMALLINT NULL DEFAULT NULL AFTER student_code'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+            ");
+            logger?.LogInformation("DbInitializer: Đã đảm bảo schema xác minh sinh viên và ví cập nhật đầy đủ.");
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "DbInitializer: Lỗi cập nhật schema bảng xác minh sinh viên.");
         }
     }
 }

@@ -141,7 +141,30 @@ var adminFrontendBaseUrl = builder.Configuration["AdminFrontend:BaseUrl"] ?? "ht
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAdminFrontend", policy =>
-        policy.WithOrigins(adminFrontendBaseUrl, "http://localhost:5174")
+        policy.WithOrigins(
+                  adminFrontendBaseUrl,
+                  "https://skillbridge.id.vn",
+                  "https://www.skillbridge.id.vn",
+                  "https://admin.skillbridge.id.vn",
+                  "http://localhost:5174",
+                  "http://localhost:5173"
+              )
+              .SetIsOriginAllowed(origin =>
+              {
+                  if (string.IsNullOrWhiteSpace(origin)) return false;
+                  try
+                  {
+                      var uri = new Uri(origin);
+                      return uri.Host.EndsWith("skillbridge.id.vn", StringComparison.OrdinalIgnoreCase) ||
+                             uri.Host.EndsWith("vercel.app", StringComparison.OrdinalIgnoreCase) ||
+                             uri.Host == "localhost" ||
+                             uri.Host == "127.0.0.1";
+                  }
+                  catch
+                  {
+                      return false;
+                  }
+              })
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials());

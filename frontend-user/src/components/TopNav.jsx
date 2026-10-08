@@ -44,6 +44,7 @@ export default function TopNav() {
   const userMenuCloseTimer = useRef(null);
   const isLoggedIn = !!state.currentUser;
   const isStudent = state.currentUser?.roleCode === 'student';
+  const isStudentVerified = state.currentUser?.kycStatus === 'verified' || state.currentUser?.isVerified;
   const isEmployer = state.currentUser?.roleCode === 'employer';
   const userPlanCode = state.activePlanCode || (state.vipBusiness ? 'EMP_VIP' : (state.subscriptionPro ? 'STU_PRO' : 'FREE'));
 
@@ -375,13 +376,27 @@ export default function TopNav() {
                       fontWeight: 700,
                       padding: '2px 7px',
                       borderRadius: 999,
-                      background: isStudent ? 'rgba(16, 185, 129, 0.12)' : (isEmployer ? 'rgba(79, 70, 229, 0.12)' : 'rgba(100, 116, 139, 0.12)'),
-                      color: isStudent ? '#059669' : (isEmployer ? 'var(--primary)' : '#475569'),
-                      border: isStudent ? '1px solid rgba(16, 185, 129, 0.25)' : (isEmployer ? '1px solid rgba(79, 70, 229, 0.25)' : '1px solid rgba(100, 116, 139, 0.2)'),
-                      lineHeight: 1.2
+                      background: isStudent
+                        ? (isStudentVerified ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)')
+                        : (isEmployer ? 'rgba(79, 70, 229, 0.12)' : 'rgba(100, 116, 139, 0.12)'),
+                      color: isStudent
+                        ? (isStudentVerified ? '#059669' : '#d97706')
+                        : (isEmployer ? 'var(--primary)' : '#475569'),
+                      border: isStudent
+                        ? (isStudentVerified ? '1px solid rgba(16, 185, 129, 0.25)' : '1px solid rgba(245, 158, 11, 0.3)')
+                        : (isEmployer ? '1px solid rgba(79, 70, 229, 0.25)' : '1px solid rgba(100, 116, 139, 0.2)'),
+                      lineHeight: 1.2,
+                      cursor: isStudent && !isStudentVerified ? 'pointer' : 'default'
+                    }}
+                    title={isStudent && !isStudentVerified ? 'Chưa xác minh thẻ sinh viên. Bấm để xác minh.' : undefined}
+                    onClick={(e) => {
+                      if (isStudent && !isStudentVerified) {
+                        e.stopPropagation();
+                        navigate('/settings/kyc');
+                      }
                     }}
                   >
-                    {isStudent ? 'Sinh viên' : (isEmployer ? 'Nhà tuyển dụng' : 'Admin')}
+                    {isStudent ? (isStudentVerified ? 'Sinh viên ✓' : 'Chưa xác minh') : (isEmployer ? 'Nhà tuyển dụng' : 'Admin')}
                   </span>
                   <UserTierBadge planCode={userPlanCode} userRole={state.currentUser?.roleCode} variant="icon-only" size="sm" />
                   <span className="nav-more-caret">▾</span>

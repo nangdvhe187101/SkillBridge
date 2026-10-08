@@ -53,7 +53,19 @@ export default function AdminOps() {
     emailDeliverable72hEnabled: true,
     emailPayoutEnabled: true,
     emailDigest18hEnabled: true,
-    emailVipMatchEnabled: true
+    emailVipMatchEnabled: true,
+    // Company & Contact Information
+    companyName: 'CÔNG TY CỔ PHẦN CÔNG NGHỆ SKILLBRIDGE VIỆT NAM',
+    projectName: 'Dự án Khởi nghiệp Sáng tạo Sinh viên · FPT University EXE Capstone Project',
+    projectLead: 'TRẦN LÊ KHÁNH LINH',
+    projectLeadTitle: 'Trưởng nhóm dự án (Project Lead)',
+    techLead: 'ĐÀO VĂN NĂNG',
+    techLeadTitle: 'Trưởng nhóm code (Technical Lead)',
+    address: 'Trường Đại học FPT Hà Nội, Khu Công nghệ cao Hòa Lạc, Km29 Đại lộ Thăng Long, Huyện Thạch Thất, TP. Hà Nội, Việt Nam',
+    hotline1: '0334404480',
+    hotline2: '0956653307',
+    email: 'skillbridge.vn@gmail.com',
+    workingHours: '08:00 - 18:00 (Thứ 2 đến Thứ 7)'
   });
   const [loadingSys, setLoadingSys] = useState(true);
   const [savingSys, setSavingSys] = useState(false);
@@ -137,7 +149,19 @@ export default function AdminOps() {
             emailDeliverable72hEnabled: res.emailDeliverable72hEnabled ?? true,
             emailPayoutEnabled: res.emailPayoutEnabled ?? true,
             emailDigest18hEnabled: res.emailDigest18hEnabled ?? true,
-            emailVipMatchEnabled: res.emailVipMatchEnabled ?? true
+            emailVipMatchEnabled: res.emailVipMatchEnabled ?? true,
+            // Company & Contact Information
+            companyName: res.companyName || 'CÔNG TY CỔ PHẦN CÔNG NGHỆ SKILLBRIDGE VIỆT NAM',
+            projectName: res.projectName || 'Dự án Khởi nghiệp Sáng tạo Sinh viên · FPT University EXE Capstone Project',
+            projectLead: res.projectLead || 'TRẦN LÊ KHÁNH LINH',
+            projectLeadTitle: res.projectLeadTitle || 'Trưởng nhóm dự án (Project Lead)',
+            techLead: res.techLead || 'ĐÀO VĂN NĂNG',
+            techLeadTitle: res.techLeadTitle || 'Trưởng nhóm code (Technical Lead)',
+            address: res.address || 'Trường Đại học FPT Hà Nội, Khu Công nghệ cao Hòa Lạc, Km29 Đại lộ Thăng Long, Huyện Thạch Thất, TP. Hà Nội, Việt Nam',
+            hotline1: res.hotline1 || '0334404480',
+            hotline2: res.hotline2 || '0956653307',
+            email: res.email || 'skillbridge.vn@gmail.com',
+            workingHours: res.workingHours || '08:00 - 18:00 (Thứ 2 đến Thứ 7)'
           });
         }
       })
@@ -525,6 +549,125 @@ export default function AdminOps() {
           >
             <Icon name="check" width="14" height="14" />
             <span>{savingSys ? 'Đang lưu...' : 'Lưu công tắc Email'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 4. CẤU HÌNH THÔNG TIN PHÁP LÝ, ĐẠI DIỆN DỰ ÁN & LIÊN HỆ */}
+      {/* ========================================================================= */}
+      <div className="adm-card" style={{ marginTop: 24 }}>
+        <div className="adm-card-head">
+          <h4 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="building" width="16" height="16" style={{ color: 'var(--primary)' }} />
+            Thông tin Doanh nghiệp, Đại diện Dự án & Kênh Liên hệ (Toàn hệ thống)
+          </h4>
+          <span className="sub">Cập nhật thông tin hiển thị tại Chân trang (Footer), Trang Liên hệ (Contact) và Hóa đơn điện tử</span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginTop: 16 }}>
+          <div className="field">
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Tên Đơn vị chủ quản / Doanh nghiệp</label>
+            <input
+              type="text"
+              value={sysSettings.companyName}
+              onChange={(e) => setSysSettings({ ...sysSettings, companyName: e.target.value })}
+              placeholder="VD: CÔNG TY CỔ PHẦN CÔNG NGHỆ SKILLBRIDGE VIỆT NAM"
+            />
+          </div>
+
+          <div className="field">
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Tên Dự án Khởi nghiệp / Capstone</label>
+            <input
+              type="text"
+              value={sysSettings.projectName}
+              onChange={(e) => setSysSettings({ ...sysSettings, projectName: e.target.value })}
+              placeholder="VD: Dự án Khởi nghiệp Sáng tạo Sinh viên · FPT University EXE Capstone Project"
+            />
+          </div>
+
+          <div className="field">
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Đại diện dự án / Phụ trách vận hành</label>
+            <input
+              type="text"
+              value={sysSettings.projectLead}
+              onChange={(e) => setSysSettings({ ...sysSettings, projectLead: e.target.value })}
+              placeholder="VD: TRẦN LÊ KHÁNH LINH"
+            />
+            <small style={{ color: 'var(--ink-soft)', fontSize: 11.5 }}>Chức vụ: {sysSettings.projectLeadTitle}</small>
+          </div>
+
+          <div className="field">
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Trưởng nhóm kỹ thuật / Code</label>
+            <input
+              type="text"
+              value={sysSettings.techLead}
+              onChange={(e) => setSysSettings({ ...sysSettings, techLead: e.target.value })}
+              placeholder="VD: ĐÀO VĂN NĂNG"
+            />
+            <small style={{ color: 'var(--ink-soft)', fontSize: 11.5 }}>Chức vụ: {sysSettings.techLeadTitle}</small>
+          </div>
+
+          <div className="field" style={{ gridColumn: '1 / -1' }}>
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Địa chỉ trụ sở & Trường học</label>
+            <input
+              type="text"
+              value={sysSettings.address}
+              onChange={(e) => setSysSettings({ ...sysSettings, address: e.target.value })}
+              placeholder="VD: Trường Đại học FPT Hà Nội, Khu Công nghệ cao Hòa Lạc..."
+            />
+          </div>
+
+          <div className="field">
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Số Hotline chính 1</label>
+            <input
+              type="text"
+              value={sysSettings.hotline1}
+              onChange={(e) => setSysSettings({ ...sysSettings, hotline1: e.target.value })}
+              placeholder="VD: 0334404480"
+            />
+          </div>
+
+          <div className="field">
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Số Hotline phụ 2</label>
+            <input
+              type="text"
+              value={sysSettings.hotline2}
+              onChange={(e) => setSysSettings({ ...sysSettings, hotline2: e.target.value })}
+              placeholder="VD: 0956653307"
+            />
+          </div>
+
+          <div className="field">
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Email liên hệ & hỗ trợ</label>
+            <input
+              type="email"
+              value={sysSettings.email}
+              onChange={(e) => setSysSettings({ ...sysSettings, email: e.target.value })}
+              placeholder="VD: skillbridge.vn@gmail.com"
+            />
+          </div>
+
+          <div className="field">
+            <label style={{ fontSize: 12.5, fontWeight: 600 }}>Khung giờ làm việc</label>
+            <input
+              type="text"
+              value={sysSettings.workingHours}
+              onChange={(e) => setSysSettings({ ...sysSettings, workingHours: e.target.value })}
+              placeholder="VD: 08:00 - 18:00 (Thứ 2 đến Thứ 7)"
+            />
+          </div>
+        </div>
+
+        <div style={{ marginTop: 20 }}>
+          <button
+            className="btn btn-primary"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            onClick={handleSaveSysSettings}
+            disabled={savingSys}
+          >
+            <Icon name="check" width="14" height="14" />
+            <span>{savingSys ? 'Đang lưu...' : 'Lưu thông tin Doanh nghiệp & Liên hệ'}</span>
           </button>
         </div>
       </div>

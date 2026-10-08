@@ -4,9 +4,26 @@ import { useToast } from './ToastContext';
 
 const AdminContext = createContext(null);
 
+const getStoredAdminRole = () => {
+  try {
+    const raw = localStorage.getItem('admin_user');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const code = (parsed?.roleCode || '').toLowerCase();
+      if (code === 'super_admin' || code === 'super') return 'super';
+      if (code === 'business_admin' || code === 'business') return 'business_admin';
+      if (code === 'moderator') return 'moderator';
+      if (code === 'dispute') return 'dispute';
+      if (code === 'finance') return 'finance';
+      if (code) return code;
+    }
+  } catch {}
+  return 'super';
+};
+
 export function AdminProvider({ children }) {
   const { showToast } = useToast();
-  const [viewRole, setViewRole] = useState('super');
+  const [viewRole, setViewRole] = useState(getStoredAdminRole);
   const [users, setUsers] = useState(seed.usersSeed);
   const [blacklist, setBlacklist] = useState(seed.blacklistSeed);
   const [queue, setQueue] = useState(seed.moderationQueueSeed);

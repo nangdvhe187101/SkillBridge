@@ -99,6 +99,40 @@ public class WithdrawalService : IWithdrawalService
             throw new BusinessException("Bạn chưa liên kết tài khoản ngân hàng hoặc tài khoản chưa được Quản trị viên phê duyệt xác thực. Vui lòng gửi hồ sơ xác thực tại trang Ví trước khi rút tiền.");
         }
 
+        // 1. Kiểm tra tạm giữ rút tiền do đổi thông tin định danh
+        if (wallet.WithdrawHoldUntil.HasValue && wallet.WithdrawHoldUntil.Value > DateTime.UtcNow)
+        {
+            throw new BusinessException($"Tính năng rút tiền đang bị tạm khóa đến {wallet.WithdrawHoldUntil.Value:dd/MM/yyyy HH:mm} (UTC). Lý do: {wallet.WithdrawHoldReason ?? "Đang cập nhật hoặc thay đổi thông tin định danh"}.");
+        }
+
+        // 2. Bắt buộc sinh viên phải có hồ sơ sinh viên hợp lệ và tên chủ tài khoản ngân hàng khớp với thẻ sinh viên (REQ-SEC-01)
+        var user = await _dbContext.Users.Include(u => u.Role).FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user?.Role?.Code == "student")
+        {
+            var studentProfile = await _dbContext.StudentProfiles
+                .FirstOrDefaultAsync(sp => sp.UserId == userId && sp.ExpiresAt > DateTime.UtcNow, ct);
+            if (studentProfile == null)
+            {
+                throw new BusinessException("Bạn cần hoàn tất xác minh thẻ sinh viên để thực hiện rút tiền.");
+            }
+
+            var cleanBankHolder = VietnameseConverter.RemoveVietnameseTones(wallet.AccountHolder);
+            var cleanStudentName = VietnameseConverter.RemoveVietnameseTones(studentProfile.VerifiedFullName);
+
+            if (!string.Equals(cleanBankHolder, cleanStudentName, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BusinessException($"Tên chủ tài khoản ngân hàng ({wallet.AccountHolder}) không khớp với tên trên thẻ sinh viên đã xác minh ({studentProfile.VerifiedFullName}). Vì lý do an toàn tài chính, bạn chỉ có thể rút tiền về tài khoản ngân hàng chính chủ.");
+            }
+
+            // 3. Giới hạn lần rút tiền đầu tiên của tài khoản sinh viên: tối đa 5.000.000 VNĐ
+            var hasPastCompletedWithdrawal = await _dbContext.WithdrawalRequests
+                .AnyAsync(w => w.UserId == userId && w.Status == "completed", ct);
+            if (!hasPastCompletedWithdrawal && amount > 5000000m)
+            {
+                throw new BusinessException("Tài khoản sinh viên chỉ được rút tối đa 5.000.000 VNĐ cho lần rút đầu tiên. Hạn mức sẽ được mở rộng ở các lần rút tiếp theo.");
+            }
+        }
+
         if (wallet.Balance < amount)
         {
             throw new BusinessException($"Số dư khả dụng ({wallet.Balance:N0}đ) không đủ để rút số tiền {amount:N0}đ.");
@@ -713,5 +747,50 @@ public class WithdrawalService : IWithdrawalService
         }
 
         return adminMember.Id;
+    }
+
+    public async Task<AdminFinanceSummaryDto> GetFinanceSummaryAsync(CancellationToken ct = default)
+    {
+        var totalWallet = await _dbContext.Wallets
+            .AsNoTracking()
+            .SumAsync(w => (decimal?)w.Balance, ct) ?? 0m;
+
+        var totalEscrow = await _dbContext.Jobs
+            .AsNoTracking()
+            .Where(j => j.HiredApplicantId != null && (j.Status == "in_progress" || j.Status == "submitted" || j.Status == "revision_requested"))
+            .SumAsync(j => (decimal?)(j.EscrowAmount ?? j.Budget), ct) ?? 0m;
+
+        var pendingWithdrawalsCount = await _dbContext.WithdrawalRequests
+            .AsNoTracking()
+            .CountAsync(w => w.Status == "pending" || w.Status == "processing", ct);
+
+        var pendingWithdrawalsAmount = await _dbContext.WithdrawalRequests
+            .AsNoTracking()
+            .Where(w => w.Status == "pending" || w.Status == "processing")
+            .SumAsync(w => (decimal?)w.Amount, ct) ?? 0m;
+
+        var completedWithdrawalsCount = await _dbContext.WithdrawalRequests
+            .AsNoTracking()
+            .CountAsync(w => w.Status == "completed", ct);
+
+        var completedWithdrawalsAmount = await _dbContext.WithdrawalRequests
+            .AsNoTracking()
+            .Where(w => w.Status == "completed")
+            .SumAsync(w => (decimal?)w.Amount, ct) ?? 0m;
+
+        var totalWithdrawalsCount = await _dbContext.WithdrawalRequests
+            .AsNoTracking()
+            .CountAsync(ct);
+
+        return new AdminFinanceSummaryDto
+        {
+            TotalWalletBalance = totalWallet,
+            TotalEscrowBalance = totalEscrow,
+            PendingWithdrawalsCount = pendingWithdrawalsCount,
+            PendingWithdrawalsAmount = pendingWithdrawalsAmount,
+            CompletedWithdrawalsCount = completedWithdrawalsCount,
+            CompletedWithdrawalsAmount = completedWithdrawalsAmount,
+            TotalWithdrawalsCount = totalWithdrawalsCount
+        };
     }
 }

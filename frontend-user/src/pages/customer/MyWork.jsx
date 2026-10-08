@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Pagination from '../../components/Pagination';
 import Avatar from '../../components/Avatar';
@@ -489,7 +489,7 @@ export default function MyWork() {
   const [searchQuery, setSearchQuery] = useState('');
   const [appsPage, setAppsPage] = useState(1);
   const [workPage, setWorkPage] = useState(1);
-  const [workPageSize, setWorkPageSize] = useState(5);
+  const [workPageSize, setWorkPageSize] = useState(1); // Mỗi job là 1 trang theo yêu cầu trải nghiệm gọn gàng
   const [deliverablesMap, setDeliverablesMap] = useState({});
   const [jobDetailsMap, setJobDetailsMap] = useState({});
   const [loadingDeliverables, setLoadingDeliverables] = useState(false);
@@ -538,17 +538,25 @@ export default function MyWork() {
     } catch {}
   }, []);
 
-  // Tải trạng thái yêu cầu gia hạn deadline đang chờ cho các công việc của sinh viên
-  useEffect(() => {
-    let isMounted = true;
-    const candidateJobs = (state?.myApplications || [])
+  // Tải trạng thái yêu cầu gia hạn deadline đang chờ cho các công việc sinh viên ĐANG LÀM
+  const activeCandidateJobs = useMemo(() => {
+    return (state?.myApplications || [])
+      .filter(a => ['hired', 'submitted', 'revision_requested', 'disputed'].includes(a.status))
       .map(a => a.jobId || a.job?.id)
       .filter(Boolean);
+  }, [state?.myApplications]);
 
-    if (candidateJobs.length === 0) return;
+  const activeCandidateJobsKey = activeCandidateJobs.slice().sort().join(',');
+
+  useEffect(() => {
+    let isMounted = true;
+    if (activeCandidateJobs.length === 0) {
+      setExtensionsMap({});
+      return;
+    }
 
     Promise.all(
-      candidateJobs.map(async (jid) => {
+      activeCandidateJobs.map(async (jid) => {
         try {
           const ext = await getDeadlineExtensionRequest(jid);
           return { jid, ext };
@@ -567,20 +575,25 @@ export default function MyWork() {
     });
 
     return () => { isMounted = false; };
-  }, [state?.myApplications, extensionRefreshTrigger]);
+  }, [activeCandidateJobsKey, extensionRefreshTrigger]);
 
   // Tải trạng thái đánh giá cho các công việc đã hoàn thành của sinh viên
-  useEffect(() => {
-    const completedJobIds = (state?.myApplications || [])
+  const completedJobIdsKey = useMemo(() => {
+    return (state?.myApplications || [])
       .filter(a => a.status === 'completed' || a.jobStatus === 'completed')
       .map(a => a.jobId || a.job?.id)
-      .filter(Boolean);
+      .filter(Boolean)
+      .sort()
+      .join(',');
+  }, [state?.myApplications]);
 
-    if (completedJobIds.length === 0) return;
+  useEffect(() => {
+    if (!completedJobIdsKey) return;
+    const completedJobIds = completedJobIdsKey.split(',').filter(Boolean);
     completedJobIds.forEach(jid => {
       loadJobReview(jid);
     });
-  }, [state?.myApplications, loadJobReview]);
+  }, [completedJobIdsKey, loadJobReview]);
 
   const handleCancelExtension = async (targetJobId, extId) => {
     if (!window.confirm('Bạn có chắc chắn muốn thu hồi đề xuất gia hạn deadline này không?')) return;
@@ -611,16 +624,31 @@ export default function MyWork() {
     });
   }, [state.myApplications, state.disputes]);
 
+  const activeAppIdsKey = useMemo(() => {
+    return activeApps.map(a => a.jobId || a.id).filter(Boolean).sort().join(',');
+  }, [activeApps]);
+
+  // Bộ nhớ đệm ID các job đã tải deliverables để tránh spam API 429
+  const loadedDeliverableJobIdsRef = useRef(new Set());
+
   // Nạp danh sách deliverables và chi tiết job thật cho các việc đang làm
-  const loadDeliverables = useCallback(async () => {
+  const loadDeliverables = useCallback(async (forceReload = false) => {
     if (!activeApps.length) return;
+
+    const jobsToFetch = activeApps.filter(a => {
+      const jId = a.jobId || a.id;
+      if (!jId || isNaN(Number(jId))) return false;
+      return forceReload || !loadedDeliverableJobIdsRef.current.has(Number(jId));
+    });
+
+    if (jobsToFetch.length === 0) return;
+
     setLoadingDeliverables(true);
     const results = {};
     const jobResults = {};
     await Promise.allSettled(
-      activeApps.map(async (a) => {
+      jobsToFetch.map(async (a) => {
         const jId = a.jobId || a.id;
-        if (!jId || isNaN(Number(jId))) return;
         const numJobId = Number(jId);
         try {
           const [delivRes, jobRes] = await Promise.allSettled([
@@ -648,6 +676,7 @@ export default function MyWork() {
               deliverableFeedback: allFeedbacks,
               allDeliverables: delivs,
             };
+            loadedDeliverableJobIdsRef.current.add(numJobId);
           }
 
           if (jobRes.status === 'fulfilled' && jobRes.value) {
@@ -658,14 +687,14 @@ export default function MyWork() {
         }
       })
     );
-    setDeliverablesMap(results);
-    setJobDetailsMap(jobResults);
+    setDeliverablesMap(prev => ({ ...prev, ...results }));
+    setJobDetailsMap(prev => ({ ...prev, ...jobResults }));
     setLoadingDeliverables(false);
   }, [activeApps]);
 
   useEffect(() => {
     loadDeliverables();
-  }, [loadDeliverables]);
+  }, [activeAppIdsKey, loadDeliverables]);
 
   const activeWork = useMemo(() => {
     // Lấy danh sách việc đang làm từ myApplications
@@ -2978,9 +3007,12 @@ export default function MyWork() {
                   totalPages={workTotalPages}
                   totalItems={displayedWork.length}
                   pageSize={workPageSize}
-                  onPageChange={setWorkPage}
+                  onPageChange={(p) => {
+                    setWorkPage(p);
+                    window.scrollTo({ top: 160, behavior: 'smooth' });
+                  }}
                   onPageSizeChange={(sz) => { setWorkPageSize(sz); setWorkPage(1); }}
-                  pageSizeOptions={[5, 10, 20]}
+                  pageSizeOptions={[1, 2, 3, 5]}
                   itemLabel="công việc"
                 />
               </div>

@@ -380,8 +380,8 @@ export function generateReceiptHtml(receipt) {
         <h2>SKILLBRIDGE VIỆT NAM</h2>
         <p><b>Hệ thống Kết nối Việc làm & Ký quỹ Sinh viên Minh bạch</b></p>
         <p>Mã số định danh / MST: <b>0109988776-SB</b></p>
-        <p>Hotline: 1900-8888 | Email: accounting@skillbridge.vn</p>
-        <p>Địa chỉ: Khu Công Nghệ Cao, Q. Nam Từ Liêm, TP. Hà Nội</p>
+        <p>Hotline: 0334404480 / 0956653307 | Email: skillbridge.vn@gmail.com</p>
+        <p>Địa chỉ: Trường Đại học FPT Hà Nội, Khu Công nghệ cao Hòa Lạc, TP. Hà Nội</p>
       </div>
       <div class="national-header">
         <h4>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</h4>
@@ -545,8 +545,8 @@ export function generateReceiptHtml(receipt) {
         <h2>SKILLBRIDGE VIỆT NAM</h2>
         <p><b>Hệ thống Kết nối Việc làm & Ký quỹ Sinh viên Minh bạch</b></p>
         <p>Mã số định danh / MST: <b>0109988776-SB</b></p>
-        <p>Hotline: 1900-8888 | Email: support@skillbridge.vn</p>
-        <p>Địa chỉ: Khu Công Nghệ Cao, Q. Nam Từ Liêm, TP. Hà Nội</p>
+        <p>Hotline: 0334404480 / 0956653307 | Email: skillbridge.vn@gmail.com</p>
+        <p>Địa chỉ: Trường Đại học FPT Hà Nội, Khu Công nghệ cao Hòa Lạc, TP. Hà Nội</p>
       </div>
       <div class="national-header">
         <h4>CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</h4>
@@ -739,8 +739,8 @@ TỔNG SỐ TIỀN THANH TOÁN / THỰC NHẬN: ${formatVND(net)}
 (Bằng chữ: ${words})
 =====================================================
 XÁC NHẬN HỢP LỆ BỞI NỀN TẢNG KÝ QUỸ SKILLBRIDGE
-Hotline hỗ trợ: 1900-8888 | Email: support@skillbridge.vn
-Địa chỉ: Khu Công Nghệ Cao, TP. Hà Nội
+Hotline hỗ trợ: 0334404480 / 0956653307 | Email: skillbridge.vn@gmail.com
+Địa chỉ: Trường Đại học FPT Hà Nội, Khu Công nghệ cao Hòa Lạc, TP. Hà Nội
 =====================================================`;
 
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });

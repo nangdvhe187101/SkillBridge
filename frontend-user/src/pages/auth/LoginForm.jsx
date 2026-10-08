@@ -80,9 +80,12 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
       <div className="sub">Đăng nhập để tiếp tục tìm việc hoặc đăng tin.</div>
 
       <div className={'field' + (emailError ? ' has-error' : '')}>
-        <label>Email</label>
+        <label htmlFor="login-email">Email</label>
         <input
+          id="login-email"
+          name="email"
           type="email"
+          autoComplete="username"
           placeholder="ban@email.com"
           value={loginForm.email}
           onFocus={handleInputFocus}
@@ -97,10 +100,13 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
       </div>
 
       <div className="field">
-        <label>Mật khẩu</label>
+        <label htmlFor="login-password">Mật khẩu</label>
         <div className="password-field password-input-wrap">
           <input
+            id="login-password"
+            name="password"
             type={showPassword ? 'text' : 'password'}
+            autoComplete="current-password"
             placeholder="••••••••"
             value={loginForm.password}
             onFocus={handleInputFocus}
@@ -144,7 +150,7 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
         <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border, #e2e8f0)' }} />
       </div>
 
-      <GoogleLoginButton roleCode="student" onError={(msg) => setFormError(msg)} />
+      <GoogleLoginButton mode="login" onError={(msg) => setFormError(msg)} />
 
       <div className="auth-foot">
         Chưa có tài khoản? <a onClick={() => onSwitchTab('register')}>Đăng ký ngay</a>

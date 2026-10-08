@@ -47,7 +47,15 @@ export async function rejectBankVerification(requestId, rejectionReason) {
   });
 }
 
-// Withdrawal Management APIs
+// Withdrawal Management & Finance APIs
+export async function getAdminFinanceSummary() {
+  return apiFetch('/admin/withdrawals/summary', { method: 'GET' });
+}
+
+export async function getAdminAnalyticsOverview() {
+  return apiFetch('/admin/analytics/overview', { method: 'GET' });
+}
+
 export async function getAdminWithdrawals(status = 'pending', page = 1, pageSize = 20) {
   return apiFetch(`/admin/withdrawals?status=${status}&page=${page}&pageSize=${pageSize}`, {
     method: 'GET',
@@ -73,6 +81,13 @@ export async function getAdminSubscriptionPlans() {
   return apiFetch('/admin/subscription-plans', { method: 'GET' });
 }
 
+export async function createAdminSubscriptionPlan(planData) {
+  return apiFetch('/admin/subscription-plans', {
+    method: 'POST',
+    body: JSON.stringify(planData),
+  });
+}
+
 export async function updateAdminSubscriptionPlan(id, planData) {
   return apiFetch(`/admin/subscription-plans/${id}`, {
     method: 'PUT',
@@ -83,6 +98,12 @@ export async function updateAdminSubscriptionPlan(id, planData) {
 export async function toggleAdminSubscriptionPlan(id) {
   return apiFetch(`/admin/subscription-plans/${id}/toggle`, {
     method: 'POST',
+  });
+}
+
+export async function deleteAdminSubscriptionPlan(id) {
+  return apiFetch(`/admin/subscription-plans/${id}`, {
+    method: 'DELETE',
   });
 }
 
@@ -154,6 +175,28 @@ export async function adjustUserReliability(userId, value, note) {
 
 export async function verifyUserKyc(userId) {
   return apiFetch(`/admin/users/${userId}/verify-kyc`, {
+    method: 'POST',
+  });
+}
+
+// Student Verification APIs
+export async function getPendingStudentVerifications() {
+  return apiFetch('/admin/student-verifications/pending', { method: 'GET' });
+}
+
+export async function getAdminSchools() {
+  return apiFetch('/admin/student-verifications/schools', { method: 'GET' });
+}
+
+export async function reviewStudentVerification(id, dto) {
+  return apiFetch(`/admin/student-verifications/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+  });
+}
+
+export async function runStudentCardOcr(id) {
+  return apiFetch(`/admin/student-verifications/${id}/ocr`, {
     method: 'POST',
   });
 }
@@ -381,5 +424,28 @@ export async function forceRefundContract(contractId, data) {
 export async function approveCheckerContract(contractId) {
   return apiFetch(`/admin/contracts/${contractId}/checker-approve`, {
     method: 'POST',
+  });
+}
+
+// Live Support Chat APIs
+export async function getAdminChatConversations() {
+  return apiFetch('/admin/chat/conversations', { method: 'GET' });
+}
+
+export async function getAdminChatMessages(conversationId, { page = 1, pageSize = 50 } = {}) {
+  const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) }).toString();
+  return apiFetch(`/admin/chat/conversations/${conversationId}/messages?${query}`, { method: 'GET' });
+}
+
+export async function sendAdminChatMessage(conversationId, messageText) {
+  return apiFetch(`/admin/chat/conversations/${conversationId}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ messageText }),
+  });
+}
+
+export async function markAdminChatAsRead(conversationId) {
+  return apiFetch(`/admin/chat/conversations/${conversationId}/read`, {
+    method: 'PATCH',
   });
 }

@@ -98,3 +98,25 @@ export function adminLogout() {
         window.location.href = '/login';
     }
 }
+
+export async function getAdmin2FaStatus() {
+    return apiFetch('/admin-auth/2fa/status', { method: 'GET' });
+}
+
+export async function setupAdmin2Fa() {
+    return apiFetch('/admin-auth/2fa/setup', { method: 'POST' });
+}
+
+export async function confirmAdmin2Fa(code, secretKey = null) {
+    return apiFetch('/admin-auth/2fa/confirm', {
+        method: 'POST',
+        body: JSON.stringify({
+            code: (code || '').trim(),
+            secretKey: secretKey ? secretKey.replace(/\s+/g, '') : undefined,
+        }),
+    });
+}
+
+export async function disableAdmin2Fa() {
+    return apiFetch('/admin-auth/2fa/disable', { method: 'POST' });
+}

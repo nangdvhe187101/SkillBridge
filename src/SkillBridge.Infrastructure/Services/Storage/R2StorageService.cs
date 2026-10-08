@@ -16,14 +16,21 @@ namespace SkillBridge.Infrastructure.Services.Storage;
 
 public class R2StorageService : IStorageService
 {
-    private readonly IAmazonS3 _s3Client;
+    private readonly IAmazonS3? _s3Client;
     private readonly string _bucketName;
     private readonly string? _publicBaseUrl;
+    private readonly string _localUploadDirectory;
     private readonly ILogger<R2StorageService> _logger;
 
     public R2StorageService(IConfiguration configuration, ILogger<R2StorageService> logger)
     {
         _logger = logger;
+        _localUploadDirectory = Path.Combine(AppContext.BaseDirectory, "uploads");
+        if (!Directory.Exists(_localUploadDirectory))
+        {
+            try { Directory.CreateDirectory(_localUploadDirectory); } catch { }
+        }
+
         var r2Config = configuration.GetSection("CloudflareR2");
         var accountId = r2Config["AccountId"];
         var accessKey = r2Config["AccessKeyId"];
@@ -33,8 +40,8 @@ public class R2StorageService : IStorageService
 
         if (string.IsNullOrWhiteSpace(accountId) || string.IsNullOrWhiteSpace(accessKey) || string.IsNullOrWhiteSpace(secretKey))
         {
-            _logger.LogWarning("Cloudflare R2 credentials chưa được cấu hình đầy đủ trong appsettings.json. Thao tác lưu trữ S3 sẽ tạm thời không khả dụng.");
-            _s3Client = null!;
+            _logger.LogWarning("Cloudflare R2 credentials chưa được cấu hình. Sử dụng bộ lưu trữ cục bộ (Local File Storage) tại {LocalPath}.", _localUploadDirectory);
+            _s3Client = null;
         }
         else
         {
@@ -51,7 +58,7 @@ public class R2StorageService : IStorageService
 
         if (string.IsNullOrWhiteSpace(_publicBaseUrl))
         {
-            _logger.LogWarning("Cloudflare R2 PublicBaseUrl chưa được cấu hình. Các tệp tải lên sẽ sử dụng presigned URL tạm thời (7 ngày), có nguy cơ hỏng link vĩnh viễn trong DB nếu không qua download endpoint.");
+            _logger.LogWarning("Cloudflare R2 PublicBaseUrl chưa được cấu hình. Các tệp tải lên sẽ sử dụng download endpoint.");
         }
     }
 
@@ -62,11 +69,6 @@ public class R2StorageService : IStorageService
         string? folder = null,
         CancellationToken cancellationToken = default)
     {
-        if (_s3Client == null)
-        {
-            throw new BusinessException("Hệ thống lưu trữ Cloudflare R2 chưa được cấu hình credentials.");
-        }
-
         if (stream == null || stream.Length == 0)
         {
             throw new BusinessException("Dữ liệu file không hợp lệ hoặc rỗng.");
@@ -78,11 +80,57 @@ public class R2StorageService : IStorageService
         var folderPrefix = string.IsNullOrWhiteSpace(folder) ? "general" : folder.Trim().Trim('/');
         var dateFolder = DateTime.UtcNow.ToString("yyyy/MM");
         var fileKey = $"{folderPrefix}/{dateFolder}/{uniqueId}{fileExtension}";
+        var safeContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType;
+
+        if (_s3Client == null)
+        {
+            _logger.LogInformation("Lưu file {FileKey} vào bộ lưu trữ cục bộ ({LocalPath}) do Cloudflare R2 chưa được cấu hình.", fileKey, _localUploadDirectory);
+            var localFilePath = Path.Combine(_localUploadDirectory, fileKey.Replace('/', Path.DirectorySeparatorChar));
+            var dir = Path.GetDirectoryName(localFilePath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+            {
+                Directory.CreateDirectory(dir);
+            }
+
+            using (var fileStream = new FileStream(localFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                if (stream.CanSeek) stream.Position = 0;
+                await stream.CopyToAsync(fileStream, cancellationToken);
+            }
+
+            // Đồng thời sao lưu vào root uploads để không bị mất khi bin/Debug bị rebuild
+            try
+            {
+                var rootUploadPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads", fileKey.Replace('/', Path.DirectorySeparatorChar));
+                var rootDir = Path.GetDirectoryName(rootUploadPath);
+                if (!string.IsNullOrEmpty(rootDir) && !Directory.Exists(rootDir))
+                {
+                    Directory.CreateDirectory(rootDir);
+                }
+                if (!string.Equals(Path.GetFullPath(localFilePath), Path.GetFullPath(rootUploadPath), StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Copy(localFilePath, rootUploadPath, overwrite: true);
+                }
+            }
+            catch (Exception copyEx)
+            {
+                _logger.LogDebug(copyEx, "Không thể sao lưu file vào root uploads.");
+            }
+
+            return new FileUploadResult
+            {
+                FileKey = fileKey,
+                FileUrl = GetPublicUrl(fileKey),
+                FileName = cleanFileName,
+                FileSize = stream.CanSeek ? stream.Length : 0,
+                ContentType = safeContentType,
+                UploadedAt = DateTime.UtcNow
+            };
+        }
 
         try
         {
             var streamLength = stream.CanSeek ? stream.Length : 0;
-            var safeContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType;
 
             if (streamLength > 5 * 1024 * 1024)
             {
@@ -143,7 +191,23 @@ public class R2StorageService : IStorageService
 
     public async Task<bool> DeleteFileAsync(string fileKey, CancellationToken cancellationToken = default)
     {
-        if (_s3Client == null || string.IsNullOrWhiteSpace(fileKey)) return false;
+        if (string.IsNullOrWhiteSpace(fileKey)) return false;
+
+        var localFilePath = Path.Combine(_localUploadDirectory, fileKey.Replace('/', Path.DirectorySeparatorChar));
+        if (File.Exists(localFilePath))
+        {
+            try
+            {
+                File.Delete(localFilePath);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Lỗi khi xóa file cục bộ {LocalPath}.", localFilePath);
+            }
+        }
+
+        if (_s3Client == null) return false;
 
         try
         {
@@ -237,30 +301,71 @@ public class R2StorageService : IStorageService
         string fileKey,
         CancellationToken cancellationToken = default)
     {
-        if (_s3Client == null || string.IsNullOrWhiteSpace(fileKey)) return null;
+        if (string.IsNullOrWhiteSpace(fileKey)) return null;
 
-        try
+        // 1. Nếu hệ thống đã cấu hình Cloudflare R2 credentials (Production/Staging): Ưu tiên tải trực tiếp từ R2
+        if (_s3Client != null)
         {
-            var getRequest = new GetObjectRequest
+            try
             {
-                BucketName = _bucketName,
-                Key = fileKey
-            };
+                var getRequest = new GetObjectRequest
+                {
+                    BucketName = _bucketName,
+                    Key = fileKey
+                };
 
-            using var response = await _s3Client.GetObjectAsync(getRequest, cancellationToken);
-            var memoryStream = new MemoryStream();
-            await response.ResponseStream.CopyToAsync(memoryStream, cancellationToken);
-            memoryStream.Position = 0;
+                using var response = await _s3Client.GetObjectAsync(getRequest, cancellationToken);
+                var memoryStream = new MemoryStream();
+                await response.ResponseStream.CopyToAsync(memoryStream, cancellationToken);
+                memoryStream.Position = 0;
 
-            var fileName = Path.GetFileName(fileKey);
-            var contentType = response.Headers.ContentType ?? "application/octet-stream";
+                var fileName = Path.GetFileName(fileKey);
+                var contentType = response.Headers.ContentType ?? "application/octet-stream";
 
-            return (memoryStream, contentType, fileName);
+                return (memoryStream, contentType, fileName);
+            }
+            catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _logger.LogInformation(ex, "File {FileKey} không tìm thấy trên Cloudflare R2, chuyển sang kiểm tra bộ lưu trữ cục bộ.", fileKey);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Lỗi khi tải stream file {FileKey} từ Cloudflare R2, thử fallback bộ lưu trữ cục bộ.", fileKey);
+            }
         }
-        catch (Exception ex)
+
+        // 2. Fallback bộ lưu trữ cục bộ (Local File Storage) khi chạy môi trường local development không có key R2
+        var localFilePath = Path.Combine(_localUploadDirectory, fileKey.Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(localFilePath))
         {
-            _logger.LogError(ex, "Lỗi khi tải stream file {FileKey} từ Cloudflare R2.", fileKey);
-            return null;
+            var rootUploadPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads", fileKey.Replace('/', Path.DirectorySeparatorChar));
+            if (File.Exists(rootUploadPath))
+            {
+                localFilePath = rootUploadPath;
+            }
         }
+
+        if (File.Exists(localFilePath))
+        {
+            var memoryStream = new MemoryStream();
+            using (var fs = new FileStream(localFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+            {
+                await fs.CopyToAsync(memoryStream, cancellationToken);
+            }
+            memoryStream.Position = 0;
+            var ext = Path.GetExtension(fileKey).ToLowerInvariant();
+            var localContentType = ext switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                ".pdf" => "application/pdf",
+                _ => "application/octet-stream"
+            };
+            return (memoryStream, localContentType, Path.GetFileName(fileKey));
+        }
+
+        return null;
     }
 }

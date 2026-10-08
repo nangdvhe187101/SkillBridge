@@ -127,6 +127,7 @@ public class SubscriptionPlanConfigService : ISubscriptionPlanConfigService
         entity.PriceSub = string.IsNullOrWhiteSpace(request.PriceSub) ? null : request.PriceSub.Trim();
         entity.CommissionRate = request.CommissionRate;
 
+        if (request.TierRank.HasValue && request.TierRank.Value >= 0) entity.TierRank = request.TierRank.Value;
         if (request.MaxActiveJobs.HasValue) entity.MaxActiveJobs = request.MaxActiveJobs.Value;
         if (request.MaxWeeklyApplications.HasValue) entity.MaxWeeklyApplications = request.MaxWeeklyApplications.Value;
         if (request.MaxCvFiles.HasValue && request.MaxCvFiles.Value > 0) entity.MaxCvFiles = request.MaxCvFiles.Value;
@@ -151,6 +152,82 @@ public class SubscriptionPlanConfigService : ISubscriptionPlanConfigService
             entity.Id, entity.Code, entity.Price, entity.CommissionRate);
 
         return MapToDto(entity);
+    }
+
+    public async Task<SubscriptionPlanConfigDto> CreatePlanAsync(CreateSubscriptionPlanConfigRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Code))
+            throw new BusinessException("Mã gói dịch vụ (Code) không được để trống.");
+
+        var normalizedCode = request.Code.Trim().ToUpperInvariant();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(normalizedCode, "^[A-Z0-9_]{3,50}$"))
+            throw new BusinessException("Mã gói chỉ được chứa chữ cái in hoa, số và dấu gạch dưới (VD: EMP_ENTERPRISE), độ dài từ 3-50 ký tự.");
+
+        var exists = await _dbContext.SubscriptionPlanConfigs.AnyAsync(p => p.Code == normalizedCode, ct);
+        if (exists)
+            throw new BusinessException($"Mã gói '{normalizedCode}' đã tồn tại trong hệ thống. Vui lòng chọn mã khác.");
+
+        var role = request.TargetRole?.Trim().ToLowerInvariant();
+        if (role != "student" && role != "employer")
+            throw new BusinessException("Đối tượng áp dụng (TargetRole) chỉ có thể là 'student' hoặc 'employer'.");
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+            throw new BusinessException("Tên gói dịch vụ không được để trống.");
+
+        if (request.Price < 0)
+            throw new BusinessException("Giá gói dịch vụ không thể là số âm.");
+
+        if (request.CommissionRate < 0 || request.CommissionRate > 1)
+            throw new BusinessException("Tỷ lệ hoa hồng nền tảng phải nằm trong khoảng từ 0 (0%) đến 1 (100%).");
+
+        var entity = new SubscriptionPlanConfig
+        {
+            Code = normalizedCode,
+            TargetRole = role,
+            Name = request.Name.Trim(),
+            Tagline = string.IsNullOrWhiteSpace(request.Tagline) ? null : request.Tagline.Trim(),
+            BadgeText = string.IsNullOrWhiteSpace(request.BadgeText) ? null : request.BadgeText.Trim(),
+            Price = request.Price,
+            PriceSub = string.IsNullOrWhiteSpace(request.PriceSub) ? null : request.PriceSub.Trim(),
+            CommissionRate = request.CommissionRate,
+            TierRank = request.TierRank >= 0 ? request.TierRank : 1,
+            MaxActiveJobs = request.MaxActiveJobs,
+            MaxWeeklyApplications = request.MaxWeeklyApplications,
+            MaxCvFiles = request.MaxCvFiles > 0 ? request.MaxCvFiles : 5,
+            DefaultRevisionLimit = request.DefaultRevisionLimit >= 0 ? request.DefaultRevisionLimit : 2,
+            FreeFeaturedPins = request.FreeFeaturedPins >= 0 ? request.FreeFeaturedPins : 0,
+            FreeDirectInvites = request.FreeDirectInvites >= 0 ? request.FreeDirectInvites : 0,
+            FeaturesJson = JsonSerializer.Serialize(request.Features ?? new List<string>()),
+            IsActive = request.IsActive,
+            IsPopular = request.IsPopular,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        await _dbContext.SubscriptionPlanConfigs.AddAsync(entity, ct);
+        await _dbContext.SaveChangesAsync(ct);
+        InvalidateCache();
+
+        _logger.LogInformation("Quản trị viên đã tạo mới thành công gói dịch vụ #{Id} ({Code}): {Name}, Giá={Price:N0}đ",
+            entity.Id, entity.Code, entity.Name, entity.Price);
+
+        return MapToDto(entity);
+    }
+
+    public async Task DeletePlanAsync(int id, CancellationToken ct = default)
+    {
+        var entity = await _dbContext.SubscriptionPlanConfigs.FirstOrDefaultAsync(p => p.Id == id, ct);
+        if (entity == null)
+            throw new KeyNotFoundException($"Không tìm thấy cấu hình gói dịch vụ #{id}.");
+
+        if (entity.Code == "FREE_STUDENT" || entity.Code == "FREE_EMPLOYER")
+            throw new BusinessException("Không thể xóa gói miễn phí mặc định của hệ thống.");
+
+        _dbContext.SubscriptionPlanConfigs.Remove(entity);
+        await _dbContext.SaveChangesAsync(ct);
+        InvalidateCache();
+
+        _logger.LogInformation("Quản trị viên đã xóa gói dịch vụ #{Id} ({Code}): {Name}", entity.Id, entity.Code, entity.Name);
     }
 
     public async Task<bool> TogglePlanActiveAsync(int id, CancellationToken ct = default)

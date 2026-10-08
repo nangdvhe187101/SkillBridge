@@ -38,4 +38,6 @@ public interface IChatService
         int conversationId,
         ReportConversationRequestDto request,
         CancellationToken ct = default);
+
+    Task<ConversationDto> StartSupportConversationAsync(int currentUserId, CancellationToken ct = default);
 }

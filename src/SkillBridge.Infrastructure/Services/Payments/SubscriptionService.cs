@@ -30,42 +30,89 @@ public class SubscriptionService : ISubscriptionService
     {
         string planName;
         decimal amount;
+        int targetRank;
+        string targetRole;
 
         var normalizedPlan = request.PlanType?.Trim().ToUpperInvariant() ?? string.Empty;
 
-        if (normalizedPlan == PaymentConstants.PlanEmpVip || normalizedPlan == "EMPLOYER_VIP" || normalizedPlan == "VIP" || normalizedPlan.Contains("VIP"))
+        // 1. Tìm cấu hình gói động trong cơ sở dữ liệu
+        var allConfigs = await _dbContext.SubscriptionPlanConfigs.AsNoTracking().ToListAsync(cancellationToken);
+        var dbPlan = allConfigs.FirstOrDefault(p =>
+            p.Code.Equals(normalizedPlan, StringComparison.OrdinalIgnoreCase) ||
+            p.Name.Equals(request.PlanType?.Trim(), StringComparison.OrdinalIgnoreCase) ||
+            (normalizedPlan == PaymentConstants.PlanEmpVip && p.Code == "EMP_VIP") ||
+            (normalizedPlan == PaymentConstants.PlanEmpGrowth && p.Code == "EMP_GROWTH") ||
+            (normalizedPlan == PaymentConstants.PlanEmpStarter && p.Code == "EMP_STARTER") ||
+            (normalizedPlan == PaymentConstants.PlanStuMaster && p.Code == "STU_MASTER") ||
+            (normalizedPlan == PaymentConstants.PlanStuPro && p.Code == "STU_PRO") ||
+            (normalizedPlan == PaymentConstants.PlanStuStarter && p.Code == "STU_STARTER") ||
+            (normalizedPlan == "VIP" && p.Code == "EMP_VIP") ||
+            (normalizedPlan == "GROWTH" && p.Code == "EMP_GROWTH") ||
+            (normalizedPlan == "STARTER" && (p.Code == "EMP_STARTER" || p.Code == "STU_STARTER")) ||
+            (normalizedPlan == "PRO" && p.Code == "STU_PRO") ||
+            (normalizedPlan == "MASTER" && p.Code == "STU_MASTER")
+        );
+
+        if (dbPlan != null)
         {
-            planName = PaymentConstants.PlanNameEmpVip;
-            amount = PaymentConstants.PriceEmpVip; // 149.000đ
-        }
-        else if (normalizedPlan == PaymentConstants.PlanEmpGrowth || normalizedPlan == "EMPLOYER_GROWTH" || normalizedPlan.Contains("GROWTH"))
-        {
-            planName = PaymentConstants.PlanNameEmpGrowth;
-            amount = PaymentConstants.PriceEmpGrowth; // 89.000đ
-        }
-        else if (normalizedPlan == PaymentConstants.PlanEmpStarter || normalizedPlan == "EMPLOYER_STARTER")
-        {
-            planName = PaymentConstants.PlanNameEmpStarter;
-            amount = PaymentConstants.PriceEmpStarter; // 49.000đ
-        }
-        else if (normalizedPlan == PaymentConstants.PlanStuMaster || normalizedPlan == "STUDENT_MASTER" || normalizedPlan == "MASTER" || normalizedPlan.Contains("MASTER"))
-        {
-            planName = PaymentConstants.PlanNameStuMaster;
-            amount = PaymentConstants.PriceStuMaster; // 99.000đ
-        }
-        else if (normalizedPlan == PaymentConstants.PlanStuPro || normalizedPlan == "STUDENT_PRO" || normalizedPlan == "PRO" || normalizedPlan.Contains("PRO"))
-        {
-            planName = PaymentConstants.PlanNameStuPro;
-            amount = PaymentConstants.PriceStuPro; // 49.000đ
-        }
-        else if (normalizedPlan == PaymentConstants.PlanStuStarter || normalizedPlan == "STUDENT_STARTER" || normalizedPlan.Contains("STARTER"))
-        {
-            planName = PaymentConstants.PlanNameStuStarter;
-            amount = PaymentConstants.PriceStuStarter; // 29.000đ
+            if (!dbPlan.IsActive)
+            {
+                throw new BusinessException($"Gói đăng ký '{dbPlan.Name}' hiện đang tạm dừng cung cấp.");
+            }
+            planName = dbPlan.Name;
+            amount = dbPlan.Price;
+            targetRank = dbPlan.TierRank;
+            targetRole = dbPlan.TargetRole;
         }
         else
         {
-            throw new BusinessException($"Gói đăng ký '{request.PlanType}' không hợp lệ.");
+            // Fallback tĩnh cho các hằng số cũ (đảm bảo backwards compatibility & in-memory unit tests)
+            if (normalizedPlan == PaymentConstants.PlanEmpVip || normalizedPlan == "EMPLOYER_VIP" || normalizedPlan == "VIP" || normalizedPlan.Contains("VIP"))
+            {
+                planName = PaymentConstants.PlanNameEmpVip;
+                amount = PaymentConstants.PriceEmpVip;
+                targetRank = 3;
+                targetRole = "employer";
+            }
+            else if (normalizedPlan == PaymentConstants.PlanEmpGrowth || normalizedPlan == "EMPLOYER_GROWTH" || normalizedPlan.Contains("GROWTH"))
+            {
+                planName = PaymentConstants.PlanNameEmpGrowth;
+                amount = PaymentConstants.PriceEmpGrowth;
+                targetRank = 2;
+                targetRole = "employer";
+            }
+            else if (normalizedPlan == PaymentConstants.PlanEmpStarter || normalizedPlan == "EMPLOYER_STARTER")
+            {
+                planName = PaymentConstants.PlanNameEmpStarter;
+                amount = PaymentConstants.PriceEmpStarter;
+                targetRank = 1;
+                targetRole = "employer";
+            }
+            else if (normalizedPlan == PaymentConstants.PlanStuMaster || normalizedPlan == "STUDENT_MASTER" || normalizedPlan == "MASTER" || normalizedPlan.Contains("MASTER"))
+            {
+                planName = PaymentConstants.PlanNameStuMaster;
+                amount = PaymentConstants.PriceStuMaster;
+                targetRank = 3;
+                targetRole = "student";
+            }
+            else if (normalizedPlan == PaymentConstants.PlanStuPro || normalizedPlan == "STUDENT_PRO" || normalizedPlan == "PRO" || normalizedPlan.Contains("PRO"))
+            {
+                planName = PaymentConstants.PlanNameStuPro;
+                amount = PaymentConstants.PriceStuPro;
+                targetRank = 2;
+                targetRole = "student";
+            }
+            else if (normalizedPlan == PaymentConstants.PlanStuStarter || normalizedPlan == "STUDENT_STARTER" || normalizedPlan.Contains("STARTER"))
+            {
+                planName = PaymentConstants.PlanNameStuStarter;
+                amount = PaymentConstants.PriceStuStarter;
+                targetRank = 1;
+                targetRole = "student";
+            }
+            else
+            {
+                throw new BusinessException($"Gói đăng ký '{request.PlanType}' không hợp lệ.");
+            }
         }
 
         // Kiểm tra tính tương thích giữa vai trò tài khoản và gói dịch vụ
@@ -85,20 +132,12 @@ public class SubscriptionService : ISubscriptionService
             roleCode = role?.Code?.ToLowerInvariant();
         }
 
-        bool isEmployerPlan = planName == PaymentConstants.PlanNameEmpVip ||
-                              planName == PaymentConstants.PlanNameEmpGrowth ||
-                              planName == PaymentConstants.PlanNameEmpStarter;
-
-        bool isStudentPlan = planName == PaymentConstants.PlanNameStuMaster ||
-                             planName == PaymentConstants.PlanNameStuPro ||
-                             planName == PaymentConstants.PlanNameStuStarter;
-
-        if (isEmployerPlan && roleCode != "employer" && roleCode != "admin" && roleCode != "super_admin")
+        if (targetRole == "employer" && roleCode != "employer" && roleCode != "admin" && roleCode != "super_admin")
         {
             throw new BusinessException($"Gói '{planName}' chỉ dành riêng cho Nhà tuyển dụng. Tài khoản của bạn không thể đăng ký gói này.");
         }
 
-        if (isStudentPlan && roleCode != "student" && roleCode != "admin" && roleCode != "super_admin")
+        if (targetRole == "student" && roleCode != "student" && roleCode != "admin" && roleCode != "super_admin")
         {
             throw new BusinessException($"Gói '{planName}' chỉ dành riêng cho Sinh viên / Freelancer. Tài khoản của bạn không thể đăng ký gói này.");
         }
@@ -109,19 +148,20 @@ public class SubscriptionService : ISubscriptionService
             return await executionStrategy.ExecuteAsync(async () =>
             {
                 await using var tx = await _dbContext.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, cancellationToken);
-                var result = await ExecutePurchaseInternalAsync(userId, planName, amount, cancellationToken);
+                var result = await ExecutePurchaseInternalAsync(userId, planName, amount, targetRank, cancellationToken);
                 await tx.CommitAsync(cancellationToken);
                 return result;
             });
         }
 
-        return await ExecutePurchaseInternalAsync(userId, planName, amount, cancellationToken);
+        return await ExecutePurchaseInternalAsync(userId, planName, amount, targetRank, cancellationToken);
     }
 
     private async Task<SubscriptionResponseDto> ExecutePurchaseInternalAsync(
         int userId,
         string planName,
         decimal amount,
+        int targetRank,
         CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
@@ -137,8 +177,9 @@ public class SubscriptionService : ISubscriptionService
 
         if (currentActiveSub != null)
         {
-            var currentRank = GetPlanTierRank(currentActiveSub.PlanName);
-            var targetRank = GetPlanTierRank(planName);
+            var currentConfig = await _dbContext.SubscriptionPlanConfigs.AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Name == currentActiveSub.PlanName || p.Code == currentActiveSub.PlanName, cancellationToken);
+            var currentRank = currentConfig?.TierRank ?? GetPlanTierRank(currentActiveSub.PlanName);
 
             if (targetRank < currentRank)
             {

@@ -112,6 +112,11 @@ public partial class SkillBridgeDbContext : DbContext
     public virtual DbSet<WebhookLog> WebhookLogs { get; set; }
     public virtual DbSet<SubscriptionPlanConfig> SubscriptionPlanConfigs { get; set; }
 
+    public virtual DbSet<School> Schools { get; set; }
+    public virtual DbSet<StudentVerificationRequest> StudentVerificationRequests { get; set; }
+    public virtual DbSet<StudentProfile> StudentProfiles { get; set; }
+    public virtual DbSet<ExternalLogin> ExternalLogins { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder
@@ -850,6 +855,96 @@ public partial class SkillBridgeDbContext : DbContext
                 .HasForeignKey(d => d.RespondedByUserId)
                 .OnDelete(DeleteBehavior.SetNull)
                 .HasConstraintName("fk_job_deadline_extensions_responder");
+        });
+
+        modelBuilder.Entity<School>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("schools");
+
+            entity.HasIndex(e => e.Name, "uq_schools_name").IsUnique();
+
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+        });
+
+        modelBuilder.Entity<StudentVerificationRequest>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("student_verification_requests");
+
+            entity.HasIndex(e => new { e.Status, e.SubmittedAt }, "idx_svr_status_submitted");
+            entity.HasIndex(e => new { e.SchoolId, e.StudentCodeNormalized }, "idx_svr_school_code");
+
+            entity.Property<int?>("PendingUserId")
+                .HasComputedColumnSql("CASE WHEN `status` = 'pending' THEN `user_id` ELSE NULL END", stored: false);
+            entity.HasIndex("PendingUserId")
+                .IsUnique()
+                .HasDatabaseName("uq_svr_pending_user");
+
+            entity.Property(e => e.SubmittedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.User)
+                .WithMany(p => p.StudentVerificationRequests)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_svr_user");
+
+            entity.HasOne(d => d.School)
+                .WithMany(p => p.VerificationRequests)
+                .HasForeignKey(d => d.SchoolId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_svr_school");
+
+            entity.HasOne(d => d.ReviewedByAdmin)
+                .WithMany()
+                .HasForeignKey(d => d.ReviewedByAdminId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_svr_reviewer");
+        });
+
+        modelBuilder.Entity<StudentProfile>(entity =>
+        {
+            entity.HasKey(e => e.UserId).HasName("PRIMARY");
+            entity.ToTable("student_profiles");
+
+            entity.HasIndex(e => new { e.SchoolId, e.StudentCodeNormalized }, "uq_student_profiles_school_code").IsUnique();
+
+            entity.Property(e => e.VerifiedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.User)
+                .WithOne(p => p.StudentProfile)
+                .HasForeignKey<StudentProfile>(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_sp_user");
+
+            entity.HasOne(d => d.School)
+                .WithMany(p => p.StudentProfiles)
+                .HasForeignKey(d => d.SchoolId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_sp_school");
+
+            entity.HasOne(d => d.SourceRequest)
+                .WithMany()
+                .HasForeignKey(d => d.SourceRequestId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("fk_sp_request");
+        });
+
+        modelBuilder.Entity<ExternalLogin>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PRIMARY");
+            entity.ToTable("external_logins");
+
+            entity.HasIndex(e => new { e.Provider, e.ProviderUserId }, "uq_external_login").IsUnique();
+
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            entity.HasOne(d => d.User)
+                .WithMany(p => p.ExternalLogins)
+                .HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_extlogin_user");
         });
 
         OnModelCreatingPartial(modelBuilder);

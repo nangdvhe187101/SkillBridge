@@ -44,10 +44,12 @@ public class TalentService : ITalentService
         var page = request.Page <= 0 ? 1 : request.Page;
         var pageSize = request.PageSize <= 0 ? 12 : Math.Min(request.PageSize, 50);
 
+        var nowUtc = DateTime.UtcNow;
         var query = _dbContext.Users
             .AsNoTracking()
             .Include(u => u.Role)
-            .Where(u => u.Role.Code == "student" && u.AccountStatus == "active");
+            .Where(u => u.Role.Code == "student" && u.AccountStatus == "active"
+                && _dbContext.StudentProfiles.Any(sp => sp.UserId == u.Id && sp.ExpiresAt > nowUtc));
 
         if (!string.IsNullOrWhiteSpace(request.Keyword))
         {

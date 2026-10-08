@@ -44,6 +44,22 @@ public class AdminSubscriptionPlansController : ControllerBase
         return Ok(updated);
     }
 
+    [HttpPost]
+    [EnableRateLimiting("ResourceCreationPolicy")]
+    public async Task<IActionResult> CreatePlan([FromBody] CreateSubscriptionPlanConfigRequest request, CancellationToken cancellationToken)
+    {
+        var created = await _planConfigService.CreatePlanAsync(request, cancellationToken);
+        return CreatedAtAction(nameof(GetPlanById), new { id = created.Id }, created);
+    }
+
+    [HttpDelete("{id:int}")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> DeletePlan(int id, CancellationToken cancellationToken)
+    {
+        await _planConfigService.DeletePlanAsync(id, cancellationToken);
+        return Ok(new { id, message = "Đã xóa gói dịch vụ thành công." });
+    }
+
     [HttpPost("{id:int}/toggle")]
     [EnableRateLimiting("GeneralApiPolicy")]
     public async Task<IActionResult> ToggleActive(int id, CancellationToken cancellationToken)

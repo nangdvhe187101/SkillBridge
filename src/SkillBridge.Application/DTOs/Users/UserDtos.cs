@@ -42,6 +42,9 @@ public class UserProfileDto
     public string RoleCode { get; set; } = null!;
     public string RoleName { get; set; } = null!;
     public string? School { get; set; }
+    public int? SchoolId { get; set; }
+    public string? StudentCode { get; set; }
+    public short? GraduationYear { get; set; }
     public string? Industry { get; set; }
     public string? CompanySize { get; set; }
     public string? Website { get; set; }
@@ -73,6 +76,9 @@ public class UpdateUserProfileRequest
     public string? Bio { get; set; }
     public decimal? ExpectedHourlyRate { get; set; }
     public string? School { get; set; }
+    public int? SchoolId { get; set; }
+    public string? StudentCode { get; set; }
+    public short? GraduationYear { get; set; }
     public string? Industry { get; set; }
     public string? CompanySize { get; set; }
     public string? Website { get; set; }
