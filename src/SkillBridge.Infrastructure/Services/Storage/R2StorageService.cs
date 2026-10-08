@@ -19,6 +19,7 @@ public class R2StorageService : IStorageService
     private readonly IAmazonS3? _s3Client;
     private readonly string _bucketName;
     private readonly string? _publicBaseUrl;
+    private readonly string? _backendBaseUrl;
     private readonly string _localUploadDirectory;
     private readonly ILogger<R2StorageService> _logger;
 
@@ -29,6 +30,14 @@ public class R2StorageService : IStorageService
         if (!Directory.Exists(_localUploadDirectory))
         {
             try { Directory.CreateDirectory(_localUploadDirectory); } catch { }
+        }
+
+        _backendBaseUrl = configuration["Backend:BaseUrl"] ?? configuration["Frontend:ApiBaseUrl"];
+        if (string.IsNullOrWhiteSpace(_backendBaseUrl) &&
+            (Environment.GetEnvironmentVariable("RENDER") != null ||
+             string.Equals(Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"), "Production", StringComparison.OrdinalIgnoreCase)))
+        {
+            _backendBaseUrl = "https://api.skillbridge.id.vn";
         }
 
         var r2Config = configuration.GetSection("CloudflareR2");
@@ -250,17 +259,28 @@ public class R2StorageService : IStorageService
             {
                 var idx = trimmed.IndexOf(".r2.dev/", StringComparison.OrdinalIgnoreCase);
                 var key = trimmed.Substring(idx + 8).TrimStart('/');
-                return $"/api/storage/file?key={Uri.EscapeDataString(key)}";
+                return BuildStorageFileUrl(key);
             }
             return trimmed;
         }
 
         if (string.IsNullOrWhiteSpace(_publicBaseUrl) || _publicBaseUrl.Contains(".r2.dev", StringComparison.OrdinalIgnoreCase))
         {
-            return $"/api/storage/file?key={Uri.EscapeDataString(normalized)}";
+            return BuildStorageFileUrl(normalized);
         }
 
         return $"{_publicBaseUrl.TrimEnd('/')}/{normalized}";
+    }
+
+    private string BuildStorageFileUrl(string normalizedKey)
+    {
+        var escapedKey = Uri.EscapeDataString(normalizedKey);
+        if (!string.IsNullOrWhiteSpace(_backendBaseUrl))
+        {
+            return $"{_backendBaseUrl.TrimEnd('/')}/api/storage/file?key={escapedKey}";
+        }
+
+        return $"/api/storage/file?key={escapedKey}";
     }
 
     private static bool IsPrivateFolder(string? fileKeyOrUrl)

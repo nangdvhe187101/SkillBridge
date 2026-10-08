@@ -14,11 +14,14 @@ namespace SkillBridge.API.Controllers.storage;
 
 [ApiController]
 [Route("api/storage")]
+[Route("api/api/storage")]
 public class StorageController : ControllerBase
 {
     private static readonly string[] AllowedPublicPrefixes = new[]
     {
         "avatars/",
+        "covers/",
+        "portfolio/",
         "jobs/",
         "chat/",
         "identity_documents/"
