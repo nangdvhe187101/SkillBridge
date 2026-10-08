@@ -24,4 +24,8 @@
     <ProjectReference Include="../SkillBridge.Infrastructure/SkillBridge.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Update="appsettings*.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
 </Project>
