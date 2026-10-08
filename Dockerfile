@@ -6,6 +6,7 @@ WORKDIR /src
 COPY ["src/SkillBridge.Domain/SkillBridge.Domain.csproj", "src/SkillBridge.Domain/"]
 COPY ["src/SkillBridge.Application/SkillBridge.Application.csproj", "src/SkillBridge.Application/"]
 COPY ["src/SkillBridge.Infrastructure/SkillBridge.Infrastructure.csproj", "src/SkillBridge.Infrastructure/"]
+COPY ["src/SkillBridge.AdminAPI/SkillBridge.AdminAPI.csproj", "src/SkillBridge.AdminAPI/"]
 COPY ["src/SkillBridge.API/SkillBridge.API.csproj", "src/SkillBridge.API/"]
 
 # Khôi phục dependencies
@@ -15,6 +16,7 @@ RUN dotnet restore "src/SkillBridge.API/SkillBridge.API.csproj"
 COPY ["src/SkillBridge.Domain/", "src/SkillBridge.Domain/"]
 COPY ["src/SkillBridge.Application/", "src/SkillBridge.Application/"]
 COPY ["src/SkillBridge.Infrastructure/", "src/SkillBridge.Infrastructure/"]
+COPY ["src/SkillBridge.AdminAPI/", "src/SkillBridge.AdminAPI/"]
 COPY ["src/SkillBridge.API/", "src/SkillBridge.API/"]
 
 # Build và publish Release
