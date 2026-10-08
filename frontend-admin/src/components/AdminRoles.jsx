@@ -20,12 +20,14 @@ const ROLE_NAME = {
   super_admin: 'Super Admin',
   super: 'Super Admin',
   admin: 'Super Admin',
+  business_admin: 'Business Admin',
+  business: 'Business Admin',
   moderator: 'Content Moderator',
   dispute: 'Dispute Officer',
   finance: 'Finance Viewer'
 };
 
-const GROUPS = ['Tất cả', 'Việc làm', 'Tuyển dụng', 'Sinh viên', 'Tài chính', 'Giao tiếp', 'Doanh nghiệp', 'Hệ thống', 'Quản trị'];
+const GROUPS = ['Tất cả', 'Việc làm', 'Khám phá & Tài năng', 'Xác thực & Tài khoản', 'Sinh viên', 'Doanh nghiệp', 'Tài chính & Escrow', 'Giao tiếp & Đồng hành', 'Hệ thống'];
 
 export default function AdminRoles() {
   const confirm = useConfirm();
@@ -50,14 +52,15 @@ export default function AdminRoles() {
   const [newFeatModal, setNewFeatModal] = useState(false);
   const [featName, setFeatName] = useState('');
   const [featUrl, setFeatUrl] = useState('');
-  const [featGroup, setFeatGroup] = useState('Tuyển dụng');
-  const [featRoles, setFeatRoles] = useState(['employer', 'admin']);
+  const [featGroup, setFeatGroup] = useState('Việc làm');
+  const [featRoles, setFeatRoles] = useState(['student', 'employer']);
   const [submittingFeat, setSubmittingFeat] = useState(false);
 
   // Add Team Member Form
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState('moderator');
+  const [password, setPassword] = useState('');
+  const [role, setRole] = useState('business_admin');
   const [submittingTeam, setSubmittingTeam] = useState(false);
 
   // Load RBAC Matrix từ Backend
@@ -65,11 +68,14 @@ export default function AdminRoles() {
     setLoadingFeatures(true);
     try {
       const res = await getAdminPermissionMatrix();
-      if (res && Array.isArray(res)) {
+      if (res && Array.isArray(res) && res.length > 0) {
         setFeatures(res);
+      } else {
+        setFeatures(featuresSeed);
       }
     } catch (err) {
       console.warn('Lỗi khi tải ma trận phân quyền RBAC:', err);
+      setFeatures(featuresSeed);
     } finally {
       setLoadingFeatures(false);
     }
@@ -228,11 +234,31 @@ export default function AdminRoles() {
     }
   };
 
+  // Reset Member Password
+  const handleResetMemberPassword = async (m) => {
+    const newPass = window.prompt(`Nhập mật khẩu mới cho quản trị viên ${m.name} (${m.email}):`);
+    if (!newPass) return;
+    if (newPass.trim().length < 6) {
+      showToast('Mật khẩu mới phải có tối thiểu 6 ký tự.', 'warning');
+      return;
+    }
+    try {
+      await updateAdminTeamMember(m.id, { password: newPass.trim() });
+      showToast(`Đã đổi mật khẩu cho ${m.name} thành công.`, 'check');
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi cập nhật mật khẩu.', 'error');
+    }
+  };
+
   // Add Team Member
   const submitAddTeam = async (e) => {
     e.preventDefault();
     if (!name.trim() || !email.trim()) {
       showToast('Vui lòng nhập họ tên và email thành viên.', 'warning');
+      return;
+    }
+    if (!password || password.trim().length < 6) {
+      showToast('Vui lòng nhập mật khẩu khởi tạo (tối thiểu 6 ký tự).', 'warning');
       return;
     }
 
@@ -241,12 +267,14 @@ export default function AdminRoles() {
       const newMember = await addAdminTeamMember({
         name: name.trim(),
         email: email.trim(),
+        password: password.trim(),
         roleCode: role
       });
-      showToast(`Đã thêm ${newMember.name} vào đội ngũ quản trị thành công!`, 'check');
+      showToast(`Đã bổ nhiệm ${newMember.name} vào đội ngũ quản trị thành công!`, 'check');
       setTeam((prev) => [...prev, newMember]);
       setName('');
       setEmail('');
+      setPassword('');
     } catch (err) {
       showToast(err.message || 'Lỗi khi thêm thành viên.', 'error');
     } finally {
@@ -291,6 +319,13 @@ export default function AdminRoles() {
             <span className="sub">Đang hiển thị {filteredFeatures.length} / {features.length} tính năng</span>
           </div>
 
+          <div style={{ background: 'rgba(37, 99, 235, 0.06)', border: '1px solid rgba(37, 99, 235, 0.15)', borderRadius: 8, padding: '10px 14px', margin: '12px 0 14px', fontSize: 13, color: '#1e40af', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16 }}>🛡️</span>
+            <span>
+              <b>Nguyên tắc RBAC:</b> Vai trò Quản trị viên (Super Admin) mặc định sở hữu toàn quyền quản trị và giám sát toàn hệ thống. Bảng ma trận dưới đây chuyên trách cấu hình quyền truy cập URL cho 3 nhóm người dùng nền tảng: <b>Khách (Guest)</b>, <b>Sinh viên (Student)</b> và <b>Doanh nghiệp (Employer)</b>.
+            </span>
+          </div>
+
           <div className="adm-toolbar" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 10, marginBottom: 16 }}>
             <input
               type="text"
@@ -314,7 +349,7 @@ export default function AdminRoles() {
                 <thead>
                   <tr>
                     <th style={{ minWidth: 230 }}>Chức năng / Tính năng</th>
-                    <th style={{ minWidth: 160 }}>URL Route</th>
+                    <th style={{ minWidth: 240 }}>API Endpoint & URL Màn hình</th>
                     <th style={{ minWidth: 100, textAlign: 'center' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
                         <Icon name="users" style={{ width: 13, height: 13 }} />
@@ -333,12 +368,6 @@ export default function AdminRoles() {
                         <span>Doanh nghiệp</span>
                       </span>
                     </th>
-                    <th style={{ minWidth: 90, textAlign: 'center' }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, justifyContent: 'center' }}>
-                        <Icon name="shield-check" style={{ width: 13, height: 13 }} />
-                        <span>Admin</span>
-                      </span>
-                    </th>
                     <th style={{ minWidth: 80, textAlign: 'center' }}>Xoá</th>
                   </tr>
                 </thead>
@@ -353,11 +382,48 @@ export default function AdminRoles() {
                         </div>
                       </td>
 
-                      {/* URL Route */}
+                      {/* URL Route & API Endpoint */}
                       <td>
-                        <code style={{ fontSize: 12, background: 'rgba(0,0,0,0.04)', padding: '2px 6px', borderRadius: 4, color: 'var(--primary)', wordBreak: 'break-all' }}>
-                          {f.url}
-                        </code>
+                        {(() => {
+                          const raw = f.url || '';
+                          const routeMatch = raw.match(/\[Route:\s*([^\]]+)\]/i);
+                          const apiPath = raw.replace(/\[Route:\s*[^\]]+\]/i, '').trim();
+                          const webRoute = routeMatch ? routeMatch[1].trim() : null;
+                          const method = (f.method || 'GET').toUpperCase();
+                          const methodColor = 
+                            method === 'POST' ? '#2563eb' :
+                            method === 'PUT' ? '#d97706' :
+                            method === 'DELETE' ? '#dc2626' :
+                            method === 'PATCH' ? '#7c3aed' : '#059669';
+
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span style={{
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  padding: '1px 5px',
+                                  borderRadius: 4,
+                                  backgroundColor: `${methodColor}15`,
+                                  color: methodColor,
+                                  border: `1px solid ${methodColor}30`,
+                                  fontFamily: 'monospace'
+                                }}>
+                                  {method}
+                                </span>
+                                <code style={{ fontSize: 11.5, background: 'rgba(0,0,0,0.04)', padding: '2px 6px', borderRadius: 4, color: 'var(--ink)', wordBreak: 'break-all' }}>
+                                  {apiPath || raw}
+                                </code>
+                              </div>
+                              {webRoute && (
+                                <div style={{ fontSize: 11, color: '#0ea5e9', display: 'flex', alignItems: 'center', gap: 4, marginLeft: 2 }}>
+                                  <span style={{ fontSize: 10 }}>🌐 Màn hình:</span>
+                                  <b style={{ fontFamily: 'monospace' }}>{webRoute}</b>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Role 1: Guest */}
@@ -393,17 +459,6 @@ export default function AdminRoles() {
                         />
                       </td>
 
-                      {/* Role 4: Admin */}
-                      <td style={{ textAlign: 'center' }}>
-                        <input
-                          type="checkbox"
-                          checked={(f.roles || []).includes('admin')}
-                          onChange={() => handleToggleFeatureRole(f.id, 'admin')}
-                          style={{ cursor: 'pointer', transform: 'scale(1.2)' }}
-                          title="Cho phép Admin truy cập"
-                        />
-                      </td>
-
                       {/* Actions */}
                       <td style={{ textAlign: 'center' }}>
                         <button
@@ -418,7 +473,7 @@ export default function AdminRoles() {
                   ))}
                   {filteredFeatures.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="adm-empty" style={{ textAlign: 'center', padding: '24px 0' }}>
+                      <td colSpan={6} className="adm-empty" style={{ textAlign: 'center', padding: '24px 0' }}>
                         Không tìm thấy chức năng hoặc URL route nào phù hợp.
                       </td>
                     </tr>
@@ -459,20 +514,86 @@ export default function AdminRoles() {
             ))}
           </div>
 
+          {/* 1. KHỐI SUPER ADMIN DUY NHẤT CỦA HỆ THỐNG */}
+          <div className="adm-card" style={{
+            marginTop: 20,
+            background: 'linear-gradient(135deg, rgba(37,99,235,0.04) 0%, rgba(248,250,252,0.95) 100%)',
+            border: '1px solid rgba(37,99,235,0.18)',
+            borderLeft: '5px solid #2563eb',
+            borderRadius: 10,
+            padding: '16px 20px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #2563eb, #1d4ed8)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 24,
+                  boxShadow: '0 4px 12px rgba(37,99,235,0.25)'
+                }}>
+                  👑
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <h3 style={{ margin: 0, fontSize: 17, color: 'var(--ink)', fontWeight: 800 }}>Quản Trị Viên Hệ Thống</h3>
+                    <span className="chip" style={{ background: '#2563eb', color: '#fff', fontSize: 11, fontWeight: 700, padding: '2px 8px' }}>
+                      Super Admin Duy Nhất
+                    </span>
+                    <span className="chip" style={{ background: '#10b981', color: '#fff', fontSize: 11, fontWeight: 600 }}>
+                      Chủ sở hữu hệ thống (Owner)
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--ink-soft)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span>Email: <b style={{ color: '#2563eb', fontFamily: 'monospace', fontSize: 13.5 }}>skillbridge.vn@gmail.com</b></span>
+                    <span>•</span>
+                    <span>Quyền hạn: <b style={{ color: '#059669' }}>Toàn quyền Quản trị & Điều hành tối cao</b></span>
+                  </div>
+                </div>
+              </div>
+              <div style={{
+                fontSize: 12,
+                color: '#059669',
+                background: 'rgba(5,150,105,0.08)',
+                padding: '6px 14px',
+                borderRadius: 20,
+                fontWeight: 600,
+                border: '1px solid rgba(5,150,105,0.25)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6
+              }}>
+                <span>✓</span>
+                <span>Tài khoản gốc bất biến (Không thể xóa / chuyển nhượng)</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 2. BẢNG NHÂN SỰ CẤP DƯỚI ĐƯỢC PHÂN QUYỀN */}
           <div className="adm-card" style={{ marginTop: 20 }}>
-            <div className="adm-card-head">
-              <h4 style={{ margin: 0 }}>Thành viên đội ngũ quản trị ({team.length})</h4>
+            <div className="adm-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h4 style={{ margin: 0 }}>
+                Thành viên nhân sự được phân quyền ({team.filter(m => (m.email || '').toLowerCase() !== 'skillbridge.vn@gmail.com' && !(m.roleCode || m.role || '').toLowerCase().includes('super')).length})
+              </h4>
+              <span className="sub">Nhân sự nội bộ hỗ trợ vận hành do Super Admin bổ nhiệm</span>
             </div>
             {loadingTeam ? (
               <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--ink-soft)' }}>
-                Đang tải danh sách thành viên...
+                Đang tải danh sách nhân sự...
               </div>
             ) : (
               <div className="adm-table-wrap">
                 <table className="adm-table">
-                  <thead><tr><th>Thành viên</th><th>Email</th><th>Vai trò nội bộ</th><th>Hành động</th></tr></thead>
+                  <thead><tr><th>Nhân sự</th><th>Email nội bộ</th><th>Vai trò đảm nhiệm</th><th>Hành động</th></tr></thead>
                   <tbody>
-                    {team.map((m) => (
+                    {team
+                      .filter(m => (m.email || '').toLowerCase() !== 'skillbridge.vn@gmail.com' && !(m.roleCode || m.role || '').toLowerCase().includes('super'))
+                      .map((m) => (
                       <tr key={m.id}>
                         <td><b>{m.name}</b></td>
                         <td>{m.email}</td>
@@ -481,23 +602,44 @@ export default function AdminRoles() {
                             value={m.roleCode || m.role}
                             onChange={(e) => handleChangeTeamRole(m.id, e.target.value)}
                           >
-                            <option value="super_admin">Super Admin</option>
+                            <option value="business_admin">Business Admin</option>
                             <option value="moderator">Content Moderator</option>
                             <option value="dispute">Dispute Officer</option>
                             <option value="finance">Finance Viewer</option>
                           </select>
                         </td>
                         <td>
-                          <button
-                            className="btn btn-outline btn-sm"
-                            style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
-                            onClick={() => handleRemoveTeam(m)}
-                          >
-                            Xoá khỏi đội ngũ
-                          </button>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <button
+                              className="btn btn-outline btn-sm"
+                              style={{ fontSize: 12, padding: '3px 8px' }}
+                              onClick={() => handleResetMemberPassword(m)}
+                              title="Đặt lại mật khẩu đăng nhập cho nhân sự này"
+                            >
+                              Đổi mật khẩu
+                            </button>
+                            <button
+                              className="btn btn-outline btn-sm"
+                              style={{ color: 'var(--coral)', borderColor: 'var(--coral)', fontSize: 12, padding: '3px 8px' }}
+                              onClick={() => handleRemoveTeam(m)}
+                            >
+                              Xoá khỏi đội ngũ
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
+                    {team.filter(m => (m.email || '').toLowerCase() !== 'skillbridge.vn@gmail.com' && !(m.roleCode || m.role || '').toLowerCase().includes('super')).length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="adm-empty" style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--ink-soft)' }}>
+                          <div style={{ fontSize: 26, marginBottom: 8 }}>👥</div>
+                          <b style={{ fontSize: 14, color: 'var(--ink)' }}>Hiện tại chưa có nhân sự cấp dưới nào được bổ nhiệm</b>
+                          <p style={{ fontSize: 12.5, margin: '6px 0 0', color: 'var(--ink-subtle)' }}>
+                            Hệ thống hiện tại đang được quản trị độc lập và an toàn bởi duy nhất 01 Quản trị viên tối cao (<b>skillbridge.vn@gmail.com</b>).
+                          </p>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -505,20 +647,23 @@ export default function AdminRoles() {
           </div>
 
           <div className="adm-card" style={{ marginTop: 20 }}>
-            <div className="adm-card-head"><h4>+ Thêm thành viên quản trị mới</h4></div>
-            <form onSubmit={submitAddTeam} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, alignItems: 'end' }}>
+            <div className="adm-card-head">
+              <h4 style={{ margin: 0 }}>+ Bổ nhiệm nhân sự quản trị mới</h4>
+              <span className="sub">Cấp tài khoản & mật khẩu đăng nhập cho nhân viên phụ trách nội dung/kinh doanh, kiểm duyệt hoặc kế toán</span>
+            </div>
+            <form onSubmit={submitAddTeam} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 14, alignItems: 'end', marginTop: 14 }}>
               <div className="field" style={{ marginBottom: 0 }}>
-                <label>Họ tên</label>
+                <label>Họ tên nhân sự</label>
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Nguyễn Văn A"
+                  placeholder="Ví dụ: Nguyễn Văn A"
                   required
                 />
               </div>
               <div className="field" style={{ marginBottom: 0 }}>
-                <label>Email nội bộ</label>
+                <label>Email nội bộ (Đăng nhập)</label>
                 <input
                   type="email"
                   value={email}
@@ -528,16 +673,27 @@ export default function AdminRoles() {
                 />
               </div>
               <div className="field" style={{ marginBottom: 0 }}>
+                <label>Mật khẩu khởi tạo</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Tối thiểu 6 ký tự"
+                  minLength={6}
+                  required
+                />
+              </div>
+              <div className="field" style={{ marginBottom: 0 }}>
                 <label>Vai trò đảm nhiệm</label>
                 <select value={role} onChange={(e) => setRole(e.target.value)}>
-                  <option value="super_admin">Super Admin</option>
-                  <option value="moderator">Content Moderator</option>
-                  <option value="dispute">Dispute Officer</option>
-                  <option value="finance">Finance Viewer</option>
+                  <option value="business_admin">Business Admin (Gói dịch vụ, Content & Đối tác)</option>
+                  <option value="moderator">Content Moderator (Kiểm duyệt tin)</option>
+                  <option value="dispute">Dispute Officer (Trọng tài tranh chấp)</option>
+                  <option value="finance">Finance Viewer (Kế toán đối soát)</option>
                 </select>
               </div>
-              <button type="submit" className="btn btn-primary btn-sm" disabled={submittingTeam}>
-                {submittingTeam ? 'Đang thêm...' : 'Thêm thành viên'}
+              <button type="submit" className="btn btn-primary btn-sm" disabled={submittingTeam} style={{ height: 38 }}>
+                {submittingTeam ? 'Đang tạo...' : 'Bổ nhiệm nhân sự'}
               </button>
             </form>
           </div>
@@ -605,11 +761,6 @@ export default function AdminRoles() {
                     <input type="checkbox" checked={featRoles.includes('employer')} onChange={() => toggleModalRole('employer')} />
                     <Icon name="building" style={{ width: 13, height: 13 }} />
                     <span>Doanh nghiệp</span>
-                  </label>
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13 }}>
-                    <input type="checkbox" checked={featRoles.includes('admin')} onChange={() => toggleModalRole('admin')} />
-                    <Icon name="shield-check" style={{ width: 13, height: 13 }} />
-                    <span>Admin</span>
                   </label>
                 </div>
               </div>

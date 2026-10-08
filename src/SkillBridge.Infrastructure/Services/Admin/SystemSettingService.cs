@@ -32,6 +32,26 @@ public class SystemSettingService : ISystemSettingService
     public const string KeyEmailDigest18h = "Email_Digest18h_Enabled";
     public const string KeyEmailVipMatch = "Email_VipMatch_Enabled";
 
+    // CPC & Referral Keys
+    public const string KeyCpcClickPrice = "Cpc_Click_Price";
+    public const string KeyReferralProgramEnabled = "Referral_Program_Enabled";
+    public const string KeyReferralRewardType = "Referral_Reward_Type";
+    public const string KeyReferralRewardValue = "Referral_Reward_Value";
+    public const string KeyReferralRewardTarget = "Referral_Reward_Target";
+
+    // Company & Contact Keys
+    public const string KeyCompanyName = "Company_Name";
+    public const string KeyProjectName = "Project_Name";
+    public const string KeyProjectLead = "Project_Lead";
+    public const string KeyProjectLeadTitle = "Project_Lead_Title";
+    public const string KeyTechLead = "Tech_Lead";
+    public const string KeyTechLeadTitle = "Tech_Lead_Title";
+    public const string KeyCompanyAddress = "Company_Address";
+    public const string KeyCompanyHotline1 = "Company_Hotline1";
+    public const string KeyCompanyHotline2 = "Company_Hotline2";
+    public const string KeyCompanyEmail = "Company_Email";
+    public const string KeyWorkingHours = "Working_Hours";
+
     public SystemSettingService(
         SkillBridgeDbContext dbContext,
         IServiceScopeFactory scopeFactory,
@@ -57,6 +77,27 @@ public class SystemSettingService : ISystemSettingService
             EmailPayoutEnabled = GetBoolFromDict(dict, KeyEmailPayout, true),
             EmailDigest18hEnabled = GetBoolFromDict(dict, KeyEmailDigest18h, true),
             EmailVipMatchEnabled = GetBoolFromDict(dict, KeyEmailVipMatch, true),
+
+            // CPC & Referral Values
+            CpcClickPrice = GetIntFromDict(dict, KeyCpcClickPrice, 2500),
+            ReferralProgramEnabled = GetBoolFromDict(dict, KeyReferralProgramEnabled, true),
+            ReferralRewardType = GetStringFromDict(dict, KeyReferralRewardType, "trial_days"),
+            ReferralRewardValue = GetIntFromDict(dict, KeyReferralRewardValue, 3),
+            ReferralRewardTarget = GetStringFromDict(dict, KeyReferralRewardTarget, "both"),
+
+            // Company & Contact Information
+            CompanyName = GetStringFromDict(dict, KeyCompanyName, "CÔNG TY CỔ PHẦN CÔNG NGHỆ SKILLBRIDGE VIỆT NAM"),
+            ProjectName = GetStringFromDict(dict, KeyProjectName, "Dự án Khởi nghiệp Sáng tạo Sinh viên · FPT University EXE Capstone Project"),
+            ProjectLead = GetStringFromDict(dict, KeyProjectLead, "TRẦN LÊ KHÁNH LINH"),
+            ProjectLeadTitle = GetStringFromDict(dict, KeyProjectLeadTitle, "Trưởng nhóm dự án (Project Lead)"),
+            TechLead = GetStringFromDict(dict, KeyTechLead, "ĐÀO VĂN NĂNG"),
+            TechLeadTitle = GetStringFromDict(dict, KeyTechLeadTitle, "Trưởng nhóm code (Technical Lead)"),
+            Address = GetStringFromDict(dict, KeyCompanyAddress, "Trường Đại học FPT Hà Nội, Khu Công nghệ cao Hòa Lạc, Km29 Đại lộ Thăng Long, Huyện Thạch Thất, TP. Hà Nội, Việt Nam"),
+            Hotline1 = GetStringFromDict(dict, KeyCompanyHotline1, "0334404480"),
+            Hotline2 = GetStringFromDict(dict, KeyCompanyHotline2, "0956653307"),
+            Email = GetStringFromDict(dict, KeyCompanyEmail, "skillbridge.vn@gmail.com"),
+            WorkingHours = GetStringFromDict(dict, KeyWorkingHours, "08:00 - 18:00 (Thứ 2 đến Thứ 7)"),
+
             RawSettings = dict
         };
     }
@@ -86,6 +127,56 @@ public class SystemSettingService : ISystemSettingService
 
         if (request.EmailVipMatchEnabled.HasValue)
             await UpsertSettingAsync(KeyEmailVipMatch, request.EmailVipMatchEnabled.Value.ToString().ToLowerInvariant(), "Bật/tắt email cảnh báo việc làm mới cho sinh viên VIP/Master", cancellationToken);
+
+        // CPC & Referral
+        if (request.CpcClickPrice.HasValue)
+            await UpsertSettingAsync(KeyCpcClickPrice, request.CpcClickPrice.Value.ToString(), "Đơn giá trên 1 lượt click hợp lệ cho chiến dịch CPC (VNĐ)", cancellationToken);
+
+        if (request.ReferralProgramEnabled.HasValue)
+            await UpsertSettingAsync(KeyReferralProgramEnabled, request.ReferralProgramEnabled.Value.ToString().ToLowerInvariant(), "Bật/tắt chương trình Giới thiệu bạn đồng hành (1-1)", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.ReferralRewardType))
+            await UpsertSettingAsync(KeyReferralRewardType, request.ReferralRewardType.Trim(), "Loại phần thưởng: trial_days hoặc free_commission_count", cancellationToken);
+
+        if (request.ReferralRewardValue.HasValue)
+            await UpsertSettingAsync(KeyReferralRewardValue, request.ReferralRewardValue.Value.ToString(), "Giá trị phần thưởng: 1-3 ngày hoặc 1-3 lần hoa hồng", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.ReferralRewardTarget))
+            await UpsertSettingAsync(KeyReferralRewardTarget, request.ReferralRewardTarget.Trim(), "Đối tượng áp dụng: both, student, hoặc employer", cancellationToken);
+
+        // Company & Contact Information
+        if (!string.IsNullOrWhiteSpace(request.CompanyName))
+            await UpsertSettingAsync(KeyCompanyName, request.CompanyName.Trim(), "Tên công ty / đơn vị chủ quản", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.ProjectName))
+            await UpsertSettingAsync(KeyProjectName, request.ProjectName.Trim(), "Tên dự án khởi nghiệp", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.ProjectLead))
+            await UpsertSettingAsync(KeyProjectLead, request.ProjectLead.Trim(), "Đại diện dự án / Phụ trách vận hành", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.ProjectLeadTitle))
+            await UpsertSettingAsync(KeyProjectLeadTitle, request.ProjectLeadTitle.Trim(), "Chức vụ đại diện dự án", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.TechLead))
+            await UpsertSettingAsync(KeyTechLead, request.TechLead.Trim(), "Trưởng nhóm code / Kỹ thuật", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.TechLeadTitle))
+            await UpsertSettingAsync(KeyTechLeadTitle, request.TechLeadTitle.Trim(), "Chức vụ trưởng nhóm code", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.Address))
+            await UpsertSettingAsync(KeyCompanyAddress, request.Address.Trim(), "Địa chỉ trụ sở / văn phòng", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.Hotline1))
+            await UpsertSettingAsync(KeyCompanyHotline1, request.Hotline1.Trim(), "Số điện thoại Hotline 1", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.Hotline2))
+            await UpsertSettingAsync(KeyCompanyHotline2, request.Hotline2.Trim(), "Số điện thoại Hotline 2", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.Email))
+            await UpsertSettingAsync(KeyCompanyEmail, request.Email.Trim(), "Địa chỉ Email liên hệ", cancellationToken);
+
+        if (!string.IsNullOrWhiteSpace(request.WorkingHours))
+            await UpsertSettingAsync(KeyWorkingHours, request.WorkingHours.Trim(), "Khung giờ làm việc hỗ trợ", cancellationToken);
 
         if (request.AdditionalSettings != null)
         {
@@ -222,6 +313,12 @@ public class SystemSettingService : ISystemSettingService
     private static bool GetBoolFromDict(Dictionary<string, string> dict, string key, bool fallback)
     {
         if (dict.TryGetValue(key, out var str) && bool.TryParse(str, out var v)) return v;
+        return fallback;
+    }
+
+    private static string GetStringFromDict(Dictionary<string, string> dict, string key, string fallback)
+    {
+        if (dict.TryGetValue(key, out var str) && !string.IsNullOrWhiteSpace(str)) return str;
         return fallback;
     }
 }

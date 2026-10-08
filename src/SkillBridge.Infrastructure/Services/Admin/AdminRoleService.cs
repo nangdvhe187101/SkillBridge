@@ -63,6 +63,11 @@ public class AdminRoleService : IAdminRoleService
             throw new BusinessException("Họ tên và email của thành viên không được để trống.");
         }
 
+        if (string.IsNullOrWhiteSpace(dto.Password) || dto.Password.Trim().Length < 6)
+        {
+            throw new BusinessException("Mật khẩu khởi tạo không được để trống và phải có ít nhất 6 ký tự.");
+        }
+
         var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
         var exists = await _dbContext.AdminTeamMembers.AnyAsync(m => m.Email == normalizedEmail, ct);
         if (exists)
@@ -91,6 +96,39 @@ public class AdminRoleService : IAdminRoleService
             throw new BusinessException("Không tìm thấy vai trò phù hợp để gán cho thành viên.");
         }
 
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password.Trim(), workFactor: 11);
+
+        // Đồng bộ hoặc tạo User trong bảng users để nhân sự có thể đăng nhập được vào Admin Portal
+        var existingUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail, ct);
+        if (existingUser != null)
+        {
+            existingUser.FullName = dto.Name.Trim();
+            existingUser.PasswordHash = passwordHash;
+            existingUser.RoleId = role.Id;
+            existingUser.AccountStatus = "active";
+            existingUser.KycStatus = "verified";
+            existingUser.FailedLoginAttempts = 0;
+            existingUser.LockoutUntil = null;
+        }
+        else
+        {
+            var newUser = new User
+            {
+                FullName = dto.Name.Trim(),
+                Email = normalizedEmail,
+                PasswordHash = passwordHash,
+                RoleId = role.Id,
+                AccountStatus = "active",
+                KycStatus = "verified",
+                ReliabilityScore = 100,
+                JobsDoneCount = 0,
+                TokenVersion = 1,
+                FailedLoginAttempts = 0,
+                JoinedAt = DateTime.UtcNow
+            };
+            await _dbContext.Users.AddAsync(newUser, ct);
+        }
+
         var member = new AdminTeamMember
         {
             Name = dto.Name.Trim(),
@@ -104,7 +142,7 @@ public class AdminRoleService : IAdminRoleService
         await _dbContext.SaveChangesAsync(ct);
 
         await RecordAuditLogAsync(actorAdminId, $"Thêm thành viên quản trị mới: {member.Name} ({member.Email}) - Vai trò: {role.Name}.", ct);
-        _logger.LogInformation("Đã thêm AdminTeamMember: {Email} bởi AdminUserId: {Actor}", member.Email, actorAdminId);
+        _logger.LogInformation("Đã thêm AdminTeamMember và tài khoản User: {Email} bởi AdminUserId: {Actor}", member.Email, actorAdminId);
 
         return new AdminTeamMemberDto
         {
@@ -133,6 +171,11 @@ public class AdminRoleService : IAdminRoleService
             throw new BusinessException($"Không tìm thấy thành viên quản trị #{memberId}.");
         }
 
+        if (string.Equals(member.Email, "skillbridge.vn@gmail.com", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Tài khoản Super Admin gốc (skillbridge.vn@gmail.com) luôn giữ vai trò Super Admin tối cao, không thể hạ quyền.");
+        }
+
         if (dto.RoleId.HasValue && dto.RoleId.Value > 0)
         {
             var role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Id == dto.RoleId.Value, ct);
@@ -155,6 +198,22 @@ public class AdminRoleService : IAdminRoleService
         if (dto.IsActive.HasValue)
         {
             member.IsActive = dto.IsActive.Value;
+        }
+
+        // Đồng bộ vai trò và mật khẩu (nếu có reset) sang bảng users
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == member.Email, ct);
+        if (user != null)
+        {
+            user.RoleId = member.RoleId;
+            if (dto.IsActive.HasValue)
+            {
+                user.AccountStatus = dto.IsActive.Value ? "active" : "locked";
+            }
+            if (!string.IsNullOrWhiteSpace(dto.Password) && dto.Password.Trim().Length >= 6)
+            {
+                user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password.Trim(), workFactor: 11);
+                _logger.LogInformation("Admin #{Actor} đã đặt lại mật khẩu cho thành viên {Email}", actorAdminId, member.Email);
+            }
         }
 
         await _dbContext.SaveChangesAsync(ct);
@@ -182,10 +241,23 @@ public class AdminRoleService : IAdminRoleService
             throw new BusinessException($"Không tìm thấy thành viên quản trị #{memberId}.");
         }
 
+        if (string.Equals(member.Email, "skillbridge.vn@gmail.com", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Tài khoản Super Admin gốc (skillbridge.vn@gmail.com) là tài khoản tối cao bất biến, không thể xóa.");
+        }
+
         var memberEmail = member.Email;
         var memberName = member.Name;
 
         _dbContext.AdminTeamMembers.Remove(member);
+
+        // Khóa tài khoản User tương ứng trong bảng users
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == memberEmail, ct);
+        if (user != null && !string.Equals(user.Email, "skillbridge.vn@gmail.com", StringComparison.OrdinalIgnoreCase))
+        {
+            user.AccountStatus = "locked";
+        }
+
         await _dbContext.SaveChangesAsync(ct);
 
         await RecordAuditLogAsync(actorAdminId, $"Xóa thành viên {memberName} ({memberEmail}) khỏi đội ngũ quản trị.", ct);
@@ -436,7 +508,8 @@ public class AdminRoleService : IAdminRoleService
                 new() { Id = 1, Code = "super_admin", Name = "Super Admin", Type = "admin", Description = "Toàn quyền quản trị hệ sinh thái SkillBridge", IsActive = true, CreatedAt = DateTime.UtcNow },
                 new() { Id = 2, Code = "moderator", Name = "Content Moderator", Type = "admin", Description = "Kiểm duyệt tin tuyển dụng, bài nộp CV và bình luận", IsActive = true, CreatedAt = DateTime.UtcNow },
                 new() { Id = 3, Code = "dispute", Name = "Dispute Officer", Type = "admin", Description = "Tiếp nhận, đối soát và phân xử tranh chấp Escrow", IsActive = true, CreatedAt = DateTime.UtcNow },
-                new() { Id = 4, Code = "finance", Name = "Finance Viewer", Type = "admin", Description = "Đối soát doanh thu, kiểm toán giao dịch rút tiền", IsActive = true, CreatedAt = DateTime.UtcNow }
+                new() { Id = 4, Code = "finance", Name = "Finance Viewer", Type = "admin", Description = "Đối soát doanh thu, kiểm toán giao dịch rút tiền", IsActive = true, CreatedAt = DateTime.UtcNow },
+                new() { Id = 5, Code = "business_admin", Name = "Business Admin", Type = "admin", Description = "Kiểm soát nội dung, gói dịch vụ, đối tác quảng cáo và giám sát tin nhắn", IsActive = true, CreatedAt = DateTime.UtcNow }
             };
             await _dbContext.Roles.AddRangeAsync(roles, ct);
             await _dbContext.SaveChangesAsync(ct);
@@ -445,45 +518,82 @@ public class AdminRoleService : IAdminRoleService
         if (!await _dbContext.AdminTeamMembers.AnyAsync(ct))
         {
             var superRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == "super_admin" || r.Type == "admin", ct);
-            var modRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == "moderator", ct) ?? superRole;
-
-            var members = new List<AdminTeamMember>
+            var member = new AdminTeamMember
             {
-                new() { Name = "Đặng Vũ Văn Năng", Email = "nangdv@skillbridge.vn", RoleId = superRole!.Id, IsActive = true, CreatedAt = DateTime.UtcNow.AddMonths(-3) },
-                new() { Name = "Nguyễn Minh Hằng", Email = "hangnm@skillbridge.vn", RoleId = modRole!.Id, IsActive = true, CreatedAt = DateTime.UtcNow.AddMonths(-2) }
+                Name = "Quản Trị Viên",
+                Email = "skillbridge.vn@gmail.com",
+                RoleId = superRole?.Id ?? 3,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
             };
-            await _dbContext.AdminTeamMembers.AddRangeAsync(members, ct);
+            await _dbContext.AdminTeamMembers.AddAsync(member, ct);
             await _dbContext.SaveChangesAsync(ct);
         }
     }
 
     private async Task EnsureInitialPermissionSeedAsync(CancellationToken ct)
     {
-        if (await _dbContext.Permissions.AnyAsync(ct)) return;
-
         await EnsureInitialTeamAndRolesSeedAsync(ct);
 
         var seedList = new List<(string Name, string Group, string Url, string[] Roles)>
         {
-            ("Xem danh sách việc làm", "Việc làm", "/jobs", new[] { "guest", "student", "employer", "admin" }),
-            ("Đăng tin tuyển dụng mới", "Tuyển dụng", "/post-job", new[] { "employer", "admin" }),
-            ("Quản lý việc làm đã đăng", "Tuyển dụng", "/employer/jobs", new[] { "employer", "admin" }),
-            ("Nộp đơn ứng tuyển", "Sinh viên", "/jobs/:id/apply", new[] { "student", "admin" }),
-            ("Ví tiền & Giao dịch", "Tài chính", "/wallet", new[] { "student", "employer", "admin" }),
-            ("Yêu cầu rút tiền", "Tài chính", "/wallet/withdraw", new[] { "student", "employer", "admin" }),
-            ("Trò chuyện trực tuyến", "Giao tiếp", "/messages", new[] { "student", "employer", "admin" }),
-            ("Báo cáo tranh chấp", "Tuyển dụng", "/disputes/new", new[] { "student", "employer", "admin" }),
-            ("Bảng điều khiển Admin", "Quản trị", "/admin", new[] { "admin" }),
-            ("Quản trị người dùng & KYC", "Quản trị", "/admin/users", new[] { "admin" }),
-            ("Giải quyết tranh chấp Escrow", "Quản trị", "/admin/disputes", new[] { "admin" }),
-            ("Cấu hình hệ thống & Email", "Hệ thống", "/admin/ops", new[] { "admin" })
+            // 1. Nhóm Việc làm (Jobs)
+            ("Tìm kiếm & Xem danh sách việc làm", "Việc làm", "/jobs", new[] { "guest", "student", "employer" }),
+            ("Chi tiết việc làm & Xem mô tả yêu cầu", "Việc làm", "/jobs/:id", new[] { "guest", "student", "employer" }),
+            ("Tải đề bài mẫu & Tài liệu đính kèm", "Việc làm", "/jobs/:id/attachment", new[] { "student", "employer" }),
+            ("Nộp hồ sơ ứng tuyển & Cover letter", "Việc làm", "/jobs/:id/apply", new[] { "student" }),
+
+            // 2. Nhóm Khám phá & Tài năng (Explore & Talents)
+            ("Trang chủ SkillBridge", "Khám phá & Tài năng", "/", new[] { "guest", "student", "employer" }),
+            ("Danh bạ Tài năng Sinh viên (Talents)", "Khám phá & Tài năng", "/talents", new[] { "guest", "student", "employer" }),
+            ("Hồ sơ Portfolio công khai của Sinh viên", "Khám phá & Tài năng", "/student/:slug", new[] { "guest", "student", "employer" }),
+            ("Trang thông tin Doanh nghiệp & Tin tuyển dụng", "Khám phá & Tài năng", "/company/:slug", new[] { "guest", "student", "employer" }),
+            ("Bảng giá Gói Freelance Pro & VIP Business", "Khám phá & Tài năng", "/pricing", new[] { "guest", "student", "employer" }),
+            ("Điều khoản, Chính sách bảo mật & Thanh toán", "Khám phá & Tài năng", "/terms", new[] { "guest", "student", "employer" }),
+            ("Trang Trợ giúp & Liên hệ hỗ trợ", "Khám phá & Tài năng", "/contact", new[] { "guest", "student", "employer" }),
+
+            // 3. Nhóm Xác thực & Tài khoản (Auth & Identity)
+            ("Đăng nhập tài khoản & Google SSO", "Xác thực & Tài khoản", "/login", new[] { "guest" }),
+            ("Đăng ký tài khoản Sinh viên / Tuyển dụng", "Xác thực & Tài khoản", "/register", new[] { "guest" }),
+            ("Quên mật khẩu & Khôi phục tài khoản", "Xác thực & Tài khoản", "/forgot-password", new[] { "guest" }),
+            ("Xác thực Email tài khoản", "Xác thực & Tài khoản", "/verify-email", new[] { "guest" }),
+
+            // 4. Nhóm Sinh viên & Freelancer (Student)
+            ("Không gian làm việc & Quản lý hợp đồng MyWork", "Sinh viên", "/mywork", new[] { "student" }),
+            ("Nộp sản phẩm bàn giao (Deliverables) theo phiên bản", "Sinh viên", "/mywork/deliverables", new[] { "student" }),
+            ("Cập nhật Hồ sơ cá nhân, Kỹ năng & Portfolio", "Sinh viên", "/profile", new[] { "student" }),
+            ("Quản lý CV & Tài liệu đính kèm", "Sinh viên", "/settings/cv", new[] { "student" }),
+            ("Xác minh Sinh viên qua Thẻ SV / eKYC", "Sinh viên", "/settings/verification", new[] { "student" }),
+
+            // 5. Nhóm Tuyển dụng & Doanh nghiệp (Employer)
+            ("Bảng điều khiển tuyển dụng Dashboard", "Doanh nghiệp", "/employer/dashboard", new[] { "employer" }),
+            ("Đăng tin tuyển dụng & Tải file đề bài", "Doanh nghiệp", "/employer/post-job", new[] { "employer" }),
+            ("Quản lý danh sách công việc đã đăng", "Doanh nghiệp", "/employer/jobs", new[] { "employer" }),
+            ("Chỉnh sửa nội dung & Ngân sách công việc", "Doanh nghiệp", "/employer/jobs/:id/edit", new[] { "employer" }),
+            ("Xem ứng viên, Phỏng vấn & Tuyển dụng", "Doanh nghiệp", "/employer/jobs/:jobId", new[] { "employer" }),
+            ("Tạo & Quản lý Chiến dịch Quảng cáo Banner CPC", "Doanh nghiệp", "/employer/ads", new[] { "employer" }),
+
+            // 6. Nhóm Tài chính & Ví Escrow (Finance & Escrow)
+            ("Ví SkillBridge: Số dư, Nạp tiền & Rút tiền", "Tài chính & Escrow", "/wallet", new[] { "student", "employer" }),
+            ("Ký quỹ Escrow bảo đảm & Nghiệm thu giải ngân", "Tài chính & Escrow", "/wallet/escrow", new[] { "employer" }),
+            ("Gửi khiếu nại bồi thường Bảo hiểm & Tranh chấp", "Tài chính & Escrow", "/wallet/claim", new[] { "student", "employer" }),
+            ("Trang kết quả thanh toán Cổng VNPAY / PayOS", "Tài chính & Escrow", "/payment/result", new[] { "student", "employer" }),
+
+            // 7. Nhóm Giao tiếp & Hệ thống (Communication & Settings)
+            ("Tin nhắn trao đổi công việc trực tuyến realtime", "Giao tiếp & Đồng hành", "/messages", new[] { "student", "employer" }),
+            ("Mời bạn đồng hành 1-1 nhận quà trải nghiệm", "Giao tiếp & Đồng hành", "/settings/referral", new[] { "student", "employer" }),
+            ("Cài đặt hồ sơ & Thông tin liên hệ cơ bản", "Hệ thống", "/settings/profile", new[] { "student", "employer" }),
+            ("Đổi mật khẩu & Bảo mật tài khoản", "Hệ thống", "/settings/password", new[] { "student", "employer" })
         };
 
         var allRoles = await _dbContext.Roles.ToListAsync(ct);
         var defaultAdmin = await _dbContext.AdminTeamMembers.FirstOrDefaultAsync(ct);
+        var existingEndpoints = await _dbContext.Permissions.Select(p => p.Endpoint).ToListAsync(ct);
 
         foreach (var item in seedList)
         {
+            if (existingEndpoints.Contains(item.Url, StringComparer.OrdinalIgnoreCase)) continue;
+
             var p = new Permission
             {
                 Name = item.Name,

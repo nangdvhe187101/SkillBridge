@@ -30,6 +30,7 @@ public class AdminUserService : IAdminUserService
         var query = _dbContext.Users
             .AsNoTracking()
             .Include(u => u.Role)
+            .Where(u => u.Role.Type == "user") // Chỉ lấy người dùng khách hàng (sinh viên, nhà tuyển dụng), không lấy quản trị viên
             .AsQueryable();
 
         // 1. Lọc theo SubTab (all | kyc | blacklist)
@@ -37,7 +38,7 @@ public class AdminUserService : IAdminUserService
         {
             if (string.Equals(filter.SubTab, "kyc", StringComparison.OrdinalIgnoreCase))
             {
-                query = query.Where(u => u.KycStatus == "pending" || u.AccountStatus == "pending");
+                query = query.Where(u => u.KycStatus == "pending");
             }
             else if (string.Equals(filter.SubTab, "blacklist", StringComparison.OrdinalIgnoreCase))
             {
@@ -94,15 +95,15 @@ public class AdminUserService : IAdminUserService
 
     public async Task<AdminUserStatsDto> GetUserStatsAsync(CancellationToken ct = default)
     {
-        var usersQuery = _dbContext.Users.AsNoTracking().Include(u => u.Role);
+        var usersQuery = _dbContext.Users.AsNoTracking().Include(u => u.Role).Where(u => u.Role.Type == "user");
 
         var totalUsers = await usersQuery.CountAsync(ct);
         var studentsCount = await usersQuery.CountAsync(u => u.Role.Code == "student", ct);
         var employersCount = await usersQuery.CountAsync(u => u.Role.Code == "employer", ct);
-        var pendingKycCount = await usersQuery.CountAsync(u => u.KycStatus == "pending" || u.AccountStatus == "pending", ct);
+        var pendingKycCount = await usersQuery.CountAsync(u => u.KycStatus == "pending", ct);
         var blacklistedCount = await usersQuery.CountAsync(u => u.AccountStatus == "blacklisted", ct);
 
-        double avgReliability = 85.0;
+        double avgReliability = 0.0;
         if (totalUsers > 0)
         {
             var sumReliability = await usersQuery.SumAsync(u => u.ReliabilityScore, ct);
@@ -173,14 +174,40 @@ public class AdminUserService : IAdminUserService
             .AsNoTracking()
             .Where(a => a.ActionText.Contains($"#{userId}") || a.ActionText.Contains(user.Email))
             .OrderByDescending(a => a.CreatedAt)
-            .Take(10)
+            .Take(15)
             .ToListAsync(ct);
 
-        dto.History = auditLogs.Select(a => new AdminUserActivityHistoryDto
+        dto.History = auditLogs.Select(a =>
         {
-            Time = a.CreatedAt.ToString("dd/MM/yyyy HH:mm"),
-            Action = a.ActionText.Split(':')[0],
-            Note = a.ActionText
+            var rawText = a.ActionText.Trim();
+            var colonIdx = rawText.IndexOf(':');
+            var rawAction = colonIdx > 0 ? rawText.Substring(0, colonIdx).Trim() : "AUDIT";
+            var rawDetails = colonIdx > 0 ? rawText.Substring(colonIdx + 1).Trim() : rawText;
+
+            while (rawDetails.StartsWith(rawAction, StringComparison.OrdinalIgnoreCase))
+            {
+                var nextColon = rawDetails.IndexOf(':');
+                rawDetails = nextColon >= 0 ? rawDetails.Substring(nextColon + 1).Trim() : rawDetails.Trim();
+            }
+
+            var actionDisplay = rawAction switch
+            {
+                "ADJUST_RELIABILITY" => "Điều chỉnh điểm uy tín",
+                "LOCK_USER" => "Khóa tài khoản",
+                "UNLOCK_USER" => "Mở khóa tài khoản",
+                "VERIFY_KYC" => "Phê duyệt eKYC",
+                "BLACKLIST_USER" => "Đưa vào Blacklist",
+                "UNBLACKLIST_USER" => "Gỡ khỏi Blacklist",
+                "STUDENT_VERIFICATION" => "Duyệt thẻ sinh viên",
+                _ => rawAction
+            };
+
+            return new AdminUserActivityHistoryDto
+            {
+                Time = a.CreatedAt.ToString("dd/MM/yyyy HH:mm"),
+                Action = actionDisplay,
+                Note = rawDetails
+            };
         }).ToList();
 
         return dto;
@@ -197,16 +224,16 @@ public class AdminUserService : IAdminUserService
             throw new KeyNotFoundException($"Không tìm thấy người dùng #{targetUserId}.");
         }
 
-        // INV-ADM-06: Khóa Root Admin Bất Tử
-        if (user.RoleId == 1 || user.Email == "admin@skillbridge.vn")
-        {
-            throw new BusinessException("Không thể khóa tài khoản Super Admin gốc (INV-ADM-06).");
-        }
-
         // Q-010: Cấm tự thao tác trên chính tài khoản của mình
         if (adminUserId == targetUserId)
         {
             throw new BusinessException("Không thể tự khóa tài khoản của chính mình (Q-010 / INV-ADM-02).");
+        }
+
+        // INV-ADM-06: Khóa Root Admin Bất Tử
+        if (user.Role?.Type == "admin" || user.Role?.Code == "super_admin" || user.Email == "admin@skillbridge.vn")
+        {
+            throw new BusinessException("Không thể khóa tài khoản Quản trị viên hệ thống (INV-ADM-06).");
         }
 
         var isLocking = user.AccountStatus != "locked";
@@ -252,9 +279,9 @@ public class AdminUserService : IAdminUserService
             throw new KeyNotFoundException($"Không tìm thấy người dùng #{targetUserId}.");
         }
 
-        if (user.RoleId == 1 || user.Email == "admin@skillbridge.vn")
+        if (user.Role?.Type == "admin" || user.Role?.Code == "super_admin" || user.Email == "admin@skillbridge.vn")
         {
-            throw new BusinessException("Không thể đưa tài khoản Super Admin vào Blacklist (INV-ADM-06).");
+            throw new BusinessException("Không thể đưa tài khoản Quản trị viên vào Blacklist (INV-ADM-06).");
         }
 
         user.AccountStatus = "blacklisted";

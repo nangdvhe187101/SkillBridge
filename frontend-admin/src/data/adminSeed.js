@@ -244,17 +244,13 @@ export const auditLogSeed = [
 
 export const rolesSeed = [
   { id: 'super', name: 'Super Admin', desc: 'Toàn quyền trên mọi module', modules: ['Người dùng', 'Nội dung', 'Tranh chấp', 'Tài chính', 'Đối tác', 'Phân tích', 'Vận hành', 'Phân quyền'] },
+  { id: 'business_admin', name: 'Business Admin', desc: 'Kiểm soát gói dịch vụ, nội dung bài đăng, đối tác quảng cáo và giám sát tin nhắn', modules: ['Nội dung', 'Gói cước', 'Đối tác', 'Giám sát', 'Phân tích'] },
   { id: 'moderator', name: 'Content Moderator', desc: 'Duyệt tin đăng, quản lý danh mục', modules: ['Nội dung'] },
   { id: 'dispute', name: 'Dispute Officer', desc: 'Xử lý tranh chấp & bồi thường', modules: ['Tranh chấp'] },
   { id: 'finance', name: 'Finance Viewer', desc: 'Xem báo cáo tài chính (chỉ đọc)', modules: ['Tài chính'] },
 ];
 
-export const teamSeed = [
-  { name: 'Ngọc Trâm', email: 'tram.ops@skillbridge.vn', role: 'super' },
-  { name: 'Anh Quân', email: 'quan.mod@skillbridge.vn', role: 'moderator' },
-  { name: 'Bích Ngọc', email: 'ngoc.dispute@skillbridge.vn', role: 'dispute' },
-  { name: 'Hải Đăng', email: 'dang.finance@skillbridge.vn', role: 'finance' },
-];
+export const teamSeed = [];
 
 export const revenueBarsSeed = [
   { label: 'Hoa hồng công việc', value: 18400000, max: 20000000 },
@@ -280,26 +276,53 @@ export const funnelSeed = [
 ];
 
 export const featuresSeed = [
-  { id: 'f_jobs', name: 'Xem danh sách việc làm', url: '/jobs', group: 'Việc làm', roles: ['guest', 'student', 'employer', 'admin'] },
-  { id: 'f_job_detail', name: 'Chi tiết việc làm & Tải đề bài', url: '/jobs/:id', group: 'Việc làm', roles: ['guest', 'student', 'employer', 'admin'] },
-  { id: 'f_post_job', name: 'Đăng tin tuyển dụng & Đính kèm file', url: '/post-job', group: 'Tuyển dụng', roles: ['employer', 'admin'] },
-  { id: 'f_applicants', name: 'Quản lý ứng viên & Phê duyệt tuyển', url: '/dashboard/jobs/:id', group: 'Tuyển dụng', roles: ['employer', 'admin'] },
-  { id: 'f_dashboard', name: 'Dashboard Doanh nghiệp & Quản lý việc', url: '/dashboard', group: 'Tuyển dụng', roles: ['employer', 'admin'] },
-  { id: 'f_mywork', name: 'Không gian làm việc & Nộp bài SV', url: '/mywork', group: 'Sinh viên', roles: ['student', 'admin'] },
-  { id: 'f_wallet', name: 'Ví SkillBridge, Nạp/Rút & Ký quỹ Escrow', url: '/wallet', group: 'Tài chính', roles: ['student', 'employer', 'admin'] },
-  { id: 'f_insurance_claim', name: 'Gửi khiếu nại bồi thường Bảo hiểm', url: '/wallet/claim', group: 'Tài chính', roles: ['student', 'admin'] },
-  { id: 'f_messages', name: 'Hộp thư tin nhắn trực tuyến', url: '/messages', group: 'Giao tiếp', roles: ['student', 'employer', 'admin'] },
-  { id: 'f_profile_student', name: 'Hồ sơ & Showcase Portfolio', url: '/profile (student)', group: 'Sinh viên', roles: ['student', 'admin'] },
-  { id: 'f_profile_company', name: 'Trang thông tin Doanh nghiệp', url: '/company/:slug', group: 'Doanh nghiệp', roles: ['guest', 'student', 'employer', 'admin'] },
-  { id: 'f_settings_emp', name: 'Cài đặt tài khoản Doanh nghiệp', url: '/settings (employer)', group: 'Hệ thống', roles: ['employer', 'admin'] },
-  { id: 'f_settings_stu', name: 'Cài đặt tài khoản Sinh viên', url: '/settings (student)', group: 'Hệ thống', roles: ['student', 'admin'] },
-  { id: 'f_pricing', name: 'Bảng giá Freelance Pro & VIP Business', url: '/pricing', group: 'Tài chính', roles: ['guest', 'student', 'employer', 'admin'] },
-  { id: 'f_admin_users', name: 'Quản lý Người dùng & eKYC', url: '/admin/users', group: 'Quản trị', roles: ['admin'] },
-  { id: 'f_admin_content', name: 'Kiểm duyệt Tin đăng & Danh mục', url: '/admin/content', group: 'Quản trị', roles: ['admin'] },
-  { id: 'f_admin_disputes', name: 'Trọng tài Xử lý Tranh chấp', url: '/admin/disputes', group: 'Quản trị', roles: ['admin'] },
-  { id: 'f_admin_finance', name: 'Doanh thu & Quỹ Bảo hiểm', url: '/admin/finance', group: 'Quản trị', roles: ['admin'] },
-  { id: 'f_admin_messages', name: 'Giám sát Tin nhắn & Chống lừa đảo', url: '/admin/messages', group: 'Quản trị', roles: ['admin'] },
-  { id: 'f_admin_rbac', name: 'Phân quyền Tính năng & URL Matrix', url: '/admin/roles', group: 'Quản trị', roles: ['admin'] },
+  // 1. Nhóm Việc làm (Jobs)
+  { id: 'f_jobs_list', name: 'Tìm kiếm & Xem danh sách việc làm', url: '/jobs', group: 'Việc làm', roles: ['guest', 'student', 'employer'] },
+  { id: 'f_job_detail', name: 'Chi tiết việc làm & Xem mô tả yêu cầu', url: '/jobs/:id', group: 'Việc làm', roles: ['guest', 'student', 'employer'] },
+  { id: 'f_job_download_spec', name: 'Tải đề bài mẫu & Tài liệu đính kèm', url: '/jobs/:id/attachment', group: 'Việc làm', roles: ['student', 'employer'] },
+  { id: 'f_job_apply', name: 'Nộp hồ sơ ứng tuyển & Cover letter', url: '/jobs/:id/apply', group: 'Việc làm', roles: ['student'] },
+
+  // 2. Nhóm Khám phá & Tài năng (Explore & Talents)
+  { id: 'f_home', name: 'Trang chủ SkillBridge', url: '/', group: 'Khám phá & Tài năng', roles: ['guest', 'student', 'employer'] },
+  { id: 'f_talents_list', name: 'Danh bạ Tài năng Sinh viên (Talents)', url: '/talents', group: 'Khám phá & Tài năng', roles: ['guest', 'student', 'employer'] },
+  { id: 'f_student_public_profile', name: 'Hồ sơ Portfolio công khai của Sinh viên', url: '/student/:slug', group: 'Khám phá & Tài năng', roles: ['guest', 'student', 'employer'] },
+  { id: 'f_company_public_profile', name: 'Trang thông tin Doanh nghiệp & Tin tuyển dụng', url: '/company/:slug', group: 'Khám phá & Tài năng', roles: ['guest', 'student', 'employer'] },
+  { id: 'f_pricing_plans', name: 'Bảng giá Gói Freelance Pro & VIP Business', url: '/pricing', group: 'Khám phá & Tài năng', roles: ['guest', 'student', 'employer'] },
+  { id: 'f_policy_terms', name: 'Điều khoản, Chính sách bảo mật & Thanh toán', url: '/terms', group: 'Khám phá & Tài năng', roles: ['guest', 'student', 'employer'] },
+  { id: 'f_contact_help', name: 'Trang Trợ giúp & Liên hệ hỗ trợ', url: '/contact', group: 'Khám phá & Tài năng', roles: ['guest', 'student', 'employer'] },
+
+  // 3. Nhóm Xác thực & Tài khoản (Auth & Identity)
+  { id: 'f_auth_login', name: 'Đăng nhập tài khoản & Google SSO', url: '/login', group: 'Xác thực & Tài khoản', roles: ['guest'] },
+  { id: 'f_auth_register', name: 'Đăng ký tài khoản Sinh viên / Tuyển dụng', url: '/register', group: 'Xác thực & Tài khoản', roles: ['guest'] },
+  { id: 'f_auth_forgot', name: 'Quên mật khẩu & Khôi phục tài khoản', url: '/forgot-password', group: 'Xác thực & Tài khoản', roles: ['guest'] },
+  { id: 'f_auth_verify_email', name: 'Xác thực Email tài khoản', url: '/verify-email', group: 'Xác thực & Tài khoản', roles: ['guest'] },
+
+  // 4. Nhóm Sinh viên & Freelancer (Student)
+  { id: 'f_mywork_contracts', name: 'Không gian làm việc & Quản lý hợp đồng MyWork', url: '/mywork', group: 'Sinh viên', roles: ['student'] },
+  { id: 'f_mywork_deliverables', name: 'Nộp sản phẩm bàn giao (Deliverables) theo phiên bản', url: '/mywork/deliverables', group: 'Sinh viên', roles: ['student'] },
+  { id: 'f_student_profile_edit', name: 'Cập nhật Hồ sơ cá nhân, Kỹ năng & Portfolio', url: '/profile', group: 'Sinh viên', roles: ['student'] },
+  { id: 'f_student_cv_manage', name: 'Quản lý CV & Tài liệu đính kèm', url: '/settings/cv', group: 'Sinh viên', roles: ['student'] },
+  { id: 'f_student_ekyc', name: 'Xác minh Sinh viên qua Thẻ SV / eKYC', url: '/settings/verification', group: 'Sinh viên', roles: ['student'] },
+
+  // 5. Nhóm Tuyển dụng & Doanh nghiệp (Employer)
+  { id: 'f_emp_dashboard', name: 'Bảng điều khiển tuyển dụng Dashboard', url: '/employer/dashboard', group: 'Doanh nghiệp', roles: ['employer'] },
+  { id: 'f_emp_post_job', name: 'Đăng tin tuyển dụng & Tải file đề bài', url: '/employer/post-job', group: 'Doanh nghiệp', roles: ['employer'] },
+  { id: 'f_emp_jobs_manage', name: 'Quản lý danh sách công việc đã đăng', url: '/employer/jobs', group: 'Doanh nghiệp', roles: ['employer'] },
+  { id: 'f_emp_job_edit', name: 'Chỉnh sửa nội dung & Ngân sách công việc', url: '/employer/jobs/:id/edit', group: 'Doanh nghiệp', roles: ['employer'] },
+  { id: 'f_emp_applicants', name: 'Xem ứng viên, Phỏng vấn & Tuyển dụng', url: '/employer/jobs/:jobId', group: 'Doanh nghiệp', roles: ['employer'] },
+  { id: 'f_emp_ads_manage', name: 'Tạo & Quản lý Chiến dịch Quảng cáo Banner CPC', url: '/employer/ads', group: 'Doanh nghiệp', roles: ['employer'] },
+
+  // 6. Nhóm Tài chính & Ví Escrow (Finance & Escrow)
+  { id: 'f_wallet_overview', name: 'Ví SkillBridge: Số dư, Nạp tiền & Rút tiền', url: '/wallet', group: 'Tài chính & Escrow', roles: ['student', 'employer'] },
+  { id: 'f_wallet_escrow', name: 'Ký quỹ Escrow bảo đảm & Nghiệm thu giải ngân', url: '/wallet/escrow', group: 'Tài chính & Escrow', roles: ['employer'] },
+  { id: 'f_wallet_claim', name: 'Gửi khiếu nại bồi thường Bảo hiểm & Tranh chấp', url: '/wallet/claim', group: 'Tài chính & Escrow', roles: ['student', 'employer'] },
+  { id: 'f_payment_result', name: 'Trang kết quả thanh toán Cổng VNPAY / PayOS', url: '/payment/result', group: 'Tài chính & Escrow', roles: ['student', 'employer'] },
+
+  // 7. Nhóm Giao tiếp & Hệ thống (Communication & Settings)
+  { id: 'f_messages', name: 'Tin nhắn trao đổi công việc trực tuyến realtime', url: '/messages', group: 'Giao tiếp & Đồng hành', roles: ['student', 'employer'] },
+  { id: 'f_referral_buddy', name: 'Mời bạn đồng hành 1-1 nhận quà trải nghiệm', url: '/settings/referral', group: 'Giao tiếp & Đồng hành', roles: ['student', 'employer'] },
+  { id: 'f_settings_profile', name: 'Cài đặt hồ sơ & Thông tin liên hệ cơ bản', url: '/settings/profile', group: 'Hệ thống', roles: ['student', 'employer'] },
+  { id: 'f_settings_security', name: 'Đổi mật khẩu & Bảo mật tài khoản', url: '/settings/password', group: 'Hệ thống', roles: ['student', 'employer'] },
 ];
 
 export const adminChatsSeed = [
