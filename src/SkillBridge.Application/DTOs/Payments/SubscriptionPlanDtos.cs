@@ -27,6 +27,28 @@ public class SubscriptionPlanConfigDto
     public DateTime UpdatedAt { get; set; }
 }
 
+public class CreateSubscriptionPlanConfigRequest
+{
+    public string Code { get; set; } = null!;
+    public string TargetRole { get; set; } = null!; // "student" | "employer"
+    public string Name { get; set; } = null!;
+    public string? Tagline { get; set; }
+    public string? BadgeText { get; set; }
+    public decimal Price { get; set; }
+    public string? PriceSub { get; set; }
+    public decimal CommissionRate { get; set; }
+    public int TierRank { get; set; } = 1;
+    public int? MaxActiveJobs { get; set; }
+    public int? MaxWeeklyApplications { get; set; }
+    public int MaxCvFiles { get; set; } = 5;
+    public int DefaultRevisionLimit { get; set; } = 2;
+    public int FreeFeaturedPins { get; set; } = 0;
+    public int FreeDirectInvites { get; set; } = 0;
+    public List<string>? Features { get; set; }
+    public bool IsActive { get; set; } = true;
+    public bool IsPopular { get; set; } = false;
+}
+
 public class UpdateSubscriptionPlanConfigRequest
 {
     public string Name { get; set; } = null!;
@@ -35,6 +57,7 @@ public class UpdateSubscriptionPlanConfigRequest
     public decimal Price { get; set; }
     public string? PriceSub { get; set; }
     public decimal CommissionRate { get; set; }
+    public int? TierRank { get; set; }
     public int? MaxActiveJobs { get; set; }
     public int? MaxWeeklyApplications { get; set; }
     public int? MaxCvFiles { get; set; }

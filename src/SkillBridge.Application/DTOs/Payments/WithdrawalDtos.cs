@@ -75,3 +75,14 @@ public class WithdrawalPagedResultDto<T>
     public int PageSize { get; set; }
     public int TotalPages => PageSize > 0 ? (int)Math.Ceiling((double)TotalCount / PageSize) : 0;
 }
+
+public class AdminFinanceSummaryDto
+{
+    public decimal TotalWalletBalance { get; set; }
+    public decimal TotalEscrowBalance { get; set; }
+    public int PendingWithdrawalsCount { get; set; }
+    public decimal PendingWithdrawalsAmount { get; set; }
+    public int CompletedWithdrawalsCount { get; set; }
+    public decimal CompletedWithdrawalsAmount { get; set; }
+    public int TotalWithdrawalsCount { get; set; }
+}

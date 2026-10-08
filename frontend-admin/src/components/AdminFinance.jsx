@@ -1,19 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { useAdmin } from '../context/AdminContext';
+import React, { useState, useEffect, useCallback } from 'react';
 import { fmtVND } from '../utils/formatters';
-import { revenueBarsSeed } from '../data/adminSeed';
 import { useToast } from '../context/ToastContext';
 import { useConfirm } from '../context/ConfirmContext';
 import { exportTransactionsToExcel, exportTransactionsToCSV } from '../utils/fileDownloader';
-import { getAdminWithdrawals, approveWithdrawal, rejectWithdrawal } from '../api/adminApi';
+import { getAdminFinanceSummary, getAdminWithdrawals, approveWithdrawal, rejectWithdrawal } from '../api/adminApi';
 import Icon from './Icon';
 import AdminModal from './AdminModal';
 import Pagination from './Pagination';
 
 export default function AdminFinance() {
-  const { subscriptions, renewSubscription, cancelSubscription } = useAdmin();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
+
+  // Finance summary state (Dữ liệu thật 100% từ Database)
+  const [summary, setSummary] = useState({
+    totalWalletBalance: 0,
+    totalEscrowBalance: 0,
+    pendingWithdrawalsCount: 0,
+    pendingWithdrawalsAmount: 0,
+    completedWithdrawalsCount: 0,
+    completedWithdrawalsAmount: 0,
+    totalWithdrawalsCount: 0,
+  });
+  const [loadingSummary, setLoadingSummary] = useState(true);
 
   // Withdrawal management state
   const [withdrawals, setWithdrawals] = useState([]);
@@ -25,6 +34,22 @@ export default function AdminFinance() {
 
   const [withdrawalPage, setWithdrawalPage] = useState(1);
   const [withdrawalPageSize, setWithdrawalPageSize] = useState(10);
+
+  const fetchSummary = useCallback(async () => {
+    try {
+      setLoadingSummary(true);
+      const res = await getAdminFinanceSummary();
+      if (res) setSummary(res);
+    } catch (err) {
+      console.error('Lỗi tải tổng hợp tài chính:', err);
+    } finally {
+      setLoadingSummary(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSummary();
+  }, [fetchSummary]);
 
   useEffect(() => {
     setWithdrawalPage(1);
@@ -71,27 +96,39 @@ export default function AdminFinance() {
       setActionModal(null);
       setActionNote('');
       fetchWithdrawals(withdrawalStatus);
+      fetchSummary();
     } catch (err) {
       showToast(err?.message || 'Có lỗi xảy ra khi xử lý yêu cầu.', 'warning');
     } finally {
       setSubmittingAction(false);
     }
   };
-  const state = {
-    transactions: [],
-    insuranceFund: 8200000,
-    claims: [
-      { id: 'CLM-101', jobTitle: 'Biên tập 5 bài viết SEO Website', desc: 'Nhà tuyển dụng không phản hồi sau khi nhận bài 7 ngày', payout: 150000, status: 'resolved', statusLabel: 'Đã bồi thường 40%', date: '19/08/2026' },
-      { id: 'CLM-102', jobTitle: 'Dựng motion graphic intro 10s', desc: 'Đang gửi bằng chứng đối soát video demo', payout: 0, status: 'pending', statusLabel: 'Đang chờ HĐ Bảo hiểm duyệt', date: '21/08/2026' },
-    ]
-  };
-  const totalRevenue = revenueBarsSeed.reduce((s, b) => s + b.value, 0);
 
   const kpis = [
-    { label: 'Tổng doanh thu', value: fmtVND(totalRevenue), icon: 'bank', colorClass: 'kpi-emerald' },
-    { label: 'Doanh thu tháng này', value: fmtVND(36500000), icon: 'chart-bar', colorClass: 'kpi-blue' },
-    { label: 'Tăng trưởng MoM', value: '+18.4%', icon: 'check', colorClass: 'kpi-purple' },
-    { label: 'Giá trị TB / GD (ARPU)', value: '420.000đ', icon: 'users', colorClass: 'kpi-amber' },
+    {
+      label: 'Tổng số dư ví thành viên',
+      value: loadingSummary ? '...' : fmtVND(summary.totalWalletBalance || 0),
+      icon: 'bank',
+      colorClass: 'kpi-emerald',
+    },
+    {
+      label: 'Tiền ký quỹ Escrow bảo chứng',
+      value: loadingSummary ? '...' : fmtVND(summary.totalEscrowBalance || 0),
+      icon: 'shield-check',
+      colorClass: 'kpi-blue',
+    },
+    {
+      label: 'Chờ duyệt rút tiền',
+      value: loadingSummary ? '...' : `${summary.pendingWithdrawalsCount} lệnh (${fmtVND(summary.pendingWithdrawalsAmount || 0)})`,
+      icon: 'clock',
+      colorClass: 'kpi-amber',
+    },
+    {
+      label: 'Đã giải ngân rút thành công',
+      value: loadingSummary ? '...' : fmtVND(summary.completedWithdrawalsAmount || 0),
+      icon: 'check',
+      colorClass: 'kpi-purple',
+    },
   ];
 
   const exportReport = (period, format = 'xlsx') => {
@@ -100,14 +137,14 @@ export default function AdminFinance() {
     const metadata = {
       userName: 'Ban Quản trị Tài chính SkillBridge',
       userEmail: 'finance-admin@skillbridge.vn',
-      filterLabel: `Báo cáo tài chính & doanh thu (${periodNames[period] || period})`,
-      fileName: `Bao_cao_tai_chinh_SkillBridge_${labels[period]}.${format}`
+      filterLabel: `Báo cáo tài chính & rút tiền (${periodNames[period] || period})`,
+      fileName: `Bao_cao_tai_chinh_SkillBridge_${labels[period]}.${format}`,
     };
 
     if (format === 'csv') {
-      exportTransactionsToCSV(state.transactions, metadata);
+      exportTransactionsToCSV(withdrawals, metadata);
     } else {
-      exportTransactionsToExcel(state.transactions, metadata);
+      exportTransactionsToExcel(withdrawals, metadata);
     }
     showToast(`Đã xuất báo cáo tài chính ${format.toUpperCase()} (${periodNames[period]}) thành công!`, 'check');
   };
@@ -115,8 +152,8 @@ export default function AdminFinance() {
   return (
     <section className="adm-section active">
       <div className="adm-head">
-        <h2>Quản lý tài chính & doanh thu</h2>
-        <p>Tổng quan 4 nguồn doanh thu, Quỹ bảo hiểm cộng đồng và quản lý gói nâng cấp.</p>
+        <h2>Quản lý tài chính & Xét duyệt rút tiền</h2>
+        <p>Theo dõi dòng tiền Escrow, số dư ví toàn sàn và phê duyệt giải ngân lệnh rút tiền về ngân hàng.</p>
       </div>
 
       <div className="adm-vibrant-kpis">
@@ -134,15 +171,12 @@ export default function AdminFinance() {
       </div>
 
       <div className="adm-card">
-        <div className="adm-card-head"><h4>Doanh thu theo nguồn</h4><span className="sub">Kỳ hiện tại (tháng này)</span></div>
-        <div className="adm-bars">
-          {revenueBarsSeed.map((b) => (
-            <div className="adm-bar-col" key={b.label} title={fmtVND(b.value)}>
-              <span style={{ fontSize: 11, fontWeight: 700 }}>{fmtVND(b.value)}</span>
-              <div className="bar" style={{ height: `${(b.value / b.max) * 100}%` }} />
-              <span className="bar-lbl">{b.label}</span>
-            </div>
-          ))}
+        <div className="adm-card-head">
+          <h4>Doanh thu theo nguồn</h4>
+          <span className="sub">Kỳ hiện tại</span>
+        </div>
+        <div style={{ padding: '24px 16px', textAlign: 'center', color: '#6b7280', fontSize: 13, background: '#f9fafb', borderRadius: 6, margin: 12 }}>
+          Chưa có dữ liệu thống kê doanh thu theo kỳ từ hệ thống.
         </div>
       </div>
 
@@ -153,33 +187,16 @@ export default function AdminFinance() {
           </h4>
         </div>
         <div className="adm-kpis" style={{ marginBottom: 6 }}>
-          <div className="adm-kpi"><div className="k-lbl">Số dư quỹ</div><div className="k-val">{fmtVND(state.insuranceFund || 0)}</div></div>
-          <div className="adm-kpi"><div className="k-lbl">Đã chi trả (tổng)</div><div className="k-val">{fmtVND((state.claims || []).reduce((s, c) => s + (c.payout || 0), 0))}</div></div>
-          <div className="adm-kpi"><div className="k-lbl">Số ca đã xử lý</div><div className="k-val">{(state.claims || []).length}</div></div>
+          <div className="adm-kpi"><div className="k-lbl">Số dư quỹ</div><div className="k-val">0 đ</div></div>
+          <div className="adm-kpi"><div className="k-lbl">Đã chi trả (tổng)</div><div className="k-val">0 đ</div></div>
+          <div className="adm-kpi"><div className="k-lbl">Số ca đã xử lý</div><div className="k-val">0</div></div>
         </div>
       </div>
 
       <div className="adm-card">
         <div className="adm-card-head"><h4>Quản lý gói nâng cấp</h4></div>
-        <div className="adm-table-wrap">
-          <table className="adm-table">
-            <thead><tr><th>Người dùng</th><th>Gói</th><th>Ngày gia hạn</th><th>Trạng thái</th><th>Hành động</th></tr></thead>
-            <tbody>
-              {subscriptions.map((s) => (
-                <tr key={s.id}>
-                  <td>{s.user}</td><td>{s.plan}</td><td>{s.renewAt}</td>
-                  <td><span className="chip">{s.status === 'active' ? 'Đang hoạt động' : 'Sắp hết hạn'}</span></td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'nowrap' }}>
-                      {s.status === 'expiring' && <button className="btn btn-outline btn-sm" onClick={() => renewSubscription(s.id)}>Gia hạn</button>}
-                      <button className="btn btn-outline btn-sm" style={{ color: 'var(--coral)', borderColor: 'var(--coral)' }}
-                        onClick={async () => { if (await confirm(`Huỷ gói ${s.plan} của ${s.user}?`, { danger: true, confirmLabel: 'Huỷ gói' })) cancelSubscription(s.id); }}>Huỷ gói</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div style={{ padding: '24px 16px', textAlign: 'center', color: '#6b7280', fontSize: 13, background: '#f9fafb', borderRadius: 6, margin: 12 }}>
+          Chưa có dữ liệu đăng ký gói nâng cấp từ người dùng.
         </div>
       </div>
 

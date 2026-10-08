@@ -21,6 +21,14 @@ public class AdminWithdrawalController : ControllerBase
         _withdrawalService = withdrawalService;
     }
 
+    [HttpGet("summary")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> GetSummary(CancellationToken cancellationToken)
+    {
+        var result = await _withdrawalService.GetFinanceSummaryAsync(cancellationToken);
+        return Ok(result);
+    }
+
     [HttpGet]
     [EnableRateLimiting("GeneralApiPolicy")]
     public async Task<IActionResult> GetList(

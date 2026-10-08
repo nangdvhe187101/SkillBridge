@@ -748,4 +748,49 @@ public class WithdrawalService : IWithdrawalService
 
         return adminMember.Id;
     }
+
+    public async Task<AdminFinanceSummaryDto> GetFinanceSummaryAsync(CancellationToken ct = default)
+    {
+        var totalWallet = await _dbContext.Wallets
+            .AsNoTracking()
+            .SumAsync(w => (decimal?)w.Balance, ct) ?? 0m;
+
+        var totalEscrow = await _dbContext.Jobs
+            .AsNoTracking()
+            .Where(j => j.HiredApplicantId != null && (j.Status == "in_progress" || j.Status == "submitted" || j.Status == "revision_requested"))
+            .SumAsync(j => (decimal?)(j.EscrowAmount ?? j.Budget), ct) ?? 0m;
+
+        var pendingWithdrawalsCount = await _dbContext.WithdrawalRequests
+            .AsNoTracking()
+            .CountAsync(w => w.Status == "pending" || w.Status == "processing", ct);
+
+        var pendingWithdrawalsAmount = await _dbContext.WithdrawalRequests
+            .AsNoTracking()
+            .Where(w => w.Status == "pending" || w.Status == "processing")
+            .SumAsync(w => (decimal?)w.Amount, ct) ?? 0m;
+
+        var completedWithdrawalsCount = await _dbContext.WithdrawalRequests
+            .AsNoTracking()
+            .CountAsync(w => w.Status == "completed", ct);
+
+        var completedWithdrawalsAmount = await _dbContext.WithdrawalRequests
+            .AsNoTracking()
+            .Where(w => w.Status == "completed")
+            .SumAsync(w => (decimal?)w.Amount, ct) ?? 0m;
+
+        var totalWithdrawalsCount = await _dbContext.WithdrawalRequests
+            .AsNoTracking()
+            .CountAsync(ct);
+
+        return new AdminFinanceSummaryDto
+        {
+            TotalWalletBalance = totalWallet,
+            TotalEscrowBalance = totalEscrow,
+            PendingWithdrawalsCount = pendingWithdrawalsCount,
+            PendingWithdrawalsAmount = pendingWithdrawalsAmount,
+            CompletedWithdrawalsCount = completedWithdrawalsCount,
+            CompletedWithdrawalsAmount = completedWithdrawalsAmount,
+            TotalWithdrawalsCount = totalWithdrawalsCount
+        };
+    }
 }

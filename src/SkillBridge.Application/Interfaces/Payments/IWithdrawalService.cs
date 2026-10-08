@@ -11,4 +11,5 @@ public interface IWithdrawalService
     Task<WithdrawalPagedResultDto<AdminWithdrawalItemDto>> GetAdminListAsync(string? status, int page = 1, int pageSize = 20, CancellationToken ct = default);
     Task<WithdrawalResponseDto> ApproveWithdrawalAsync(int adminUserId, int withdrawalId, AdminApproveWithdrawalDto? dto = null, CancellationToken ct = default);
     Task<WithdrawalResponseDto> RejectWithdrawalAsync(int adminUserId, int withdrawalId, AdminRejectWithdrawalDto dto, CancellationToken ct = default);
+    Task<AdminFinanceSummaryDto> GetFinanceSummaryAsync(CancellationToken ct = default);
 }
