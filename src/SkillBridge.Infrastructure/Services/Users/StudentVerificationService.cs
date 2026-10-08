@@ -342,12 +342,18 @@ namespace SkillBridge.Infrastructure.Services.Users
                 throw new BusinessException($"Yêu cầu này đang ở trạng thái '{request.Status}', không thể duyệt lại.");
             }
 
+            if (string.IsNullOrWhiteSpace(dto.Decision))
+            {
+                throw new BusinessException("Vui lòng chọn quyết định kiểm duyệt (approve, need_more_info, hoặc reject).");
+            }
+
             var decision = dto.Decision.Trim().ToLowerInvariant();
+            var adminMemberId = await EnsureAdminMemberIdAsync(adminId);
 
             if (decision == "approve")
             {
                 request.Status = "approved";
-                request.ReviewedByAdminId = adminId;
+                request.ReviewedByAdminId = adminMemberId;
                 request.ReviewedAt = DateTime.UtcNow;
                 request.AdminNote = dto.AdminNote;
 
@@ -362,7 +368,7 @@ namespace SkillBridge.Infrastructure.Services.Users
                 }
                 if (dto.GraduationYear.HasValue && dto.GraduationYear.Value > 0)
                 {
-                    request.GraduationYear = dto.GraduationYear.Value;
+                    request.GraduationYear = (short)dto.GraduationYear.Value;
                 }
                 if (dto.SchoolId.HasValue && dto.SchoolId.Value > 0)
                 {
@@ -374,8 +380,24 @@ namespace SkillBridge.Infrastructure.Services.Users
                     }
                 }
 
+                // Kiểm tra trùng MSSV tại cùng trường với tài khoản khác
+                if (!string.IsNullOrWhiteSpace(request.StudentCodeNormalized))
+                {
+                    var existingCodeOwner = await dbContext.StudentProfiles
+                        .FirstOrDefaultAsync(p => p.SchoolId == request.SchoolId 
+                                               && p.StudentCodeNormalized == request.StudentCodeNormalized 
+                                               && p.UserId != request.UserId);
+                    if (existingCodeOwner != null)
+                    {
+                        throw new BusinessException($"Mã số sinh viên '{request.StudentCode}' tại trường này đã được xác thực bởi một tài khoản khác.");
+                    }
+                }
+
                 // Tính hạn mốc hết năm tốt nghiệp: YYYY-12-31 23:59:59
-                var expiresAt = new DateTime(request.GraduationYear, 12, 31, 23, 59, 59, DateTimeKind.Utc);
+                var gradYear = request.GraduationYear >= 2000 && request.GraduationYear <= 2100
+                    ? (int)request.GraduationYear
+                    : DateTime.UtcNow.Year + 2;
+                var expiresAt = new DateTime(gradYear, 12, 31, 23, 59, 59, DateTimeKind.Utc);
 
                 var profile = await dbContext.StudentProfiles.FirstOrDefaultAsync(p => p.UserId == request.UserId);
                 if (profile == null)
@@ -421,11 +443,15 @@ namespace SkillBridge.Infrastructure.Services.Users
                 }
 
                 // Gửi thông báo in-app cho sinh viên
+                var schoolNameText = request.School?.Name ?? "trường đã đăng ký";
+                var studentMsg = $"Chúc mừng bạn! Hồ sơ xác minh thẻ sinh viên trường {schoolNameText} đã được phê duyệt. Bạn đã mở khóa toàn bộ quyền ứng tuyển và rút tiền.";
+                if (studentMsg.Length > 250) studentMsg = studentMsg.Substring(0, 247) + "...";
+
                 await dbContext.Notifications.AddAsync(new Notification
                 {
                     UserId = request.UserId,
                     Title = "Xác minh thẻ sinh viên thành công",
-                    MessageText = $"Chúc mừng bạn! Hồ sơ xác minh thẻ sinh viên trường {request.School?.Name} đã được phê duyệt. Bạn đã mở khóa toàn bộ quyền ứng tuyển và rút tiền.",
+                    MessageText = studentMsg,
                     Type = "student_verified",
                     RelatedEntityType = "student_verification_requests",
                     RelatedEntityId = request.Id,
@@ -447,11 +473,14 @@ namespace SkillBridge.Infrastructure.Services.Users
 
                     if (app.Job != null && app.Job.EmployerId > 0)
                     {
+                        var appMsg = $"Ứng viên {request.FullNameOnCard} đã hoàn tất xác minh thẻ sinh viên và nộp đơn vào công việc: {app.Job.Title}.";
+                        if (appMsg.Length > 250) appMsg = appMsg.Substring(0, 247) + "...";
+
                         await dbContext.Notifications.AddAsync(new Notification
                         {
                             UserId = app.Job.EmployerId,
                             Title = "Đơn ứng tuyển mới",
-                            MessageText = $"Ứng viên {request.FullNameOnCard} đã hoàn tất xác minh thẻ sinh viên và nộp đơn vào công việc: {app.Job.Title}.",
+                            MessageText = appMsg,
                             Type = "job_application",
                             RelatedEntityType = "applications",
                             RelatedEntityId = app.Id,
@@ -465,18 +494,21 @@ namespace SkillBridge.Infrastructure.Services.Users
             else if (decision == "need_more_info")
             {
                 request.Status = "need_more_info";
-                request.ReviewedByAdminId = adminId;
+                request.ReviewedByAdminId = adminMemberId;
                 request.ReviewedAt = DateTime.UtcNow;
                 request.ReasonCode = dto.ReasonCode;
                 request.UserMessage = dto.UserMessage ?? "Vui lòng chụp lại ảnh thẻ rõ nét hơn hoặc bổ sung giấy tờ xác minh theo yêu cầu.";
                 request.AdminNote = dto.AdminNote;
                 request.NeedInfoDeadline = DateTime.UtcNow.AddDays(dto.NeedInfoDeadlineDays ?? 7);
 
+                var needInfoMsg = request.UserMessage;
+                if (needInfoMsg.Length > 250) needInfoMsg = needInfoMsg.Substring(0, 247) + "...";
+
                 await dbContext.Notifications.AddAsync(new Notification
                 {
                     UserId = request.UserId,
                     Title = "Yêu cầu bổ sung thông tin thẻ sinh viên",
-                    MessageText = request.UserMessage,
+                    MessageText = needInfoMsg,
                     Type = "student_need_info",
                     RelatedEntityType = "student_verification_requests",
                     RelatedEntityId = request.Id,
@@ -487,7 +519,7 @@ namespace SkillBridge.Infrastructure.Services.Users
             else if (decision == "reject")
             {
                 request.Status = "rejected";
-                request.ReviewedByAdminId = adminId;
+                request.ReviewedByAdminId = adminMemberId;
                 request.ReviewedAt = DateTime.UtcNow;
                 request.ReasonCode = dto.ReasonCode;
                 request.RejectionReason = dto.RejectionReason ?? "Hồ sơ xác minh thẻ sinh viên không đạt yêu cầu.";
@@ -499,11 +531,14 @@ namespace SkillBridge.Infrastructure.Services.Users
                     doc.PurgeAfter = DateTime.UtcNow.AddDays(30);
                 }
 
+                var rejectMsg = request.RejectionReason;
+                if (rejectMsg.Length > 250) rejectMsg = rejectMsg.Substring(0, 247) + "...";
+
                 await dbContext.Notifications.AddAsync(new Notification
                 {
                     UserId = request.UserId,
                     Title = "Hồ sơ xác minh thẻ sinh viên bị từ chối",
-                    MessageText = request.RejectionReason,
+                    MessageText = rejectMsg,
                     Type = "student_rejected",
                     RelatedEntityType = "student_verification_requests",
                     RelatedEntityId = request.Id,
@@ -672,6 +707,46 @@ namespace SkillBridge.Infrastructure.Services.Users
                     try { File.Delete(tempImagePath); } catch { }
                 }
             }
+        }
+
+        private async Task<int?> EnsureAdminMemberIdAsync(int adminUserId, CancellationToken ct = default)
+        {
+            var adminUser = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == adminUserId, ct);
+            if (adminUser != null)
+            {
+                var adminMember = await dbContext.AdminTeamMembers
+                    .FirstOrDefaultAsync(a => a.Email == adminUser.Email, ct);
+
+                if (adminMember == null)
+                {
+                    try
+                    {
+                        adminMember = new AdminTeamMember
+                        {
+                            Name = adminUser.FullName ?? "Admin Member",
+                            Email = adminUser.Email,
+                            RoleId = adminUser.RoleId > 0 ? adminUser.RoleId : 1,
+                            IsActive = true,
+                            CreatedAt = DateTime.UtcNow
+                        };
+                        await dbContext.AdminTeamMembers.AddAsync(adminMember, ct);
+                        await dbContext.SaveChangesAsync(ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogWarning(ex, "Không thể tự động tạo AdminTeamMember cho email {Email}.", adminUser.Email);
+                        adminMember = await dbContext.AdminTeamMembers.FirstOrDefaultAsync(a => a.Email == adminUser.Email, ct);
+                    }
+                }
+
+                if (adminMember != null)
+                {
+                    return adminMember.Id;
+                }
+            }
+
+            var defaultAdmin = await dbContext.AdminTeamMembers.FirstOrDefaultAsync(ct);
+            return defaultAdmin?.Id;
         }
     }
 }

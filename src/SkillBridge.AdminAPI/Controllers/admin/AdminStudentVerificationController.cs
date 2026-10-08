@@ -15,10 +15,14 @@ namespace SkillBridge.AdminAPI.Controllers.admin
     public class AdminStudentVerificationController : ControllerBase
     {
         private readonly IStudentVerificationService _studentVerificationService;
+        private readonly Microsoft.Extensions.Logging.ILogger<AdminStudentVerificationController> _logger;
 
-        public AdminStudentVerificationController(IStudentVerificationService studentVerificationService)
+        public AdminStudentVerificationController(
+            IStudentVerificationService studentVerificationService,
+            Microsoft.Extensions.Logging.ILogger<AdminStudentVerificationController> logger)
         {
             _studentVerificationService = studentVerificationService;
+            _logger = logger;
         }
 
         /// <summary>
@@ -57,6 +61,11 @@ namespace SkillBridge.AdminAPI.Controllers.admin
             {
                 return BadRequest(new { message = ex.Message });
             }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi hệ thống khi xét duyệt hồ sơ thẻ sinh viên ID {RequestId}: {Message}", id, ex.Message);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi xét duyệt hồ sơ: " + ex.Message });
+            }
         }
 
         /// <summary>
@@ -73,6 +82,11 @@ namespace SkillBridge.AdminAPI.Controllers.admin
             catch (BusinessException ex)
             {
                 return BadRequest(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Lỗi hệ thống khi thực hiện OCR hồ sơ thẻ sinh viên ID {RequestId}: {Message}", id, ex.Message);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi thực hiện OCR: " + ex.Message });
             }
         }
     }
