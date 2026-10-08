@@ -12,15 +12,20 @@ function getMediaUrl(src) {
   if (!src || typeof src !== 'string') return '';
   if (src.startsWith('blob:') || src.startsWith('data:')) return src;
   
+  const isClientProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
   let targetUrl = src;
-  if (!src.startsWith('http://') && !src.startsWith('https://')) {
-    targetUrl = src.startsWith('/') ? src : `/${src}`;
+  if (isClientProd && /https?:\/\/localhost(:\d+)?/i.test(targetUrl)) {
+    targetUrl = targetUrl.replace(/https?:\/\/localhost(:\d+)?/i, 'https://api.skillbridge.id.vn');
+  }
+
+  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+    targetUrl = targetUrl.startsWith('/') ? targetUrl : `/${targetUrl}`;
   }
 
   // Tự động đính kèm access_token cho các tệp giấy tờ định danh bảo mật (Nghị định 13/2023/NĐ-CP)
-  if (targetUrl.includes('identity_documents')) {
+  if (targetUrl.includes('identity_documents') || targetUrl.includes('/api/storage/file')) {
     const token = getAccessToken();
-    if (token) {
+    if (token && !targetUrl.includes('access_token=')) {
       const sep = targetUrl.includes('?') ? '&' : '?';
       targetUrl = `${targetUrl}${sep}access_token=${encodeURIComponent(token)}`;
     }

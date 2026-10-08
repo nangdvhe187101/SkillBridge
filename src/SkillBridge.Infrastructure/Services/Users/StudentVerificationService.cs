@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
 using SkillBridge.Application.Interfaces;
+using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 
@@ -20,13 +21,16 @@ namespace SkillBridge.Infrastructure.Services.Users
     {
         private readonly SkillBridgeDbContext dbContext;
         private readonly ILogger<StudentVerificationService> logger;
+        private readonly IStorageService _storageService;
 
         public StudentVerificationService(
             SkillBridgeDbContext _dbContext,
-            ILogger<StudentVerificationService> _logger)
+            ILogger<StudentVerificationService> _logger,
+            IStorageService storageService)
         {
             dbContext = _dbContext;
             logger = _logger;
+            _storageService = storageService;
         }
 
         public async Task<List<SchoolDto>> GetSchoolsAsync()
@@ -278,8 +282,8 @@ namespace SkillBridge.Infrastructure.Services.Users
                 NeedInfoDeadline = request.NeedInfoDeadline,
                 SubmittedAt = request.SubmittedAt,
                 ReviewedAt = request.ReviewedAt,
-                FrontCardUrl = frontDoc?.FileUrl,
-                BackCardUrl = backDoc?.FileUrl
+                FrontCardUrl = _storageService.GetPublicUrl(frontDoc?.FileUrl),
+                BackCardUrl = _storageService.GetPublicUrl(backDoc?.FileUrl)
             };
         }
 
@@ -314,8 +318,8 @@ namespace SkillBridge.Infrastructure.Services.Users
                     ReasonCode = r.ReasonCode,
                     UserMessage = r.UserMessage,
                     SubmittedAt = r.SubmittedAt,
-                    FrontCardUrl = frontDoc?.FileUrl,
-                    BackCardUrl = backDoc?.FileUrl
+                    FrontCardUrl = _storageService.GetPublicUrl(frontDoc?.FileUrl),
+                    BackCardUrl = _storageService.GetPublicUrl(backDoc?.FileUrl)
                 };
             }).ToList();
         }
@@ -544,8 +548,8 @@ namespace SkillBridge.Infrastructure.Services.Users
                 NeedInfoDeadline = request.NeedInfoDeadline,
                 SubmittedAt = request.SubmittedAt,
                 ReviewedAt = request.ReviewedAt,
-                FrontCardUrl = front?.FileUrl,
-                BackCardUrl = back?.FileUrl
+                FrontCardUrl = _storageService.GetPublicUrl(front?.FileUrl),
+                BackCardUrl = _storageService.GetPublicUrl(back?.FileUrl)
             };
         }
 
@@ -570,9 +574,7 @@ namespace SkillBridge.Infrastructure.Services.Users
             var tempImagePath = Path.Combine(Path.GetTempPath(), $"card_ocr_{requestId}_{Guid.NewGuid():N}.jpg");
             try
             {
-                var downloadUrl = frontDoc.FileUrl.StartsWith("http")
-                    ? frontDoc.FileUrl
-                    : $"http://localhost:5004{frontDoc.FileUrl}";
+                var downloadUrl = _storageService.GetPublicUrl(frontDoc.FileUrl);
 
                 using (var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
                 {

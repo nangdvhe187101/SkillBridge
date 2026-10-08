@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Moq;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
+using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Services.Users;
@@ -17,6 +18,13 @@ namespace SkillBridge.Tests.Users
     public class StudentVerificationServiceTests
     {
         private readonly Mock<ILogger<StudentVerificationService>> _loggerMock = new();
+        private readonly Mock<IStorageService> _storageServiceMock = new();
+
+        public StudentVerificationServiceTests()
+        {
+            _storageServiceMock.Setup(s => s.GetPublicUrl(It.IsAny<string>()))
+                .Returns<string>(url => url ?? string.Empty);
+        }
 
         private SkillBridgeDbContext CreateInMemoryDbContext()
         {
@@ -71,7 +79,7 @@ namespace SkillBridge.Tests.Users
             // Arrange
             using var db = CreateInMemoryDbContext();
             await SeedDataAsync(db);
-            var service = new StudentVerificationService(db, _loggerMock.Object);
+            var service = new StudentVerificationService(db, _loggerMock.Object, _storageServiceMock.Object);
 
             var dto = new SubmitStudentVerificationDto
             {
@@ -121,7 +129,7 @@ namespace SkillBridge.Tests.Users
             });
             await db.SaveChangesAsync();
 
-            var service = new StudentVerificationService(db, _loggerMock.Object);
+            var service = new StudentVerificationService(db, _loggerMock.Object, _storageServiceMock.Object);
 
             // User 20 cố tình nhập trùng MSSV SE187101
             var dto = new SubmitStudentVerificationDto
@@ -157,7 +165,7 @@ namespace SkillBridge.Tests.Users
             });
             await db.SaveChangesAsync();
 
-            var service = new StudentVerificationService(db, _loggerMock.Object);
+            var service = new StudentVerificationService(db, _loggerMock.Object, _storageServiceMock.Object);
             var dto = new SubmitStudentVerificationDto
             {
                 SchoolId = 1,
@@ -194,7 +202,7 @@ namespace SkillBridge.Tests.Users
             db.StudentVerificationRequests.Add(request);
             await db.SaveChangesAsync();
 
-            var service = new StudentVerificationService(db, _loggerMock.Object);
+            var service = new StudentVerificationService(db, _loggerMock.Object, _storageServiceMock.Object);
 
             var reviewDto = new AdminReviewVerificationDto
             {
@@ -251,7 +259,7 @@ namespace SkillBridge.Tests.Users
             db.StudentVerificationRequests.Add(request);
             await db.SaveChangesAsync();
 
-            var service = new StudentVerificationService(db, _loggerMock.Object);
+            var service = new StudentVerificationService(db, _loggerMock.Object, _storageServiceMock.Object);
 
             var reviewDto = new AdminReviewVerificationDto
             {
@@ -312,7 +320,7 @@ namespace SkillBridge.Tests.Users
             db.IdentityDocuments.Add(doc);
             await db.SaveChangesAsync();
 
-            var service = new StudentVerificationService(db, _loggerMock.Object);
+            var service = new StudentVerificationService(db, _loggerMock.Object, _storageServiceMock.Object);
 
             var reviewDto = new AdminReviewVerificationDto
             {
@@ -381,7 +389,7 @@ namespace SkillBridge.Tests.Users
             db.StudentVerificationRequests.Add(req);
             await db.SaveChangesAsync();
 
-            var service = new StudentVerificationService(db, _loggerMock.Object);
+            var service = new StudentVerificationService(db, _loggerMock.Object, _storageServiceMock.Object);
 
             // Act
             var result = await service.ReviewVerificationAsync(200, 999, new AdminReviewVerificationDto { Decision = "approve" });
@@ -404,7 +412,7 @@ namespace SkillBridge.Tests.Users
             // Arrange
             using var db = CreateInMemoryDbContext();
             await SeedDataAsync(db);
-            var service = new StudentVerificationService(db, _loggerMock.Object);
+            var service = new StudentVerificationService(db, _loggerMock.Object, _storageServiceMock.Object);
 
             db.StudentProfiles.Add(new StudentProfile
             {
@@ -459,7 +467,7 @@ namespace SkillBridge.Tests.Users
             // Arrange
             using var db = CreateInMemoryDbContext();
             await SeedDataAsync(db);
-            var service = new StudentVerificationService(db, _loggerMock.Object);
+            var service = new StudentVerificationService(db, _loggerMock.Object, _storageServiceMock.Object);
 
             db.Wallets.Add(new Wallet
             {
