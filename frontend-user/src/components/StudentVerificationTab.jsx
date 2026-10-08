@@ -1,17 +1,39 @@
 import { useState, useEffect, useRef } from 'react';
 import { useToast } from '../context/ToastContext';
 import { getSchools, getStudentVerificationStatus, submitStudentVerification, uploadStudentCard } from '../api/studentVerificationApi';
+import { getAccessToken } from '../api/tokenStore';
 import Icon from './Icon';
 
 const CURRENT_YEAR = new Date().getFullYear();
-const GRAD_YEARS = Array.from({ length: 8 }, (_, i) => CURRENT_YEAR + i - 1);
+const API_URL = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) || 'http://localhost:5004/api';
+const API_BASE = API_URL.replace(/\/api\/?$/, '');
+
+function getMediaUrl(src) {
+  if (!src || typeof src !== 'string') return '';
+  if (src.startsWith('blob:') || src.startsWith('data:')) return src;
+  
+  let targetUrl = src;
+  if (!src.startsWith('http://') && !src.startsWith('https://')) {
+    targetUrl = src.startsWith('/') ? src : `/${src}`;
+  }
+
+  // Tự động đính kèm access_token cho các tệp giấy tờ định danh bảo mật (Nghị định 13/2023/NĐ-CP)
+  if (targetUrl.includes('identity_documents')) {
+    const token = getAccessToken();
+    if (token) {
+      const sep = targetUrl.includes('?') ? '&' : '?';
+      targetUrl = `${targetUrl}${sep}access_token=${encodeURIComponent(token)}`;
+    }
+  }
+
+  return targetUrl;
+}
 
 export default function StudentVerificationTab({ isEmployer: _isEmployer = false, currentUser = null }) {
   const { addToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [statusData, setStatusData] = useState(null);
-  const [schools, setSchools] = useState([]);
 
   // Form State (View-only values fallback to statusData or currentUser)
   const [schoolId, setSchoolId] = useState(1);
@@ -20,10 +42,11 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
   const [graduationYear, setGraduationYear] = useState(CURRENT_YEAR + 2);
 
   // Card Files State
-  const [frontCard, setFrontCard] = useState(null); // { url, hash, name }
-  const [backCard, setBackCard] = useState(null);   // { url, hash, name }
+  const [frontCard, setFrontCard] = useState(null); // { url, previewUrl, hash, name }
+  const [backCard, setBackCard] = useState(null);   // { url, previewUrl, hash, name }
   const [uploadingFront, setUploadingFront] = useState(false);
   const [uploadingBack, setUploadingBack] = useState(false);
+  const [enlargedImage, setEnlargedImage] = useState(null);
 
   const frontInputRef = useRef(null);
   const backInputRef = useRef(null);
@@ -37,7 +60,6 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
       ]);
 
       const loadedSchools = Array.isArray(schoolsRes) ? schoolsRes : [];
-      setSchools(loadedSchools);
 
       setStatusData(statusRes);
 
@@ -53,10 +75,18 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
       setGraduationYear(resolvedGradYear);
 
       if (statusRes?.frontCardUrl) {
-        setFrontCard({ url: statusRes.frontCardUrl, name: 'Mặt trước thẻ đã nộp' });
+        setFrontCard(prev => ({
+          url: statusRes.frontCardUrl,
+          previewUrl: prev?.previewUrl || null,
+          name: prev?.name || 'Mặt trước thẻ đã nộp'
+        }));
       }
       if (statusRes?.backCardUrl) {
-        setBackCard({ url: statusRes.backCardUrl, name: 'Mặt sau thẻ đã nộp' });
+        setBackCard(prev => ({
+          url: statusRes.backCardUrl,
+          previewUrl: prev?.previewUrl || null,
+          name: prev?.name || 'Mặt sau thẻ đã nộp'
+        }));
       }
     } catch (err) {
       console.error('Lỗi khi tải thông tin xác minh sinh viên:', err);
@@ -92,13 +122,29 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
       return;
     }
 
-    if (side === 'front') setUploadingFront(true);
-    else setUploadingBack(true);
+    const localPreviewUrl = URL.createObjectURL(file);
+
+    if (side === 'front') {
+      setUploadingFront(true);
+      setFrontCard(prev => ({
+        ...(prev || {}),
+        previewUrl: localPreviewUrl,
+        name: file.name
+      }));
+    } else {
+      setUploadingBack(true);
+      setBackCard(prev => ({
+        ...(prev || {}),
+        previewUrl: localPreviewUrl,
+        name: file.name
+      }));
+    }
 
     try {
       const res = await uploadStudentCard(file);
       const cardObj = {
         url: res.fileUrl,
+        previewUrl: localPreviewUrl,
         hash: res.fileSha256,
         name: file.name
       };
@@ -112,6 +158,8 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
       }
     } catch (err) {
       addToast(err?.message || 'Không thể tải lên ảnh thẻ sinh viên.', 'error');
+      if (side === 'front') setFrontCard(null);
+      else setBackCard(null);
     } finally {
       if (side === 'front') setUploadingFront(false);
       else setUploadingBack(false);
@@ -122,16 +170,6 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!studentCode || !studentCode.trim()) {
-      addToast('Vui lòng cập nhật Mã số sinh viên (MSSV) tại tab "Thông tin Sinh viên" trước khi nộp thẻ.', 'error');
-      return;
-    }
-
-    if (!fullNameOnCard || !fullNameOnCard.trim()) {
-      addToast('Vui lòng cập nhật Họ và tên đầy đủ tại tab "Thông tin Sinh viên" trước khi nộp thẻ.', 'error');
-      return;
-    }
-
     if (!frontCard?.url) {
       addToast('Vui lòng tải lên ảnh mặt trước thẻ sinh viên.', 'error');
       return;
@@ -140,17 +178,17 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
     setSubmitting(true);
     try {
       await submitStudentVerification({
-        schoolId: Number(schoolId),
-        studentCode: studentCode.trim().toUpperCase(),
-        fullNameOnCard: fullNameOnCard.trim(),
-        graduationYear: Number(graduationYear),
+        schoolId: Number(schoolId) || 1,
+        studentCode: (studentCode && studentCode.trim()) ? studentCode.trim().toUpperCase() : 'CHỜ_DUYỆT',
+        fullNameOnCard: (fullNameOnCard && fullNameOnCard.trim()) ? fullNameOnCard.trim() : (currentUser?.fullName || 'Sinh viên'),
+        graduationYear: Number(graduationYear) || (CURRENT_YEAR + 2),
         frontCardUrl: frontCard.url,
         frontCardHash: frontCard.hash || null,
         backCardUrl: backCard?.url || null,
         backCardHash: backCard?.hash || null
       });
 
-      addToast('Nộp hồ sơ xác minh thẻ sinh viên thành công! Quản trị viên sẽ xét duyệt trong vòng 24 giờ.', 'success');
+      addToast('Nộp hồ sơ xác minh thẻ sinh viên thành công! Quản trị viên sẽ đối soát thông tin trên thẻ và xét duyệt trong vòng 24 giờ.', 'success');
       await loadData();
     } catch (err) {
       addToast(err?.message || 'Có lỗi xảy ra khi nộp hồ sơ.', 'error');
@@ -168,6 +206,7 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
   }
 
   const currentStatus = statusData?.status || 'unverified';
+  const isVerified = currentStatus === 'approved' || currentUser?.kycStatus?.toLowerCase() === 'verified';
 
   return (
     <div className="acct-section">
@@ -192,17 +231,21 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
                 Hồ Sơ Đã Được Xác Minh Tư Cách Sinh Viên
               </h4>
               <p style={{ margin: '0 0 12px', fontSize: 13.5, color: '#047857', lineHeight: 1.5 }}>
-                Tài khoản của bạn đã được kiểm duyệt hợp lệ theo thẻ sinh viên trường <b>{statusData?.schoolName || 'Đại học FPT'}</b>.
+                Tài khoản của bạn đã được kiểm duyệt hợp lệ theo thẻ sinh viên trường <b>{statusData?.schoolName || currentUser?.school || 'nhà trường'}</b>.
                 Bạn có toàn quyền ứng tuyển việc làm, nhận hợp đồng và rút tiền thù lao về tài khoản ngân hàng.
               </p>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, background: 'rgba(255,255,255,0.7)', padding: 14, borderRadius: 8 }}>
                 <div>
-                  <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block' }}>Họ và tên (Đã khóa):</span>
+                  <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block' }}>Email tài khoản:</span>
+                  <strong style={{ fontSize: 14, color: 'var(--primary)' }}>{currentUser?.email} 🔒</strong>
+                </div>
+                <div>
+                  <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block' }}>Họ và tên:</span>
                   <strong style={{ fontSize: 14, color: 'var(--ink)' }}>{statusData?.fullNameOnCard} 🔒</strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block' }}>Mã số sinh viên (MSSV):</span>
+                  <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block' }}>Mã số sinh viên:</span>
                   <strong style={{ fontSize: 14, color: 'var(--primary)' }}>{statusData?.studentCode} 🔒</strong>
                 </div>
                 <div>
@@ -300,77 +343,60 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
             {currentStatus === 'need_more_info' ? 'Bổ Sung Thông Tin Thẻ Sinh Viên' : 'Thông Tin Đăng Ký Xác Minh'}
           </h4>
 
-          {/* Thông tin đối soát (Chỉ để nhìn, in ra giá trị từ Hồ sơ sinh viên, không cho sửa) */}
+          {/* Thông tin tài khoản & đối soát */}
           <div style={{ background: 'var(--surface-sunken)', border: '1px solid var(--border)', borderRadius: 10, padding: 18, marginBottom: 24 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--border)', flexWrap: 'wrap', gap: 8 }}>
               <div>
                 <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--ink)' }}>
-                  📋 Thông Tin Thẻ Sinh Viên Đối Soát
-                </span>
-                <span style={{ fontSize: 12, color: 'var(--ink-soft)', marginLeft: 8 }}>
-                  (Chỉ xem · Tự động đồng bộ từ Hồ sơ cá nhân)
+                  📋 Thông tin tài khoản & đối soát thẻ
                 </span>
               </div>
-              <a
-                href="/settings/profile"
-                style={{ fontSize: 12.5, color: 'var(--primary)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}
-              >
-                <span>✏️ Chỉnh sửa thông tin tại Hồ sơ</span>
-              </a>
+              <span style={{ fontSize: 12, color: 'var(--ink-soft)' }}>
+                Quản trị viên sẽ đối soát và phê duyệt theo ảnh chụp thẻ
+              </span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
-              {/* Họ và tên */}
+              {/* Email tài khoản */}
               <div style={{ background: 'var(--surface)', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
                 <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginBottom: 4 }}>
-                  Họ và tên sinh viên:
+                  Email tài khoản:
                 </span>
-                <strong style={{ fontSize: 14, color: fullNameOnCard ? 'var(--ink)' : '#f59e0b' }}>
-                  {fullNameOnCard || 'Chưa cập nhật họ tên'}
+                <strong style={{ fontSize: 14, color: 'var(--primary)' }}>
+                  {currentUser?.email || '—'}
                 </strong>
               </div>
 
-              {/* Trường Đại học */}
+              {/* Tên tài khoản đăng ký */}
               <div style={{ background: 'var(--surface)', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
                 <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginBottom: 4 }}>
-                  Trường Đại học / Cao đẳng:
+                  Tên đăng ký tài khoản:
                 </span>
                 <strong style={{ fontSize: 14, color: 'var(--ink)' }}>
-                  {statusData?.schoolName || currentUser?.school || schools.find((s) => s.id === Number(schoolId))?.name || 'Đại học FPT (FPT University)'}
+                  {currentUser?.fullName || 'Chưa cập nhật'}
                 </strong>
               </div>
 
-              {/* Mã số sinh viên (MSSV) */}
+              {/* Mã số sinh viên */}
               <div style={{ background: 'var(--surface)', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
                 <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginBottom: 4 }}>
-                  Mã số sinh viên (MSSV):
+                  Mã số sinh viên:
                 </span>
-                <strong style={{ fontSize: 14, color: studentCode ? 'var(--primary)' : 'var(--danger)', letterSpacing: '0.5px' }}>
-                  {studentCode || '⚠️ Chưa nhập MSSV'}
-                </strong>
+                <span style={{ fontSize: 13, color: '#d97706', fontWeight: 600 }}>
+                  Chờ Admin duyệt theo thẻ
+                </span>
               </div>
 
-              {/* Năm tốt nghiệp dự kiến */}
+              {/* Trường & Năm tốt nghiệp */}
               <div style={{ background: 'var(--surface)', padding: '12px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
                 <span style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'block', marginBottom: 4 }}>
-                  Năm tốt nghiệp dự kiến:
+                  Trường & Năm tốt nghiệp:
                 </span>
-                <strong style={{ fontSize: 14, color: 'var(--ink)' }}>
-                  Năm {graduationYear} (Hiệu lực đến 31/12/{graduationYear})
-                </strong>
+                <span style={{ fontSize: 13, color: '#d97706', fontWeight: 600 }}>
+                  Chờ Admin đối soát theo thẻ
+                </span>
               </div>
             </div>
-
-            {(!studentCode || !fullNameOnCard) && (
-              <div style={{ marginTop: 12, fontSize: 12.5, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', padding: '10px 14px', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-                <span>
-                  ⚠️ <b>Lưu ý:</b> Bạn chưa điền đầy đủ Mã số sinh viên (MSSV) hoặc Họ tên ở Hồ sơ cá nhân. Vui lòng cập nhật trước khi nộp ảnh thẻ.
-                </span>
-                <a href="/settings/profile" style={{ color: '#b45309', fontWeight: 700, textDecoration: 'underline' }}>
-                  Cập nhật ngay →
-                </a>
-              </div>
-            )}
           </div>
 
           {/* Vùng tải ảnh thẻ sinh viên 2 mặt */}
@@ -389,23 +415,65 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
                   1. Mặt trước thẻ sinh viên <span style={{ color: 'var(--danger)' }}>*</span>
                 </span>
 
-                {frontCard?.url ? (
-                  <div style={{ position: 'relative' }}>
-                    <img
-                      src={frontCard.url}
-                      alt="Mặt trước thẻ"
-                      style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }}
-                    />
-                    {currentStatus !== 'pending' && (
+                {frontCard && (frontCard.previewUrl || frontCard.url) ? (
+                  <div style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface)' }}>
+                    <div style={{ position: 'relative', background: '#0b0f19', minHeight: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img
+                        src={frontCard.previewUrl || getMediaUrl(frontCard.url)}
+                        alt="Mặt trước thẻ"
+                        style={{ width: '100%', maxHeight: 180, objectFit: 'contain', display: 'block', cursor: 'zoom-in' }}
+                        onError={(e) => {
+                          if (frontCard.previewUrl && e.target.src !== frontCard.previewUrl) {
+                            e.target.src = frontCard.previewUrl;
+                          }
+                        }}
+                        onClick={() => setEnlargedImage(frontCard.previewUrl || getMediaUrl(frontCard.url))}
+                      />
+                      {uploadingFront && (
+                        <div style={{
+                          position: 'absolute',
+                          inset: 0,
+                          background: 'rgba(0, 0, 0, 0.6)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          backdropFilter: 'blur(2px)'
+                        }}>
+                          <span className="adm-spinner" style={{ marginRight: 8 }} /> Đang tải lên máy chủ...
+                        </div>
+                      )}
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      background: 'var(--surface-sunken)',
+                      borderTop: '1px solid var(--border)'
+                    }}>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
-                        onClick={() => frontInputRef.current?.click()}
-                        style={{ marginTop: 8 }}
+                        onClick={() => setEnlargedImage(frontCard.previewUrl || getMediaUrl(frontCard.url))}
+                        style={{ fontSize: 12, height: 30, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                       >
-                        Đổi ảnh khác
+                        🔍 Xem ảnh lớn
                       </button>
-                    )}
+                      {currentStatus !== 'pending' && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => frontInputRef.current?.click()}
+                          disabled={uploadingFront}
+                          style={{ fontSize: 12, height: 30 }}
+                        >
+                          Đổi ảnh khác
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div style={{ padding: '24px 12px' }}>
@@ -435,26 +503,68 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
               {/* Mặt sau */}
               <div style={{ border: '2px dashed var(--border)', borderRadius: 10, padding: 16, textAlign: 'center', background: 'var(--surface-sunken)' }}>
                 <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--ink)', display: 'block', marginBottom: 8 }}>
-                  2. Mặt sau thẻ sinh viên (Tùy chọn)
+                  2. Mặt sau thẻ sinh viên
                 </span>
 
-                {backCard?.url ? (
-                  <div style={{ position: 'relative' }}>
-                    <img
-                      src={backCard.url}
-                      alt="Mặt sau thẻ"
-                      style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }}
-                    />
-                    {currentStatus !== 'pending' && (
+                {backCard && (backCard.previewUrl || backCard.url) ? (
+                  <div style={{ position: 'relative', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface)' }}>
+                    <div style={{ position: 'relative', background: '#0b0f19', minHeight: 140, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <img
+                        src={backCard.previewUrl || getMediaUrl(backCard.url)}
+                        alt="Mặt sau thẻ"
+                        style={{ width: '100%', maxHeight: 180, objectFit: 'contain', display: 'block', cursor: 'zoom-in' }}
+                        onError={(e) => {
+                          if (backCard.previewUrl && e.target.src !== backCard.previewUrl) {
+                            e.target.src = backCard.previewUrl;
+                          }
+                        }}
+                        onClick={() => setEnlargedImage(backCard.previewUrl || getMediaUrl(backCard.url))}
+                      />
+                      {uploadingBack && (
+                        <div style={{
+                          position: 'absolute',
+                          inset: 0,
+                          background: 'rgba(0, 0, 0, 0.6)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          fontSize: 13,
+                          fontWeight: 600,
+                          backdropFilter: 'blur(2px)'
+                        }}>
+                          <span className="adm-spinner" style={{ marginRight: 8 }} /> Đang tải lên máy chủ...
+                        </div>
+                      )}
+                    </div>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 12px',
+                      background: 'var(--surface-sunken)',
+                      borderTop: '1px solid var(--border)'
+                    }}>
                       <button
                         type="button"
                         className="btn btn-secondary btn-sm"
-                        onClick={() => backInputRef.current?.click()}
-                        style={{ marginTop: 8 }}
+                        onClick={() => setEnlargedImage(backCard.previewUrl || getMediaUrl(backCard.url))}
+                        style={{ fontSize: 12, height: 30, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                       >
-                        Đổi ảnh khác
+                        🔍 Xem ảnh lớn
                       </button>
-                    )}
+                      {currentStatus !== 'pending' && (
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => backInputRef.current?.click()}
+                          disabled={uploadingBack}
+                          style={{ fontSize: 12, height: 30 }}
+                        >
+                          Đổi ảnh khác
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <div style={{ padding: '24px 12px' }}>
@@ -484,8 +594,8 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
           </div>
 
           {/* Cam kết & Quyền riêng tư */}
-          <div style={{ background: 'var(--surface-sunken)', borderRadius: 8, padding: 12, marginBottom: 20, fontSize: 12, color: 'var(--ink-soft)', lineHeight: 1.5 }}>
-            🔒 <b>Bảo vệ quyền riêng tư (Nghị định 13/2023/NĐ-CP):</b> Hình ảnh thẻ sinh viên của bạn được lưu trữ an toàn trong kho lưu trữ riêng biệt (Private Storage) và chỉ sử dụng cho mục đích duy nhất là đối soát xác minh tư cách sinh viên. Ảnh sẽ được tự động xóa vĩnh viễn khỏi máy chủ sau thời hạn quy định.
+          <div style={{ background: 'var(--surface-sunken)', borderRadius: 8, padding: '10px 14px', marginBottom: 20, fontSize: 12.5, color: 'var(--ink-soft)' }}>
+            🔒 <b>Bảo vệ quyền riêng tư (Nghị định 13/2023/NĐ-CP)</b>
           </div>
 
           {currentStatus !== 'pending' && (
@@ -503,6 +613,54 @@ export default function StudentVerificationTab({ isEmployer: _isEmployer = false
             </button>
           )}
         </form>
+      )}
+
+      {/* Lightbox Phóng to ảnh thẻ */}
+      {enlargedImage && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.85)',
+            zIndex: 9999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 20
+          }}
+          onClick={() => setEnlargedImage(null)}
+        >
+          <div style={{ position: 'relative', maxWidth: '90vw', maxHeight: '90vh' }} onClick={(e) => e.stopPropagation()}>
+            <img
+              src={enlargedImage}
+              alt="Ảnh thẻ phóng to"
+              style={{ maxWidth: '100%', maxHeight: '85vh', objectFit: 'contain', borderRadius: 8, boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)', display: 'block' }}
+            />
+            <button
+              type="button"
+              onClick={() => setEnlargedImage(null)}
+              style={{
+                position: 'absolute',
+                top: -14,
+                right: -14,
+                background: '#ef4444',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '50%',
+                width: 32,
+                height: 32,
+                cursor: 'pointer',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

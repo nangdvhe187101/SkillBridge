@@ -22,6 +22,16 @@ namespace SkillBridge.AdminAPI.Controllers.admin
         }
 
         /// <summary>
+        /// Lấy danh sách các trường đại học / cao đẳng đang hoạt động
+        /// </summary>
+        [HttpGet("schools")]
+        public async Task<IActionResult> GetSchools()
+        {
+            var schools = await _studentVerificationService.GetSchoolsAsync();
+            return Ok(schools);
+        }
+
+        /// <summary>
         /// Lấy danh sách hồ sơ xác minh thẻ sinh viên đang chờ duyệt
         /// </summary>
         [HttpGet("pending")]
@@ -42,6 +52,23 @@ namespace SkillBridge.AdminAPI.Controllers.admin
             {
                 var result = await _studentVerificationService.ReviewVerificationAsync(id, adminId, dto);
                 return Ok(result);
+            }
+            catch (BusinessException ex)
+            {
+                return BadRequest(new { message = ex.Message });
+            }
+        }
+
+        /// <summary>
+        /// Quét OCR ảnh thẻ sinh viên tự động trích xuất thông tin (MSSV, Họ tên, Trường, Niên khóa)
+        /// </summary>
+        [HttpPost("{id}/ocr")]
+        public async Task<IActionResult> RunOcr(int id, System.Threading.CancellationToken ct)
+        {
+            try
+            {
+                var ocrResult = await _studentVerificationService.PerformOcrAsync(id, ct);
+                return Ok(ocrResult);
             }
             catch (BusinessException ex)
             {

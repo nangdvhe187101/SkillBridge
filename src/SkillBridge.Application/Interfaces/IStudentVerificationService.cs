@@ -11,5 +11,6 @@ namespace SkillBridge.Application.Interfaces
         Task<StudentVerificationResponseDto?> GetLatestVerificationAsync(int userId);
         Task<List<StudentVerificationResponseDto>> GetPendingVerificationsForAdminAsync();
         Task<StudentVerificationResponseDto> ReviewVerificationAsync(int requestId, int adminId, AdminReviewVerificationDto dto);
+        Task<StudentCardOcrResultDto> PerformOcrAsync(int requestId, CancellationToken ct = default);
     }
 }

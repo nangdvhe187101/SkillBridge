@@ -1,5 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Diagnostics;
+using System.Net.Http;
+using System.Text.Json;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -53,25 +57,31 @@ namespace SkillBridge.Infrastructure.Services.Users
             var effectiveSchoolId = dto.SchoolId > 0 ? dto.SchoolId : (user.StudentProfile?.SchoolId ?? user.SchoolId ?? 0);
             var effectiveStudentCode = !string.IsNullOrWhiteSpace(dto.StudentCode)
                 ? dto.StudentCode.Trim()
-                : (user.StudentProfile?.StudentCode ?? user.StudentCode ?? string.Empty);
+                : (!string.IsNullOrWhiteSpace(user.StudentProfile?.StudentCode)
+                    ? user.StudentProfile!.StudentCode
+                    : (!string.IsNullOrWhiteSpace(user.StudentCode) ? user.StudentCode : "CHỜ_DUYỆT"));
+
             var effectiveFullName = !string.IsNullOrWhiteSpace(dto.FullNameOnCard)
                 ? dto.FullNameOnCard.Trim()
-                : (user.StudentProfile?.VerifiedFullName ?? user.FullName ?? string.Empty);
+                : (!string.IsNullOrWhiteSpace(user.StudentProfile?.VerifiedFullName)
+                    ? user.StudentProfile!.VerifiedFullName
+                    : (!string.IsNullOrWhiteSpace(user.FullName) ? user.FullName : "Sinh viên"));
+
             var effectiveGraduationYear = dto.GraduationYear > 0
                 ? dto.GraduationYear
                 : (user.StudentProfile?.GraduationYear ?? user.GraduationYear ?? (short)(DateTime.UtcNow.Year + 2));
 
             if (effectiveSchoolId <= 0)
             {
-                throw new BusinessException("Vui lòng chọn Trường Đại học trong Hồ sơ cá nhân trước khi nộp thẻ sinh viên.");
-            }
-            if (string.IsNullOrWhiteSpace(effectiveStudentCode))
-            {
-                throw new BusinessException("Vui lòng nhập Mã số sinh viên (MSSV) trong Hồ sơ cá nhân trước khi nộp thẻ sinh viên.");
-            }
-            if (string.IsNullOrWhiteSpace(effectiveFullName))
-            {
-                throw new BusinessException("Vui lòng nhập đầy đủ Họ và tên trong Hồ sơ cá nhân trước khi nộp thẻ sinh viên.");
+                var defaultSchool = await dbContext.Schools.FirstOrDefaultAsync(s => s.IsActive);
+                if (defaultSchool != null)
+                {
+                    effectiveSchoolId = defaultSchool.Id;
+                }
+                else
+                {
+                    throw new BusinessException("Hệ thống chưa có danh mục trường đại học khả dụng.");
+                }
             }
 
             var school = await dbContext.Schools.FirstOrDefaultAsync(s => s.Id == effectiveSchoolId && s.IsActive);
@@ -82,13 +92,20 @@ namespace SkillBridge.Infrastructure.Services.Users
 
             var studentCodeNormalized = effectiveStudentCode.ToUpperInvariant().Replace(" ", "");
 
-            // 1. Kiểm tra xem MSSV này đã gắn với sinh viên nào khác đã verified chưa
-            var existsVerified = await dbContext.StudentProfiles
-                .AnyAsync(p => p.SchoolId == effectiveSchoolId && p.StudentCodeNormalized == studentCodeNormalized && p.UserId != userId);
+            // 1. Kiểm tra xem MSSV này đã gắn với sinh viên nào khác đã verified chưa (bỏ qua nếu là placeholder)
+            var isPlaceholderCode = string.Equals(studentCodeNormalized, "CHO_DUYET", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(studentCodeNormalized, "CHỜ_DUYỆT", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(studentCodeNormalized, "CHODUYET", StringComparison.OrdinalIgnoreCase);
 
-            if (existsVerified)
+            if (!isPlaceholderCode)
             {
-                throw new BusinessException("Mã số sinh viên này đã được liên kết với một tài khoản sinh viên đã xác minh khác.");
+                var existsVerified = await dbContext.StudentProfiles
+                    .AnyAsync(p => p.SchoolId == effectiveSchoolId && p.StudentCodeNormalized == studentCodeNormalized && p.UserId != userId);
+
+                if (existsVerified)
+                {
+                    throw new BusinessException("Mã số sinh viên này đã được liên kết với một tài khoản sinh viên đã xác minh khác.");
+                }
             }
 
             // 2. Kiểm tra xem user có đơn pending không
@@ -270,6 +287,7 @@ namespace SkillBridge.Infrastructure.Services.Users
         {
             var requests = await dbContext.StudentVerificationRequests
                 .Include(r => r.School)
+                .Include(r => r.User)
                 .Include(r => r.Documents)
                 .Where(r => r.Status == "pending")
                 .OrderBy(r => r.SubmittedAt)
@@ -284,12 +302,15 @@ namespace SkillBridge.Infrastructure.Services.Users
                 {
                     Id = r.Id,
                     UserId = r.UserId,
+                    UserEmail = r.User?.Email ?? string.Empty,
+                    UserName = r.User?.FullName ?? string.Empty,
                     SchoolId = r.SchoolId,
                     SchoolName = r.School?.Name ?? string.Empty,
                     StudentCode = r.StudentCode,
                     FullNameOnCard = r.FullNameOnCard,
                     GraduationYear = r.GraduationYear,
                     Status = r.Status,
+                    OcrResultJson = r.OcrResultJson,
                     ReasonCode = r.ReasonCode,
                     UserMessage = r.UserMessage,
                     SubmittedAt = r.SubmittedAt,
@@ -325,6 +346,29 @@ namespace SkillBridge.Infrastructure.Services.Users
                 request.ReviewedByAdminId = adminId;
                 request.ReviewedAt = DateTime.UtcNow;
                 request.AdminNote = dto.AdminNote;
+
+                if (!string.IsNullOrWhiteSpace(dto.StudentCode))
+                {
+                    request.StudentCode = dto.StudentCode.Trim().ToUpperInvariant();
+                    request.StudentCodeNormalized = request.StudentCode.Replace(" ", "");
+                }
+                if (!string.IsNullOrWhiteSpace(dto.FullNameOnCard))
+                {
+                    request.FullNameOnCard = dto.FullNameOnCard.Trim();
+                }
+                if (dto.GraduationYear.HasValue && dto.GraduationYear.Value > 0)
+                {
+                    request.GraduationYear = dto.GraduationYear.Value;
+                }
+                if (dto.SchoolId.HasValue && dto.SchoolId.Value > 0)
+                {
+                    var targetSchool = await dbContext.Schools.FirstOrDefaultAsync(s => s.Id == dto.SchoolId.Value && s.IsActive);
+                    if (targetSchool != null)
+                    {
+                        request.SchoolId = targetSchool.Id;
+                        request.School = targetSchool;
+                    }
+                }
 
                 // Tính hạn mốc hết năm tốt nghiệp: YYYY-12-31 23:59:59
                 var expiresAt = new DateTime(request.GraduationYear, 12, 31, 23, 59, 59, DateTimeKind.Utc);
@@ -503,6 +547,129 @@ namespace SkillBridge.Infrastructure.Services.Users
                 FrontCardUrl = front?.FileUrl,
                 BackCardUrl = back?.FileUrl
             };
+        }
+
+        public async Task<StudentCardOcrResultDto> PerformOcrAsync(int requestId, CancellationToken ct = default)
+        {
+            var request = await dbContext.StudentVerificationRequests
+                .Include(r => r.Documents)
+                .Include(r => r.School)
+                .FirstOrDefaultAsync(r => r.Id == requestId, ct);
+
+            if (request == null)
+            {
+                throw new BusinessException("Không tìm thấy hồ sơ xác minh sinh viên.");
+            }
+
+            var frontDoc = request.Documents.FirstOrDefault(d => d.Side == "front");
+            if (frontDoc == null || string.IsNullOrWhiteSpace(frontDoc.FileUrl))
+            {
+                throw new BusinessException("Hồ sơ không có ảnh mặt trước thẻ sinh viên.");
+            }
+
+            var tempImagePath = Path.Combine(Path.GetTempPath(), $"card_ocr_{requestId}_{Guid.NewGuid():N}.jpg");
+            try
+            {
+                var downloadUrl = frontDoc.FileUrl.StartsWith("http")
+                    ? frontDoc.FileUrl
+                    : $"http://localhost:5004{frontDoc.FileUrl}";
+
+                using (var httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
+                {
+                    var imageBytes = await httpClient.GetByteArrayAsync(downloadUrl, ct);
+                    await File.WriteAllBytesAsync(tempImagePath, imageBytes, ct);
+                }
+
+                var ocrBinary = "/Users/vannang/Projects/SkillBridge/scripts/student_card_ocr";
+                var isBinary = File.Exists(ocrBinary);
+
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = isBinary ? ocrBinary : "swift",
+                    Arguments = isBinary ? $"\"{tempImagePath}\"" : $"/Users/vannang/Projects/SkillBridge/scripts/student_card_ocr.swift \"{tempImagePath}\"",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using var process = new Process { StartInfo = startInfo };
+                process.Start();
+
+                var output = await process.StandardOutput.ReadToEndAsync(ct);
+                var error = await process.StandardError.ReadToEndAsync(ct);
+                await process.WaitForExitAsync(ct);
+
+                if (string.IsNullOrWhiteSpace(output))
+                {
+                    logger.LogWarning("OCR returned empty output. Error: {Error}", error);
+                    return new StudentCardOcrResultDto
+                    {
+                        Success = false,
+                        Error = "Không thể nhận diện nội dung từ ảnh thẻ sinh viên."
+                    };
+                }
+
+                using var doc = JsonDocument.Parse(output);
+                var root = doc.RootElement;
+
+                var studentCode = root.TryGetProperty("studentCode", out var sc) && sc.ValueKind == JsonValueKind.String ? sc.GetString() : null;
+                var fullName = root.TryGetProperty("fullName", out var fn) && fn.ValueKind == JsonValueKind.String ? fn.GetString() : null;
+                var schoolName = root.TryGetProperty("schoolName", out var sn) && sn.ValueKind == JsonValueKind.String ? sn.GetString() : null;
+                int? gradYear = root.TryGetProperty("graduationYear", out var gy) && gy.ValueKind == JsonValueKind.Number ? gy.GetInt32() : null;
+
+                var rawLines = new List<string>();
+                if (root.TryGetProperty("rawLines", out var rl) && rl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in rl.EnumerateArray())
+                    {
+                        var str = item.GetString();
+                        if (!string.IsNullOrWhiteSpace(str)) rawLines.Add(str);
+                    }
+                }
+
+                int? matchedSchoolId = null;
+                if (!string.IsNullOrWhiteSpace(schoolName))
+                {
+                    var school = await dbContext.Schools
+                        .FirstOrDefaultAsync(s => s.IsActive && (s.Name.Contains(schoolName, StringComparison.OrdinalIgnoreCase) || schoolName.Contains(s.Name, StringComparison.OrdinalIgnoreCase)), ct);
+                    if (school != null)
+                    {
+                        matchedSchoolId = school.Id;
+                        schoolName = school.Name;
+                    }
+                }
+
+                request.OcrResultJson = output;
+                await dbContext.SaveChangesAsync(ct);
+
+                return new StudentCardOcrResultDto
+                {
+                    Success = true,
+                    StudentCode = studentCode,
+                    FullName = fullName,
+                    SchoolName = schoolName,
+                    SchoolId = matchedSchoolId,
+                    GraduationYear = gradYear,
+                    RawLines = rawLines
+                };
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Lỗi khi thực hiện OCR thẻ sinh viên request ID: {RequestId}", requestId);
+                return new StudentCardOcrResultDto
+                {
+                    Success = false,
+                    Error = ex.Message
+                };
+            }
+            finally
+            {
+                if (File.Exists(tempImagePath))
+                {
+                    try { File.Delete(tempImagePath); } catch { }
+                }
+            }
         }
     }
 }

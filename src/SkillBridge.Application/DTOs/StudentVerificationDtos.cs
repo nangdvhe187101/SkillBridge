@@ -37,12 +37,15 @@ namespace SkillBridge.Application.DTOs
     {
         public int Id { get; set; }
         public int UserId { get; set; }
+        public string UserEmail { get; set; } = string.Empty;
+        public string UserName { get; set; } = string.Empty;
         public int SchoolId { get; set; }
         public string SchoolName { get; set; } = string.Empty;
         public string StudentCode { get; set; } = string.Empty;
         public string FullNameOnCard { get; set; } = string.Empty;
         public short GraduationYear { get; set; }
         public string Status { get; set; } = string.Empty;
+        public string? OcrResultJson { get; set; }
         public string? ReasonCode { get; set; }
         public string? UserMessage { get; set; }
         public string? RejectionReason { get; set; }
@@ -52,6 +55,18 @@ namespace SkillBridge.Application.DTOs
         public DateTime? ReviewedAt { get; set; }
         public string? FrontCardUrl { get; set; }
         public string? BackCardUrl { get; set; }
+    }
+
+    public class StudentCardOcrResultDto
+    {
+        public bool Success { get; set; }
+        public string? StudentCode { get; set; }
+        public string? FullName { get; set; }
+        public string? SchoolName { get; set; }
+        public int? SchoolId { get; set; }
+        public int? GraduationYear { get; set; }
+        public List<string> RawLines { get; set; } = new();
+        public string? Error { get; set; }
     }
 
     public class AdminReviewVerificationDto
@@ -64,5 +79,9 @@ namespace SkillBridge.Application.DTOs
         public string? RejectionReason { get; set; }
         public string? AdminNote { get; set; }
         public int? NeedInfoDeadlineDays { get; set; } = 7;
+        public string? StudentCode { get; set; }
+        public string? FullNameOnCard { get; set; }
+        public int? SchoolId { get; set; }
+        public short? GraduationYear { get; set; }
     }
 }
