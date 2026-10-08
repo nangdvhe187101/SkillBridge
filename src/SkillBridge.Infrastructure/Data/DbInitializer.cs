@@ -198,7 +198,10 @@ public static class DbInitializer
             ("social_links_json", "TEXT NULL"),
             ("benefits_json", "TEXT NULL"),
             ("office_images_json", "TEXT NULL"),
-            ("expected_hourly_rate", "DECIMAL(12,2) NULL")
+            ("expected_hourly_rate", "DECIMAL(12,2) NULL"),
+            ("school_id", "INT NULL"),
+            ("student_code", "VARCHAR(50) NULL"),
+            ("graduation_year", "SMALLINT NULL")
         };
 
         try
