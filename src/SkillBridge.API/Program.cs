@@ -158,6 +158,7 @@ builder.Services.AddSingleton<SkillBridge.Application.Common.IEncryptionKeyProvi
 builder.Services.AddHttpClient();
 
 builder.Services.AddControllers()
+    .AddApplicationPart(typeof(SkillBridge.AdminAPI.Controllers.admin.AdminStudentVerificationController).Assembly)
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.Converters.Add(new SkillBridge.API.Converters.UtcDateTimeJsonConverter());
