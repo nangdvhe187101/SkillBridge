@@ -719,6 +719,40 @@ public static class DbInitializer
                     'ALTER TABLE users ADD COLUMN graduation_year SMALLINT NULL DEFAULT NULL AFTER student_code'
                 ));
                 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                -- 8. notifications (optional columns if used)
+                SET @tablename = 'notifications';
+                SET @col = 'title';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE notifications ADD COLUMN title VARCHAR(200) NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                SET @col = 'type';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE notifications ADD COLUMN type VARCHAR(50) NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                SET @col = 'related_entity_type';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE notifications ADD COLUMN related_entity_type VARCHAR(50) NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+                SET @col = 'related_entity_id';
+                SET @sql = (SELECT IF(
+                    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = @dbname AND TABLE_NAME = @tablename AND COLUMN_NAME = @col) > 0,
+                    'SELECT 1',
+                    'ALTER TABLE notifications ADD COLUMN related_entity_id INT NULL DEFAULT NULL'
+                ));
+                PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
             ");
             logger?.LogInformation("DbInitializer: Đã đảm bảo schema xác minh sinh viên và ví cập nhật đầy đủ.");
         }

@@ -450,8 +450,10 @@ namespace SkillBridge.Infrastructure.Services.Users
                 await dbContext.Notifications.AddAsync(new Notification
                 {
                     UserId = request.UserId,
+                    Icon = "🎓",
                     Title = "Xác minh thẻ sinh viên thành công",
                     MessageText = studentMsg,
+                    Link = "/profile",
                     Type = "student_verified",
                     RelatedEntityType = "student_verification_requests",
                     RelatedEntityId = request.Id,
@@ -479,12 +481,13 @@ namespace SkillBridge.Infrastructure.Services.Users
                         await dbContext.Notifications.AddAsync(new Notification
                         {
                             UserId = app.Job.EmployerId,
+                            Icon = "📄",
                             Title = "Đơn ứng tuyển mới",
                             MessageText = appMsg,
+                            Link = $"/employer/jobs/{app.JobId}/applications",
                             Type = "job_application",
                             RelatedEntityType = "applications",
                             RelatedEntityId = app.Id,
-                            Link = $"/employer/jobs/{app.JobId}/applications",
                             IsRead = false,
                             CreatedAt = DateTime.UtcNow
                         });
@@ -507,8 +510,10 @@ namespace SkillBridge.Infrastructure.Services.Users
                 await dbContext.Notifications.AddAsync(new Notification
                 {
                     UserId = request.UserId,
+                    Icon = "⚠️",
                     Title = "Yêu cầu bổ sung thông tin thẻ sinh viên",
                     MessageText = needInfoMsg,
+                    Link = "/profile",
                     Type = "student_need_info",
                     RelatedEntityType = "student_verification_requests",
                     RelatedEntityId = request.Id,
@@ -537,8 +542,10 @@ namespace SkillBridge.Infrastructure.Services.Users
                 await dbContext.Notifications.AddAsync(new Notification
                 {
                     UserId = request.UserId,
+                    Icon = "❌",
                     Title = "Hồ sơ xác minh thẻ sinh viên bị từ chối",
                     MessageText = rejectMsg,
+                    Link = "/profile",
                     Type = "student_rejected",
                     RelatedEntityType = "student_verification_requests",
                     RelatedEntityId = request.Id,
@@ -711,41 +718,33 @@ namespace SkillBridge.Infrastructure.Services.Users
 
         private async Task<int?> EnsureAdminMemberIdAsync(int adminUserId, CancellationToken ct = default)
         {
-            var adminUser = await dbContext.Users.FirstOrDefaultAsync(u => u.Id == adminUserId, ct);
-            if (adminUser != null)
+            // 1. Kiểm tra trực tiếp xem adminUserId có trùng với Id trong admin_team_members không
+            var memberById = await dbContext.AdminTeamMembers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.Id == adminUserId, ct);
+            if (memberById != null) return memberById.Id;
+
+            // 2. Kiểm tra theo email của adminUser
+            var adminUser = await dbContext.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == adminUserId, ct);
+            if (adminUser != null && !string.IsNullOrWhiteSpace(adminUser.Email))
             {
-                var adminMember = await dbContext.AdminTeamMembers
+                var memberByEmail = await dbContext.AdminTeamMembers
+                    .AsNoTracking()
                     .FirstOrDefaultAsync(a => a.Email == adminUser.Email, ct);
-
-                if (adminMember == null)
-                {
-                    try
-                    {
-                        adminMember = new AdminTeamMember
-                        {
-                            Name = adminUser.FullName ?? "Admin Member",
-                            Email = adminUser.Email,
-                            RoleId = adminUser.RoleId > 0 ? adminUser.RoleId : 1,
-                            IsActive = true,
-                            CreatedAt = DateTime.UtcNow
-                        };
-                        await dbContext.AdminTeamMembers.AddAsync(adminMember, ct);
-                        await dbContext.SaveChangesAsync(ct);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogWarning(ex, "Không thể tự động tạo AdminTeamMember cho email {Email}.", adminUser.Email);
-                        adminMember = await dbContext.AdminTeamMembers.FirstOrDefaultAsync(a => a.Email == adminUser.Email, ct);
-                    }
-                }
-
-                if (adminMember != null)
-                {
-                    return adminMember.Id;
-                }
+                if (memberByEmail != null) return memberByEmail.Id;
             }
 
-            var defaultAdmin = await dbContext.AdminTeamMembers.FirstOrDefaultAsync(ct);
+            // 3. Fallback lấy bất kỳ admin member nào đang hoạt động
+            var fallbackAdmin = await dbContext.AdminTeamMembers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(a => a.IsActive == true, ct);
+            if (fallbackAdmin != null) return fallbackAdmin.Id;
+
+            var defaultAdmin = await dbContext.AdminTeamMembers
+                .AsNoTracking()
+                .FirstOrDefaultAsync(ct);
             return defaultAdmin?.Id;
         }
     }

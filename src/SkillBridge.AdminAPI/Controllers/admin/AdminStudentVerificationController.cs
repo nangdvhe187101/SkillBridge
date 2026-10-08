@@ -63,8 +63,9 @@ namespace SkillBridge.AdminAPI.Controllers.admin
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Lỗi hệ thống khi xét duyệt hồ sơ thẻ sinh viên ID {RequestId}: {Message}", id, ex.Message);
-                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi xét duyệt hồ sơ: " + ex.Message });
+                var errorDetail = ex.InnerException?.Message ?? ex.Message;
+                _logger.LogError(ex, "Lỗi hệ thống khi xét duyệt hồ sơ thẻ sinh viên ID {RequestId}: {Message}", id, errorDetail);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi xét duyệt hồ sơ: " + errorDetail });
             }
         }
 
@@ -85,8 +86,9 @@ namespace SkillBridge.AdminAPI.Controllers.admin
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Lỗi hệ thống khi thực hiện OCR hồ sơ thẻ sinh viên ID {RequestId}: {Message}", id, ex.Message);
-                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi thực hiện OCR: " + ex.Message });
+                var errorDetail = ex.InnerException?.Message ?? ex.Message;
+                _logger.LogError(ex, "Lỗi hệ thống khi thực hiện OCR hồ sơ thẻ sinh viên ID {RequestId}: {Message}", id, errorDetail);
+                return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi thực hiện OCR: " + errorDetail });
             }
         }
     }
