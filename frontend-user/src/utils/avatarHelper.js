@@ -1,8 +1,8 @@
-const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:5004/api';
+const API_URL = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) || 'http://localhost:5004/api';
 const API_BASE = API_URL.replace(/\/api\/?$/, '');
 
 /**
- * Chuẩn hóa mọi dạng avatar URL/key thành URL ảnh hợp lệ có thể load trực tiếp trên browser
+ * Chuẩn hóa mọi dạng avatar/media URL hoặc file key thành URL ảnh hợp lệ có thể load trực tiếp trên browser
  * @param {string|null|undefined} src
  * @returns {string|null}
  */
@@ -23,29 +23,39 @@ export function resolveAvatarUrl(src) {
   // 2. Nếu là URL Cloudflare R2 (.r2.dev), chuyển qua backend storage endpoint để tránh lỗi 401 Unauthorized
   if (s.includes('.r2.dev/')) {
     const key = s.substring(s.indexOf('.r2.dev/') + 8).split('?')[0];
-    return `/api/storage/file?key=${encodeURIComponent(key)}`;
+    return `${API_BASE}/api/storage/file?key=${encodeURIComponent(key)}`;
   }
 
-  // 3. Full URL bên ngoài hợp lệ (Google avatar, CDN công khai, Unsplash...)
-  if (s.startsWith('http://') || s.startsWith('https://')) {
-    if (s.includes('/api/storage/file')) {
-      // Đã là storage URL tuyệt đối
-      return s;
+  // 3. Nếu trong database lưu URL localhost nhưng client đang truy cập production (ví dụ: skillbridge.id.vn)
+  if (s.startsWith('http://localhost') || s.startsWith('http://127.0.0.1')) {
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      try {
+        const u = new URL(s);
+        return `${API_BASE}${u.pathname}${u.search}`;
+      } catch {
+        return s;
+      }
     }
     return s;
   }
 
-  // 4. Đã là endpoint /api/storage/file
-  if (s.includes('/api/storage/file')) {
-    return s.startsWith('/') ? s : `/${s}`;
+  // 4. Full URL bên ngoài hợp lệ (Google avatar, CDN công khai, Unsplash...)
+  if (s.startsWith('http://') || s.startsWith('https://')) {
+    return s;
   }
 
-  // 5. Chứa key avatars/
-  if (s.includes('avatars/')) {
-    const key = s.substring(s.indexOf('avatars/')).split('?')[0];
-    return `/api/storage/file?key=${encodeURIComponent(key)}`;
+  // 5. Đã là endpoint /api/storage/file hoặc /uploads/
+  if (s.includes('/api/storage/file') || s.startsWith('/uploads/')) {
+    return `${API_BASE}${s.startsWith('/') ? '' : '/'}${s}`;
   }
 
-  // 6. Tệp key thông thường
-  return `/api/storage/file?key=${encodeURIComponent(s.replace(/^[\/\\]+/, ''))}`;
+  // 6. Chứa key avatars/ hoặc covers/
+  if (s.includes('avatars/') || s.includes('covers/')) {
+    const key = s.substring(Math.max(s.indexOf('avatars/'), s.indexOf('covers/'))).split('?')[0];
+    return `${API_BASE}/api/storage/file?key=${encodeURIComponent(key)}`;
+  }
+
+  // 7. Tệp key thông thường
+  const cleanKey = s.replace(/^[\/\\]+/, '');
+  return `${API_BASE}/api/storage/file?key=${encodeURIComponent(cleanKey)}`;
 }

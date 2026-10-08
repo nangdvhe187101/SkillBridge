@@ -15,6 +15,7 @@ import StudentVerificationTab from '../../components/StudentVerificationTab';
 import BuddyReferralTab from '../../components/BuddyReferralTab';
 import { getSchools } from '../../api/studentVerificationApi';
 import { getPublicSystemConfigs } from '../../api/authApi';
+import { resolveAvatarUrl } from '../../utils/avatarHelper';
 import '../../styles/account-settings.css';
 
 const PHONE_REGEX = /^0\d{9}$/;
@@ -154,7 +155,7 @@ function CoverUploadCard({ currentUser, onCoverUpdated }) {
                 accept="image/png, image/jpeg, image/webp"
                 onChange={handleFileChange}
             />
-            <div style={{ position: 'relative', height: 140, background: currentUser?.coverImageUrl ? `url(${currentUser.coverImageUrl}) center/cover no-repeat` : 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%)' }}>
+            <div style={{ position: 'relative', height: 140, background: currentUser?.coverImageUrl ? `url(${resolveAvatarUrl(currentUser.coverImageUrl)}) center/cover no-repeat` : 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%)' }}>
                 <button
                     type="button"
                     className="btn btn-sm"
