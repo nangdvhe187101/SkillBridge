@@ -15,6 +15,7 @@ import StudentVerificationTab from '../../components/StudentVerificationTab';
 import BuddyReferralTab from '../../components/BuddyReferralTab';
 import { getSchools } from '../../api/studentVerificationApi';
 import { getPublicSystemConfigs } from '../../api/authApi';
+import { resolveAvatarUrl } from '../../utils/avatarHelper';
 import '../../styles/account-settings.css';
 
 const PHONE_REGEX = /^0\d{9}$/;
@@ -154,7 +155,7 @@ function CoverUploadCard({ currentUser, onCoverUpdated }) {
                 accept="image/png, image/jpeg, image/webp"
                 onChange={handleFileChange}
             />
-            <div style={{ position: 'relative', height: 140, background: currentUser?.coverImageUrl ? `url(${currentUser.coverImageUrl}) center/cover no-repeat` : 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%)' }}>
+            <div style={{ position: 'relative', height: 140, background: currentUser?.coverImageUrl ? `url(${resolveAvatarUrl(currentUser.coverImageUrl)}) center/cover no-repeat` : 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #ec4899 100%)' }}>
                 <button
                     type="button"
                     className="btn btn-sm"
@@ -2464,12 +2465,6 @@ export default function AccountSettings({ forcedTab }) {
 
     const activeTabRef = useRef(null);
 
-    useEffect(() => {
-        if (activeTabRef.current) {
-            activeTabRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
-    }, [tab]);
-
     const handleAvatarUpdated = (newAvatarUrl) => {
         if (updateProfile) {
             updateProfile({ avatarUrl: newAvatarUrl }).catch(() => {});
@@ -2494,15 +2489,24 @@ export default function AccountSettings({ forcedTab }) {
                         </span>
                     </div>
 
-                    <div className="acct-tablist">
+                    {/* Danh sách các mục cài đặt xếp dọc từ trên xuống dưới */}
+                    <div className="acct-tablist" role="tablist">
                         {tabs.map((t) => (
                             <button
                                 key={t.id}
                                 ref={tab === t.id ? activeTabRef : null}
                                 className={'acct-tab' + (tab === t.id ? ' is-active' : '')}
-                                onClick={() => navigate(t.path)}
+                                onClick={() => {
+                                    navigate(t.path);
+                                    if (typeof window !== 'undefined' && window.innerWidth <= 860) {
+                                        const contentEl = document.querySelector('.acct-content');
+                                        if (contentEl) {
+                                            contentEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                        }
+                                    }
+                                }}
                             >
-                                <Icon name={t.icon} width="16" height="16" />
+                                <Icon name={t.icon} width="18" height="18" />
                                 <span>{t.label}</span>
                             </button>
                         ))}
