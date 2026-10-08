@@ -29,19 +29,16 @@ public partial class Notification
     [StringLength(255)]
     public string? Link { get; set; }
 
-    [Column("title")]
-    [StringLength(200)]
+    [NotMapped]
     public string? Title { get; set; }
 
-    [Column("type")]
-    [StringLength(50)]
+    [NotMapped]
     public string? Type { get; set; }
 
-    [Column("related_entity_type")]
-    [StringLength(50)]
+    [NotMapped]
     public string? RelatedEntityType { get; set; }
 
-    [Column("related_entity_id")]
+    [NotMapped]
     public int? RelatedEntityId { get; set; }
 
     [Column("is_read")]
