@@ -296,7 +296,7 @@ export function exportTransactionsToExcel(transactions = [], options = {}) {
     ]);
     sheetData.push([]);
     sheetData.push(['* BẢN SAO KÊ ĐIỆN TỬ: Dữ liệu được bảo chứng bằng công nghệ ký quỹ Escrow và lưu trữ tự động trên nền tảng SkillBridge.']);
-    sheetData.push(['* Mọi khiếu nại hoặc đối soát phát sinh vui lòng liên hệ Trung tâm Trợ giúp SkillBridge (support@skillbridge.vn) trong vòng 30 ngày.']);
+    sheetData.push(['* Mọi khiếu nại hoặc đối soát phát sinh vui lòng liên hệ Trung tâm Trợ giúp SkillBridge (Email: skillbridge.vn@gmail.com - Hotline: 0334404480 / 0956653307) trong vòng 30 ngày.']);
 
     const ws = XLSX.utils.aoa_to_sheet(sheetData);
 

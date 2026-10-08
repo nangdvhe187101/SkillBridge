@@ -156,6 +156,10 @@ export default function App() {
           <Route path="/settings/security" element={
             <ProtectedRoute><AccountSettings forcedTab="password" /></ProtectedRoute>
           } />
+          <Route path="/settings/referral" element={
+            <ProtectedRoute><AccountSettings forcedTab="referral" /></ProtectedRoute>
+          } />
+          <Route path="/account/referral" element={<Navigate to="/settings/referral" replace />} />
 
           {/* Catch-all 404 fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />

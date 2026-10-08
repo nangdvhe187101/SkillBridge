@@ -15,37 +15,37 @@ export function resolveAvatarUrl(src) {
   // Nếu là chuỗi đơn không có dấu / hoặc đuôi mở rộng hợp lệ thì không phải file key
   if (!s.includes('/') && !s.includes('.')) return null;
 
-
   // 1. Data URI hoặc Blob URL (upload preview)
   if (s.startsWith('data:') || s.startsWith('blob:')) {
     return s;
   }
 
-  // 2. Đã là endpoint /api/storage/file (tránh double-wrap)
-  if (s.includes('/api/storage/file')) {
-    if (s.startsWith('http://') || s.startsWith('https://')) {
-      return s;
-    }
-    return `${API_BASE}${s.startsWith('/') ? '' : '/'}${s}`;
-  }
-
-  // 3. Chứa key avatars/ (dù là full URL r2.dev, cloudflarestorage hay relative key)
-  if (s.includes('avatars/')) {
-    const key = s.substring(s.indexOf('avatars/')).split('?')[0];
-    return `${API_URL}/storage/file?key=${encodeURIComponent(key)}`;
-  }
-
-  // 4. URL r2.dev bất kỳ
+  // 2. Nếu là URL Cloudflare R2 (.r2.dev), chuyển qua backend storage endpoint để tránh lỗi 401 Unauthorized
   if (s.includes('.r2.dev/')) {
     const key = s.substring(s.indexOf('.r2.dev/') + 8).split('?')[0];
-    return `${API_URL}/storage/file?key=${encodeURIComponent(key)}`;
+    return `/api/storage/file?key=${encodeURIComponent(key)}`;
   }
 
-  // 5. Full URL http/https hợp lệ bên ngoài (Google avatar, CDN khác)
+  // 3. Full URL bên ngoài hợp lệ (Google avatar, CDN công khai, Unsplash...)
   if (s.startsWith('http://') || s.startsWith('https://')) {
+    if (s.includes('/api/storage/file')) {
+      // Đã là storage URL tuyệt đối
+      return s;
+    }
     return s;
   }
 
+  // 4. Đã là endpoint /api/storage/file
+  if (s.includes('/api/storage/file')) {
+    return s.startsWith('/') ? s : `/${s}`;
+  }
+
+  // 5. Chứa key avatars/
+  if (s.includes('avatars/')) {
+    const key = s.substring(s.indexOf('avatars/')).split('?')[0];
+    return `/api/storage/file?key=${encodeURIComponent(key)}`;
+  }
+
   // 6. Tệp key thông thường
-  return `${API_URL}/storage/file?key=${encodeURIComponent(s)}`;
+  return `/api/storage/file?key=${encodeURIComponent(s.replace(/^[\/\\]+/, ''))}`;
 }

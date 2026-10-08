@@ -489,7 +489,7 @@ export default function MyWork() {
   const [searchQuery, setSearchQuery] = useState('');
   const [appsPage, setAppsPage] = useState(1);
   const [workPage, setWorkPage] = useState(1);
-  const [workPageSize, setWorkPageSize] = useState(5);
+  const [workPageSize, setWorkPageSize] = useState(1); // Mỗi job là 1 trang theo yêu cầu trải nghiệm gọn gàng
   const [deliverablesMap, setDeliverablesMap] = useState({});
   const [jobDetailsMap, setJobDetailsMap] = useState({});
   const [loadingDeliverables, setLoadingDeliverables] = useState(false);
@@ -3007,9 +3007,12 @@ export default function MyWork() {
                   totalPages={workTotalPages}
                   totalItems={displayedWork.length}
                   pageSize={workPageSize}
-                  onPageChange={setWorkPage}
+                  onPageChange={(p) => {
+                    setWorkPage(p);
+                    window.scrollTo({ top: 160, behavior: 'smooth' });
+                  }}
                   onPageSizeChange={(sz) => { setWorkPageSize(sz); setWorkPage(1); }}
-                  pageSizeOptions={[5, 10, 20]}
+                  pageSizeOptions={[1, 2, 3, 5]}
                   itemLabel="công việc"
                 />
               </div>

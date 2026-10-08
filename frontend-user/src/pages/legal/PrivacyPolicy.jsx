@@ -108,7 +108,7 @@ export default function PrivacyPolicy() {
           <ol style={{ paddingLeft: 20, lineHeight: 1.9 }}>
             <li><b>Quyền được biết & tra cứu:</b> Xem toàn bộ thông tin cá nhân và lịch sử giao dịch tại mục Cài đặt tài khoản.</li>
             <li><b>Quyền chỉnh sửa:</b> Cập nhật số điện thoại, kỹ năng, tài khoản ngân hàng bất cứ lúc nào.</li>
-            <li><b>Quyền yêu cầu xóa:</b> Yêu cầu khóa hoặc xóa vĩnh viễn dữ liệu tài khoản khi không còn nhu cầu sử dụng thông qua email hỗ trợ <code>privacy@skillbridge.vn</code>.</li>
+            <li><b>Quyền yêu cầu xóa:</b> Yêu cầu khóa hoặc xóa vĩnh viễn dữ liệu tài khoản khi không còn nhu cầu sử dụng thông qua email hỗ trợ <code>skillbridge.vn@gmail.com</code>.</li>
           </ol>
         </div>
       )

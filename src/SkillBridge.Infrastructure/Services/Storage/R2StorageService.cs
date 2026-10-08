@@ -98,6 +98,25 @@ public class R2StorageService : IStorageService
                 await stream.CopyToAsync(fileStream, cancellationToken);
             }
 
+            // Đồng thời sao lưu vào root uploads để không bị mất khi bin/Debug bị rebuild
+            try
+            {
+                var rootUploadPath = Path.Combine(Directory.GetCurrentDirectory(), "uploads", fileKey.Replace('/', Path.DirectorySeparatorChar));
+                var rootDir = Path.GetDirectoryName(rootUploadPath);
+                if (!string.IsNullOrEmpty(rootDir) && !Directory.Exists(rootDir))
+                {
+                    Directory.CreateDirectory(rootDir);
+                }
+                if (!string.Equals(Path.GetFullPath(localFilePath), Path.GetFullPath(rootUploadPath), StringComparison.OrdinalIgnoreCase))
+                {
+                    File.Copy(localFilePath, rootUploadPath, overwrite: true);
+                }
+            }
+            catch (Exception copyEx)
+            {
+                _logger.LogDebug(copyEx, "Không thể sao lưu file vào root uploads.");
+            }
+
             return new FileUploadResult
             {
                 FileKey = fileKey,

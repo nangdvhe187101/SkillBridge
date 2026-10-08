@@ -72,18 +72,22 @@ public class UserService : IUserService
             if (!string.IsNullOrWhiteSpace(request.FullName))
                 user.FullName = request.FullName.Trim();
 
-            if (request.SchoolId.HasValue && request.SchoolId.Value > 0)
+            // Tên trường học của sinh viên được bảo vệ: Không cho phép tự sửa qua UpdateProfile, chỉ cập nhật qua Admin duyệt thẻ sinh viên
+            if (!string.Equals(user.Role?.Code, "student", StringComparison.OrdinalIgnoreCase))
             {
-                user.SchoolId = request.SchoolId.Value;
-                var matchedSchool = await _dbContext.Schools.FindAsync(new object[] { request.SchoolId.Value }, cancellationToken);
-                if (matchedSchool != null)
+                if (request.SchoolId.HasValue && request.SchoolId.Value > 0)
                 {
-                    user.School = matchedSchool.Name;
+                    user.SchoolId = request.SchoolId.Value;
+                    var matchedSchool = await _dbContext.Schools.FindAsync(new object[] { request.SchoolId.Value }, cancellationToken);
+                    if (matchedSchool != null)
+                    {
+                        user.School = matchedSchool.Name;
+                    }
                 }
-            }
-            else if (request.School != null)
-            {
-                user.School = string.IsNullOrWhiteSpace(request.School) ? null : request.School.Trim();
+                else if (request.School != null)
+                {
+                    user.School = string.IsNullOrWhiteSpace(request.School) ? null : request.School.Trim();
+                }
             }
 
             if (request.StudentCode != null)
@@ -91,9 +95,13 @@ public class UserService : IUserService
                 user.StudentCode = string.IsNullOrWhiteSpace(request.StudentCode) ? null : request.StudentCode.Trim().ToUpperInvariant();
             }
 
-            if (request.GraduationYear.HasValue)
+            // Năm tốt nghiệp của sinh viên được bảo vệ: Chỉ cập nhật khi Quản trị viên duyệt thẻ sinh viên
+            if (!string.Equals(user.Role?.Code, "student", StringComparison.OrdinalIgnoreCase))
             {
-                user.GraduationYear = request.GraduationYear.Value > 0 ? request.GraduationYear.Value : null;
+                if (request.GraduationYear.HasValue)
+                {
+                    user.GraduationYear = request.GraduationYear.Value > 0 ? request.GraduationYear.Value : null;
+                }
             }
         }
 

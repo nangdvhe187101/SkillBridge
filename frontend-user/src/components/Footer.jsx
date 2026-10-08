@@ -1,7 +1,9 @@
 import { Link } from 'react-router-dom';
 import Icon from './Icon';
+import { useCompanyInfo } from '../hooks/useCompanyInfo';
 
 export default function Footer() {
+  const { companyInfo } = useCompanyInfo();
 
   return (
     <footer style={{
@@ -26,33 +28,29 @@ export default function Footer() {
           {/* Column 1: Hotline & Customer Support */}
           <div>
             <h5 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--ink)', marginBottom: 14 }}>
-              Tổng đài hỗ trợ (Miễn phí)
+              Tổng đài hỗ trợ
             </h5>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, color: 'var(--ink-soft)' }}>
               <div>
                 <span>Hỗ trợ sinh viên & người dùng:</span>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
-                  <b style={{ color: '#d70018', fontSize: 16 }}>1900 6828</b>
-                  <span style={{ fontSize: 11.5 }}>(8h00 – 21h00)</span>
+                  <b style={{ color: '#d70018', fontSize: 16 }}>{companyInfo.hotline1}</b>
+                  <span style={{ fontSize: 11.5 }}>({companyInfo.workingHours})</span>
                 </div>
               </div>
-              <div>
-                <span>Khiếu nại & Tranh chấp:</span>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
-                  <b style={{ color: '#2563eb', fontSize: 15 }}>0327 724 169</b>
-                  <span style={{ fontSize: 11.5 }}>(8h00 – 21h30)</span>
+              {companyInfo.hotline2 && (
+                <div>
+                  <span>Khiếu nại & Tranh chấp:</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginTop: 2 }}>
+                    <b style={{ color: '#2563eb', fontSize: 15 }}>{companyInfo.hotline2}</b>
+                    <span style={{ fontSize: 11.5 }}>(Hỗ trợ khẩn cấp)</span>
+                  </div>
                 </div>
-              </div>
+              )}
               <div>
-                <span>Email hỗ trợ:</span>
+                <span>Email hỗ trợ & hợp tác:</span>
                 <div style={{ marginTop: 2 }}>
-                  <span style={{ color: 'var(--ink)', fontWeight: 600 }}>support@skillbridge.vn</span>
-                </div>
-              </div>
-              <div>
-                <span>Hợp tác trường học & doanh nghiệp:</span>
-                <div style={{ marginTop: 2 }}>
-                  <span style={{ color: 'var(--ink)', fontWeight: 600 }}>partner@skillbridge.vn</span>
+                  <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{companyInfo.email}</span>
                 </div>
               </div>
             </div>
@@ -226,13 +224,13 @@ export default function Footer() {
         }}>
           {/* Company details lines */}
           <p style={{ margin: '0 0 4px 0', fontWeight: 700, color: 'var(--ink)' }}>
-            Dự án Khởi nghiệp Sáng tạo Sinh viên · FPT University EXE Capstone Project
+            {companyInfo.projectName}
           </p>
           <p style={{ margin: '0 0 4px 0' }}>
-            Nền tảng Công nghệ & Việc làm Sinh viên SkillBridge Việt Nam (Dự án đang trong quá trình hoàn tất thủ tục đăng ký kinh doanh & cấp MST).
+            Nền tảng Công nghệ & Việc làm Sinh viên {companyInfo.companyName} (Dự án đang trong quá trình hoàn tất thủ tục đăng ký kinh doanh & cấp MST).
           </p>
           <p style={{ margin: '0 0 16px 0' }}>
-            Địa chỉ văn phòng: Tòa nhà FPT Polytechnic, Phố Trịnh Văn Bô, Phường Phương Canh, Quận Nam Từ Liêm, TP. Hà Nội. Điện thoại: 1900.6828 - 0327.724.169. Chịu trách nhiệm nội dung: <b>Đào Văn Năng</b>.
+            Địa chỉ: {companyInfo.address}. Điện thoại: {companyInfo.hotline1} {companyInfo.hotline2 ? `- ${companyInfo.hotline2}` : ''}. Đại diện dự án / Phụ trách vận hành: <b>{companyInfo.projectLead} ({companyInfo.projectLeadTitle})</b> — Trưởng nhóm code: <b>{companyInfo.techLead} ({companyInfo.techLeadTitle})</b>.
           </p>
 
           {/* Official Seals & Badges: DISPLAY ONLY, NO OUTBOUND LINKS */}

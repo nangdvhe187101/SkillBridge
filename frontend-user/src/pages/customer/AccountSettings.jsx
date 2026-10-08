@@ -12,7 +12,9 @@ import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
 import ModalShell from '../../components/modals/ModalShell';
 import StudentVerificationTab from '../../components/StudentVerificationTab';
+import BuddyReferralTab from '../../components/BuddyReferralTab';
 import { getSchools } from '../../api/studentVerificationApi';
+import { getPublicSystemConfigs } from '../../api/authApi';
 import '../../styles/account-settings.css';
 
 const PHONE_REGEX = /^0\d{9}$/;
@@ -297,7 +299,7 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCov
                         />
                     </div>
                     <div className="acct-field">
-                        <label>Mã số thuế doanh nghiệp (MST)</label>
+                        <label>Mã số thuế doanh nghiệp</label>
                         <input
                             type="text"
                             placeholder="Ví dụ: 0108899888"
@@ -470,13 +472,6 @@ function EmployerProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCov
 // 2. Student Profile Tab
 function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCoverUpdated }) {
     const isStudentVerified = currentUser?.kycStatus === 'verified';
-    const [schools, setSchools] = useState([]);
-
-    useEffect(() => {
-        getSchools().then((res) => {
-            if (Array.isArray(res)) setSchools(res);
-        }).catch(() => {});
-    }, []);
 
     const [form, setForm] = useState({
         fullName: currentUser.fullName || '',
@@ -484,7 +479,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
         school: currentUser.school || '',
         schoolId: currentUser.schoolId || '',
         studentCode: currentUser.studentCode || '',
-        graduationYear: currentUser.graduationYear || (CURRENT_YEAR + 2),
+        graduationYear: currentUser.graduationYear || '',
         industry: currentUser.industry || 'Lập trình web & App',
         phone: currentUser.phone || currentUser.phoneNumber || '',
         website: currentUser.website || '',
@@ -576,7 +571,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
             await updateProfile({
                 fullName: form.fullName.trim(),
                 headline: form.headline.trim(),
-                school: form.school.trim(),
+                school: form.school ? form.school.trim() : null,
                 schoolId: form.schoolId ? Number(form.schoolId) : null,
                 studentCode: form.studentCode ? form.studentCode.trim().toUpperCase() : null,
                 graduationYear: form.graduationYear ? Number(form.graduationYear) : null,
@@ -626,14 +621,6 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                             onChange={(e) => setForm({ ...form, fullName: e.target.value })}
                             style={isStudentVerified ? { background: 'var(--surface-sunken)', color: 'var(--ink-soft)', cursor: 'not-allowed' } : {}}
                         />
-                        <div style={{ fontSize: '0.78rem', color: isStudentVerified ? '#10b981' : '#6366f1', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <span>{isStudentVerified ? '✅' : '💡'}</span>
-                            <span>
-                                {isStudentVerified
-                                    ? 'Họ tên đã được xác thực chính chủ theo thẻ sinh viên và khóa chỉnh sửa.'
-                                    : 'Vui lòng nhập đúng Họ và Tên theo CCCD/Thẻ sinh viên để trùng khớp khi rút tiền.'}
-                            </span>
-                        </div>
                     </div>
                     <div className="acct-field">
                         <label>Tiêu đề nghề nghiệp / Chức danh nổi bật</label>
@@ -650,55 +637,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                     {/* Trường Đại học */}
                     <div className="acct-field">
                         <label>
-                            Trường Đại học / Cao đẳng <span style={{ color: 'var(--coral)' }}>*</span>
-                            {isStudentVerified && (
-                                <span style={{ marginLeft: 8, fontSize: 11.5, color: '#10b981', fontWeight: 600 }}>
-                                    🔒 Đã xác minh
-                                </span>
-                            )}
-                        </label>
-                        {isStudentVerified ? (
-                            <input
-                                type="text"
-                                value={form.school || 'Đại học FPT'}
-                                disabled
-                                style={{ background: 'var(--surface-sunken)', color: 'var(--ink-soft)', cursor: 'not-allowed' }}
-                            />
-                        ) : (
-                            <select
-                                value={form.schoolId || (schools[0]?.id || 1)}
-                                onChange={(e) => {
-                                    const sid = Number(e.target.value);
-                                    const matched = schools.find((s) => s.id === sid);
-                                    setForm({
-                                        ...form,
-                                        schoolId: sid,
-                                        school: matched ? matched.name : form.school
-                                    });
-                                }}
-                            >
-                                {schools.length > 0 ? (
-                                    schools.map((s) => (
-                                        <option key={s.id} value={s.id}>
-                                            {s.name} ({s.shortName || 'FPTU'})
-                                        </option>
-                                    ))
-                                ) : (
-                                    <option value={1}>Đại học FPT (FPT University)</option>
-                                )}
-                            </select>
-                        )}
-                        {!isStudentVerified && (
-                            <span style={{ fontSize: '0.78rem', color: 'var(--ink-soft)', marginTop: 4, display: 'block' }}>
-                                Trường học bạn đang theo học để đối soát xác minh thẻ sinh viên.
-                            </span>
-                        )}
-                    </div>
-
-                    {/* Mã số sinh viên (MSSV) */}
-                    <div className="acct-field">
-                        <label>
-                            Mã số sinh viên (MSSV) <span style={{ color: 'var(--coral)' }}>*</span>
+                            Trường Đại học / Cao đẳng
                             {isStudentVerified && (
                                 <span style={{ marginLeft: 8, fontSize: 11.5, color: '#10b981', fontWeight: 600 }}>
                                     🔒 Đã xác minh
@@ -707,15 +646,30 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                         </label>
                         <input
                             type="text"
-                            placeholder="Ví dụ: SE187101, HE187101..."
-                            value={form.studentCode}
-                            disabled={isStudentVerified}
-                            onChange={(e) => setForm({ ...form, studentCode: e.target.value.toUpperCase() })}
-                            style={isStudentVerified ? { background: 'var(--surface-sunken)', color: 'var(--ink-soft)', cursor: 'not-allowed', textTransform: 'uppercase' } : { textTransform: 'uppercase' }}
+                            value={isStudentVerified ? (form.school || '') : ''}
+                            placeholder="Chưa xác minh"
+                            disabled
+                            style={{ background: 'var(--surface-sunken)', color: (isStudentVerified && form.school) ? 'var(--ink)' : 'var(--ink-soft)', cursor: 'not-allowed' }}
                         />
-                        <span style={{ fontSize: '0.78rem', color: 'var(--ink-soft)', marginTop: 4, display: 'block' }}>
-                            {isStudentVerified ? 'Mã số sinh viên đã liên kết chính thức với hồ sơ.' : 'Dùng để đối soát với ảnh chụp thẻ sinh viên tại trang Xác minh.'}
-                        </span>
+                    </div>
+
+                    {/* Mã số sinh viên */}
+                    <div className="acct-field">
+                        <label>
+                            Mã số sinh viên
+                            {isStudentVerified && (
+                                <span style={{ marginLeft: 8, fontSize: 11.5, color: '#10b981', fontWeight: 600 }}>
+                                    🔒 Đã xác minh
+                                </span>
+                            )}
+                        </label>
+                        <input
+                            type="text"
+                            placeholder="Chưa xác minh"
+                            value={isStudentVerified ? (form.studentCode || '') : ''}
+                            disabled
+                            style={{ background: 'var(--surface-sunken)', color: (isStudentVerified && form.studentCode) ? 'var(--ink)' : 'var(--ink-soft)', cursor: 'not-allowed', textTransform: 'uppercase' }}
+                        />
                     </div>
                 </div>
 
@@ -723,32 +677,20 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                     {/* Năm tốt nghiệp dự kiến */}
                     <div className="acct-field">
                         <label>
-                            Năm tốt nghiệp dự kiến <span style={{ color: 'var(--coral)' }}>*</span>
+                            Năm tốt nghiệp dự kiến
                             {isStudentVerified && (
                                 <span style={{ marginLeft: 8, fontSize: 11.5, color: '#10b981', fontWeight: 600 }}>
                                     🔒 Đã xác minh
                                 </span>
                             )}
                         </label>
-                        {isStudentVerified ? (
-                            <input
-                                type="text"
-                                value={`Năm ${form.graduationYear || (CURRENT_YEAR + 2)} (Hiệu lực thẻ đến 31/12/${form.graduationYear || (CURRENT_YEAR + 2)})`}
-                                disabled
-                                style={{ background: 'var(--surface-sunken)', color: 'var(--ink-soft)', cursor: 'not-allowed' }}
-                            />
-                        ) : (
-                            <select
-                                value={form.graduationYear || (CURRENT_YEAR + 2)}
-                                onChange={(e) => setForm({ ...form, graduationYear: Number(e.target.value) })}
-                            >
-                                {GRAD_YEARS.map((y) => (
-                                    <option key={y} value={y}>
-                                        Năm {y} (Hiệu lực thẻ đến 31/12/{y})
-                                    </option>
-                                ))}
-                            </select>
-                        )}
+                        <input
+                            type="text"
+                            value={form.graduationYear && isStudentVerified ? `Năm ${form.graduationYear}` : ''}
+                            placeholder="Chưa xác minh"
+                            disabled
+                            style={{ background: 'var(--surface-sunken)', color: (form.graduationYear && isStudentVerified) ? 'var(--ink)' : 'var(--ink-soft)', cursor: 'not-allowed' }}
+                        />
                     </div>
 
                     {/* Lĩnh vực chuyên môn */}
@@ -798,9 +740,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                                 <span style={{ color: '#4f46e5', fontWeight: 600, fontSize: '0.85rem' }}>
                                     ≈ {Number(form.expectedHourlyRate).toLocaleString('vi-VN')} đ / giờ
                                 </span>
-                            ) : (
-                                <span style={{ color: '#94a3b8', fontSize: '0.8rem' }}>Chưa thiết lập (hệ thống sẽ tự ước lượng)</span>
-                            )}
+                            ) : null}
                         </label>
                         <div style={{ position: 'relative' }}>
                             <input
@@ -815,10 +755,6 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                             <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: 13, fontWeight: 500, pointerEvents: 'none' }}>
                                 đ/giờ
                             </span>
-                        </div>
-                        <div style={{ fontSize: '0.78rem', color: '#64748b', marginTop: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Icon name="info" width="13" height="13" />
-                            <span>Mức thù lao mong muốn sẽ hiển thị trực tiếp trên trang Tìm kiếm ứng viên để Nhà tuyển dụng cân đối ngân sách. Mức đề xuất phổ biến: 80.000đ - 250.000đ/giờ.</span>
                         </div>
                     </div>
                 </div>
@@ -2019,7 +1955,7 @@ function KycVerificationTab({ isEmployer }) {
                 return;
             }
             if (!studentId.trim()) {
-                setErrorMsg('Vui lòng nhập Mã số sinh viên (MSSV) in trên thẻ.');
+                setErrorMsg('Vui lòng nhập Mã số sinh viên in trên thẻ.');
                 return;
             }
         } else {
@@ -2135,7 +2071,7 @@ function KycVerificationTab({ isEmployer }) {
                                 </div>
                                 {kycData.studentIdNumber && (
                                     <div>
-                                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Mã số sinh viên (MSSV)</div>
+                                        <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Mã số sinh viên</div>
                                         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>{kycData.studentIdNumber}</div>
                                     </div>
                                 )}
@@ -2285,7 +2221,7 @@ function KycVerificationTab({ isEmployer }) {
 
                                 <div className="acct-field-row" style={{ marginTop: 12 }}>
                                     <div className="acct-field" style={{ flex: 1 }}>
-                                        <label>Mã số sinh viên (MSSV) <span style={{ color: '#ef4444' }}>*</span></label>
+                                        <label>Mã số sinh viên <span style={{ color: '#ef4444' }}>*</span></label>
                                         <input
                                             type="text"
                                             placeholder="Ví dụ: HE187101, 2022001..."
@@ -2293,7 +2229,6 @@ function KycVerificationTab({ isEmployer }) {
                                             onChange={(e) => setStudentId(e.target.value)}
                                             required
                                         />
-                                        <div className="acct-hint">Mã số in trên thẻ sinh viên của bạn.</div>
                                     </div>
 
                                     <div className="acct-field" style={{ flex: 1 }}>
@@ -2307,7 +2242,6 @@ function KycVerificationTab({ isEmployer }) {
                                                 <option key={y} value={y}>Năm {y}</option>
                                             ))}
                                         </select>
-                                        <div className="acct-hint">Căn cứ để tính thời hạn hiệu lực thẻ sinh viên.</div>
                                     </div>
                                 </div>
                             </>
@@ -2325,7 +2259,7 @@ function KycVerificationTab({ isEmployer }) {
                                         />
                                     </div>
                                     <div className="acct-field" style={{ flex: 1 }}>
-                                        <label>Mã số thuế (MST)</label>
+                                        <label>Mã số thuế</label>
                                         <input
                                             type="text"
                                             placeholder="Ví dụ: 0108899888"
@@ -2475,27 +2409,48 @@ export default function AccountSettings({ forcedTab }) {
     const navigate = useNavigate();
     const location = useLocation();
 
+    const [publicConfigs, setPublicConfigs] = useState(null);
+
+    useEffect(() => {
+        getPublicSystemConfigs().then((cfg) => {
+            if (cfg) setPublicConfigs(cfg);
+        });
+    }, []);
+
     const userRole = (currentUser?.roleCode || role || 'student').toLowerCase();
     const isEmployer = userRole === 'employer' || userRole === 'recruiter' || userRole === 'business';
 
-    const tabs = isEmployer
-        ? [
-            { id: 'profile', path: '/settings/profile', label: 'Thông tin Doanh nghiệp', icon: 'building' },
-            { id: 'kyc', path: '/settings/kyc', label: 'Xác minh Doanh nghiệp', icon: 'shield-check' },
-            { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: 'key' },
-        ]
-        : [
-            { id: 'profile', path: '/settings/profile', label: 'Thông tin Sinh viên', icon: 'graduation' },
-            { id: 'kyc', path: '/settings/kyc', label: 'Xác minh Thẻ sinh viên', icon: 'shield-check' },
-            { id: 'cv_manager', path: '/settings/cv', label: 'Quản lý CV & Hồ sơ', icon: 'file-text' },
-            { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: 'key' },
-        ];
+    const isReferralActive = publicConfigs ? publicConfigs.referralProgramEnabled : true;
+
+    // Chỉ thêm Tab Bạn Đồng Hành nếu Admin BẬT trong cài đặt hệ thống
+    const tabs = useMemo(() => {
+        const base = isEmployer
+            ? [
+                { id: 'profile', path: '/settings/profile', label: 'Thông tin Doanh nghiệp', icon: 'building' },
+                { id: 'kyc', path: '/settings/kyc', label: 'Xác minh Doanh nghiệp', icon: 'shield-check' },
+                { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: 'key' },
+            ]
+            : [
+                { id: 'profile', path: '/settings/profile', label: 'Thông tin Sinh viên', icon: 'graduation' },
+                { id: 'kyc', path: '/settings/kyc', label: 'Xác minh Thẻ sinh viên', icon: 'shield-check' },
+                { id: 'cv_manager', path: '/settings/cv', label: 'Quản lý CV & Hồ sơ', icon: 'file-text' },
+                { id: 'password', path: '/settings/password', label: 'Đổi mật khẩu', icon: 'key' },
+            ];
+
+        if (!isReferralActive) return base;
+        const insertIdx = base.length - 1; // Đứng trước Đổi mật khẩu
+        const referralTab = { id: 'referral', path: '/settings/referral', label: 'Bạn đồng hành (1/1)', icon: 'users' };
+        const copy = [...base];
+        copy.splice(insertIdx, 0, referralTab);
+        return copy;
+    }, [isEmployer, isReferralActive]);
 
     const tab = useMemo(() => {
         if (forcedTab) return forcedTab;
         const p = location.pathname;
         if (p === '/settings/kyc' || p === '/account/kyc' || p === '/settings/verification') return 'kyc';
         if (p === '/settings/cv' || p === '/account/cv') return 'cv_manager';
+        if (p === '/settings/referral' || p === '/account/referral') return 'referral';
         if (p === '/settings/password' || p === '/settings/security' || p === '/account/security') return 'password';
         return 'profile';
     }, [forcedTab, location.pathname]);
@@ -2591,6 +2546,10 @@ export default function AccountSettings({ forcedTab }) {
 
                         {tab === 'password' && (
                             <PasswordTab changePassword={changePassword} logout={logout} currentUser={safeUser} />
+                        )}
+
+                        {tab === 'referral' && isReferralActive && (
+                            <BuddyReferralTab currentUser={safeUser} publicConfigs={publicConfigs} />
                         )}
                     </div>
                 </div>
