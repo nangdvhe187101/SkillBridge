@@ -45,7 +45,17 @@ export function resolveAvatarUrl(src) {
     return s;
   }
 
-  // 4. Full URL bên ngoài hợp lệ (Google avatar, CDN công khai, Unsplash...)
+  // 4. Nếu URL chứa /api/storage/file nhưng đang trỏ vào domain frontend (skillbridge.id.vn) thay vì backend API
+  if (s.includes('skillbridge.id.vn/api/storage/file')) {
+    try {
+      const u = new URL(s);
+      return `${API_BASE}${u.pathname}${u.search}`;
+    } catch {
+      return s;
+    }
+  }
+
+  // 5. Full URL bên ngoài hợp lệ (Google avatar, CDN công khai, Unsplash...)
   if (s.startsWith('http://') || s.startsWith('https://')) {
     return s;
   }

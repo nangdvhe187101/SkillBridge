@@ -2405,7 +2405,7 @@ function KycVerificationTab({ isEmployer }) {
 
 // Main Component
 export default function AccountSettings({ forcedTab }) {
-    const { state, updateProfile, changePassword, logout } = useStore();
+    const { state, dispatch, updateProfile, changePassword, logout } = useStore();
     const { currentUser, role } = state;
     const navigate = useNavigate();
     const location = useLocation();
@@ -2466,14 +2466,14 @@ export default function AccountSettings({ forcedTab }) {
     const activeTabRef = useRef(null);
 
     const handleAvatarUpdated = (newAvatarUrl) => {
-        if (updateProfile) {
-            updateProfile({ avatarUrl: newAvatarUrl }).catch(() => {});
+        if (dispatch) {
+            dispatch({ type: 'UPDATE_PROFILE', patch: { avatarUrl: newAvatarUrl } });
         }
     };
 
     const handleCoverUpdated = (newCoverUrl) => {
-        if (updateProfile) {
-            updateProfile({ coverImageUrl: newCoverUrl }).catch(() => {});
+        if (dispatch) {
+            dispatch({ type: 'UPDATE_PROFILE', patch: { coverImageUrl: newCoverUrl } });
         }
     };
 
