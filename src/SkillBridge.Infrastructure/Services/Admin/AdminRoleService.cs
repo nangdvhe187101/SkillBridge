@@ -46,7 +46,7 @@ public class AdminRoleService : IAdminRoleService
             Name = m.Name,
             Email = m.Email,
             RoleId = m.RoleId,
-            RoleCode = m.Role?.Code ?? "admin",
+            RoleCode = MapToDtoRoleCode(m.Role?.Code),
             RoleName = m.Role?.Name ?? "Quản trị viên",
             IsActive = m.IsActive ?? true,
             CreatedAt = m.CreatedAt
@@ -63,9 +63,10 @@ public class AdminRoleService : IAdminRoleService
             throw new BusinessException("Họ tên và email của thành viên không được để trống.");
         }
 
-        if (string.IsNullOrWhiteSpace(dto.Password) || dto.Password.Trim().Length < 6)
+        var rawPassword = string.IsNullOrWhiteSpace(dto.Password) ? "Admin@123" : dto.Password.Trim();
+        if (rawPassword.Length < 6)
         {
-            throw new BusinessException("Mật khẩu khởi tạo không được để trống và phải có ít nhất 6 ký tự.");
+            throw new BusinessException("Mật khẩu khởi tạo phải có ít nhất 6 ký tự.");
         }
 
         var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
@@ -75,28 +76,9 @@ public class AdminRoleService : IAdminRoleService
             throw new BusinessException($"Email '{dto.Email}' đã tồn tại trong đội ngũ quản trị.");
         }
 
-        Role? role = null;
-        if (dto.RoleId.HasValue && dto.RoleId.Value > 0)
-        {
-            role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Id == dto.RoleId.Value, ct);
-        }
-        else if (!string.IsNullOrWhiteSpace(dto.RoleCode))
-        {
-            role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == dto.RoleCode.Trim().ToLowerInvariant(), ct);
-        }
+        var role = await ResolveAdminRoleAsync(dto.RoleId, dto.RoleCode, ct);
 
-        if (role == null)
-        {
-            role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == "moderator" || r.Type == "admin", ct)
-                   ?? await _dbContext.Roles.FirstOrDefaultAsync(ct);
-        }
-
-        if (role == null)
-        {
-            throw new BusinessException("Không tìm thấy vai trò phù hợp để gán cho thành viên.");
-        }
-
-        var passwordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password.Trim(), workFactor: 11);
+        var passwordHash = BCrypt.Net.BCrypt.HashPassword(rawPassword, workFactor: 11);
 
         // Đồng bộ hoặc tạo User trong bảng users để nhân sự có thể đăng nhập được vào Admin Portal
         var existingUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail, ct);
@@ -150,7 +132,7 @@ public class AdminRoleService : IAdminRoleService
             Name = member.Name,
             Email = member.Email,
             RoleId = member.RoleId,
-            RoleCode = role.Code,
+            RoleCode = MapToDtoRoleCode(role.Code),
             RoleName = role.Name,
             IsActive = member.IsActive ?? true,
             CreatedAt = member.CreatedAt
@@ -176,23 +158,11 @@ public class AdminRoleService : IAdminRoleService
             throw new BusinessException("Tài khoản Super Admin gốc (skillbridge.vn@gmail.com) luôn giữ vai trò Super Admin tối cao, không thể hạ quyền.");
         }
 
-        if (dto.RoleId.HasValue && dto.RoleId.Value > 0)
+        if ((dto.RoleId.HasValue && dto.RoleId.Value > 0) || !string.IsNullOrWhiteSpace(dto.RoleCode))
         {
-            var role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Id == dto.RoleId.Value, ct);
-            if (role != null)
-            {
-                member.RoleId = role.Id;
-                member.Role = role;
-            }
-        }
-        else if (!string.IsNullOrWhiteSpace(dto.RoleCode))
-        {
-            var role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == dto.RoleCode.Trim().ToLowerInvariant(), ct);
-            if (role != null)
-            {
-                member.RoleId = role.Id;
-                member.Role = role;
-            }
+            var newRole = await ResolveAdminRoleAsync(dto.RoleId, dto.RoleCode, ct);
+            member.RoleId = newRole.Id;
+            member.Role = newRole;
         }
 
         if (dto.IsActive.HasValue)
@@ -225,7 +195,7 @@ public class AdminRoleService : IAdminRoleService
             Name = member.Name,
             Email = member.Email,
             RoleId = member.RoleId,
-            RoleCode = member.Role?.Code ?? "admin",
+            RoleCode = MapToDtoRoleCode(member.Role?.Code),
             RoleName = member.Role?.Name ?? "Quản trị viên",
             IsActive = member.IsActive ?? true,
             CreatedAt = member.CreatedAt
@@ -563,6 +533,63 @@ public class AdminRoleService : IAdminRoleService
         }
     }
 
+    private static string MapToDtoRoleCode(string? dbRoleCode)
+    {
+        if (string.IsNullOrWhiteSpace(dbRoleCode)) return "business_admin";
+        var lower = dbRoleCode.Trim().ToLowerInvariant();
+        return lower switch
+        {
+            "content_moderator" => "moderator",
+            "dispute_officer" => "dispute",
+            "finance_viewer" => "finance",
+            "admin" => "business_admin",
+            _ => lower
+        };
+    }
+
+    private async Task<Role> ResolveAdminRoleAsync(int? roleId, string? roleCode, CancellationToken ct)
+    {
+        if (roleId.HasValue && roleId.Value > 0)
+        {
+            var roleById = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Id == roleId.Value, ct);
+            if (roleById != null) return roleById;
+        }
+
+        if (!string.IsNullOrWhiteSpace(roleCode))
+        {
+            var rawCode = roleCode.Trim().ToLowerInvariant();
+            var targetCodes = rawCode switch
+            {
+                "business_admin" or "business" or "admin" => new[] { "business_admin", "admin" },
+                "moderator" or "content_moderator" => new[] { "content_moderator", "moderator" },
+                "dispute" or "dispute_officer" => new[] { "dispute_officer", "dispute" },
+                "finance" or "finance_viewer" => new[] { "finance_viewer", "finance" },
+                "super_admin" or "super" => new[] { "super_admin" },
+                _ => new[] { rawCode }
+            };
+
+            foreach (var code in targetCodes)
+            {
+                var role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == code, ct);
+                if (role != null) return role;
+            }
+        }
+
+        // An toàn: Fallback mặc định về role nhân sự cấp dưới, tuyệt đối không bao giờ fallback về super_admin!
+        var defaultRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == "business_admin", ct)
+                       ?? await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == "content_moderator" || r.Code == "moderator", ct)
+                       ?? await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == "admin" && r.Code != "super_admin", ct)
+                       ?? await _dbContext.Roles.FirstOrDefaultAsync(r => r.Type == "admin" && r.Code != "super_admin", ct)
+                       ?? await _dbContext.Roles.FirstOrDefaultAsync(ct);
+
+        if (defaultRole == null)
+        {
+            throw new BusinessException("Không tìm thấy vai trò phù hợp để gán cho thành viên.");
+        }
+
+        return defaultRole;
+    }
+
     private async Task EnsureInitialTeamAndRolesSeedAsync(CancellationToken ct)
     {
         if (!await _dbContext.Roles.AnyAsync(ct))
@@ -579,18 +606,67 @@ public class AdminRoleService : IAdminRoleService
             await _dbContext.SaveChangesAsync(ct);
         }
 
-        if (!await _dbContext.AdminTeamMembers.AnyAsync(ct))
+        // 1. Đảm bảo role business_admin tồn tại
+        var businessAdminRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == "business_admin", ct);
+        if (businessAdminRole == null)
         {
-            var superRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == "super_admin" || r.Type == "admin", ct);
-            var member = new AdminTeamMember
+            businessAdminRole = new Role
             {
-                Name = "Quản Trị Viên",
-                Email = "skillbridge.vn@gmail.com",
-                RoleId = superRole?.Id ?? 3,
+                Code = "business_admin",
+                Name = "Business Admin",
+                Type = "admin",
+                Description = "Kiểm soát nội dung, gói dịch vụ, đối tác quảng cáo và giám sát tin nhắn",
                 IsActive = true,
                 CreatedAt = DateTime.UtcNow
             };
-            await _dbContext.AdminTeamMembers.AddAsync(member, ct);
+            await _dbContext.Roles.AddAsync(businessAdminRole, ct);
+            await _dbContext.SaveChangesAsync(ct);
+            _logger.LogInformation("EnsureInitialTeamAndRolesSeed: Đã tạo role 'business_admin' thành công.");
+        }
+
+        // 2. Tự động khắc phục tài khoản linhtlkhs189008@fpt.edu.vn nếu bị gán nhầm sang super_admin (ID 3)
+        var misassignedMembers = await _dbContext.AdminTeamMembers
+            .Where(m => m.Email == "linhtlkhs189008@fpt.edu.vn" && m.RoleId == 3)
+            .ToListAsync(ct);
+
+        foreach (var m in misassignedMembers)
+        {
+            m.RoleId = businessAdminRole.Id;
+            var u = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == m.Email, ct);
+            if (u != null)
+            {
+                u.RoleId = businessAdminRole.Id;
+            }
+        }
+        if (misassignedMembers.Count > 0)
+        {
+            await _dbContext.SaveChangesAsync(ct);
+            _logger.LogInformation("EnsureInitialTeamAndRolesSeed: Đã điều chỉnh {Count} tài khoản linhtlkhs189008@fpt.edu.vn về role Business Admin.", misassignedMembers.Count);
+        }
+
+        if (!await _dbContext.AdminTeamMembers.AnyAsync(ct))
+        {
+            var superRole = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == "super_admin" || r.Type == "admin", ct);
+            var members = new List<AdminTeamMember>
+            {
+                new()
+                {
+                    Name = "Quản Trị Viên",
+                    Email = "skillbridge.vn@gmail.com",
+                    RoleId = superRole?.Id ?? 3,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                },
+                new()
+                {
+                    Name = "Lê Quản Trị",
+                    Email = "admin@skillbridge.vn",
+                    RoleId = superRole?.Id ?? 3,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                }
+            };
+            await _dbContext.AdminTeamMembers.AddRangeAsync(members, ct);
             await _dbContext.SaveChangesAsync(ct);
         }
     }
@@ -647,7 +723,13 @@ public class AdminRoleService : IAdminRoleService
             ("Tin nhắn trao đổi công việc trực tuyến realtime", "Giao tiếp & Đồng hành", "/messages", new[] { "student", "employer" }),
             ("Mời bạn đồng hành 1-1 nhận quà trải nghiệm", "Giao tiếp & Đồng hành", "/settings/referral", new[] { "student", "employer" }),
             ("Cài đặt hồ sơ & Thông tin liên hệ cơ bản", "Hệ thống", "/settings/profile", new[] { "student", "employer" }),
-            ("Đổi mật khẩu & Bảo mật tài khoản", "Hệ thống", "/settings/password", new[] { "student", "employer" })
+            ("Đổi mật khẩu & Bảo mật tài khoản", "Hệ thống", "/settings/password", new[] { "student", "employer" }),
+
+            // 8. Nhóm Quản trị hệ thống (Admin & Governance)
+            ("Bảng điều khiển Admin Portal", "Quản trị", "/admin", new[] { "admin", "super_admin" }),
+            ("Quản trị người dùng & KYC", "Quản trị", "/admin/users", new[] { "admin", "super_admin" }),
+            ("Giải quyết tranh chấp Escrow", "Quản trị", "/admin/disputes", new[] { "admin", "super_admin" }),
+            ("Cấu hình hệ thống & Email", "Hệ thống", "/admin/ops", new[] { "admin", "super_admin" })
         };
 
         var allRoles = await _dbContext.Roles.ToListAsync(ct);
@@ -669,13 +751,14 @@ public class AdminRoleService : IAdminRoleService
             await _dbContext.Permissions.AddAsync(p, ct);
             await _dbContext.SaveChangesAsync(ct);
 
+            var assignedRoleIds = new HashSet<int>();
             foreach (var rCode in item.Roles)
             {
                 var role = allRoles.FirstOrDefault(r =>
                     string.Equals(NormalizeRoleCode(r.Code), NormalizeRoleCode(rCode), StringComparison.OrdinalIgnoreCase) ||
                     string.Equals(r.Code, rCode, StringComparison.OrdinalIgnoreCase));
 
-                if (role != null)
+                if (role != null && assignedRoleIds.Add(role.Id))
                 {
                     await _dbContext.RolePermissions.AddAsync(new RolePermission
                     {

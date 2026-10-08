@@ -32,3 +32,6 @@ frontend-admin/.vite/
 # IDE
 .idea/
 .vscode/
+
+# DB Dumps
+tidb_export/

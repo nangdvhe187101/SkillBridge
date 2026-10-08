@@ -19,12 +19,15 @@ import {
 const ROLE_NAME = {
   super_admin: 'Super Admin',
   super: 'Super Admin',
-  admin: 'Super Admin',
+  admin: 'Business Admin',
   business_admin: 'Business Admin',
   business: 'Business Admin',
   moderator: 'Content Moderator',
+  content_moderator: 'Content Moderator',
   dispute: 'Dispute Officer',
-  finance: 'Finance Viewer'
+  dispute_officer: 'Dispute Officer',
+  finance: 'Finance Viewer',
+  finance_viewer: 'Finance Viewer'
 };
 
 const GROUPS = ['Tất cả', 'Việc làm', 'Khám phá & Tài năng', 'Xác thực & Tài khoản', 'Sinh viên', 'Doanh nghiệp', 'Tài chính & Escrow', 'Giao tiếp & Đồng hành', 'Hệ thống'];
@@ -578,7 +581,7 @@ export default function AdminRoles() {
           <div className="adm-card" style={{ marginTop: 20 }}>
             <div className="adm-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h4 style={{ margin: 0 }}>
-                Thành viên nhân sự được phân quyền ({team.filter(m => (m.email || '').toLowerCase() !== 'skillbridge.vn@gmail.com' && !(m.roleCode || m.role || '').toLowerCase().includes('super')).length})
+                Thành viên nhân sự được phân quyền ({team.filter(m => (m.email || '').toLowerCase() !== 'skillbridge.vn@gmail.com').length})
               </h4>
               <span className="sub">Nhân sự nội bộ hỗ trợ vận hành do Super Admin bổ nhiệm</span>
             </div>
@@ -592,44 +595,53 @@ export default function AdminRoles() {
                   <thead><tr><th>Nhân sự</th><th>Email nội bộ</th><th>Vai trò đảm nhiệm</th><th>Hành động</th></tr></thead>
                   <tbody>
                     {team
-                      .filter(m => (m.email || '').toLowerCase() !== 'skillbridge.vn@gmail.com' && !(m.roleCode || m.role || '').toLowerCase().includes('super'))
-                      .map((m) => (
-                      <tr key={m.id}>
-                        <td><b>{m.name}</b></td>
-                        <td>{m.email}</td>
-                        <td>
-                          <select
-                            value={m.roleCode || m.role}
-                            onChange={(e) => handleChangeTeamRole(m.id, e.target.value)}
-                          >
-                            <option value="business_admin">Business Admin</option>
-                            <option value="moderator">Content Moderator</option>
-                            <option value="dispute">Dispute Officer</option>
-                            <option value="finance">Finance Viewer</option>
-                          </select>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                            <button
-                              className="btn btn-outline btn-sm"
-                              style={{ fontSize: 12, padding: '3px 8px' }}
-                              onClick={() => handleResetMemberPassword(m)}
-                              title="Đặt lại mật khẩu đăng nhập cho nhân sự này"
-                            >
-                              Đổi mật khẩu
-                            </button>
-                            <button
-                              className="btn btn-outline btn-sm"
-                              style={{ color: 'var(--coral)', borderColor: 'var(--coral)', fontSize: 12, padding: '3px 8px' }}
-                              onClick={() => handleRemoveTeam(m)}
-                            >
-                              Xoá khỏi đội ngũ
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {team.filter(m => (m.email || '').toLowerCase() !== 'skillbridge.vn@gmail.com' && !(m.roleCode || m.role || '').toLowerCase().includes('super')).length === 0 && (
+                      .filter(m => (m.email || '').toLowerCase() !== 'skillbridge.vn@gmail.com')
+                      .map((m) => {
+                        const rawCode = (m.roleCode || m.role || '').toLowerCase();
+                        const selectVal =
+                          (rawCode === 'content_moderator' || rawCode === 'moderator') ? 'moderator' :
+                          (rawCode === 'dispute_officer' || rawCode === 'dispute') ? 'dispute' :
+                          (rawCode === 'finance_viewer' || rawCode === 'finance') ? 'finance' :
+                          'business_admin';
+
+                        return (
+                          <tr key={m.id}>
+                            <td><b>{m.name}</b></td>
+                            <td>{m.email}</td>
+                            <td>
+                              <select
+                                value={selectVal}
+                                onChange={(e) => handleChangeTeamRole(m.id, e.target.value)}
+                              >
+                                <option value="business_admin">Business Admin</option>
+                                <option value="moderator">Content Moderator</option>
+                                <option value="dispute">Dispute Officer</option>
+                                <option value="finance">Finance Viewer</option>
+                              </select>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <button
+                                  className="btn btn-outline btn-sm"
+                                  style={{ fontSize: 12, padding: '3px 8px' }}
+                                  onClick={() => handleResetMemberPassword(m)}
+                                  title="Đặt lại mật khẩu đăng nhập cho nhân sự này"
+                                >
+                                  Đổi mật khẩu
+                                </button>
+                                <button
+                                  className="btn btn-outline btn-sm"
+                                  style={{ color: 'var(--coral)', borderColor: 'var(--coral)', fontSize: 12, padding: '3px 8px' }}
+                                  onClick={() => handleRemoveTeam(m)}
+                                >
+                                  Xoá khỏi đội ngũ
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    {team.filter(m => (m.email || '').toLowerCase() !== 'skillbridge.vn@gmail.com').length === 0 && (
                       <tr>
                         <td colSpan={4} className="adm-empty" style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--ink-soft)' }}>
                           <div style={{ fontSize: 26, marginBottom: 8 }}>👥</div>

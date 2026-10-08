@@ -110,6 +110,44 @@ public static class DbInitializer
             await context.SaveChangesAsync();
             logger?.LogInformation("AdminSeed: Đã đồng bộ tài khoản {Email} vào bảng admin_team_members.", email);
         }
+
+        // 5. Đảm bảo Role 'business_admin' tồn tại và sửa tài khoản bị gán nhầm
+        try
+        {
+            var businessAdminRole = await context.Roles.FirstOrDefaultAsync(r => r.Code == "business_admin");
+            if (businessAdminRole == null)
+            {
+                businessAdminRole = new Role
+                {
+                    Code = "business_admin",
+                    Name = "Business Admin",
+                    Description = "Kiểm soát nội dung, gói dịch vụ, đối tác quảng cáo và giám sát tin nhắn",
+                    Type = "admin",
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+                await context.Roles.AddAsync(businessAdminRole);
+                await context.SaveChangesAsync();
+                logger?.LogInformation("AdminSeed: Đã tạo Role 'business_admin' (ID: {Id}).", businessAdminRole.Id);
+            }
+
+            var misassignedMember = await context.AdminTeamMembers.FirstOrDefaultAsync(m => m.Email == "linhtlkhs189008@fpt.edu.vn" && m.RoleId == 3);
+            if (misassignedMember != null)
+            {
+                misassignedMember.RoleId = businessAdminRole.Id;
+                var misassignedUser = await context.Users.FirstOrDefaultAsync(u => u.Email == "linhtlkhs189008@fpt.edu.vn");
+                if (misassignedUser != null)
+                {
+                    misassignedUser.RoleId = businessAdminRole.Id;
+                }
+                await context.SaveChangesAsync();
+                logger?.LogInformation("AdminSeed: Đã chuyển tài khoản linhtlkhs189008@fpt.edu.vn từ Super Admin về Business Admin.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "AdminSeed: Lỗi khi khởi tạo/điều chỉnh Business Admin role.");
+        }
     }
 
     public static async Task EnsureChatSchemaAsync(SkillBridgeDbContext context, ILogger? logger = null)
