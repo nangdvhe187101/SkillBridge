@@ -114,6 +114,68 @@ export default function Messages() {
         return () => document.removeEventListener('mousedown', onClickOutside);
     }, [menuOpen]);
 
+    const [connectingAdmin, setConnectingAdmin] = useState(false);
+    const connectingAdminRef = useRef(false);
+    const autoConnectedAdminRef = useRef(false);
+
+    const isAdminConvo = (c) => {
+        return c?.otherUserRole === 'admin' || c?.role === 'admin' || (c?.name && c.name.toLowerCase().includes('quản trị'));
+    };
+
+    // Tự động kết nối sẵn hội thoại CSKH với Admin khi vào trang Tin nhắn
+    useEffect(() => {
+        if (autoConnectedAdminRef.current) return;
+        if (conversations && conversations.length >= 0) {
+            const hasAdmin = conversations.some((c) => isAdminConvo(c));
+            if (!hasAdmin) {
+                autoConnectedAdminRef.current = true;
+                chatApi.startSupportConversation()
+                    .then((convo) => {
+                        if (convo?.id) {
+                            refreshConversations('chat');
+                        }
+                    })
+                    .catch(() => {});
+            } else {
+                autoConnectedAdminRef.current = true;
+            }
+        }
+    }, [conversations, refreshConversations]);
+
+    const handleChatWithAdmin = async () => {
+        // Chống spam nút bấm click liên tục
+        if (connectingAdminRef.current || connectingAdmin) return;
+
+        // Nếu đã có sẵn cuộc hội thoại với Admin trong danh sách, chọn luôn mà không gọi lại API
+        const existingAdminConvo = conversations.find((c) => isAdminConvo(c));
+        if (existingAdminConvo) {
+            setTab('chat');
+            setActiveId(existingAdminConvo.id);
+            setSearchParams({ c: existingAdminConvo.id });
+            return;
+        }
+
+        connectingAdminRef.current = true;
+        setConnectingAdmin(true);
+        try {
+            const convo = await chatApi.startSupportConversation();
+            if (convo && convo.id) {
+                await refreshConversations('chat');
+                setTab('chat');
+                setActiveId(convo.id);
+                setSearchParams({ c: convo.id });
+                showToast('Đã kết nối với Quản trị viên SkillBridge!', 'check');
+            }
+        } catch (err) {
+            showToast(err?.message || 'Không thể kết nối với Quản trị viên lúc này', 'warning');
+        } finally {
+            setConnectingAdmin(false);
+            setTimeout(() => {
+                connectingAdminRef.current = false;
+            }, 1000); // Khóa chống spam 1 giây
+        }
+    };
+
     const handleSelectTab = (newTab) => {
         setTab(newTab);
         refreshConversations(newTab);
@@ -152,6 +214,51 @@ export default function Messages() {
                     <div className="msgr-page-head">
                         <h2>Tin nhắn</h2>
                     </div>
+
+                    {/* Quick Support with Admin Banner */}
+                    <div style={{
+                        margin: '0 12px 10px',
+                        padding: '10px 12px',
+                        background: 'linear-gradient(135deg, #eff6ff 0%, #e0e7ff 100%)',
+                        borderRadius: 10,
+                        border: '1px solid #bfdbfe',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
+                    }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                            <span style={{ fontSize: 20, flexShrink: 0 }}>🛡️</span>
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e3a8a', lineHeight: 1.2 }}>Hỗ trợ SkillBridge</div>
+                                <div style={{ fontSize: 11, color: '#3b82f6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Chat trực tiếp với Ban Quản trị</div>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleChatWithAdmin}
+                            disabled={connectingAdmin}
+                            style={{
+                                padding: '5px 11px',
+                                fontSize: 11.5,
+                                fontWeight: 600,
+                                background: '#2563eb',
+                                color: '#fff',
+                                border: 'none',
+                                borderRadius: 7,
+                                cursor: connectingAdmin ? 'wait' : 'pointer',
+                                whiteSpace: 'nowrap',
+                                flexShrink: 0,
+                                transition: 'background 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = '#1d4ed8'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = '#2563eb'}
+                        >
+                            {connectingAdmin ? 'Đang mở...' : 'Chat với Admin'}
+                        </button>
+                    </div>
+
                     <div className="msgr-panel-search">
                         <input type="text" placeholder="Tìm kiếm hội thoại..." value={search} onChange={(e) => setSearch(e.target.value)} />
                     </div>
@@ -177,7 +284,17 @@ export default function Messages() {
                                         {c.online && <span className="msgr-online-dot" />}
                                     </div>
                                     <div className="msgr-convo-main">
-                                        <div className="msgr-convo-top"><b>{c.name} {c.muted && '🔕'}</b><span>{c.lastTime}</span></div>
+                                        <div className="msgr-convo-top">
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, flex: 1 }}>
+                                                <b style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name} {c.muted && '🔕'}</b>
+                                                {isAdminConvo(c) && (
+                                                    <span style={{ fontSize: 9.5, background: '#2563eb', color: '#fff', padding: '1px 5px', borderRadius: 4, fontWeight: 700, flexShrink: 0 }}>
+                                                        ADMIN
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span>{c.lastTime}</span>
+                                        </div>
                                         <div className="msgr-convo-sub">{lastPreview(c)}</div>
                                     </div>
                                     {c.unread > 0 && <span className="msgr-unread-dot">{c.unread}</span>}
@@ -210,8 +327,15 @@ export default function Messages() {
                                     )}
                                     <Avatar src={active.avatar || active.avatarUrl || active.otherUserAvatar} name={active.name} fontSize={16} style={{ width: 46, height: 46 }} />
                                     <div className="msgr-window-head-txt" style={{ minWidth: 0 }}>
-                                        <b style={{ fontSize: 16.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block' }}>{active.name}</b>
-                                        <span style={{ fontSize: 13 }}>{active.subtitle} · {active.blocked ? 'Đã chặn' : active.online ? 'Đang hoạt động' : 'Ngoại tuyến'}</span>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                            <b style={{ fontSize: 16.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{active.name}</b>
+                                            {isAdminConvo(active) && (
+                                                <span style={{ fontSize: 11, background: '#2563eb', color: '#fff', padding: '1px 7px', borderRadius: 4, fontWeight: 700 }}>
+                                                    Hỗ trợ hệ thống
+                                                </span>
+                                            )}
+                                        </div>
+                                        <span style={{ fontSize: 13 }}>{isAdminConvo(active) ? 'Đội ngũ Quản trị viên SkillBridge' : `${active.subtitle} · ${active.blocked ? 'Đã chặn' : active.online ? 'Đang hoạt động' : 'Ngoại tuyến'}`}</span>
                                     </div>
                                 </div>
 

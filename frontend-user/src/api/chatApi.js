@@ -26,6 +26,15 @@ export async function getConversationMessages(conversationId, { page = 1, pageSi
 }
 
 /**
+ * Bắt đầu hoặc lấy cuộc trò chuyện với Quản trị viên (Admin) hỗ trợ hệ thống
+ */
+export async function startSupportConversation() {
+  return apiFetch('/conversations/support', {
+    method: 'POST',
+  });
+}
+
+/**
  * Bắt đầu hoặc lấy cuộc trò chuyện với người dùng khác
  * @param {number} targetUserId
  * @param {number|null} [jobId=null]
