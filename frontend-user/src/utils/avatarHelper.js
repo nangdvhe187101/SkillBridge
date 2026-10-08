@@ -1,4 +1,10 @@
-const API_URL = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) || 'http://localhost:5004/api';
+const isClientProd = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+const defaultApiUrl = isClientProd ? 'https://api.skillbridge.id.vn/api' : 'http://localhost:5004/api';
+let rawApiUrl = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) || defaultApiUrl;
+if (isClientProd && rawApiUrl.includes('localhost')) {
+  rawApiUrl = 'https://api.skillbridge.id.vn/api';
+}
+const API_URL = rawApiUrl;
 const API_BASE = API_URL.replace(/\/api\/?$/, '');
 
 /**

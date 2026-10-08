@@ -19,6 +19,8 @@ public class StorageController : ControllerBase
     private static readonly string[] AllowedPublicPrefixes = new[]
     {
         "avatars/",
+        "covers/",
+        "portfolio/",
         "jobs/",
         "chat/",
         "identity_documents/"
