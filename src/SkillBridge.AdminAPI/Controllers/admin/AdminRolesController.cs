@@ -21,10 +21,14 @@ namespace SkillBridge.AdminAPI.Controllers.admin;
 public class AdminRolesController : ControllerBase
 {
     private readonly IAdminRoleService _roleService;
+    private readonly Microsoft.Extensions.Logging.ILogger<AdminRolesController> _logger;
 
-    public AdminRolesController(IAdminRoleService roleService)
+    public AdminRolesController(
+        IAdminRoleService roleService,
+        Microsoft.Extensions.Logging.ILogger<AdminRolesController> logger)
     {
         _roleService = roleService;
+        _logger = logger;
     }
 
     /// <summary>
@@ -55,6 +59,12 @@ public class AdminRolesController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (Exception ex)
+        {
+            var errorDetail = ex.InnerException?.Message ?? ex.Message;
+            _logger.LogError(ex, "Lỗi khi thêm thành viên quản trị: {Message}", errorDetail);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi thêm thành viên: " + errorDetail });
+        }
     }
 
     /// <summary>
@@ -76,6 +86,12 @@ public class AdminRolesController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+        catch (Exception ex)
+        {
+            var errorDetail = ex.InnerException?.Message ?? ex.Message;
+            _logger.LogError(ex, "Lỗi khi cập nhật thành viên quản trị #{MemberId}: {Message}", id, errorDetail);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi cập nhật thành viên: " + errorDetail });
+        }
     }
 
     /// <summary>
@@ -95,6 +111,12 @@ public class AdminRolesController : ControllerBase
         catch (BusinessException ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            var errorDetail = ex.InnerException?.Message ?? ex.Message;
+            _logger.LogError(ex, "Lỗi khi xóa thành viên quản trị #{MemberId}: {Message}", id, errorDetail);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi xóa thành viên: " + errorDetail });
         }
     }
 

@@ -249,6 +249,70 @@ public class AdminRoleService : IAdminRoleService
         var memberEmail = member.Email;
         var memberName = member.Name;
 
+        // Nếu database là relational (MySQL / TiDB), giải phóng hoặc chuyển tiếp các liên kết khóa ngoại
+        // để không bị lỗi 'Cannot delete or update a parent row: a foreign key constraint fails'
+        if (_dbContext.Database.IsRelational())
+        {
+            var fallbackAdmin = await _dbContext.AdminTeamMembers
+                .FirstOrDefaultAsync(a => a.Id != memberId && (a.Email == "skillbridge.vn@gmail.com" || a.IsActive == true), ct);
+            var fallbackAdminId = fallbackAdmin?.Id ?? actorAdminId;
+
+            // 1. audit_logs: actor_id NOT NULL -> chuyển sang fallback admin
+            await _dbContext.AuditLogs
+                .Where(a => a.ActorId == memberId)
+                .ExecuteUpdateAsync(s => s.SetProperty(a => a.ActorId, fallbackAdminId), ct);
+
+            // 2. moderation_queue: reviewed_by nullable -> set null
+            await _dbContext.ModerationQueues
+                .Where(m => m.ReviewedBy == memberId)
+                .ExecuteUpdateAsync(s => s.SetProperty(m => m.ReviewedBy, (int?)null), ct);
+
+            // 3. disputes: resolved_by nullable -> set null
+            await _dbContext.Disputes
+                .Where(d => d.ResolvedBy == memberId)
+                .ExecuteUpdateAsync(s => s.SetProperty(d => d.ResolvedBy, (int?)null), ct);
+
+            // 4. users: kyc_reviewed_by nullable -> set null
+            await _dbContext.Users
+                .Where(u => u.KycReviewedBy == memberId)
+                .ExecuteUpdateAsync(s => s.SetProperty(u => u.KycReviewedBy, (int?)null), ct);
+
+            // 5. bank_verification_requests: reviewed_by_admin_id nullable -> set null
+            await _dbContext.BankVerificationRequests
+                .Where(b => b.ReviewedByAdminId == memberId)
+                .ExecuteUpdateAsync(s => s.SetProperty(b => b.ReviewedByAdminId, (int?)null), ct);
+
+            // 6. student_verification_requests: reviewed_by_admin_id nullable -> set null
+            await _dbContext.StudentVerificationRequests
+                .Where(s => s.ReviewedByAdminId == memberId)
+                .ExecuteUpdateAsync(s => s.SetProperty(s => s.ReviewedByAdminId, (int?)null), ct);
+
+            // 7. support_tickets: resolved_by nullable -> set null
+            await _dbContext.SupportTickets
+                .Where(t => t.ResolvedBy == memberId)
+                .ExecuteUpdateAsync(s => s.SetProperty(t => t.ResolvedBy, (int?)null), ct);
+
+            // 8. withdrawal_requests: processed_by nullable -> set null
+            await _dbContext.WithdrawalRequests
+                .Where(w => w.ProcessedBy == memberId)
+                .ExecuteUpdateAsync(s => s.SetProperty(w => w.ProcessedBy, (int?)null), ct);
+
+            // 9. role_permissions: granted_by nullable -> set null
+            await _dbContext.RolePermissions
+                .Where(rp => rp.GrantedBy == memberId)
+                .ExecuteUpdateAsync(s => s.SetProperty(rp => rp.GrantedBy, (int?)null), ct);
+
+            // 10. user_badges: granted_by nullable -> set null
+            await _dbContext.UserBadges
+                .Where(ub => ub.GrantedBy == memberId)
+                .ExecuteUpdateAsync(s => s.SetProperty(ub => ub.GrantedBy, (int?)null), ct);
+        }
+        else
+        {
+            var logs = await _dbContext.AuditLogs.Where(a => a.ActorId == memberId).ToListAsync(ct);
+            foreach (var l in logs) l.ActorId = actorAdminId;
+        }
+
         _dbContext.AdminTeamMembers.Remove(member);
 
         // Khóa tài khoản User tương ứng trong bảng users
