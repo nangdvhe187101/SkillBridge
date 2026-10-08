@@ -2464,12 +2464,6 @@ export default function AccountSettings({ forcedTab }) {
 
     const activeTabRef = useRef(null);
 
-    useEffect(() => {
-        if (activeTabRef.current) {
-            activeTabRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
-    }, [tab]);
-
     const handleAvatarUpdated = (newAvatarUrl) => {
         if (updateProfile) {
             updateProfile({ avatarUrl: newAvatarUrl }).catch(() => {});
@@ -2494,15 +2488,24 @@ export default function AccountSettings({ forcedTab }) {
                         </span>
                     </div>
 
-                    <div className="acct-tablist">
+                    {/* Danh sách các mục cài đặt xếp dọc từ trên xuống dưới */}
+                    <div className="acct-tablist" role="tablist">
                         {tabs.map((t) => (
                             <button
                                 key={t.id}
                                 ref={tab === t.id ? activeTabRef : null}
                                 className={'acct-tab' + (tab === t.id ? ' is-active' : '')}
-                                onClick={() => navigate(t.path)}
+                                onClick={() => {
+                                    navigate(t.path);
+                                    if (typeof window !== 'undefined' && window.innerWidth <= 860) {
+                                        const contentEl = document.querySelector('.acct-content');
+                                        if (contentEl) {
+                                            contentEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                        }
+                                    }
+                                }}
                             >
-                                <Icon name={t.icon} width="16" height="16" />
+                                <Icon name={t.icon} width="18" height="18" />
                                 <span>{t.label}</span>
                             </button>
                         ))}
