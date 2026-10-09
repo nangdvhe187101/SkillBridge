@@ -536,6 +536,50 @@ public static class DbInitializer
         }
     }
 
+    public static async Task EnsureCoreEnumCompatibilityAsync(SkillBridgeDbContext context, ILogger? logger = null)
+    {
+        if (!context.Database.IsRelational()) return;
+
+        try
+        {
+            // 1. jobs.status: Mở rộng thêm 'disputed'
+            await context.Database.ExecuteSqlRawAsync(@"
+                ALTER TABLE jobs MODIFY COLUMN status ENUM('open','filled','in_progress','submitted','revision_requested','completed','cancelled','disputed') NOT NULL DEFAULT 'open';
+            ");
+            logger?.LogInformation("DbInitializer: Đã đảm bảo ENUM jobs.status hỗ trợ 'disputed'.");
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "DbInitializer: Không thể mở rộng jobs.status ENUM.");
+        }
+
+        try
+        {
+            // 2. disputes.decision: Mở rộng thêm 'split'
+            await context.Database.ExecuteSqlRawAsync(@"
+                ALTER TABLE disputes MODIFY COLUMN decision ENUM('accept','reject','split') NULL DEFAULT NULL;
+            ");
+            logger?.LogInformation("DbInitializer: Đã đảm bảo ENUM disputes.decision hỗ trợ 'split'.");
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "DbInitializer: Không thể mở rộng disputes.decision ENUM.");
+        }
+
+        try
+        {
+            // 3. kyc_documents.doc_type: Mở rộng thêm 'identity_card', 'passport'
+            await context.Database.ExecuteSqlRawAsync(@"
+                ALTER TABLE kyc_documents MODIFY COLUMN doc_type ENUM('national_id','student_card','business_license','company_logo','identity_card','passport') NOT NULL;
+            ");
+            logger?.LogInformation("DbInitializer: Đã đảm bảo ENUM kyc_documents.doc_type hỗ trợ đầy đủ các loại giấy tờ.");
+        }
+        catch (Exception ex)
+        {
+            logger?.LogWarning(ex, "DbInitializer: Không thể mở rộng kyc_documents.doc_type ENUM.");
+        }
+    }
+
     public static async Task EnsureStudentVerificationSchemaAsync(SkillBridgeDbContext context, ILogger? logger = null)
     {
         try

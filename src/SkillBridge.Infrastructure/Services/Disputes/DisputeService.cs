@@ -114,10 +114,20 @@ public class DisputeService : IDisputeService
         await _dbContext.Disputes.AddAsync(dispute, ct);
 
         // Khóa trạng thái công việc sang 'disputed'
-        job.Status = "disputed";
-        job.UpdatedAt = now;
+        try
+        {
+            job.Status = "disputed";
+            job.UpdatedAt = now;
+            await _dbContext.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException dbEx)
+        {
+            // Dự phòng nếu enum chưa có 'disputed' trên DB TiDB cũ
+            _logger.LogWarning(dbEx, "DB chưa hỗ trợ enum 'disputed' cho Job #{JobId}, giữ nguyên status hiện tại", job.Id);
+            _dbContext.Entry(job).State = EntityState.Unchanged;
+            await _dbContext.SaveChangesAsync(ct);
+        }
 
-        await _dbContext.SaveChangesAsync(ct);
         _logger.LogInformation("Đã khởi tạo Dispute #{DisputeId} cho Job #{JobId} bởi User {UserId} ({Role})",
             dispute.Id, job.Id, userId, filedBy);
 
@@ -464,7 +474,7 @@ public class DisputeService : IDisputeService
 
             studentPayout = Math.Round(totalAmount * (splitPercent / 100m), 0);
             employerRefund = totalAmount - studentPayout;
-            payoutToRole = "student";
+            payoutToRole = studentPayout >= employerRefund ? "student" : "employer";
 
             // Giải ngân phần của sinh viên (thu phí hoa hồng trên phần thực nhận này)
             if (studentPayout > 0)

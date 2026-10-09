@@ -313,11 +313,19 @@ public class AdminContentService : IAdminContentService
             throw new BusinessException($"Danh mục '{cleanName}' đã tồn tại trên hệ thống.");
         }
 
+        var validStrategies = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "watermark_image", "watermark_video", "partial_text", "sample_rows"
+        };
+        var strategy = !string.IsNullOrWhiteSpace(request.PreviewStrategy) && validStrategies.Contains(request.PreviewStrategy.Trim())
+            ? request.PreviewStrategy.Trim().ToLowerInvariant()
+            : "watermark_image";
+
         var category = new Category
         {
             Name = cleanName,
             DefaultRevisionLimit = request.DefaultRevisionLimit > 0 ? request.DefaultRevisionLimit : 2,
-            PreviewStrategy = string.IsNullOrWhiteSpace(request.PreviewStrategy) ? "watermark_image" : request.PreviewStrategy
+            PreviewStrategy = strategy
         };
 
         await _dbContext.Categories.AddAsync(category, ct);
