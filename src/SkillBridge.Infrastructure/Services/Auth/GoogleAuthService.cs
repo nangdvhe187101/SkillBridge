@@ -81,13 +81,8 @@ namespace SkillBridge.Infrastructure.Services.Auth
 
             var user = await userRepository.GetByEmailWithRoleAsync(email);
 
-            if (mode == "login")
+            if (user != null)
             {
-                if (user == null)
-                {
-                    throw new BusinessException("Tài khoản chưa được đăng ký trong hệ thống. Vui lòng chuyển sang tab Đăng ký để tạo tài khoản mới.");
-                }
-
                 if (user.AccountStatus == "locked" || user.AccountStatus == "blacklisted")
                 {
                     throw new BusinessException("Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.");
@@ -105,7 +100,7 @@ namespace SkillBridge.Infrastructure.Services.Auth
                 // Cập nhật Avatar từ Google nếu user chưa có avatar
                 if (string.IsNullOrWhiteSpace(user.AvatarUrl) && !string.IsNullOrWhiteSpace(payload.Picture))
                 {
-                    user.AvatarUrl = payload.Picture;
+                    user.AvatarUrl = payload.Picture.Length > 255 ? payload.Picture.Substring(0, 255) : payload.Picture;
                     updated = true;
                 }
 
@@ -139,34 +134,37 @@ namespace SkillBridge.Infrastructure.Services.Auth
                     await userRepository.SaveChangesAsync();
                 }
             }
-            else if (mode == "register")
+            else
             {
-                if (user != null)
-                {
-                    throw new BusinessException("Email này đã được đăng ký tài khoản trong hệ thống. Vui lòng chuyển sang tab Đăng nhập.");
-                }
-
+                // Tài khoản chưa tồn tại -> Tự động đăng ký mới an toàn
                 var targetRoleCode = string.Equals(dto.RoleCode, RoleCode.Employer, StringComparison.OrdinalIgnoreCase)
                     ? RoleCode.Employer
                     : RoleCode.Student;
 
-                var role = await roleRepository.GetByCodeAsync(targetRoleCode);
+                var role = await roleRepository.GetByCodeAsync(targetRoleCode)
+                        ?? await roleRepository.GetByCodeAsync(RoleCode.Student);
+
                 if (role == null)
                 {
                     throw new BusinessException($"Không tìm thấy cấu hình vai trò '{targetRoleCode}' trong hệ thống.");
                 }
 
+                var avatar = !string.IsNullOrWhiteSpace(payload.Picture)
+                    ? (payload.Picture.Length > 255 ? payload.Picture.Substring(0, 255) : payload.Picture)
+                    : null;
+
                 user = new User
                 {
                     FullName = string.IsNullOrWhiteSpace(payload.Name) ? email.Split('@')[0] : payload.Name,
                     Email = email,
-                    AvatarUrl = payload.Picture,
+                    AvatarUrl = avatar,
                     PasswordHash = "GOOGLE_SSO:" + BCrypt.Net.BCrypt.HashPassword(Guid.NewGuid().ToString("N")),
                     RoleId = role.Id,
-                    KycStatus = "unverified",
+                    KycStatus = "pending", // Ràng buộc đúng enum('pending','verified','rejected') của CSDL
                     AccountStatus = "active", // Google đã xác minh chính chủ -> Kích hoạt ngay
                     ReliabilityScore = 100,
                     JobsDoneCount = 0,
+                    TokenVersion = 1,
                     JoinedAt = DateTime.UtcNow
                 };
 
@@ -204,10 +202,6 @@ namespace SkillBridge.Infrastructure.Services.Auth
                         }
                     });
                 }
-            }
-            else
-            {
-                throw new BusinessException("Chế độ xác thực Google không hợp lệ (hỗ trợ 'login' hoặc 'register').");
             }
 
             if (user == null || user.Role == null)
