@@ -17,6 +17,10 @@ export default function CompanyProfile() {
   const [following, setFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [apiCompany, setApiCompany] = useState(null);
+  const [jobsPage, setJobsPage] = useState(1);
+  const [jobsPageSize, setJobsPageSize] = useState(6);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const [reviewsPageSize, setReviewsPageSize] = useState(5);
 
   const currentUser = state.currentUser;
   const isSelf = currentUser && (
@@ -154,6 +158,21 @@ export default function CompanyProfile() {
     showToast('Đã sao chép đường dẫn hồ sơ doanh nghiệp!', 'copy');
   };
 
+  const openJobsList = company?.openJobs || [];
+  const reviewsList = company?.reviews || [];
+
+  const jobsTotalPages = Math.ceil(openJobsList.length / jobsPageSize) || 1;
+  const pagedOpenJobs = useMemo(() => {
+    const start = (jobsPage - 1) * jobsPageSize;
+    return openJobsList.slice(start, start + jobsPageSize);
+  }, [openJobsList, jobsPage, jobsPageSize]);
+
+  const reviewsTotalPages = Math.ceil(reviewsList.length / reviewsPageSize) || 1;
+  const pagedReviews = useMemo(() => {
+    const start = (reviewsPage - 1) * reviewsPageSize;
+    return reviewsList.slice(start, start + reviewsPageSize);
+  }, [reviewsList, reviewsPage, reviewsPageSize]);
+
   if (loading) {
     return (
       <div className="page active">
@@ -176,26 +195,6 @@ export default function CompanyProfile() {
       </div>
     );
   }
-
-  const [jobsPage, setJobsPage] = useState(1);
-  const [jobsPageSize, setJobsPageSize] = useState(6);
-  const [reviewsPage, setReviewsPage] = useState(1);
-  const [reviewsPageSize, setReviewsPageSize] = useState(5);
-
-  const openJobsList = company.openJobs || [];
-  const reviewsList = company.reviews || [];
-
-  const jobsTotalPages = Math.ceil(openJobsList.length / jobsPageSize) || 1;
-  const pagedOpenJobs = useMemo(() => {
-    const start = (jobsPage - 1) * jobsPageSize;
-    return openJobsList.slice(start, start + jobsPageSize);
-  }, [openJobsList, jobsPage, jobsPageSize]);
-
-  const reviewsTotalPages = Math.ceil(reviewsList.length / reviewsPageSize) || 1;
-  const pagedReviews = useMemo(() => {
-    const start = (reviewsPage - 1) * reviewsPageSize;
-    return reviewsList.slice(start, start + reviewsPageSize);
-  }, [reviewsList, reviewsPage, reviewsPageSize]);
 
   return (
     <div className="page active" style={{ background: 'var(--bg-subtle, #f8fafc)', minHeight: '100vh', paddingBottom: 80 }}>
