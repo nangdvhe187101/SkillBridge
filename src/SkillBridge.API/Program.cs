@@ -389,6 +389,7 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var dbContext = services.GetRequiredService<SkillBridge.Infrastructure.Data.SkillBridgeDbContext>();
+        await SkillBridge.Infrastructure.Data.DbInitializer.EnsureCoreEnumCompatibilityAsync(dbContext, logger);
         await SkillBridge.Infrastructure.Data.DbInitializer.EnsureUserExtendedFieldsAsync(dbContext, logger);
         await SkillBridge.Infrastructure.Data.DbInitializer.EnsureChatSchemaAsync(dbContext, logger);
         await SkillBridge.Infrastructure.Data.DbInitializer.EnsureStudentVerificationSchemaAsync(dbContext, logger);

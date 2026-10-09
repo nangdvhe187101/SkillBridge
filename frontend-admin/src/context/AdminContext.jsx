@@ -10,11 +10,13 @@ const getStoredAdminRole = () => {
     if (raw) {
       const parsed = JSON.parse(raw);
       const code = (parsed?.roleCode || '').toLowerCase();
+      const email = (parsed?.email || '').toLowerCase();
+      if (email === 'skillbridge.vn@gmail.com') return 'super';
       if (code === 'super_admin' || code === 'super') return 'super';
-      if (code === 'business_admin' || code === 'business') return 'business_admin';
-      if (code === 'moderator') return 'moderator';
-      if (code === 'dispute') return 'dispute';
-      if (code === 'finance') return 'finance';
+      if (code === 'business_admin' || code === 'business' || code === 'admin') return 'business_admin';
+      if (code === 'moderator' || code === 'content_moderator') return 'moderator';
+      if (code === 'dispute' || code === 'dispute_officer') return 'dispute';
+      if (code === 'finance' || code === 'finance_viewer') return 'finance';
       if (code) return code;
     }
   } catch {}

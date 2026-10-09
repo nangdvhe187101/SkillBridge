@@ -96,6 +96,13 @@ public class AdminAuthController : ControllerBase
 
             _logger.LogInformation("Admin {Email} (UserId: {UserId}) đăng nhập thành công vào Admin Portal.", user.Email, user.Id);
 
+            var effectiveRoleCode = user.Role.Code;
+            if (string.Equals(effectiveRoleCode, "admin", StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(user.Email, "skillbridge.vn@gmail.com", StringComparison.OrdinalIgnoreCase))
+            {
+                effectiveRoleCode = "business_admin";
+            }
+
             return Ok(new
             {
                 requiresTwoFactor = false,
@@ -105,7 +112,7 @@ public class AdminAuthController : ControllerBase
                 userId = result.UserId,
                 fullName = result.FullName,
                 email = result.Email,
-                roleCode = result.RoleCode,
+                roleCode = effectiveRoleCode,
                 avatarUrl = result.AvatarUrl
             });
         }
@@ -158,6 +165,13 @@ public class AdminAuthController : ControllerBase
 
         _logger.LogInformation("Admin #{UserId} ({Email}) đã vượt qua 2FA TOTP thành công.", session.UserId, session.Email);
 
+        var effectiveRoleCode = session.RoleCode;
+        if (string.Equals(effectiveRoleCode, "admin", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(session.Email, "skillbridge.vn@gmail.com", StringComparison.OrdinalIgnoreCase))
+        {
+            effectiveRoleCode = "business_admin";
+        }
+
         return Ok(new
         {
             requiresTwoFactor = false,
@@ -167,7 +181,7 @@ public class AdminAuthController : ControllerBase
             userId = session.UserId,
             fullName = session.FullName,
             email = session.Email,
-            roleCode = session.RoleCode,
+            roleCode = effectiveRoleCode,
             avatarUrl = session.AvatarUrl
         });
     }

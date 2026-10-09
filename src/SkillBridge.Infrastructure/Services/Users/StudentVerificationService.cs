@@ -675,8 +675,12 @@ namespace SkillBridge.Infrastructure.Services.Users
                 int? matchedSchoolId = null;
                 if (!string.IsNullOrWhiteSpace(schoolName))
                 {
-                    var school = await dbContext.Schools
-                        .FirstOrDefaultAsync(s => s.IsActive && (s.Name.Contains(schoolName, StringComparison.OrdinalIgnoreCase) || schoolName.Contains(s.Name, StringComparison.OrdinalIgnoreCase)), ct);
+                    var cleanSchoolName = schoolName.Trim();
+                    var activeSchools = await dbContext.Schools.AsNoTracking().Where(s => s.IsActive).ToListAsync(ct);
+                    var school = activeSchools.FirstOrDefault(s =>
+                        s.Name.Contains(cleanSchoolName, StringComparison.OrdinalIgnoreCase) ||
+                        cleanSchoolName.Contains(s.Name, StringComparison.OrdinalIgnoreCase) ||
+                        (!string.IsNullOrWhiteSpace(s.Code) && cleanSchoolName.Contains(s.Code, StringComparison.OrdinalIgnoreCase)));
                     if (school != null)
                     {
                         matchedSchoolId = school.Id;

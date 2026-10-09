@@ -152,12 +152,12 @@ public class KycService : IKycService
             throw new BusinessException("Tài khoản của bạn đã được xác minh thành công. Thẻ sinh viên vẫn còn trong thời hạn hiệu lực.");
         }
 
-        // Validate nghiệp vụ theo loại tài liệu
+        // Validate nghiệp vụ theo loại tài liệu (Chuẩn hóa theo enum CSDL: 'national_id', 'student_card', 'business_license', 'company_logo')
         string docTypeEnum = request.DocumentType?.ToLowerInvariant() switch
         {
             "business_license" => "business_license",
-            "identity_card" => "identity_card",
-            "passport" => "passport",
+            "company_logo" => "company_logo",
+            "identity_card" or "national_id" or "passport" or "citizen_id" => "national_id",
             _ => "student_card"
         };
 

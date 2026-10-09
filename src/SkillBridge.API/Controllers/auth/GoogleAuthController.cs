@@ -39,7 +39,8 @@ namespace SkillBridge.API.Controllers
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Lỗi xảy ra trong quá trình xác thực Google Login");
+                _logger.LogError(ex, "Lỗi xảy ra trong quá trình xác thực Google Login. Message: {Message}, Inner: {Inner}",
+                    ex.Message, ex.InnerException?.Message);
                 return StatusCode(500, new { message = "Đã xảy ra lỗi trong quá trình xác thực với Google. Vui lòng thử lại sau." });
             }
         }
