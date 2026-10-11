@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
@@ -8,7 +8,7 @@ import { useStore } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { talentApi } from '../../api/talentApi';
 import { getMyJobs } from '../../api/jobApi';
-import { getPublicStudentProfile } from '../../api/userApi';
+import { getPublicStudentProfile, uploadAvatar, uploadCover } from '../../api/userApi';
 import { slugify } from '../../data/companies';
 
 function tierFromScore(score) {
@@ -21,8 +21,11 @@ const TIER_LABEL = { gold: 'Gold Tier', silver: 'Silver Tier', bronze: 'Bronze T
 export default function StudentProfile() {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const { state, openChatWithPerson } = useStore();
+  const { state, dispatch, openChatWithPerson } = useStore();
   const { showToast } = useToast();
+  const avatarInputRef = useRef();
+  const coverInputRef = useRef();
+
   const [tab, setTab] = useState('overview'); // 'overview' | 'experience' | 'portfolio' | 'reviews'
   const [selectedPf, setSelectedPf] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -37,11 +40,56 @@ export default function StudentProfile() {
   const [inviting, setInviting] = useState(false);
 
   const currentUser = state?.currentUser;
-  const isSelf = currentUser && (
+  const userSlug = slugify(currentUser?.fullName || '');
+  const displaySlug = slugify(state?.displayName || '');
+  const isSelf = Boolean(currentUser && (
     String(currentUser.id) === slug ||
-    slugify(currentUser.fullName || '') === slug ||
-    slugify(state.displayName || '') === slug
-  );
+    userSlug === slug ||
+    displaySlug === slug ||
+    userSlug.replace(/-\d+$/, '') === String(slug).replace(/-\d+$/, '')
+  ));
+
+  const onAvatarChange = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      showToast('Đang tải lên ảnh đại diện…', 'hourglass');
+      const res = await uploadAvatar(f);
+      const newAvatarUrl = res.avatarUrl || res.data?.avatarUrl;
+      if (newAvatarUrl) {
+        setApiStudent((prev) => (prev ? { ...prev, avatarUrl: newAvatarUrl } : prev));
+        if (dispatch) {
+          dispatch({ type: 'UPDATE_PROFILE', patch: { avatarUrl: newAvatarUrl } });
+        }
+      }
+      showToast('Đã cập nhật ảnh đại diện mới!', 'check');
+    } catch (err) {
+      showToast(err?.message || 'Không thể tải lên ảnh đại diện.', 'error');
+    } finally {
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const onCoverChange = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      showToast('Đang tải lên ảnh bìa…', 'hourglass');
+      const res = await uploadCover(f);
+      const newCoverUrl = res.coverImageUrl || res.data?.coverImageUrl;
+      if (newCoverUrl) {
+        setApiStudent((prev) => (prev ? { ...prev, coverImageUrl: newCoverUrl } : prev));
+        if (dispatch) {
+          dispatch({ type: 'UPDATE_PROFILE', patch: { coverImageUrl: newCoverUrl } });
+        }
+      }
+      showToast('Đã cập nhật ảnh bìa mới!', 'check');
+    } catch (err) {
+      showToast(err?.message || 'Không thể tải lên ảnh bìa.', 'error');
+    } finally {
+      if (e.target) e.target.value = '';
+    }
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -71,17 +119,20 @@ export default function StudentProfile() {
 
   // Hợp nhất dữ liệu: API thật > currentUser (nếu isSelf) > Fallback
   const student = useMemo(() => {
+    const currentAvatar = (isSelf && (currentUser?.avatarUrl || currentUser?.avatar)) || apiStudent?.avatarUrl || apiStudent?.avatar || null;
+    const currentCover = (isSelf && currentUser?.coverImageUrl) || apiStudent?.coverImageUrl || null;
+
     if (apiStudent) {
       return {
         id: apiStudent.id,
-        name: apiStudent.fullName,
+        name: (isSelf && (currentUser?.fullName || state?.displayName)) || apiStudent.fullName,
         headline: apiStudent.headline || 'Sinh viên tài năng · SkillBridge Freelancer',
         school: apiStudent.school || 'Đang cập nhật trường',
         industry: apiStudent.industry || 'Lập trình & Thiết kế',
         email: apiStudent.email,
         phone: apiStudent.phoneNumber,
-        avatar: apiStudent.avatarUrl || apiStudent.avatar || null,
-        cover: apiStudent.coverImageUrl,
+        avatar: currentAvatar,
+        cover: currentCover,
         reliability: apiStudent.reliabilityScore || 95,
         completedJobs: apiStudent.completedJobsCount || 0,
         avgRating: apiStudent.averageRating || 5.0,
@@ -108,8 +159,8 @@ export default function StudentProfile() {
         industry: currentUser.industry || 'Lập trình web',
         email: currentUser.email,
         phone: currentUser.phone || currentUser.phoneNumber,
-        avatar: currentUser.avatarUrl || currentUser.avatar || null,
-        cover: currentUser.coverImageUrl,
+        avatar: currentAvatar,
+        cover: currentCover,
         reliability: currentUser.reliabilityScore ?? state?.myReliability ?? 98,
         completedJobs: currentUser.jobsDoneCount ?? (state?.myApplications?.filter((a) => a.status === 'completed')?.length || 0),
         avgRating: 5.0,
@@ -138,8 +189,8 @@ export default function StudentProfile() {
       industry: 'Chuyên môn ứng dụng',
       email: null,
       phone: null,
-      avatar: null,
-      cover: null,
+      avatar: currentAvatar,
+      cover: currentCover,
       reliability: 95,
       completedJobs: 4,
       avgRating: 5.0,
@@ -262,6 +313,10 @@ export default function StudentProfile() {
 
   return (
     <div className="page active" style={{ background: 'var(--bg-subtle, #f8fafc)', minHeight: '100vh', paddingBottom: 80 }}>
+      {/* Hidden file inputs for avatar/cover upload */}
+      <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onAvatarChange} />
+      <input ref={coverInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onCoverChange} />
+
       {/* Cover Banner */}
       <div
         style={{
@@ -295,6 +350,32 @@ export default function StudentProfile() {
           >
             <Icon name="chevleft" width="14" height="14" /> Quay lại
           </a>
+
+          {isSelf && (
+            <button
+              type="button"
+              onClick={() => coverInputRef.current?.click()}
+              style={{
+                position: 'absolute',
+                bottom: 16,
+                right: 0,
+                background: 'rgba(0,0,0,0.5)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.3)',
+                padding: '6px 14px',
+                borderRadius: 20,
+                backdropFilter: 'blur(6px)',
+                fontSize: 12.5,
+                fontWeight: 500,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              <Icon name="camera" width="14" height="14" /> Đổi ảnh bìa
+            </button>
+          )}
         </div>
       </div>
 
@@ -310,19 +391,49 @@ export default function StudentProfile() {
           }}
         >
           <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-            <Avatar
-              src={student.avatar}
-              name={student.name}
-              fontSize={34}
-              style={{
-                width: 96,
-                height: 96,
-                borderRadius: '50%',
-                border: '4px solid #fff',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
-                flexShrink: 0
-              }}
-            />
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <Avatar
+                src={student.avatar}
+                name={student.name}
+                fontSize={34}
+                style={{
+                  width: 96,
+                  height: 96,
+                  borderRadius: '50%',
+                  border: '4px solid #fff',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
+                  cursor: isSelf ? 'pointer' : 'default'
+                }}
+                onClick={() => {
+                  if (isSelf) avatarInputRef.current?.click();
+                }}
+              />
+              {isSelf && (
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  title="Thay đổi ảnh đại diện"
+                  style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    right: 0,
+                    width: 30,
+                    height: 30,
+                    borderRadius: '50%',
+                    background: '#4f46e5',
+                    color: '#fff',
+                    border: '2px solid #fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.2)'
+                  }}
+                >
+                  <Icon name="camera" width="14" height="14" />
+                </button>
+              )}
+            </div>
 
             <div style={{ flex: 1, minWidth: 260 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
