@@ -13,6 +13,7 @@ public class TalentFilterRequest
     public int? MinReliabilityScore { get; set; }
     public decimal? MinRate { get; set; }
     public decimal? MaxRate { get; set; }
+    public bool? OnlyVerified { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 12;
 }
@@ -30,6 +31,7 @@ public class TalentItemDto
     public decimal ExpectedRate { get; set; } = 100_000m;
     public string RateUnit { get; set; } = "đ/giờ";
     public string KycStatus { get; set; } = "verified";
+    public bool IsStudentVerified { get; set; }
     public string? ActivePlanCode { get; set; }
     public int ActivePlanTier { get; set; }
     public DateTime JoinedAt { get; set; }
