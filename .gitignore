@@ -35,3 +35,15 @@ frontend-admin/.vite/
 
 # DB Dumps
 tidb_export/
+# Database & Local Runtime
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+src/SkillBridge.API/skillbridge.db
+
+# Storage Uploads
+uploads/
+**/uploads/
+!uploads/.gitkeep
