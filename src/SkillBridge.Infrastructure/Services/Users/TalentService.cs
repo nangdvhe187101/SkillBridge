@@ -48,8 +48,12 @@ public class TalentService : ITalentService
         var query = _dbContext.Users
             .AsNoTracking()
             .Include(u => u.Role)
-            .Where(u => u.Role.Code == "student" && u.AccountStatus == "active"
-                && _dbContext.StudentProfiles.Any(sp => sp.UserId == u.Id && sp.ExpiresAt > nowUtc));
+            .Where(u => u.Role.Code == "student" && u.AccountStatus == "active");
+
+        if (request.OnlyVerified == true)
+        {
+            query = query.Where(u => _dbContext.StudentProfiles.Any(sp => sp.UserId == u.Id && sp.ExpiresAt > nowUtc));
+        }
 
         if (!string.IsNullOrWhiteSpace(request.Keyword))
         {
@@ -93,7 +97,8 @@ public class TalentService : ITalentService
         var totalCount = await query.CountAsync(ct);
 
         var rawUsers = await query
-            .OrderByDescending(u => u.ReliabilityScore)
+            .OrderByDescending(u => _dbContext.StudentProfiles.Any(sp => sp.UserId == u.Id && sp.ExpiresAt > nowUtc))
+            .ThenByDescending(u => u.ReliabilityScore)
             .ThenByDescending(u => u.JobsDoneCount)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -101,6 +106,13 @@ public class TalentService : ITalentService
 
         var userIds = rawUsers.Select(u => u.Id).ToList();
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var verifiedUserIds = await _dbContext.StudentProfiles
+            .AsNoTracking()
+            .Where(sp => userIds.Contains(sp.UserId) && sp.ExpiresAt > nowUtc)
+            .Select(sp => sp.UserId)
+            .Distinct()
+            .ToListAsync(ct);
 
         var activeSubs = await _dbContext.Subscriptions
             .AsNoTracking()
@@ -178,6 +190,8 @@ public class TalentService : ITalentService
             if (request.MinRate.HasValue && expectedRate < request.MinRate.Value) return null;
             if (request.MaxRate.HasValue && expectedRate > request.MaxRate.Value) return null;
 
+            var isStudentVerified = verifiedUserIds.Contains(u.Id);
+
             return new TalentItemDto
             {
                 Id = u.Id,
@@ -190,7 +204,8 @@ public class TalentService : ITalentService
                 JobsDoneCount = u.JobsDoneCount,
                 ExpectedRate = expectedRate,
                 RateUnit = "đ/giờ",
-                KycStatus = u.KycStatus ?? "verified",
+                KycStatus = isStudentVerified ? "verified" : (u.KycStatus ?? "unverified"),
+                IsStudentVerified = isStudentVerified,
                 ActivePlanCode = planCode,
                 ActivePlanTier = tier,
                 JoinedAt = u.JoinedAt,
@@ -201,6 +216,7 @@ public class TalentService : ITalentService
         .Where(x => x != null)
         .Select(x => x!)
         .OrderByDescending(x => x.ActivePlanTier)
+        .ThenByDescending(x => x.IsStudentVerified)
         .ThenByDescending(x => x.ReliabilityScore)
         .ThenByDescending(x => x.JobsDoneCount)
         .ToList();

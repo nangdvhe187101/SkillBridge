@@ -79,6 +79,7 @@ export default function Talents() {
   const [industry, setIndustry] = useState('');
   const [minScore, setMinScore] = useState('');
   const [rateRange, setRateRange] = useState('');
+  const [onlyVerified, setOnlyVerified] = useState(false);
   const [selectedSkills, setSelectedSkills] = useState([]);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(12);
@@ -124,6 +125,7 @@ export default function Talents() {
         minReliabilityScore: minScore ? parseInt(minScore, 10) : undefined,
         minRate,
         maxRate,
+        onlyVerified: onlyVerified ? true : undefined,
         skills: selectedSkills.length > 0 ? selectedSkills : undefined,
         page,
         pageSize,
@@ -139,7 +141,7 @@ export default function Talents() {
     } finally {
       setLoading(false);
     }
-  }, [keyword, school, industry, minScore, rateRange, selectedSkills, page, showToast]);
+  }, [keyword, school, industry, minScore, rateRange, onlyVerified, selectedSkills, page, showToast]);
 
   useEffect(() => {
     fetchTalents();
@@ -173,6 +175,7 @@ export default function Talents() {
     setIndustry('');
     setMinScore('');
     setRateRange('');
+    setOnlyVerified(false);
     setSelectedSkills([]);
     setPage(1);
   };
@@ -307,8 +310,8 @@ export default function Talents() {
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5 }}>
-              <span style={{ color: '#10b981', fontWeight: 800 }}>✓ 100%</span>
-              <span style={{ color: 'var(--ink-soft)' }}>Hồ sơ xác thực sinh viên</span>
+              <span style={{ color: '#10b981', fontWeight: 800 }}>✓ Đã xác thực</span>
+              <span style={{ color: 'var(--ink-soft)' }}>Hồ sơ sinh viên ưu tiên</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5 }}>
               <span style={{ color: '#6366f1', fontWeight: 800 }}>⭐ 95+</span>
@@ -501,7 +504,7 @@ export default function Talents() {
               >
                 Lọc kết quả
               </button>
-              {(keyword || school || industry || minScore || rateRange || selectedSkills.length > 0) && (
+              {(keyword || school || industry || minScore || rateRange || onlyVerified || selectedSkills.length > 0) && (
                 <button
                   type="button"
                   onClick={handleResetFilters}
@@ -517,6 +520,33 @@ export default function Talents() {
                 </button>
               )}
             </div>
+          </div>
+
+          {/* Toggle Only Verified */}
+          <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <label
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                cursor: 'pointer',
+                userSelect: 'none',
+                fontSize: 13,
+                fontWeight: 600,
+                color: 'var(--ink)',
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={onlyVerified}
+                onChange={(e) => {
+                  setOnlyVerified(e.target.checked);
+                  setPage(1);
+                }}
+                style={{ width: 16, height: 16, accentColor: '#10b981', cursor: 'pointer' }}
+              />
+              <span>Chỉ hiển thị sinh viên đã xác thực thẻ SV (Verified)</span>
+            </label>
           </div>
 
           {/* Bộ lọc Kỹ năng chuyên sâu dạng Tag Checkbox */}
@@ -831,6 +861,45 @@ export default function Talents() {
                             variant="pill"
                             size="sm"
                           />
+
+                          {talent.isStudentVerified ? (
+                            <span
+                              title="Đã xác thực thẻ sinh viên và hồ sơ học tập hợp lệ"
+                              style={{
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                color: '#059669',
+                                background: 'rgba(16, 185, 129, 0.12)',
+                                border: '1px solid rgba(16, 185, 129, 0.25)',
+                                padding: '1px 6px',
+                                borderRadius: 6,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                              }}
+                            >
+                              <span style={{ fontSize: 9 }}>✓</span> Đã xác thực SV
+                            </span>
+                          ) : (
+                            <span
+                              title="Hồ sơ tự khai báo, sinh viên chưa gửi đối soát thẻ sinh viên"
+                              style={{
+                                fontSize: 10.5,
+                                fontWeight: 600,
+                                color: '#d97706',
+                                background: 'rgba(245, 158, 11, 0.12)',
+                                border: '1px solid rgba(245, 158, 11, 0.25)',
+                                padding: '1px 6px',
+                                borderRadius: 6,
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                              }}
+                            >
+                              <span style={{ fontSize: 9 }}>ℹ</span> Chưa xác thực SV
+                            </span>
+                          )}
+
                           {isOnline ? (
                             <span style={{ fontSize: 10.5, fontWeight: 700, color: '#10b981', background: 'rgba(16, 185, 129, 0.12)', padding: '1px 6px', borderRadius: 6 }}>
                               ● Online
