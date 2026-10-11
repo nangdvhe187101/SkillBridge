@@ -195,10 +195,14 @@ export default function Profile() {
     try {
       showToast('Đang tải lên ảnh bìa…', 'hourglass');
       const res = await uploadCover(f);
-      if (dispatch) {
-        dispatch({ type: 'UPDATE_PROFILE', patch: { coverImageUrl: res.coverImageUrl } });
-      } else if (updateProfile) {
-        await updateProfile({ coverImageUrl: res.coverImageUrl });
+      const newCoverUrl = res.coverImageUrl || res.data?.coverImageUrl;
+      if (newCoverUrl) {
+        setProfileData((prev) => (prev ? { ...prev, coverImageUrl: newCoverUrl } : { coverImageUrl: newCoverUrl }));
+        if (dispatch) {
+          dispatch({ type: 'UPDATE_PROFILE', patch: { coverImageUrl: newCoverUrl } });
+        } else if (updateProfile) {
+          await updateProfile({ coverImageUrl: newCoverUrl });
+        }
       }
       showToast('Đã cập nhật ảnh bìa mới!', 'check');
     } catch (err) {
@@ -214,10 +218,14 @@ export default function Profile() {
     try {
       showToast('Đang tải lên ảnh đại diện…', 'hourglass');
       const res = await uploadAvatar(f);
-      if (dispatch) {
-        dispatch({ type: 'UPDATE_PROFILE', patch: { avatarUrl: res.avatarUrl } });
-      } else if (updateProfile) {
-        await updateProfile({ avatarUrl: res.avatarUrl });
+      const newAvatarUrl = res.avatarUrl || res.data?.avatarUrl;
+      if (newAvatarUrl) {
+        setProfileData((prev) => (prev ? { ...prev, avatarUrl: newAvatarUrl } : { avatarUrl: newAvatarUrl }));
+        if (dispatch) {
+          dispatch({ type: 'UPDATE_PROFILE', patch: { avatarUrl: newAvatarUrl } });
+        } else if (updateProfile) {
+          await updateProfile({ avatarUrl: newAvatarUrl });
+        }
       }
       showToast('Đã cập nhật ảnh đại diện mới!', 'check');
     } catch (err) {
