@@ -775,7 +775,23 @@ export default function JobDetail() {
                 </div>
               )}
               <div className="jd-card">
-                <div className="jd-emp-row" style={{ cursor: 'pointer' }} onClick={() => navigate(`/company/${slugify(j.emp)}`)}>
+                <div
+                  className="jd-emp-row"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => {
+                    const target = j.employerId ? `/company/${j.employerId}` : `/company/${slugify(j.emp)}`;
+                    navigate(target, {
+                      state: {
+                        employerId: j.employerId,
+                        companyName: j.emp,
+                        companyDesc: j.companyDesc,
+                        industry: j.industry,
+                        loc: j.loc,
+                        logo: j.employerAvatar || j.empAvatar || j.employerAvatarUrl
+                      }
+                    });
+                  }}
+                >
                   <Avatar src={j.employerAvatar || j.empAvatar || j.employer?.avatarUrl} name={j.emp} className="jd-emp-av" fontSize={16} />
                   <div>
                     <b>{j.emp}</b> <Icon name="check" style={{ width: 14, height: 14, display: 'inline', color: 'var(--primary)' }} />
@@ -784,7 +800,23 @@ export default function JobDetail() {
                 </div>
                 <div className="jd-rating"><Icon name="star" /> 4.9 · 21 công việc đã đăng</div>
                 <div className="jd-rating"><Icon name="clock" /> Phản hồi trong ~10 phút</div>
-                <button className="btn btn-outline btn-sm btn-block" style={{ marginTop: 12 }} onClick={() => navigate(`/company/${slugify(j.emp)}`)}>
+                <button
+                  className="btn btn-outline btn-sm btn-block"
+                  style={{ marginTop: 12 }}
+                  onClick={() => {
+                    const target = j.employerId ? `/company/${j.employerId}` : `/company/${slugify(j.emp)}`;
+                    navigate(target, {
+                      state: {
+                        employerId: j.employerId,
+                        companyName: j.emp,
+                        companyDesc: j.companyDesc,
+                        industry: j.industry,
+                        loc: j.loc,
+                        logo: j.employerAvatar || j.empAvatar || j.employerAvatarUrl
+                      }
+                    });
+                  }}
+                >
                   Xem hồ sơ công ty →
                 </button>
               </div>

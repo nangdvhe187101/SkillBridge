@@ -18,7 +18,10 @@
   --ink-fixed: #0F172A;
   --panel-dark: #0F172A;
   --cta-bg: #4F46E5;
-  --shadow-cta: 0 10px 20px -6px rgba(79, 70, 229, 0.4);
+  --surface-sunken: #F1F5F9;
+  --bg-subtle: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --line: #E2E8F0;
   color-scheme: light;
 }
 
@@ -38,6 +41,10 @@
   --panel-dark: #1E293B;
   --cta-bg: #6366F1;
   --shadow-cta: 0 10px 20px -6px rgba(99, 102, 241, 0.45);
+  --surface-sunken: #0B1120;
+  --bg-subtle: #141E33;
+  --bg-card: #1E293B;
+  --line: #334155;
   color-scheme: dark;
 }
 
@@ -1617,7 +1624,7 @@ footer {
   height: 100%;
   max-height: 100vh;
   overflow-y: auto;
-  background: #f8fafc;
+  background: var(--bg-subtle, #f8fafc);
   position: relative;
   z-index: 3;
   scrollbar-width: thin;
@@ -1641,10 +1648,11 @@ footer {
   width: 100%;
   max-width: 440px;
   margin: auto 0;
-  background: #ffffff;
+  background: var(--bg, #ffffff);
   border-radius: 24px;
   padding: 36px 32px;
-  box-shadow: 0 20px 45px -12px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(226, 232, 240, 0.8);
+  border: 1px solid var(--border, rgba(226, 232, 240, 0.8));
+  box-shadow: var(--shadow-lg, 0 20px 45px -12px rgba(15, 23, 42, 0.08));
 }
 
 .auth-box-header {
@@ -1827,6 +1835,73 @@ footer {
 .auth-foot a {
   color: var(--primary);
   font-weight: 600;
+}
+
+[data-theme="dark"] .auth-box {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: 0 20px 45px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border);
+}
+
+[data-theme="dark"] .auth-tabs {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+[data-theme="dark"] .auth-tab {
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .auth-tab.is-active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .role-opt {
+  background: var(--surface-2);
+  border-color: var(--border);
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .role-opt.is-active {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: var(--primary);
+  color: #c7d2fe;
+}
+
+[data-theme="dark"] .field input,
+[data-theme="dark"] .field select,
+[data-theme="dark"] .field textarea {
+  background: var(--surface-2);
+  color: var(--ink);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .field input:focus,
+[data-theme="dark"] .field select:focus,
+[data-theme="dark"] .field textarea:focus {
+  background: var(--surface);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+[data-theme="dark"] .field input::placeholder,
+[data-theme="dark"] .field textarea::placeholder {
+  color: #64748b;
+}
+
+[data-theme="dark"] .password-toggle {
+  color: var(--ink-soft);
+}
+
+[data-theme="dark"] .password-toggle:hover {
+  color: var(--ink);
+}
+
+[data-theme="dark"] .auth-mobile-trust {
+  background: var(--surface-2);
+  border-color: var(--border);
 }
 
 .back-home {

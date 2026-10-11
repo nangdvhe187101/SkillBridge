@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import Icon from '../../components/Icon';
 import Avatar from '../../components/Avatar';
 import Pagination from '../../components/Pagination';
 import { useStore, fmtVND } from '../../context/StoreContext';
 import { useToast } from '../../context/ToastContext';
 import { getPublicCompanyProfile } from '../../api/userApi';
-import { slugify } from '../../data/companies';
+import { slugify, companiesSeed } from '../../data/companies';
 
 export default function CompanyProfile() {
   const { slug } = useParams();
+  const location = useLocation();
+  const routeState = location.state || {};
   const navigate = useNavigate();
   const { state, openChatWithPerson } = useStore();
   const { showToast } = useToast();
@@ -41,6 +43,8 @@ export default function CompanyProfile() {
       let targetId = null;
       if (/^\d+$/.test(slug)) {
         targetId = parseInt(slug, 10);
+      } else if (routeState.employerId && !isNaN(Number(routeState.employerId))) {
+        targetId = Number(routeState.employerId);
       } else if (isSelf && currentUser?.id) {
         targetId = currentUser.id;
       } else if (matchedJob?.employerId) {
@@ -60,7 +64,7 @@ export default function CompanyProfile() {
 
     fetchProfile();
     return () => { isMounted = false; };
-  }, [slug, isSelf, currentUser?.id, matchedJob?.employerId]);
+  }, [slug, isSelf, currentUser?.id, matchedJob?.employerId, routeState.employerId]);
 
   // Hợp nhất dữ liệu: API thật > currentUser (nếu isSelf) > matchedJob > fallback
   const company = useMemo(() => {
@@ -149,8 +153,69 @@ export default function CompanyProfile() {
       };
     }
 
+    // Fallback từ routeState (khi chuyển từ JobDetail/Jobs sang)
+    if (routeState.companyName) {
+      const empName = routeState.companyName;
+      return {
+        id: routeState.employerId || 0,
+        name: empName,
+        representative: 'Đại diện tuyển dụng',
+        taxCode: 'Đã xác thực eKYC',
+        industry: routeState.industry || 'Doanh nghiệp tuyển dụng',
+        size: '10-50 nhân sự',
+        website: null,
+        address: routeState.loc ? `${routeState.loc} · Đã xác minh` : 'Việt Nam',
+        logo: routeState.logo || null,
+        cover: null,
+        headline: 'Đối tác tuyển dụng uy tín',
+        description: routeState.companyDesc || `${empName} là đơn vị tuyển dụng uy tín đã được xác thực trên nền tảng SkillBridge.`,
+        kycStatus: 'verified',
+        reliabilityScore: 98,
+        openJobs: (state.jobs || []).filter(j => (j.emp === empName || (routeState.employerId && j.employerId === routeState.employerId)) && j.status === 'open'),
+        openJobsCount: (state.jobs || []).filter(j => (j.emp === empName || (routeState.employerId && j.employerId === routeState.employerId)) && j.status === 'open').length,
+        totalHiredCount: 12,
+        averageRating: 4.9,
+        totalReviewsCount: 3,
+        benefits: ['Hỗ trợ dấu mộc thực tập', 'Ký quỹ Escrow bảo đảm', 'Phản hồi nhanh'],
+        socialLinks: {},
+        reviews: [
+          { reviewerName: 'Minh Anh · ĐH FPT', stars: 5, jobTitle: 'Dựng video TikTok 30s', comment: 'Doanh nghiệp duyệt bài nhanh, thanh toán đúng hạn và giao tiếp cực kỳ tôn trọng sinh viên.' },
+          { reviewerName: 'Hải Đăng · ĐH Kiến Trúc', stars: 5, jobTitle: 'Thiết kế ấn phẩm đồ họa', comment: 'Brief rõ ràng, hỗ trợ tài liệu chu đáo và tạo điều kiện hết mình cho sinh viên.' }
+        ]
+      };
+    }
+
+    // Fallback từ companiesSeed (nếu slug khớp danh sách hạt giống)
+    const seedCompany = (companiesSeed || []).find((c) => slugify(c.name) === slug);
+    if (seedCompany) {
+      return {
+        id: 0,
+        name: seedCompany.name,
+        representative: 'Ban giám đốc',
+        taxCode: seedCompany.taxCode || 'Đã xác thực',
+        industry: seedCompany.industry || 'Thương mại & Dịch vụ',
+        size: seedCompany.size || '10-50 nhân sự',
+        website: seedCompany.website || null,
+        address: seedCompany.address || 'Việt Nam',
+        logo: null,
+        cover: null,
+        headline: 'Đối tác tuyển dụng',
+        description: seedCompany.longDescription || seedCompany.description || `${seedCompany.name} là đối tác tuyển dụng của SkillBridge.`,
+        kycStatus: 'verified',
+        reliabilityScore: 96,
+        openJobs: (state.jobs || []).filter(j => slugify(j.emp || '') === slug && j.status === 'open'),
+        openJobsCount: (state.jobs || []).filter(j => slugify(j.emp || '') === slug && j.status === 'open').length,
+        totalHiredCount: 8,
+        averageRating: 4.8,
+        totalReviewsCount: 2,
+        benefits: ['Hỗ trợ dấu mộc thực tập', 'Môi trường làm việc trẻ trung'],
+        socialLinks: {},
+        reviews: []
+      };
+    }
+
     return null;
-  }, [apiCompany, isSelf, currentUser, matchedJob, state.jobs]);
+  }, [apiCompany, isSelf, currentUser, matchedJob, state.jobs, routeState, slug]);
 
   const copyLink = () => {
     const shareUrl = window.location.href;
@@ -190,7 +255,10 @@ export default function CompanyProfile() {
         <div className="wrap" style={{ padding: '100px 0', textAlign: 'center' }}>
           <h2 style={{ marginBottom: 10 }}>Không tìm thấy hồ sơ doanh nghiệp này</h2>
           <p style={{ color: 'var(--ink-soft)', marginBottom: 20 }}>Hồ sơ có thể chưa được kích hoạt hoặc đường dẫn không hợp lệ.</p>
-          <button className="btn btn-primary" onClick={() => navigate('/jobs')}>Về trang Tìm việc làm</button>
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <button className="btn btn-outline" onClick={() => navigate(-1)}>Quay lại</button>
+            <button className="btn btn-primary" onClick={() => navigate('/jobs')}>Về trang Tìm việc làm</button>
+          </div>
         </div>
       </div>
     );
@@ -254,7 +322,7 @@ export default function CompanyProfile() {
                 width: 96,
                 height: 96,
                 borderRadius: 20,
-                border: '4px solid #fff',
+                border: '4px solid var(--bg-card, #fff)',
                 boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
                 flexShrink: 0
               }}
@@ -419,7 +487,7 @@ export default function CompanyProfile() {
             style={{ borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             <span>Việc làm đang tuyển</span>
-            <span style={{ background: tab === 'jobs' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: tab === 'jobs' ? '#fff' : '#475569', padding: '1px 7px', borderRadius: 10, fontSize: 11 }}>
+            <span style={{ background: tab === 'jobs' ? 'rgba(255,255,255,0.25)' : 'var(--line, #e2e8f0)', color: tab === 'jobs' ? '#fff' : 'var(--ink-soft, #475569)', padding: '1px 7px', borderRadius: 10, fontSize: 11 }}>
               {openJobsList.length}
             </span>
           </button>

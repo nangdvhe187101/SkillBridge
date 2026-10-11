@@ -861,3 +861,118 @@
         min-height: 40px;
     }
 }
+
+/* =======================================================
+   DARK THEME REFINEMENTS FOR ACCOUNT SETTINGS
+   ======================================================= */
+[data-theme="dark"] .acct-settings-layout {
+    background: var(--bg);
+}
+
+[data-theme="dark"] .acct-sidebar {
+    background: var(--surface);
+    border-color: var(--border);
+}
+
+[data-theme="dark"] .acct-sidebar-head h2 {
+    color: var(--ink);
+}
+
+[data-theme="dark"] .acct-tab {
+    color: var(--ink-soft);
+}
+
+[data-theme="dark"] .acct-tab:hover {
+    background: var(--surface-2);
+    color: var(--ink);
+}
+
+[data-theme="dark"] .acct-tab.is-active {
+    background: rgba(99, 102, 241, 0.16);
+    color: #a5b4fc;
+    border-color: rgba(99, 102, 241, 0.35);
+}
+
+[data-theme="dark"] .acct-content {
+    background: var(--bg);
+}
+
+[data-theme="dark"] .acct-content-title {
+    color: var(--ink);
+    border-bottom-color: var(--border);
+}
+
+[data-theme="dark"] .acct-section {
+    border-bottom-color: var(--border);
+}
+
+[data-theme="dark"] .acct-section-title {
+    color: var(--ink);
+}
+
+[data-theme="dark"] .acct-section-desc {
+    color: var(--ink-soft);
+}
+
+[data-theme="dark"] .acct-field label {
+    color: var(--ink);
+}
+
+[data-theme="dark"] .acct-field input,
+[data-theme="dark"] .acct-field textarea,
+[data-theme="dark"] .acct-field select {
+    background: var(--surface-2);
+    color: var(--ink);
+    border-color: var(--border);
+}
+
+[data-theme="dark"] .acct-field input:focus,
+[data-theme="dark"] .acct-field textarea:focus,
+[data-theme="dark"] .acct-field select:focus {
+    background: var(--surface);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+[data-theme="dark"] .acct-field input:disabled {
+    background: var(--surface-sunken);
+    color: var(--ink-soft);
+    border-color: var(--border);
+    opacity: 0.65;
+}
+
+[data-theme="dark"] .acct-field input::placeholder,
+[data-theme="dark"] .acct-field textarea::placeholder {
+    color: #64748b;
+}
+
+[data-theme="dark"] .acct-avatar-card,
+[data-theme="dark"] .acct-cover-card {
+    background: var(--surface);
+    border-color: var(--border);
+}
+
+[data-theme="dark"] .acct-avatar-info h4 {
+    color: var(--ink);
+}
+
+[data-theme="dark"] .acct-avatar-info p {
+    color: var(--ink-soft);
+}
+
+[data-theme="dark"] .acct-hint {
+    color: var(--ink-soft);
+}
+
+[data-theme="dark"] .cv-item-card {
+    background: var(--surface);
+    border-color: var(--border);
+}
+
+[data-theme="dark"] .cv-item-title {
+    color: var(--ink);
+}
+
+[data-theme="dark"] .cv-item-meta {
+    color: var(--ink-soft);
+}

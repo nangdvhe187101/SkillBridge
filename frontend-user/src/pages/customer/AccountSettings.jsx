@@ -492,7 +492,33 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
         expectedHourlyRate: currentUser.expectedHourlyRate || ''
     });
 
-    // Đồng bộ nếu currentUser cập nhật
+    // Hàm chuẩn hóa dữ liệu để so sánh dirty check
+    const getComparable = (data) => JSON.stringify({
+        fullName: (data?.fullName || '').trim(),
+        headline: (data?.headline || '').trim(),
+        school: (data?.school || '').trim(),
+        schoolId: data?.schoolId ? String(data.schoolId) : '',
+        studentCode: (data?.studentCode || '').trim().toUpperCase(),
+        graduationYear: data?.graduationYear ? String(data.graduationYear) : '',
+        industry: data?.industry || 'Lập trình web & App',
+        phone: (data?.phone || data?.phoneNumber || '').trim(),
+        website: (data?.website || '').trim(),
+        bio: (data?.bio || data?.companyDescription || '').trim(),
+        skills: Array.isArray(data?.skills) ? data.skills : [],
+        education: Array.isArray(data?.education) ? data.education : [],
+        experiences: Array.isArray(data?.experiences) ? data.experiences : [],
+        socialLinks: {
+            github: (data?.socialLinks?.github || '').trim(),
+            linkedin: (data?.socialLinks?.linkedin || '').trim(),
+            behance: (data?.socialLinks?.behance || '').trim(),
+            facebook: (data?.socialLinks?.facebook || '').trim()
+        },
+        expectedHourlyRate: data?.expectedHourlyRate ? String(data.expectedHourlyRate) : ''
+    });
+
+    const [savedSnapshot, setSavedSnapshot] = useState(() => getComparable(currentUser));
+
+    // Đồng bộ nếu currentUser cập nhật từ bên ngoài
     useEffect(() => {
         if (currentUser) {
             setForm((prev) => ({
@@ -503,8 +529,13 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                 studentCode: currentUser.studentCode || prev.studentCode,
                 graduationYear: currentUser.graduationYear || prev.graduationYear
             }));
+            setSavedSnapshot(getComparable(currentUser));
         }
     }, [currentUser]);
+
+    const isDirty = useMemo(() => {
+        return getComparable(form) !== savedSnapshot;
+    }, [form, savedSnapshot]);
 
     const [newSkill, setNewSkill] = useState('');
     const [saving, setSaving] = useState(false);
@@ -588,6 +619,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                 socialLinks: form.socialLinks,
                 expectedHourlyRate: form.expectedHourlyRate ? Number(form.expectedHourlyRate) : null
             });
+            setSavedSnapshot(getComparable(form));
         } catch (err) {
             setError(err?.message || 'Không thể lưu thông tin hồ sơ.');
         } finally {
@@ -738,7 +770,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                         <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <span>Thù lao mong muốn (VNĐ / giờ)</span>
                             {form.expectedHourlyRate ? (
-                                <span style={{ color: '#4f46e5', fontWeight: 600, fontSize: '0.85rem' }}>
+                                <span style={{ color: 'var(--indigo, #6366f1)', fontWeight: 600, fontSize: '0.85rem' }}>
                                     ≈ {Number(form.expectedHourlyRate).toLocaleString('vi-VN')} đ / giờ
                                 </span>
                             ) : null}
@@ -753,7 +785,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                                 onChange={(e) => setForm({ ...form, expectedHourlyRate: e.target.value })}
                                 style={{ paddingRight: 70 }}
                             />
-                            <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: 13, fontWeight: 500, pointerEvents: 'none' }}>
+                            <span style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-soft)', fontSize: 13, fontWeight: 500, pointerEvents: 'none' }}>
                                 đ/giờ
                             </span>
                         </div>
@@ -968,7 +1000,7 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
                         {form.experiences.map((exp, idx) => (
                             <div key={idx} style={{ padding: '10px 14px', borderRadius: 8, border: '1px solid var(--line, #e2e8f0)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--bg-card, #fff)' }}>
                                 <div>
-                                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{exp.role} · <span style={{ color: '#4f46e5' }}>{exp.company}</span></div>
+                                    <div style={{ fontWeight: 600, fontSize: 13.5 }}>{exp.role} · <span style={{ color: 'var(--indigo, #6366f1)' }}>{exp.company}</span></div>
                                     <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{exp.period}</div>
                                     {exp.description && <div style={{ fontSize: 12.5, marginTop: 4, color: 'var(--ink)' }}>{exp.description}</div>}
                                 </div>
@@ -1029,7 +1061,18 @@ function StudentProfileTab({ currentUser, updateProfile, onAvatarUpdated, onCove
 
             {error && <div className="field-error acct-error">{error}</div>}
 
-            <button className="btn btn-primary acct-submit-btn" onClick={save} disabled={saving}>
+            <button
+                className="btn btn-primary acct-submit-btn"
+                onClick={save}
+                disabled={saving || !isDirty}
+                style={{
+                    opacity: (!isDirty && !saving) ? 0.45 : 1,
+                    cursor: (!isDirty && !saving) ? 'not-allowed' : 'pointer',
+                    filter: (!isDirty && !saving) ? 'grayscale(0.6)' : 'none',
+                    transition: 'all 0.2s ease'
+                }}
+                title={!isDirty ? 'Chưa có thông tin nào được thay đổi' : 'Lưu các thông tin đã chỉnh sửa'}
+            >
                 {saving ? 'Đang lưu...' : 'Lưu thông tin hồ sơ'}
             </button>
         </>
