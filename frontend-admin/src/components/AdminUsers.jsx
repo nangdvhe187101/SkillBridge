@@ -75,7 +75,7 @@ function UserAvatar({ name, avatarUrl, size = 30, fontSize = 12, role = 'student
   );
 }
 
-export default function AdminUsers() {
+export default function AdminUsers({ onViewDetail }) {
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -223,6 +223,10 @@ export default function AdminUsers() {
   };
 
   const openHistory = async (u) => {
+    if (onViewDetail) {
+      onViewDetail(u);
+      return;
+    }
     setModal({ type: 'history', user: u });
     setUserDetail(null);
     setDetailLoading(true);
