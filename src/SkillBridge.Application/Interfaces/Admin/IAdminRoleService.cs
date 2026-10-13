@@ -31,6 +31,12 @@ public interface IAdminRoleService
     Task DeleteTeamMemberAsync(int memberId, int actorAdminId, CancellationToken ct = default);
 
     /// <summary>
+    /// Khôi phục tài khoản user (sinh viên/nhà tuyển dụng) bị chuyển nhầm thành nhân sự quản trị:
+    /// gỡ khỏi đội ngũ quản trị, trả về role user, đặt mật khẩu mới và tự lấy lại thông tin cá nhân còn lưu trong hệ thống.
+    /// </summary>
+    Task<RestoreUserAccountResultDto> RestoreUserAccountAsync(int memberId, RestoreUserAccountDto dto, int actorAdminId, CancellationToken ct = default);
+
+    /// <summary>
     /// Lấy danh sách các vai trò quản trị nội bộ trong hệ thống
     /// </summary>
     Task<List<AdminRoleItemDto>> GetRolesAsync(CancellationToken ct = default);

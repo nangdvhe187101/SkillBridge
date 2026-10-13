@@ -45,7 +45,7 @@ public interface ITotpService
     /// <summary>
     /// Hủy kích hoạt 2FA cho tài khoản quản trị viên
     /// </summary>
-    Task<bool> Disable2FaAsync(int adminUserId, CancellationToken ct = default);
+    Task<bool> Disable2FaAsync(int adminUserId, string code, CancellationToken ct = default);
 
     /// <summary>
     /// Lấy khoá bí mật hiện tại của Admin (được mã hoá an toàn) để xác thực khi đăng nhập
@@ -76,4 +76,18 @@ public class Confirm2FaSetupRequestDto
 {
     public string Code { get; set; } = string.Empty;
     public string? SecretKey { get; set; }
+}
+
+/// <summary>
+/// Thiết lập 2FA bắt buộc ngay sau bước mật khẩu (admin chưa từng bật 2FA)
+/// </summary>
+public class Enroll2FaRequestDto
+{
+    public string TempToken { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+}
+
+public class Disable2FaRequestDto
+{
+    public string Code { get; set; } = string.Empty;
 }

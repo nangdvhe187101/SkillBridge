@@ -71,9 +71,10 @@ public class StorageController : ControllerBase
             if (segments.Length > 1 && int.TryParse(segments[1], out var targetUserId))
             {
                 var currentUserId = User.GetCurrentUserId();
-                var isAdmin = User.IsInRole("admin") ||
-                              User.HasClaim(System.Security.Claims.ClaimTypes.Role, "admin") ||
-                              User.HasClaim("role", "admin");
+                // Chỉ token quản trị đã qua 2FA (claim admin_mfa) mới được xem giấy tờ KYC của người khác
+                var isAdmin = User.HasClaim(SkillBridge.Application.Common.AdminAuthClaims.MfaVerified, SkillBridge.Application.Common.AdminAuthClaims.MfaVerifiedValue) &&
+                              (User.IsInRole("admin") || User.IsInRole("super_admin") ||
+                               User.HasClaim("role_type", SkillBridge.Application.Common.AdminAuthClaims.AdminRoleType));
 
                 var isOwner = currentUserId.HasValue && currentUserId.Value == targetUserId;
 

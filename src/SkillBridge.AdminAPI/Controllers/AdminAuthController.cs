@@ -63,57 +63,51 @@ public class AdminAuthController : ControllerBase
                 return Unauthorized(new { message = "Email hoặc mật khẩu không đúng" });
             }
 
-            // Kiểm tra trạng thái 2FA của Admin (Q-001 / BR-SEC-01)
+            // Refresh token phía người dùng sinh ra bởi LoginService không dùng cho cổng Admin
+            await _authTokenRepository.InvalidateAllActiveTokensAsync(user.Id, TokenTypes.Refresh);
+
+            // 2FA bắt buộc với mọi admin (BR-SEC-01): mật khẩu đúng chỉ mở phiên tạm, chưa cấp token quản trị
             var twoFactorStatus = await _totpService.GetAdmin2FaStatusAsync(user.Id, ct);
+            var tempToken = $"temp_2fa_{Guid.NewGuid():N}";
+            var pendingSession = new AdminPending2FaSession
+            {
+                UserId = user.Id,
+                Email = user.Email,
+                FullName = user.FullName,
+                RoleCode = user.Role.Code,
+                TokenVersion = user.TokenVersion,
+                AvatarUrl = result.AvatarUrl,
+                IsEnrollment = !twoFactorStatus.IsTwoFactorEnabled
+            };
+            _memoryCache.Set(tempToken, pendingSession, PendingSessionLifetime);
+
             if (twoFactorStatus.IsTwoFactorEnabled)
             {
-                // Tạo Temp Token phiên đăng nhập chờ 2FA (hạn 5 phút)
-                var tempToken = $"temp_2fa_{Guid.NewGuid():N}";
-                var pendingSession = new AdminPending2FaSession
-                {
-                    UserId = user.Id,
-                    Email = user.Email,
-                    FullName = user.FullName,
-                    RoleCode = user.Role.Code,
-                    RoleType = user.Role.Type,
-                    TokenVersion = user.TokenVersion,
-                    AvatarUrl = user.AvatarUrl
-                };
-
-                _memoryCache.Set(tempToken, pendingSession, TimeSpan.FromMinutes(5));
-
-                _logger.LogInformation("Admin {Email} (UserId: {UserId}) vượt qua bước 1 mật khẩu, yêu cầu xác thực 2FA TOTP.", user.Email, user.Id);
-
+                _logger.LogInformation("Admin {Email} (UserId: {UserId}) vượt qua bước mật khẩu, yêu cầu mã 2FA TOTP.", user.Email, user.Id);
                 return Ok(new
                 {
                     requiresTwoFactor = true,
+                    requiresTwoFactorSetup = false,
                     tempToken,
                     userId = user.Id,
                     email = user.Email,
-                    message = "Tài khoản của bạn đã bật xác thực 2 bước. Vui lòng nhập mã 6 số từ ứng dụng Authenticator."
+                    message = "Vui lòng nhập mã 6 số từ ứng dụng Authenticator."
                 });
             }
 
-            _logger.LogInformation("Admin {Email} (UserId: {UserId}) đăng nhập thành công vào Admin Portal.", user.Email, user.Id);
-
-            var effectiveRoleCode = user.Role.Code;
-            if (string.Equals(effectiveRoleCode, "admin", StringComparison.OrdinalIgnoreCase) &&
-                !string.Equals(user.Email, "skillbridge.vn@gmail.com", StringComparison.OrdinalIgnoreCase))
-            {
-                effectiveRoleCode = "business_admin";
-            }
-
+            // Admin chưa bật 2FA: bắt buộc thiết lập ngay, khóa bí mật do máy chủ sinh và giữ trong cache
+            var setup = await _totpService.Setup2FaAsync(user.Id, user.Email, ct);
+            _logger.LogWarning("Admin {Email} (UserId: {UserId}) chưa bật 2FA, bắt buộc thiết lập trước khi vào Admin Portal.", user.Email, user.Id);
             return Ok(new
             {
                 requiresTwoFactor = false,
-                isTwoFactorEnabled = false,
-                accessToken = result.Token,
-                token = result.Token,
-                userId = result.UserId,
-                fullName = result.FullName,
-                email = result.Email,
-                roleCode = effectiveRoleCode,
-                avatarUrl = result.AvatarUrl
+                requiresTwoFactorSetup = true,
+                tempToken,
+                userId = user.Id,
+                email = user.Email,
+                qrCodeUri = setup.QrCodeUri,
+                manualEntryKey = setup.ManualEntryKey,
+                message = "Tài khoản quản trị bắt buộc bật xác thực 2 bước. Quét mã QR bằng ứng dụng Authenticator rồi nhập mã 6 số."
             });
         }
         catch (BusinessException ex)
@@ -139,29 +133,76 @@ public class AdminAuthController : ControllerBase
             return BadRequest(new { message = "Phiên xác thực 2FA đã hết hạn. Vui lòng đăng nhập lại từ đầu." });
         }
 
+        if (session.IsEnrollment)
+        {
+            return BadRequest(new { message = "Tài khoản chưa bật 2FA. Vui lòng hoàn tất thiết lập Authenticator." });
+        }
+
         var secretKey = await _totpService.GetAdminSecretKeyAsync(session.UserId, ct);
         if (string.IsNullOrWhiteSpace(secretKey))
         {
-            return BadRequest(new { message = "Tài khoản chưa được thiết lập khóa bí mật 2FA." });
+            _memoryCache.Remove(dto.TempToken);
+            return BadRequest(new { message = "Tài khoản chưa được thiết lập khóa bí mật 2FA. Vui lòng đăng nhập lại." });
         }
 
-        var isValid = _totpService.ValidateCode(secretKey, dto.Code);
-        if (!isValid)
+        if (!_totpService.ValidateCode(secretKey, dto.Code))
         {
-            _logger.LogWarning("Admin #{UserId} nhập sai mã 2FA TOTP.", session.UserId);
-            return BadRequest(new { message = "Mã xác thực 2FA không chính xác hoặc đã hết hạn. Vui lòng thử lại." });
+            return RegisterFailedCode(dto.TempToken, session);
         }
 
-        // Hủy phiên tạm sau khi dùng thành công
-        _memoryCache.Remove(dto.TempToken);
+        return IssueAdminSession(dto.TempToken, session);
+    }
 
-        // Sinh Token JWT chính thức
-        var token = _jwtService.GenerateToken(
-            session.UserId,
-            session.Email,
-            session.RoleCode,
-            session.TokenVersion,
-            session.RoleType);
+    /// <summary>
+    /// Thiết lập 2FA bắt buộc ngay sau bước mật khẩu cho admin chưa từng bật 2FA
+    /// </summary>
+    [HttpPost("2fa/enroll")]
+    public async Task<IActionResult> Enroll2Fa([FromBody] Enroll2FaRequestDto dto, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(dto.TempToken) || string.IsNullOrWhiteSpace(dto.Code))
+        {
+            return BadRequest(new { message = "Thiếu thông tin phiên đăng nhập tạm hoặc mã xác thực 2FA." });
+        }
+
+        if (!_memoryCache.TryGetValue(dto.TempToken, out AdminPending2FaSession? session) || session == null || !session.IsEnrollment)
+        {
+            return BadRequest(new { message = "Phiên thiết lập 2FA đã hết hạn. Vui lòng đăng nhập lại từ đầu." });
+        }
+
+        try
+        {
+            await _totpService.Confirm2FaSetupAsync(session.UserId, dto.Code, null, ct);
+        }
+        catch (BusinessException ex)
+        {
+            _logger.LogWarning("Admin #{UserId} thiết lập 2FA thất bại: {Message}", session.UserId, ex.Message);
+            return RegisterFailedCode(dto.TempToken, session);
+        }
+
+        return IssueAdminSession(dto.TempToken, session);
+    }
+
+    private IActionResult RegisterFailedCode(string tempToken, AdminPending2FaSession session)
+    {
+        session.FailedAttempts += 1;
+        _logger.LogWarning("Admin #{UserId} nhập sai mã 2FA ({Attempts}/{Max}).", session.UserId, session.FailedAttempts, MaxCodeAttempts);
+
+        if (session.FailedAttempts >= MaxCodeAttempts)
+        {
+            _memoryCache.Remove(tempToken);
+            return BadRequest(new { message = "Nhập sai mã quá nhiều lần. Vui lòng đăng nhập lại từ đầu.", sessionExpired = true });
+        }
+
+        var remaining = MaxCodeAttempts - session.FailedAttempts;
+        return BadRequest(new { message = $"Mã xác thực 2FA không chính xác hoặc đã hết hạn. Còn {remaining} lần thử." });
+    }
+
+    private IActionResult IssueAdminSession(string tempToken, AdminPending2FaSession session)
+    {
+        // Phiên tạm chỉ dùng được một lần
+        _memoryCache.Remove(tempToken);
+
+        var token = _jwtService.GenerateAdminToken(session.UserId, session.Email, session.RoleCode, session.TokenVersion);
 
         _logger.LogInformation("Admin #{UserId} ({Email}) đã vượt qua 2FA TOTP thành công.", session.UserId, session.Email);
 
@@ -240,12 +281,22 @@ public class AdminAuthController : ControllerBase
     /// </summary>
     [HttpPost("2fa/disable")]
     [Authorize(Policy = "RequireAdminRole")]
-    public async Task<IActionResult> Disable2Fa(CancellationToken ct)
+    public async Task<IActionResult> Disable2Fa([FromBody] Disable2FaRequestDto dto, CancellationToken ct)
     {
         var adminUserId = User.GetRequiredUserId();
-        var success = await _totpService.Disable2FaAsync(adminUserId, ct);
-        return Ok(new { success, message = "Đã tắt xác thực 2 bước (2FA)." });
+        try
+        {
+            var success = await _totpService.Disable2FaAsync(adminUserId, dto?.Code ?? string.Empty, ct);
+            return Ok(new { success, message = "Đã tắt xác thực 2 bước (2FA). Lần đăng nhập tới bạn sẽ phải thiết lập lại." });
+        }
+        catch (BusinessException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
+
+    private const int MaxCodeAttempts = 5;
+    private static readonly TimeSpan PendingSessionLifetime = TimeSpan.FromMinutes(5);
 
     private class AdminPending2FaSession
     {
@@ -253,8 +304,10 @@ public class AdminAuthController : ControllerBase
         public string Email { get; set; } = string.Empty;
         public string FullName { get; set; } = string.Empty;
         public string RoleCode { get; set; } = string.Empty;
-        public string RoleType { get; set; } = string.Empty;
         public int TokenVersion { get; set; }
         public string? AvatarUrl { get; set; }
+        public bool IsEnrollment { get; set; }
+        // Đối tượng tham chiếu trong IMemoryCache nên tăng tại chỗ là đủ
+        public int FailedAttempts { get; set; }
     }
 }

@@ -20,6 +20,7 @@ public class TotpService : ITotpService
 {
     private const string Base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
     private const int TimeStepSeconds = 30;
+    private const int AllowedStepDrift = 1;
     private readonly SkillBridgeDbContext _dbContext;
     private readonly IMemoryCache _memoryCache;
     private readonly ILogger<TotpService> _logger;
@@ -64,12 +65,6 @@ public class TotpService : ITotpService
             return false;
         }
 
-        // Mã dự phòng kiểm thử nhanh cho môi trường phát triển / staging
-        if (string.Equals(cleanCode, "123456", StringComparison.Ordinal))
-        {
-            return true;
-        }
-
         byte[] keyBytes;
         try
         {
@@ -83,8 +78,13 @@ public class TotpService : ITotpService
         var currentUnixTime = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         var currentStep = currentUnixTime / TimeStepSeconds;
 
-        // Cửa sổ dung sai ±10 time steps (tương đương lệch tối đa 5 phút giữa máy chủ và điện thoại)
-        for (int offset = -10; offset <= 10; offset++)
+        if (keyBytes.Length == 0)
+        {
+            return false;
+        }
+
+        // Cửa sổ dung sai ±1 time step (±30 giây) theo khuyến nghị RFC 6238
+        for (int offset = -AllowedStepDrift; offset <= AllowedStepDrift; offset++)
         {
             var step = currentStep + offset;
             var expectedCode = ComputeTotp(keyBytes, step);
@@ -144,42 +144,26 @@ public class TotpService : ITotpService
 
     public async Task<bool> Confirm2FaSetupAsync(int adminUserId, string code, string? secretKeyFromClient = null, CancellationToken ct = default)
     {
+        // Chỉ tin khóa bí mật do máy chủ sinh ra và giữ trong cache; khóa gửi từ client chỉ được dùng
+        // để đối chiếu, không bao giờ được lưu nếu khác khóa máy chủ đã cấp.
         var cacheKey = $"pending_totp_{adminUserId}";
-        string? clientKey = !string.IsNullOrWhiteSpace(secretKeyFromClient)
-            ? secretKeyFromClient.Trim().Replace(" ", "").ToUpperInvariant()
-            : null;
-
-        _memoryCache.TryGetValue(cacheKey, out string? cachedKey);
-
-        string? selectedSecret = null;
-
-        // 1. Thử khóa gửi từ Client (khóa tương ứng với mã QR đang hiển thị trên màn hình hiện tại)
-        if (!string.IsNullOrWhiteSpace(clientKey) && ValidateCode(clientKey, code))
+        if (!_memoryCache.TryGetValue(cacheKey, out string? cachedKey) || string.IsNullOrWhiteSpace(cachedKey))
         {
-            selectedSecret = clientKey;
-        }
-        // 2. Thử khóa lưu trong Cache của Admin
-        else if (!string.IsNullOrWhiteSpace(cachedKey) && ValidateCode(cachedKey, code))
-        {
-            selectedSecret = cachedKey;
-        }
-        // 3. Nếu là mã bypass dev 123456
-        else if (string.Equals(code?.Trim(), "123456", StringComparison.Ordinal))
-        {
-            selectedSecret = clientKey ?? cachedKey;
+            throw new BusinessException("Phiên thiết lập 2FA đã hết hạn. Vui lòng bấm Thiết lập lại để lấy mã QR mới.");
         }
 
-        if (string.IsNullOrWhiteSpace(selectedSecret))
+        var clientKey = secretKeyFromClient?.Trim().Replace(" ", "").ToUpperInvariant();
+        if (!string.IsNullOrWhiteSpace(clientKey) && !string.Equals(clientKey, cachedKey, StringComparison.Ordinal))
         {
-            if (string.IsNullOrWhiteSpace(clientKey) && string.IsNullOrWhiteSpace(cachedKey))
-            {
-                throw new BusinessException("Phiên thiết lập 2FA đã hết hạn. Vui lòng bấm Thiết lập lại để lấy mã QR mới.");
-            }
-
-            throw new BusinessException("Mã xác thực 6 số không chính xác hoặc đã hết hạn. Bạn có thể kiểm tra lại giờ điện thoại, quét lại mã QR mới, hoặc nhập mã thử nghiệm: 123456.");
+            throw new BusinessException("Mã QR đã được làm mới. Vui lòng quét lại mã QR đang hiển thị trên màn hình.");
         }
 
-        var secretKey = selectedSecret;
+        if (!ValidateCode(cachedKey, code))
+        {
+            throw new BusinessException("Mã xác thực 6 số không chính xác hoặc đã hết hạn. Vui lòng kiểm tra lại giờ trên điện thoại hoặc quét lại mã QR mới.");
+        }
+
+        var secretKey = cachedKey;
 
         // Lưu chính thức vào DB
         var settingKey = $"totp_admin_{adminUserId}";
@@ -239,8 +223,20 @@ public class TotpService : ITotpService
         return true;
     }
 
-    public async Task<bool> Disable2FaAsync(int adminUserId, CancellationToken ct = default)
+    public async Task<bool> Disable2FaAsync(int adminUserId, string code, CancellationToken ct = default)
     {
+        // Bắt buộc nhập lại mã TOTP hợp lệ: chiếm được phiên đăng nhập thôi chưa đủ để gỡ 2FA
+        var currentSecret = await GetAdminSecretKeyAsync(adminUserId, ct);
+        if (string.IsNullOrWhiteSpace(currentSecret))
+        {
+            throw new BusinessException("Tài khoản chưa bật xác thực 2 bước.");
+        }
+
+        if (!ValidateCode(currentSecret, code))
+        {
+            throw new BusinessException("Mã xác thực 6 số không chính xác hoặc đã hết hạn.");
+        }
+
         var settingKey = $"totp_admin_{adminUserId}";
         var existingSetting = await _dbContext.SystemSettings
             .FirstOrDefaultAsync(s => s.Key == settingKey, ct);

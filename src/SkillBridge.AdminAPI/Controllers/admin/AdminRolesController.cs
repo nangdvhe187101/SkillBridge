@@ -121,6 +121,32 @@ public class AdminRolesController : ControllerBase
     }
 
     /// <summary>
+    /// Khôi phục tài khoản user (sinh viên/nhà tuyển dụng) bị chuyển nhầm thành nhân sự quản trị
+    /// </summary>
+    [HttpPost("team/{id:int}/restore-user")]
+    public async Task<IActionResult> RestoreUserAccount(
+        [FromRoute] int id,
+        [FromBody] RestoreUserAccountDto dto,
+        CancellationToken ct = default)
+    {
+        var actorAdminId = User.GetRequiredUserId();
+        try
+        {
+            var result = await _roleService.RestoreUserAccountAsync(id, dto, actorAdminId, ct);
+            return Ok(result);
+        }
+        catch (BusinessException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi khôi phục tài khoản user từ thành viên quản trị #{MemberId}", id);
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi khôi phục tài khoản." });
+        }
+    }
+
+    /// <summary>
     /// Lấy danh sách các vai trò quản trị nội bộ
     /// </summary>
     [HttpGet("roles")]

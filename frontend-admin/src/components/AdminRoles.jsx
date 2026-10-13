@@ -9,6 +9,7 @@ import {
   addAdminTeamMember,
   updateAdminTeamMember,
   deleteAdminTeamMember,
+  restoreUserFromTeamMember,
   getAdminRolesList,
   getAdminPermissionMatrix,
   addAdminPermissionRoute,
@@ -65,6 +66,13 @@ export default function AdminRoles() {
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('business_admin');
   const [submittingTeam, setSubmittingTeam] = useState(false);
+
+  // Restore User Account Modal (tài khoản user bị chuyển nhầm thành admin)
+  const [restoreTarget, setRestoreTarget] = useState(null);
+  const [restoreRole, setRestoreRole] = useState('student');
+  const [restorePassword, setRestorePassword] = useState('');
+  const [restoreName, setRestoreName] = useState('');
+  const [submittingRestore, setSubmittingRestore] = useState(false);
 
   // Load RBAC Matrix từ Backend
   const loadMatrix = useCallback(async () => {
@@ -250,6 +258,39 @@ export default function AdminRoles() {
       showToast(`Đã đổi mật khẩu cho ${m.name} thành công.`, 'check');
     } catch (err) {
       showToast(err.message || 'Lỗi khi cập nhật mật khẩu.', 'error');
+    }
+  };
+
+  // Restore User Account
+  const openRestoreModal = (m) => {
+    setRestoreTarget(m);
+    setRestoreRole(m.suggestedUserRoleCode || 'student');
+    setRestorePassword('');
+    setRestoreName('');
+  };
+
+  const submitRestore = async (e) => {
+    e.preventDefault();
+    if (!restoreTarget) return;
+    if (!/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/.test(restorePassword)) {
+      showToast('Mật khẩu mới cần tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt.', 'warning');
+      return;
+    }
+    setSubmittingRestore(true);
+    try {
+      const res = await restoreUserFromTeamMember(restoreTarget.id, {
+        roleCode: restoreRole,
+        newPassword: restorePassword,
+        fullName: restoreName.trim() || null
+      });
+      const recovered = (res?.recoveredFields || []).join(', ');
+      showToast(`Đã khôi phục ${res?.email || restoreTarget.email}${recovered ? ` (${recovered})` : ''}.`, 'check');
+      setTeam((prev) => prev.filter((t) => t.id !== restoreTarget.id));
+      setRestoreTarget(null);
+    } catch (err) {
+      showToast(err.message || 'Lỗi khi khôi phục tài khoản.', 'error');
+    } finally {
+      setSubmittingRestore(false);
     }
   };
 
@@ -606,7 +647,14 @@ export default function AdminRoles() {
 
                         return (
                           <tr key={m.id}>
-                            <td><b>{m.name}</b></td>
+                            <td>
+                              <b>{m.name}</b>
+                              {m.hasUserActivity && (
+                                <div style={{ fontSize: 11.5, color: 'var(--coral)', marginTop: 2 }}>
+                                  ⚠ Email này đang có dữ liệu người dùng (job, CV, ứng tuyển...)
+                                </div>
+                              )}
+                            </td>
                             <td>{m.email}</td>
                             <td>
                               <select
@@ -628,6 +676,14 @@ export default function AdminRoles() {
                                   title="Đặt lại mật khẩu đăng nhập cho nhân sự này"
                                 >
                                   Đổi mật khẩu
+                                </button>
+                                <button
+                                  className="btn btn-outline btn-sm"
+                                  style={{ fontSize: 12, padding: '3px 8px' }}
+                                  onClick={() => openRestoreModal(m)}
+                                  title="Trả tài khoản này về người dùng (sinh viên/nhà tuyển dụng) và lấy lại dữ liệu cũ"
+                                >
+                                  Khôi phục về user
                                 </button>
                                 <button
                                   className="btn btn-outline btn-sm"
@@ -715,6 +771,64 @@ export default function AdminRoles() {
       {/* ========================================================================= */}
       {/* MODAL THÊM TÍNH NĂNG / URL ROUTE MỚI VÀO MA TRẬN */}
       {/* ========================================================================= */}
+      {restoreTarget && (
+        <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget && !submittingRestore) setRestoreTarget(null); }}>
+          <div className="modal-box" style={{ maxWidth: 520 }}>
+            <button className="modal-close" onClick={() => setRestoreTarget(null)} disabled={submittingRestore} aria-label="Đóng" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Icon name="x" style={{ width: 16, height: 16 }} />
+            </button>
+            <h3>Khôi phục tài khoản người dùng</h3>
+            <p style={{ fontSize: 13, color: 'var(--ink-soft)', marginBottom: 14 }}>
+              Gỡ <b>{restoreTarget.email}</b> khỏi đội ngũ quản trị và trả về tài khoản người dùng.
+              Job, CV, ứng tuyển, ví... vẫn được giữ nguyên. Họ tên, trường học và trạng thái xác thực sẽ được tự động lấy lại từ hồ sơ xác thực nếu có.
+            </p>
+
+            <form onSubmit={submitRestore}>
+              <div className="field">
+                <label htmlFor="restore-role">Vai trò người dùng</label>
+                <select id="restore-role" value={restoreRole} onChange={(e) => setRestoreRole(e.target.value)}>
+                  <option value="student">Sinh viên</option>
+                  <option value="employer">Nhà tuyển dụng</option>
+                </select>
+              </div>
+
+              <div className="field">
+                <label htmlFor="restore-password">Mật khẩu mới <span style={{ color: 'var(--coral)' }}>*</span></label>
+                <input
+                  id="restore-password"
+                  type="password"
+                  value={restorePassword}
+                  onChange={(e) => setRestorePassword(e.target.value)}
+                  placeholder="Tối thiểu 8 ký tự, có chữ hoa, chữ thường, số, ký tự đặc biệt"
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+
+              <div className="field">
+                <label htmlFor="restore-name">Họ tên (tuỳ chọn)</label>
+                <input
+                  id="restore-name"
+                  type="text"
+                  value={restoreName}
+                  onChange={(e) => setRestoreName(e.target.value)}
+                  placeholder="Bỏ trống để tự lấy lại từ hồ sơ xác thực"
+                />
+              </div>
+
+              <div className="modal-actions" style={{ marginTop: 18 }}>
+                <button type="submit" className="btn btn-primary" disabled={submittingRestore}>
+                  {submittingRestore ? 'Đang khôi phục...' : 'Khôi phục tài khoản'}
+                </button>
+                <button type="button" className="btn btn-outline" onClick={() => setRestoreTarget(null)} disabled={submittingRestore}>
+                  Hủy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {newFeatModal && (
         <div className="modal-overlay open" onClick={(e) => { if (e.target === e.currentTarget) setNewFeatModal(false); }}>
           <div className="modal-box" style={{ maxWidth: 540 }}>

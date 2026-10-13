@@ -21,10 +21,10 @@ import Icon from '../components/Icon';
 import { adminLogout } from '../api/authApi';
 
 const ROLE_MODULES = {
-  super: ['users', 'contracts', 'student-verification', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'ops', 'roles'],
-  super_admin: ['users', 'contracts', 'student-verification', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'ops', 'roles'],
-  business_admin: ['student-verification', 'content', 'plans', 'partners', 'messages', 'support-chat', 'analytics'],
-  business: ['student-verification', 'content', 'plans', 'partners', 'messages', 'support-chat', 'analytics'],
+  super: ['users', 'contracts', 'student-verification', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'tickets', 'ops', 'roles'],
+  super_admin: ['users', 'contracts', 'student-verification', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'tickets', 'ops', 'roles'],
+  business_admin: ['student-verification', 'content', 'plans', 'partners', 'messages', 'support-chat', 'tickets', 'analytics'],
+  business: ['student-verification', 'content', 'plans', 'partners', 'messages', 'support-chat', 'tickets', 'analytics'],
   moderator: ['content', 'messages', 'support-chat', 'student-verification'],
   dispute: ['contracts', 'disputes', 'messages', 'support-chat'],
   finance: ['contracts', 'finance', 'plans', 'bank-verification', 'support-chat'],
@@ -54,6 +54,7 @@ const CF_NAV_SECTIONS = [
   {
     title: 'Observe & Manage',
     items: [
+      { id: 'tickets', path: '/tickets', icon: 'ticket', label: 'Ticket hỗ trợ (CSKH)', sub: 'Hộp thư yêu cầu & Khiếu nại' },
       { id: 'support-chat', path: '/support-chat', icon: 'chat', label: 'Tin nhắn hỗ trợ (CSKH)', sub: 'Hội thoại trực tiếp với User/NTD' },
       { id: 'student-verification', path: '/student-verification', icon: 'shield-check', label: 'Duyệt thẻ sinh viên' },
       { id: 'bank-verification', path: '/bank-verification', icon: 'shield-check', label: 'Duyệt ngân hàng' },
@@ -91,6 +92,7 @@ const MODULE_TITLES = {
   analytics: 'Báo cáo số liệu & phân tích',
   plans: 'Quản lý gói bán & bảng giá',
   partners: 'Đối tác liên kết & quảng cáo',
+  tickets: 'Hộp Ticket hỗ trợ & Khiếu nại (CSKH)',
   ops: 'Hỗ trợ vận hành & CS Tickets',
   roles: 'Phân quyền & Ma trận bảo mật',
 };
@@ -411,7 +413,7 @@ function AdminInner({ forcedTab }) {
           {activeTab === 'partners' && <AdminPartners />}
           {activeTab === 'messages' && <AdminMessages />}
           {activeTab === 'support-chat' && <AdminChat />}
-          {activeTab === 'ops' && <AdminOps />}
+          {(activeTab === 'ops' || activeTab === 'tickets') && <AdminOps />}
           {activeTab === 'roles' && <AdminRoles />}
         </main>
 

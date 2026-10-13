@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using SkillBridge.Application.Common;
 using SkillBridge.Application.Interfaces;
 
 namespace SkillBridge.Infrastructure.Services
@@ -25,14 +26,28 @@ namespace SkillBridge.Infrastructure.Services
                 ? roleType
                 : (roleCode.Equals("admin", StringComparison.OrdinalIgnoreCase) || roleCode.Equals("super_admin", StringComparison.OrdinalIgnoreCase) ? "admin" : "user");
 
-            var claim = new[]
+            return WriteToken(BuildBaseClaims(userId, email, roleCode, tokenVersion, effectiveRoleType));
+        }
+
+        public string GenerateAdminToken(int userId, string email, string roleCode, int tokenVersion)
+        {
+            var claims = BuildBaseClaims(userId, email, roleCode, tokenVersion, AdminAuthClaims.AdminRoleType);
+            claims.Add(new Claim(AdminAuthClaims.MfaVerified, AdminAuthClaims.MfaVerifiedValue));
+            return WriteToken(claims);
+        }
+
+        private static List<Claim> BuildBaseClaims(int userId, string email, string roleCode, int tokenVersion, string roleType) =>
+            new()
             {
                 new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
                 new Claim(ClaimTypes.Email, email),
                 new Claim(ClaimTypes.Role, roleCode),
-                new Claim("role_type", effectiveRoleType),
+                new Claim("role_type", roleType),
                 new Claim("token_version", tokenVersion.ToString())
             };
+
+        private string WriteToken(IEnumerable<Claim> claim)
+        {
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Key"]!));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { adminLogin, adminVerify2Fa } from '../api/authApi';
+import { adminLogin, adminVerify2Fa, adminEnroll2Fa } from '../api/authApi';
 import { setAccessToken } from '../api/tokenStore';
 import { useToast } from '../context/ToastContext';
 import Icon from '../components/Icon';
@@ -54,21 +54,23 @@ export default function Login() {
     try {
       const data = await adminLogin(email.trim(), password);
 
-      // Nếu tài khoản đã kích hoạt 2FA TOTP (Q-001 / SC-ADM-01)
-      if (data.requiresTwoFactor) {
+      // 2FA bắt buộc: đã bật thì nhập mã, chưa bật thì phải thiết lập ngay (BR-SEC-01)
+      if (data.requiresTwoFactor || data.requiresTwoFactorSetup) {
         setTempSession({
           tempToken: data.tempToken,
           email: data.email || email.trim(),
-          userId: data.userId
+          userId: data.userId,
+          qrCodeUri: data.qrCodeUri,
+          manualEntryKey: data.manualEntryKey
         });
-        setStep('2fa');
+        setStep(data.requiresTwoFactorSetup ? 'enroll' : '2fa');
         setTotpCode('');
         setError('');
         showToast(data.message || 'Vui lòng nhập mã TOTP từ ứng dụng Authenticator', 'info');
         return;
       }
 
-      handleLoginSuccess(data);
+      throw new Error('Phản hồi đăng nhập không hợp lệ. Vui lòng thử lại.');
     } catch (err) {
       setError(err.message || 'Thông tin đăng nhập không đúng.');
     } finally {
@@ -96,10 +98,16 @@ export default function Login() {
     setError('');
 
     try {
-      const data = await adminVerify2Fa(tempSession.tempToken, cleanCode);
+      const data = step === 'enroll'
+        ? await adminEnroll2Fa(tempSession.tempToken, cleanCode)
+        : await adminVerify2Fa(tempSession.tempToken, cleanCode);
       handleLoginSuccess(data);
     } catch (err) {
-      setError(err.message || 'Mã xác thực 2FA không chính xác hoặc đã hết hạn.');
+      const msg = err.message || 'Mã xác thực 2FA không chính xác hoặc đã hết hạn.';
+      if (err.data?.sessionExpired) {
+        handleBackToCredentials();
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -363,12 +371,36 @@ export default function Login() {
                 <Icon name="shield-check" width="28" height="28" />
               </div>
               <h3 style={{ margin: '0 0 6px 0', fontSize: 16, fontWeight: 700, color: '#fff' }}>
-                Xác thực hai bước (2FA TOTP)
+                {step === 'enroll' ? 'Bắt buộc thiết lập xác thực hai bước' : 'Xác thực hai bước (2FA TOTP)'}
               </h3>
               <p style={{ margin: 0, fontSize: 13, color: '#cbd5e1', lineHeight: 1.4 }}>
-                Mở ứng dụng <strong>Google Authenticator</strong> trên điện thoại và nhập mã bảo mật 6 số cho tài khoản <strong>{tempSession?.email}</strong>.
+                {step === 'enroll'
+                  ? <>Quét mã QR bên dưới bằng <strong>Google Authenticator</strong> cho tài khoản <strong>{tempSession?.email}</strong>, rồi nhập mã 6 số để kích hoạt.</>
+                  : <>Mở ứng dụng <strong>Google Authenticator</strong> trên điện thoại và nhập mã bảo mật 6 số cho tài khoản <strong>{tempSession?.email}</strong>.</>}
               </p>
             </div>
+
+            {step === 'enroll' && (
+              <div style={{ textAlign: 'center' }}>
+                {tempSession?.qrCodeUri && (
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(tempSession.qrCodeUri)}`}
+                    alt="Mã QR thiết lập Google Authenticator"
+                    width={180}
+                    height={180}
+                    style={{ background: '#fff', padding: 8, borderRadius: 12 }}
+                  />
+                )}
+                {tempSession?.manualEntryKey && (
+                  <div style={{ marginTop: 10, fontSize: 12.5, color: '#cbd5e1' }}>
+                    Hoặc nhập khóa thủ công:
+                    <div style={{ marginTop: 4, fontFamily: 'monospace', fontSize: 13.5, color: '#fff', wordBreak: 'break-all' }}>
+                      {tempSession.manualEntryKey}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div>
               <label

@@ -16,6 +16,17 @@ public class AdminTeamMemberDto
     public string RoleName { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
+
+    /// <summary>
+    /// true nếu email này từng là tài khoản sinh viên/nhà tuyển dụng có dữ liệu (job, CV, ứng tuyển, hồ sơ...)
+    /// — dấu hiệu tài khoản user bị chuyển nhầm thành admin, cần khôi phục.
+    /// </summary>
+    public bool HasUserActivity { get; set; }
+
+    /// <summary>
+    /// Vai trò user gợi ý khi khôi phục ("student" | "employer"), suy ra từ dữ liệu còn lại.
+    /// </summary>
+    public string? SuggestedUserRoleCode { get; set; }
 }
 
 /// <summary>
@@ -39,6 +50,37 @@ public class UpdateAdminTeamMemberRoleDto
     public string? RoleCode { get; set; }
     public bool? IsActive { get; set; }
     public string? Password { get; set; }
+}
+
+/// <summary>
+/// DTO khôi phục một tài khoản user bị chuyển nhầm thành nhân sự quản trị
+/// </summary>
+public class RestoreUserAccountDto
+{
+    /// <summary>"student" hoặc "employer"</summary>
+    public string RoleCode { get; set; } = string.Empty;
+
+    /// <summary>Mật khẩu mới cho user (bắt buộc, theo chính sách mật khẩu đăng ký)</summary>
+    public string NewPassword { get; set; } = string.Empty;
+
+    /// <summary>Họ tên ghi đè (tuỳ chọn). Bỏ trống để hệ thống tự lấy lại từ hồ sơ xác thực.</summary>
+    public string? FullName { get; set; }
+}
+
+/// <summary>
+/// Kết quả khôi phục tài khoản user
+/// </summary>
+public class RestoreUserAccountResultDto
+{
+    public int UserId { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public string FullName { get; set; } = string.Empty;
+    public string RoleCode { get; set; } = string.Empty;
+    public string KycStatus { get; set; } = string.Empty;
+    public string? School { get; set; }
+
+    /// <summary>Danh sách thông tin đã được tự động lấy lại, để hiển thị cho admin</summary>
+    public List<string> RecoveredFields { get; set; } = new();
 }
 
 /// <summary>

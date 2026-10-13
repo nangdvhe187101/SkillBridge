@@ -124,11 +124,14 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddAuthorizationBuilder()
     .AddPolicy("RequireEmployerRole", policy => policy.RequireRole("employer"))
     .AddPolicy("RequireStudentRole", policy => policy.RequireRole("student"))
+    // Token quản trị bắt buộc mang claim admin_mfa (chỉ cấp sau mật khẩu + 2FA tại /api/admin-auth).
+    // Token đăng nhập phía người dùng (mật khẩu, Google, refresh) không có claim này nên bị từ chối.
     .AddPolicy("RequireAdminRole", policy =>
         policy.RequireAssertion(context =>
-            context.User.IsInRole("admin") ||
-            context.User.IsInRole("super_admin") ||
-            context.User.HasClaim(c => (c.Type == "role_type" || c.Type == "RoleType") && string.Equals(c.Value, "admin", StringComparison.OrdinalIgnoreCase))));
+            context.User.HasClaim(SkillBridge.Application.Common.AdminAuthClaims.MfaVerified, SkillBridge.Application.Common.AdminAuthClaims.MfaVerifiedValue) &&
+            (context.User.IsInRole("admin") ||
+             context.User.IsInRole("super_admin") ||
+             context.User.HasClaim(c => (c.Type == "role_type" || c.Type == "RoleType") && string.Equals(c.Value, "admin", StringComparison.OrdinalIgnoreCase)))));
 
 
 builder.Services.Scan(scan => scan
@@ -250,6 +253,18 @@ builder.Services.AddRateLimiter(options =>
             {
                 PermitLimit = 120,
                 Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst
+            }));
+
+    // ContactFormPolicy (Chống spam ticket / contact form): tối đa 5 yêu cầu / 10 phút per IP
+    options.AddPolicy("ContactFormPolicy", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(10),
                 QueueLimit = 0,
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst
             }));

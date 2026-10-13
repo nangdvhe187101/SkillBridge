@@ -209,6 +209,13 @@ namespace SkillBridge.Infrastructure.Services.Auth
                 throw new BusinessException("Không thể xác thực thông tin tài khoản.");
             }
 
+            // Tài khoản quản trị chỉ được đăng nhập qua cổng Admin (mật khẩu + 2FA)
+            if (string.Equals(user.Role.Type, AdminAuthClaims.AdminRoleType, StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogWarning("Chặn đăng nhập Google phía người dùng cho tài khoản quản trị UserId {UserId}.", user.Id);
+                throw new BusinessException("Tài khoản quản trị không thể đăng nhập bằng Google. Vui lòng dùng cổng quản trị.");
+            }
+
             var accessToken = jwtService.GenerateToken(user.Id, user.Email, user.Role.Code, user.TokenVersion, user.Role.Type);
             var refreshToken = jwtService.GenerateRefreshTokenString();
 

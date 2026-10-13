@@ -355,6 +355,13 @@ export async function updateAdminTeamMember(memberId, data) {
   });
 }
 
+export async function restoreUserFromTeamMember(memberId, data) {
+  return apiFetch(`/admin/roles/team/${memberId}/restore-user`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function deleteAdminTeamMember(memberId) {
   return apiFetch(`/admin/roles/team/${memberId}`, {
     method: 'DELETE',

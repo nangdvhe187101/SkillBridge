@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
+using SkillBridge.Application.DTOs;
 using SkillBridge.Application.DTOs.Admin;
 using SkillBridge.Application.Interfaces.Admin;
 using SkillBridge.Infrastructure.Data;
@@ -40,16 +41,43 @@ public class AdminRoleService : IAdminRoleService
             .AsNoTracking()
             .ToListAsync(ct);
 
-        return members.Select(m => new AdminTeamMemberDto
+        // Phát hiện tài khoản user bị chuyển nhầm thành admin: email này còn dữ liệu sinh viên/nhà tuyển dụng
+        var emails = members.Select(m => m.Email).ToList();
+        var userIdByEmail = await _dbContext.Users
+            .AsNoTracking()
+            .Where(u => emails.Contains(u.Email))
+            .ToDictionaryAsync(u => u.Email, u => u.Id, ct);
+        var userIds = userIdByEmail.Values.ToList();
+
+        var studentUserIds = new HashSet<int>(await _dbContext.CvFiles.Where(c => userIds.Contains(c.StudentId)).Select(c => c.StudentId)
+            .Union(_dbContext.Applications.Where(a => userIds.Contains(a.StudentId)).Select(a => a.StudentId))
+            .Union(_dbContext.StudentProfiles.Where(p => userIds.Contains(p.UserId)).Select(p => p.UserId))
+            .Union(_dbContext.StudentVerificationRequests.Where(r => userIds.Contains(r.UserId)).Select(r => r.UserId))
+            .ToListAsync(ct));
+        var employerUserIds = new HashSet<int>(await _dbContext.Jobs
+            .Where(j => userIds.Contains(j.EmployerId))
+            .Select(j => j.EmployerId)
+            .Distinct()
+            .ToListAsync(ct));
+
+        return members.Select(m =>
         {
-            Id = m.Id,
-            Name = m.Name,
-            Email = m.Email,
-            RoleId = m.RoleId,
-            RoleCode = MapToDtoRoleCode(m.Role?.Code),
-            RoleName = m.Role?.Name ?? "Quản trị viên",
-            IsActive = m.IsActive ?? true,
-            CreatedAt = m.CreatedAt
+            int? uid = userIdByEmail.TryGetValue(m.Email, out var id) ? id : null;
+            var isStudent = uid.HasValue && studentUserIds.Contains(uid.Value);
+            var isEmployer = uid.HasValue && employerUserIds.Contains(uid.Value);
+            return new AdminTeamMemberDto
+            {
+                Id = m.Id,
+                Name = m.Name,
+                Email = m.Email,
+                RoleId = m.RoleId,
+                RoleCode = MapToDtoRoleCode(m.Role?.Code),
+                RoleName = m.Role?.Name ?? "Quản trị viên",
+                IsActive = m.IsActive ?? true,
+                CreatedAt = m.CreatedAt,
+                HasUserActivity = isStudent || isEmployer,
+                SuggestedUserRoleCode = isStudent ? RoleCode.Student : isEmployer ? RoleCode.Employer : null
+            };
         }).ToList();
     }
 
@@ -76,40 +104,34 @@ public class AdminRoleService : IAdminRoleService
             throw new BusinessException($"Email '{dto.Email}' đã tồn tại trong đội ngũ quản trị.");
         }
 
+        // Không cho phép chiếm dụng email đã đăng ký: nếu ghi đè sẽ đổi role, mật khẩu của user thật
+        // và làm toàn bộ dữ liệu sinh viên/nhà tuyển dụng (job, CV, hồ sơ...) không còn truy cập được.
+        var emailTaken = await _dbContext.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail, ct);
+        if (emailTaken)
+        {
+            throw new BusinessException($"Email '{dto.Email}' đã được đăng ký bởi một tài khoản người dùng. Vui lòng dùng email khác cho nhân sự quản trị.");
+        }
+
         var role = await ResolveAdminRoleAsync(dto.RoleId, dto.RoleCode, ct);
 
         var passwordHash = BCrypt.Net.BCrypt.HashPassword(rawPassword, workFactor: 11);
 
-        // Đồng bộ hoặc tạo User trong bảng users để nhân sự có thể đăng nhập được vào Admin Portal
-        var existingUser = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == normalizedEmail, ct);
-        if (existingUser != null)
+        // Tạo User trong bảng users để nhân sự có thể đăng nhập được vào Admin Portal
+        var newUser = new User
         {
-            existingUser.FullName = dto.Name.Trim();
-            existingUser.PasswordHash = passwordHash;
-            existingUser.RoleId = role.Id;
-            existingUser.AccountStatus = "active";
-            existingUser.KycStatus = "verified";
-            existingUser.FailedLoginAttempts = 0;
-            existingUser.LockoutUntil = null;
-        }
-        else
-        {
-            var newUser = new User
-            {
-                FullName = dto.Name.Trim(),
-                Email = normalizedEmail,
-                PasswordHash = passwordHash,
-                RoleId = role.Id,
-                AccountStatus = "active",
-                KycStatus = "verified",
-                ReliabilityScore = 100,
-                JobsDoneCount = 0,
-                TokenVersion = 1,
-                FailedLoginAttempts = 0,
-                JoinedAt = DateTime.UtcNow
-            };
-            await _dbContext.Users.AddAsync(newUser, ct);
-        }
+            FullName = dto.Name.Trim(),
+            Email = normalizedEmail,
+            PasswordHash = passwordHash,
+            RoleId = role.Id,
+            AccountStatus = "active",
+            KycStatus = "verified",
+            ReliabilityScore = 100,
+            JobsDoneCount = 0,
+            TokenVersion = 1,
+            FailedLoginAttempts = 0,
+            JoinedAt = DateTime.UtcNow
+        };
+        await _dbContext.Users.AddAsync(newUser, ct);
 
         var member = new AdminTeamMember
         {
@@ -219,8 +241,29 @@ public class AdminRoleService : IAdminRoleService
         var memberEmail = member.Email;
         var memberName = member.Name;
 
-        // Nếu database là relational (MySQL / TiDB), giải phóng hoặc chuyển tiếp các liên kết khóa ngoại
-        // để không bị lỗi 'Cannot delete or update a parent row: a foreign key constraint fails'
+        await DetachAdminMemberReferencesAsync(memberId, actorAdminId, ct);
+
+        _dbContext.AdminTeamMembers.Remove(member);
+
+        // Khóa tài khoản User tương ứng trong bảng users
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == memberEmail, ct);
+        if (user != null && !string.Equals(user.Email, "skillbridge.vn@gmail.com", StringComparison.OrdinalIgnoreCase))
+        {
+            user.AccountStatus = "locked";
+        }
+
+        await _dbContext.SaveChangesAsync(ct);
+
+        await RecordAuditLogAsync(actorAdminId, $"Xóa thành viên {memberName} ({memberEmail}) khỏi đội ngũ quản trị.", ct);
+        _logger.LogInformation("Đã xóa AdminTeamMember #{MemberId} ({Email}) bởi AdminUserId {Actor}", memberId, memberEmail, actorAdminId);
+    }
+
+    /// <summary>
+    /// Giải phóng hoặc chuyển tiếp các liên kết khóa ngoại trỏ tới một admin_team_member trước khi xóa,
+    /// để không bị lỗi 'Cannot delete or update a parent row: a foreign key constraint fails'.
+    /// </summary>
+    private async Task DetachAdminMemberReferencesAsync(int memberId, int actorAdminId, CancellationToken ct)
+    {
         if (_dbContext.Database.IsRelational())
         {
             var fallbackAdmin = await _dbContext.AdminTeamMembers
@@ -282,20 +325,126 @@ public class AdminRoleService : IAdminRoleService
             var logs = await _dbContext.AuditLogs.Where(a => a.ActorId == memberId).ToListAsync(ct);
             foreach (var l in logs) l.ActorId = actorAdminId;
         }
+    }
 
+    /// <inheritdoc />
+    public async Task<RestoreUserAccountResultDto> RestoreUserAccountAsync(int memberId, RestoreUserAccountDto dto, int actorAdminId, CancellationToken ct = default)
+    {
+        var roleCode = (dto.RoleCode ?? string.Empty).Trim().ToLowerInvariant();
+        if (roleCode != RoleCode.Student && roleCode != RoleCode.Employer)
+        {
+            throw new BusinessException("Vai trò khôi phục chỉ được là 'student' (Sinh viên) hoặc 'employer' (Nhà tuyển dụng).");
+        }
+
+        var newPassword = dto.NewPassword?.Trim() ?? string.Empty;
+        if (!ValidationPatterns.Password.IsMatch(newPassword))
+        {
+            throw new BusinessException("Mật khẩu mới phải có tối thiểu 8 ký tự, gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt.");
+        }
+
+        var member = await _dbContext.AdminTeamMembers.FirstOrDefaultAsync(m => m.Id == memberId, ct)
+            ?? throw new BusinessException($"Không tìm thấy thành viên quản trị #{memberId}.");
+
+        if (string.Equals(member.Email, "skillbridge.vn@gmail.com", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BusinessException("Không thể khôi phục tài khoản Super Admin gốc thành tài khoản người dùng.");
+        }
+
+        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == member.Email, ct)
+            ?? throw new BusinessException($"Không tìm thấy tài khoản người dùng ứng với email '{member.Email}'.");
+
+        if (user.Id == actorAdminId)
+        {
+            throw new BusinessException("Bạn không thể tự khôi phục chính tài khoản quản trị đang đăng nhập.");
+        }
+
+        var role = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Code == roleCode, ct)
+            ?? throw new BusinessException($"Không tìm thấy cấu hình vai trò '{roleCode}' trong hệ thống.");
+
+        var recovered = new List<string>();
+
+        // Lấy lại họ tên, trường, trạng thái KYC từ hồ sơ xác thực sinh viên (không bị ghi đè khi lên admin)
+        var profile = await _dbContext.StudentProfiles
+            .Include(p => p.School)
+            .AsNoTracking()
+            .FirstOrDefaultAsync(p => p.UserId == user.Id, ct);
+        var latestRequest = await _dbContext.StudentVerificationRequests
+            .Include(r => r.School)
+            .AsNoTracking()
+            .Where(r => r.UserId == user.Id)
+            .OrderByDescending(r => r.SubmittedAt)
+            .FirstOrDefaultAsync(ct);
+
+        string? recoveredName = profile?.VerifiedFullName ?? latestRequest?.FullNameOnCard;
+        if (!string.IsNullOrWhiteSpace(dto.FullName))
+        {
+            user.FullName = dto.FullName.Trim();
+            recovered.Add("Họ tên (do admin nhập)");
+        }
+        else if (!string.IsNullOrWhiteSpace(recoveredName))
+        {
+            user.FullName = recoveredName.Trim();
+            recovered.Add("Họ tên (từ hồ sơ xác thực sinh viên)");
+        }
+
+        var school = profile?.School ?? latestRequest?.School;
+        if (school != null)
+        {
+            user.SchoolId = school.Id;
+            user.School = school.Name;
+            recovered.Add("Trường học");
+        }
+
+        // KYC: trước đây bị ép 'verified' khi lên admin -> tính lại từ dữ liệu thực tế
+        if (profile != null && (profile.ExpiresAt == null || profile.ExpiresAt > DateTime.UtcNow))
+        {
+            user.KycStatus = "verified";
+        }
+        else if (latestRequest?.Status == "rejected")
+        {
+            user.KycStatus = "rejected";
+        }
+        else
+        {
+            user.KycStatus = "pending";
+            user.KycReviewedAt = null;
+            user.KycReviewedBy = null;
+        }
+        recovered.Add($"Trạng thái xác thực: {user.KycStatus}");
+
+        // Gỡ khỏi đội ngũ quản trị (giữ nguyên toàn bộ job, CV, ứng tuyển, ví... vì chúng gắn theo user id)
+        await DetachAdminMemberReferencesAsync(memberId, actorAdminId, ct);
         _dbContext.AdminTeamMembers.Remove(member);
 
-        // Khóa tài khoản User tương ứng trong bảng users
-        var user = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == memberEmail, ct);
-        if (user != null && !string.Equals(user.Email, "skillbridge.vn@gmail.com", StringComparison.OrdinalIgnoreCase))
-        {
-            user.AccountStatus = "locked";
-        }
+        user.RoleId = role.Id;
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword, workFactor: 11);
+        user.AccountStatus = "active";
+        user.FailedLoginAttempts = 0;
+        user.LockoutUntil = null;
+        // Thu hồi mọi phiên admin đang mở của tài khoản này
+        user.TokenVersion += 1;
+
+        var activeRefreshTokens = await _dbContext.AuthTokens
+            .Where(t => t.UserId == user.Id && t.TokenType == TokenTypes.Refresh && t.UsedAt == null)
+            .ToListAsync(ct);
+        foreach (var t in activeRefreshTokens) t.UsedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(ct);
 
-        await RecordAuditLogAsync(actorAdminId, $"Xóa thành viên {memberName} ({memberEmail}) khỏi đội ngũ quản trị.", ct);
-        _logger.LogInformation("Đã xóa AdminTeamMember #{MemberId} ({Email}) bởi AdminUserId {Actor}", memberId, memberEmail, actorAdminId);
+        await RecordAuditLogAsync(actorAdminId,
+            $"Khôi phục tài khoản người dùng #{user.Id} ({user.Email}) từ nhân sự quản trị về vai trò {role.Name}. Đã lấy lại: {string.Join(", ", recovered)}.", ct);
+        _logger.LogInformation("Admin #{Actor} đã khôi phục tài khoản user #{UserId} ({Email}) về role {Role}", actorAdminId, user.Id, user.Email, role.Code);
+
+        return new RestoreUserAccountResultDto
+        {
+            UserId = user.Id,
+            Email = user.Email,
+            FullName = user.FullName,
+            RoleCode = role.Code,
+            KycStatus = user.KycStatus,
+            School = user.School,
+            RecoveredFields = recovered
+        };
     }
 
     /// <inheritdoc />
@@ -624,25 +773,6 @@ public class AdminRoleService : IAdminRoleService
             _logger.LogInformation("EnsureInitialTeamAndRolesSeed: Đã tạo role 'business_admin' thành công.");
         }
 
-        // 2. Tự động khắc phục tài khoản linhtlkhs189008@fpt.edu.vn nếu bị gán nhầm sang super_admin (ID 3)
-        var misassignedMembers = await _dbContext.AdminTeamMembers
-            .Where(m => m.Email == "linhtlkhs189008@fpt.edu.vn" && m.RoleId == 3)
-            .ToListAsync(ct);
-
-        foreach (var m in misassignedMembers)
-        {
-            m.RoleId = businessAdminRole.Id;
-            var u = await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == m.Email, ct);
-            if (u != null)
-            {
-                u.RoleId = businessAdminRole.Id;
-            }
-        }
-        if (misassignedMembers.Count > 0)
-        {
-            await _dbContext.SaveChangesAsync(ct);
-            _logger.LogInformation("EnsureInitialTeamAndRolesSeed: Đã điều chỉnh {Count} tài khoản linhtlkhs189008@fpt.edu.vn về role Business Admin.", misassignedMembers.Count);
-        }
 
         if (!await _dbContext.AdminTeamMembers.AnyAsync(ct))
         {

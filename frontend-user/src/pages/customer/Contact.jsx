@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useStore } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
 import { useCompanyInfo } from '../../hooks/useCompanyInfo';
+import { submitContactTicket } from '../../api/ticketApi';
 
 export default function Contact() {
   const { user, showToast } = useStore();
@@ -11,10 +12,21 @@ export default function Contact() {
     email: '',
     phone: '',
     subject: 'support',
-    message: ''
+    message: '',
+    honeypotTrap: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [ticketResult, setTicketResult] = useState(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownSeconds((prev) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownSeconds]);
 
   useEffect(() => {
     if (user) {
@@ -29,27 +41,34 @@ export default function Contact() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.message) {
+    if (cooldownSeconds > 0) {
+      showToast(`Vui lòng đợi ${cooldownSeconds}s trước khi gửi tiếp.`, 'x');
+      return;
+    }
+
+    if (!form.name.trim() || !form.email.trim() || !form.message.trim()) {
       showToast('Vui lòng điền đầy đủ các thông tin bắt buộc.', 'x');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      // Giả lập gửi qua network và lưu lịch sử liên hệ cục bộ
-      await new Promise((res) => setTimeout(res, 600));
-
-      const contactHistory = JSON.parse(localStorage.getItem('skillbridge_contact_messages') || '[]');
-      contactHistory.push({
-        ...form,
-        createdAt: new Date().toISOString()
+      const res = await submitContactTicket({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone ? form.phone.trim() : null,
+        subject: form.subject || 'Hỗ trợ kỹ thuật & tài khoản',
+        message: form.message.trim(),
+        honeypotTrap: form.honeypotTrap || null
       });
-      localStorage.setItem('skillbridge_contact_messages', JSON.stringify(contactHistory));
 
+      setTicketResult(res);
       setSubmitted(true);
-      showToast('Yêu cầu hỗ trợ đã được gửi thành công!', 'check');
-    } catch {
-      showToast('Có lỗi xảy ra, vui lòng liên hệ hotline hoặc gửi email trực tiếp.', 'x');
+      setCooldownSeconds(60); // Kích hoạt 60s cooldown chống click spam
+      showToast('Yêu cầu hỗ trợ đã được gửi thành công đến Quản trị viên!', 'check');
+    } catch (err) {
+      const errorMsg = err?.message || 'Có lỗi xảy ra, vui lòng liên hệ hotline hoặc gửi email trực tiếp.';
+      showToast(errorMsg, 'x');
     } finally {
       setIsSubmitting(false);
     }
@@ -154,9 +173,11 @@ export default function Contact() {
               }}>
                 <Icon name="check" width="34" height="34" />
               </div>
-              <h4 style={{ color: '#16a34a', margin: '0 0 8px 0', fontSize: 18 }}>Đã tiếp nhận yêu cầu!</h4>
+              <h4 style={{ color: '#16a34a', margin: '0 0 8px 0', fontSize: 18 }}>
+                Đã tiếp nhận yêu cầu{ticketResult?.ticketId ? ` #${ticketResult.ticketId}` : ''}!
+              </h4>
               <p style={{ color: 'var(--ink-soft)', fontSize: 13.5, maxWidth: 360, margin: '0 auto 16px auto', lineHeight: 1.6 }}>
-                Hệ thống đã ghi nhận nội dung hỗ trợ từ bạn. Ban quản trị sẽ phản hồi sớm nhất qua email <b>{form.email}</b> trong vòng 24 giờ làm việc.
+                Hệ thống đã ghi nhận nội dung hỗ trợ từ bạn{ticketResult?.ticketId ? <> (Mã ticket: <b>#{ticketResult.ticketId}</b>)</> : ''}. Ban quản trị sẽ phản hồi sớm nhất qua email <b>{form.email}</b> trong vòng 24 giờ làm việc.
               </p>
               
               <div style={{ background: 'var(--bg-subtle, #f8fafc)', padding: '14px', borderRadius: 10, marginBottom: 20, textAlign: 'left', fontSize: 13 }}>
@@ -260,17 +281,33 @@ export default function Contact() {
                 />
               </div>
 
+              {/* Honeypot Bot Trap: Ẩn hoàn toàn với người dùng thật, bot crawler tự động điền sẽ bị kích hoạt bẫy và âm thầm hủy */}
+              <div style={{ position: 'absolute', left: '-9999px', opacity: 0, height: 0, width: 0, overflow: 'hidden', pointerEvents: 'none' }} aria-hidden="true" tabIndex={-1}>
+                <label htmlFor="companyFaxTrap">Vui lòng bỏ trống trường này nếu bạn là người:</label>
+                <input
+                  id="companyFaxTrap"
+                  type="text"
+                  name="companyFaxTrap"
+                  autoComplete="off"
+                  tabIndex={-1}
+                  value={form.honeypotTrap}
+                  onChange={(e) => setForm({ ...form, honeypotTrap: e.target.value })}
+                />
+              </div>
+
               <button
                 type="submit"
                 className="btn btn-primary"
                 style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
-                disabled={isSubmitting}
+                disabled={isSubmitting || cooldownSeconds > 0}
               >
                 {isSubmitting ? (
                   <>
                     <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
                     Đang gửi yêu cầu...
                   </>
+                ) : cooldownSeconds > 0 ? (
+                  `Vui lòng đợi (${cooldownSeconds}s)`
                 ) : (
                   'Gửi yêu cầu hỗ trợ'
                 )}
