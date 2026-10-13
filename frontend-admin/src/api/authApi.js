@@ -67,6 +67,16 @@ export async function adminVerify2Fa(tempToken, code) {
     return handleResponse(res);
 }
 
+// Thiết lập 2FA bắt buộc ngay sau bước mật khẩu (admin chưa bật 2FA)
+export async function adminEnroll2Fa(tempToken, code) {
+    const res = await fetch(`${API_URL}/admin-auth/2fa/enroll`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tempToken, code: (code || '').trim() }),
+    });
+    return handleResponse(res);
+}
+
 export async function apiFetch(path, options = {}) {
     const isFormData = options.body instanceof FormData;
     const defaultHeaders = isFormData ? {} : { "Content-Type": "application/json" };
@@ -123,6 +133,9 @@ export async function confirmAdmin2Fa(code, secretKey = null) {
     });
 }
 
-export async function disableAdmin2Fa() {
-    return apiFetch('/admin-auth/2fa/disable', { method: 'POST' });
+export async function disableAdmin2Fa(code) {
+    return apiFetch('/admin-auth/2fa/disable', {
+        method: 'POST',
+        body: JSON.stringify({ code: (code || '').trim() }),
+    });
 }

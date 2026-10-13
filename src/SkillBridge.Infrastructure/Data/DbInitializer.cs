@@ -131,18 +131,6 @@ public static class DbInitializer
                 logger?.LogInformation("AdminSeed: Đã tạo Role 'business_admin' (ID: {Id}).", businessAdminRole.Id);
             }
 
-            var misassignedMember = await context.AdminTeamMembers.FirstOrDefaultAsync(m => m.Email == "linhtlkhs189008@fpt.edu.vn" && m.RoleId == 3);
-            if (misassignedMember != null)
-            {
-                misassignedMember.RoleId = businessAdminRole.Id;
-                var misassignedUser = await context.Users.FirstOrDefaultAsync(u => u.Email == "linhtlkhs189008@fpt.edu.vn");
-                if (misassignedUser != null)
-                {
-                    misassignedUser.RoleId = businessAdminRole.Id;
-                }
-                await context.SaveChangesAsync();
-                logger?.LogInformation("AdminSeed: Đã chuyển tài khoản linhtlkhs189008@fpt.edu.vn từ Super Admin về Business Admin.");
-            }
         }
         catch (Exception ex)
         {

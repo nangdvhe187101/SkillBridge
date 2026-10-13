@@ -113,11 +113,14 @@ builder.Services.AddAuthentication(options =>
 });
 
 builder.Services.AddAuthorizationBuilder()
+    // Token quản trị bắt buộc mang claim admin_mfa (chỉ cấp sau mật khẩu + 2FA tại /api/admin-auth).
+    // Token đăng nhập phía người dùng (mật khẩu, Google, refresh) không có claim này nên bị từ chối.
     .AddPolicy("RequireAdminRole", policy =>
         policy.RequireAssertion(context =>
-            context.User.IsInRole("admin") ||
-            context.User.IsInRole("super_admin") ||
-            context.User.HasClaim(c => (c.Type == "role_type" || c.Type == "RoleType") && string.Equals(c.Value, "admin", StringComparison.OrdinalIgnoreCase))));
+            context.User.HasClaim(SkillBridge.Application.Common.AdminAuthClaims.MfaVerified, SkillBridge.Application.Common.AdminAuthClaims.MfaVerifiedValue) &&
+            (context.User.IsInRole("admin") ||
+             context.User.IsInRole("super_admin") ||
+             context.User.HasClaim(c => (c.Type == "role_type" || c.Type == "RoleType") && string.Equals(c.Value, "admin", StringComparison.OrdinalIgnoreCase)))));
 
 builder.Services.Scan(scan => scan
     .FromAssemblies(
