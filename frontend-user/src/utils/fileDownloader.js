@@ -1,5 +1,4 @@
 import { getAccessToken } from '../api/tokenStore';
-import * as XLSX from 'xlsx';
 
 export async function downloadJobAttachment(file, jobTitle = '', jobId = null) {
     const fileName = file?.fileName || file?.name || 'Tai_lieu_SkillBridge.pdf';
@@ -208,7 +207,7 @@ function formatVNDDisplay(num) {
     return (Number(num) || 0).toLocaleString('vi-VN') + ' VNĐ';
 }
 
-export function exportTransactionsToExcel(transactions = [], options = {}) {
+export async function exportTransactionsToExcel(transactions = [], options = {}) {
     const config = typeof options === 'string' ? { fileName: options } : (options || {});
     const user = config.user || {};
     const userName = user.fullName || config.userName || 'Khách hàng';
@@ -229,6 +228,7 @@ export function exportTransactionsToExcel(transactions = [], options = {}) {
         ? (config.fileName.endsWith('.xlsx') ? config.fileName : `${config.fileName.replace(/\.csv$/i, '')}.xlsx`)
         : `Sao_ke_vi_SkillBridge_${cleanUser}_${nowTag}.xlsx`;
 
+    const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
 
     // 1. DATA SHEET: "Sao Kê Giao Dịch"
