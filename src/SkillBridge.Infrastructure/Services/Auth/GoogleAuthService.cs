@@ -136,14 +136,27 @@ namespace SkillBridge.Infrastructure.Services.Auth
             }
             else
             {
-                // Tài khoản chưa tồn tại -> Tự động đăng ký mới an toàn
+                // Tài khoản chưa tồn tại trên hệ thống
+                if (string.Equals(mode, "login", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new BusinessException("Tài khoản chưa tồn tại trên hệ thống. Vui lòng chuyển sang trang Đăng ký để lựa chọn vai trò (Sinh viên hoặc Nhà tuyển dụng).");
+                }
+
+                if (string.IsNullOrWhiteSpace(dto.RoleCode))
+                {
+                    throw new BusinessException("Vui lòng chọn vai trò (Sinh viên hoặc Nhà tuyển dụng) khi đăng ký tài khoản mới.");
+                }
+
                 var targetRoleCode = string.Equals(dto.RoleCode, RoleCode.Employer, StringComparison.OrdinalIgnoreCase)
                     ? RoleCode.Employer
-                    : RoleCode.Student;
+                    : (string.Equals(dto.RoleCode, RoleCode.Student, StringComparison.OrdinalIgnoreCase) ? RoleCode.Student : null);
 
-                var role = await roleRepository.GetByCodeAsync(targetRoleCode)
-                        ?? await roleRepository.GetByCodeAsync(RoleCode.Student);
+                if (string.IsNullOrWhiteSpace(targetRoleCode))
+                {
+                    throw new BusinessException($"Vai trò '{dto.RoleCode}' không hợp lệ. Vui lòng chọn Sinh viên hoặc Nhà tuyển dụng.");
+                }
 
+                var role = await roleRepository.GetByCodeAsync(targetRoleCode);
                 if (role == null)
                 {
                     throw new BusinessException($"Không tìm thấy cấu hình vai trò '{targetRoleCode}' trong hệ thống.");

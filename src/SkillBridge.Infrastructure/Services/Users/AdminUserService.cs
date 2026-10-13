@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Jobs;
 using SkillBridge.Application.DTOs.Users;
+using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Application.Interfaces.Users;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
@@ -17,11 +18,13 @@ namespace SkillBridge.Infrastructure.Services.Users;
 public class AdminUserService : IAdminUserService
 {
     private readonly SkillBridgeDbContext _dbContext;
+    private readonly IStorageService _storageService;
     private readonly ILogger<AdminUserService> _logger;
 
-    public AdminUserService(SkillBridgeDbContext dbContext, ILogger<AdminUserService> logger)
+    public AdminUserService(SkillBridgeDbContext dbContext, IStorageService storageService, ILogger<AdminUserService> logger)
     {
         _dbContext = dbContext;
+        _storageService = storageService;
         _logger = logger;
     }
 
@@ -155,7 +158,7 @@ public class AdminUserService : IAdminUserService
             JobsDone = user.JobsDoneCount,
             School = user.School,
             Industry = user.Industry,
-            AvatarUrl = user.AvatarUrl,
+            AvatarUrl = _storageService.GetPublicUrl(user.AvatarUrl),
             BlacklistReason = user.BlacklistReason,
             JoinedAt = user.JoinedAt,
             CompanySize = user.CompanySize,
@@ -407,7 +410,7 @@ public class AdminUserService : IAdminUserService
         return MapToListItemDto(user);
     }
 
-    private static AdminUserListItemDto MapToListItemDto(User u)
+    private AdminUserListItemDto MapToListItemDto(User u)
     {
         return new AdminUserListItemDto
         {
@@ -422,7 +425,7 @@ public class AdminUserService : IAdminUserService
             JobsDone = u.JobsDoneCount,
             School = u.School,
             Industry = u.Industry,
-            AvatarUrl = u.AvatarUrl,
+            AvatarUrl = _storageService.GetPublicUrl(u.AvatarUrl),
             BlacklistReason = u.BlacklistReason,
             JoinedAt = u.JoinedAt
         };

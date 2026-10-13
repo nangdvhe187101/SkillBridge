@@ -13,6 +13,7 @@ import AdminMessages from '../components/AdminMessages';
 import AdminChat from '../components/AdminChat';
 import AdminBankVerification from '../components/AdminBankVerification';
 import AdminStudentVerification from '../components/AdminStudentVerification';
+import AdminStudentDetail from '../components/AdminStudentDetail';
 import AdminPlans from '../components/AdminPlans';
 import AdminContracts from '../components/AdminContracts';
 import IdleLockOverlay from '../components/security/IdleLockOverlay';
@@ -106,6 +107,7 @@ function AdminInner({ forcedTab }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [twoFactorModalOpen, setTwoFactorModalOpen] = useState(false);
+  const [selectedStudent, setSelectedStudent] = useState(null);
 
   const currentAdmin = useMemo(() => {
     try {
@@ -136,6 +138,7 @@ function AdminInner({ forcedTab }) {
   const activeTab = allowed.includes(currentTabId) ? currentTabId : allowed[0];
 
   const handleTabClick = (item) => {
+    setSelectedStudent(null);
     navigate(item.path);
   };
 
@@ -389,7 +392,17 @@ function AdminInner({ forcedTab }) {
 
         {/* Main Content Area */}
         <main className="cf-main">
-          {activeTab === 'users' && <AdminUsers />}
+          {activeTab === 'users' && (
+            selectedStudent ? (
+              <AdminStudentDetail
+                userId={selectedStudent.id}
+                initialUser={selectedStudent}
+                onBack={() => setSelectedStudent(null)}
+              />
+            ) : (
+              <AdminUsers onViewDetail={(u) => setSelectedStudent(u)} />
+            )
+          )}
           {activeTab === 'contracts' && <AdminContracts />}
           {activeTab === 'student-verification' && <AdminStudentVerification />}
           {activeTab === 'bank-verification' && (
