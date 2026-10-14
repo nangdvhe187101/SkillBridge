@@ -103,6 +103,8 @@ export default function AdminUsers({ onViewDetail }) {
   const [searchDebounce, setSearchDebounce] = useState('');
   const [roleF, setRoleF] = useState('all');
   const [statusF, setStatusF] = useState('all');
+  const [cvStatus, setCvStatus] = useState('all'); // 'all' | 'has_cv' | 'no_cv'
+  const [verificationStatus, setVerificationStatus] = useState('all'); // 'all' | 'student_verified' | 'student_pending' | 'employer_verified' | 'employer_pending'
   const [timeRange, setTimeRange] = useState('all'); // 'all' | '1d' | '7d' | '15d' | '30d'
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -177,6 +179,8 @@ export default function AdminUsers({ onViewDetail }) {
         status: statusF,
         subTab: activeSubTab,
         timeRange,
+        cvStatus,
+        verificationStatus,
       });
 
       if (res) {
@@ -190,7 +194,7 @@ export default function AdminUsers({ onViewDetail }) {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, pageSize, searchDebounce, roleF, statusF, activeSubTab, timeRange]);
+  }, [currentPage, pageSize, searchDebounce, roleF, statusF, activeSubTab, timeRange, cvStatus, verificationStatus]);
 
   useEffect(() => {
     fetchStats();
@@ -219,6 +223,16 @@ export default function AdminUsers({ onViewDetail }) {
 
   const handleTimeRangeChange = (e) => {
     setTimeRange(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleCvStatusChange = (e) => {
+    setCvStatus(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleVerificationStatusChange = (e) => {
+    setVerificationStatus(e.target.value);
     setCurrentPage(1);
   };
 
@@ -504,6 +518,48 @@ export default function AdminUsers({ onViewDetail }) {
             <option value="7d">7 ngày qua</option>
             <option value="15d">15 ngày qua</option>
             <option value="30d">30 ngày qua (1 tháng)</option>
+          </select>
+
+          {/* Dropdown Lọc CV */}
+          <select
+            value={cvStatus}
+            onChange={handleCvStatusChange}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: cvStatus !== 'all' ? '1.5px solid #059669' : '1px solid #d1d5db',
+              fontSize: 13,
+              background: cvStatus !== 'all' ? '#ecfdf5' : '#ffffff',
+              color: cvStatus !== 'all' ? '#059669' : '#374151',
+              fontWeight: cvStatus !== 'all' ? 600 : 400,
+            }}
+            title="Lọc sinh viên theo trạng thái hồ sơ CV"
+          >
+            <option value="all">Tất cả CV</option>
+            <option value="has_cv">Đã có CV</option>
+            <option value="no_cv">Chưa có CV</option>
+          </select>
+
+          {/* Dropdown Lọc Xác thực */}
+          <select
+            value={verificationStatus}
+            onChange={handleVerificationStatusChange}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: verificationStatus !== 'all' ? '1.5px solid #7c3aed' : '1px solid #d1d5db',
+              fontSize: 13,
+              background: verificationStatus !== 'all' ? '#f5f3ff' : '#ffffff',
+              color: verificationStatus !== 'all' ? '#7c3aed' : '#374151',
+              fontWeight: verificationStatus !== 'all' ? 600 : 400,
+            }}
+            title="Lọc theo tình trạng xác thực tài khoản"
+          >
+            <option value="all">Tất cả xác thực</option>
+            <option value="student_verified">SV: Đã xác thực (FPT)</option>
+            <option value="student_pending">SV: Chờ duyệt thẻ SV</option>
+            <option value="employer_verified">NTD: Doanh nghiệp đã duyệt</option>
+            <option value="employer_pending">NTD: Đang chờ xác minh</option>
           </select>
         </div>
 

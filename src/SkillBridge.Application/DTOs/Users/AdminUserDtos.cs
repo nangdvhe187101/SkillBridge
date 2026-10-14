@@ -10,6 +10,8 @@ public class AdminUserFilterRequest
     public string? Status { get; set; } // 'all' | 'active' | 'pending' | 'locked' | 'blacklisted'
     public string? SubTab { get; set; } // 'all' | 'kyc' | 'blacklist'
     public string? TimeRange { get; set; } // 'all' | '1d' | '7d' | '15d' | '30d' (hoặc '1m')
+    public string? CvStatus { get; set; } // 'all' | 'has_cv' | 'no_cv'
+    public string? VerificationStatus { get; set; } // 'all' | 'student_verified' | 'student_pending' | 'employer_verified' | 'employer_pending'
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 10;
 }
@@ -26,11 +28,35 @@ public class AdminUserListItemDto
     public int Reliability { get; set; }
     public int JobsDone { get; set; }
     public string? School { get; set; }
+    public string? StudentCode { get; set; }
     public string? Industry { get; set; }
     public string? AvatarUrl { get; set; }
+    public bool HasCv { get; set; }
+    public int CvCount { get; set; }
     public string? BlacklistReason { get; set; }
     public DateTime? BlacklistDate { get; set; }
     public DateTime JoinedAt { get; set; }
+}
+
+public class AdminUserCvDto
+{
+    public int Id { get; set; }
+    public string FileName { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
+    public string? Label { get; set; }
+    public int FileSize { get; set; }
+    public string? CategoryName { get; set; }
+    public DateTime UploadedAt { get; set; }
+}
+
+public class AdminUserDocumentDto
+{
+    public int Id { get; set; }
+    public string DocType { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
+    public int FileSize { get; set; }
+    public DateTime UploadedAt { get; set; }
 }
 
 public class AdminUserDetailDto : AdminUserListItemDto
@@ -43,8 +69,11 @@ public class AdminUserDetailDto : AdminUserListItemDto
     public string? KycRejectionReason { get; set; }
     public string? UnmaskedPhone { get; set; }
     public string? UnmaskedIdCard { get; set; }
+    public short? GraduationYear { get; set; }
     public int ActiveJobsCount { get; set; }
     public decimal WalletBalance { get; set; }
+    public List<AdminUserCvDto> Cvs { get; set; } = new();
+    public List<AdminUserDocumentDto> Documents { get; set; } = new();
     public List<AdminUserActivityHistoryDto> History { get; set; } = new();
 }
 

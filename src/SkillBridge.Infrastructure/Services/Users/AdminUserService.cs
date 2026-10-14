@@ -105,6 +105,40 @@ public class AdminUserService : IAdminUserService
             }
         }
 
+        // 6. Lọc theo trạng thái CV (all | has_cv | no_cv)
+        if (!string.IsNullOrWhiteSpace(filter.CvStatus) && !string.Equals(filter.CvStatus, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.Equals(filter.CvStatus, "has_cv", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(u => _dbContext.CvFiles.Any(c => c.StudentId == u.Id));
+            }
+            else if (string.Equals(filter.CvStatus, "no_cv", StringComparison.OrdinalIgnoreCase))
+            {
+                query = query.Where(u => !_dbContext.CvFiles.Any(c => c.StudentId == u.Id));
+            }
+        }
+
+        // 7. Lọc theo trạng thái xác thực (all | student_verified | student_pending | employer_verified | employer_pending)
+        if (!string.IsNullOrWhiteSpace(filter.VerificationStatus) && !string.Equals(filter.VerificationStatus, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            var vStatus = filter.VerificationStatus.ToLowerInvariant();
+            switch (vStatus)
+            {
+                case "student_verified":
+                    query = query.Where(u => u.Role.Code == "student" && u.KycStatus == "verified");
+                    break;
+                case "student_pending":
+                    query = query.Where(u => u.Role.Code == "student" && u.KycStatus == "pending");
+                    break;
+                case "employer_verified":
+                    query = query.Where(u => u.Role.Code == "employer" && u.KycStatus == "verified");
+                    break;
+                case "employer_pending":
+                    query = query.Where(u => u.Role.Code == "employer" && u.KycStatus == "pending");
+                    break;
+            }
+        }
+
         var totalCount = await query.CountAsync(ct);
         var page = filter.Page > 0 ? filter.Page : 1;
         var pageSize = filter.PageSize > 0 ? filter.PageSize : 10;
@@ -115,7 +149,23 @@ public class AdminUserService : IAdminUserService
             .Take(pageSize)
             .ToListAsync(ct);
 
-        var dtos = items.Select(MapToListItemDto).ToList();
+        var userIds = items.Select(u => u.Id).ToList();
+        var cvCounts = await _dbContext.CvFiles
+            .AsNoTracking()
+            .Where(c => userIds.Contains(c.StudentId))
+            .GroupBy(c => c.StudentId)
+            .Select(g => new { StudentId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.StudentId, x => x.Count, ct);
+
+        var dtos = items.Select(u =>
+        {
+            var dto = MapToListItemDto(u);
+            var hasCv = cvCounts.TryGetValue(u.Id, out var count);
+            dto.HasCv = hasCv && count > 0;
+            dto.CvCount = hasCv ? count : 0;
+            dto.StudentCode = u.StudentCode;
+            return dto;
+        }).ToList();
 
         return new PagedResult<AdminUserListItemDto>
         {
@@ -214,8 +264,32 @@ public class AdminUserService : IAdminUserService
             KycRejectionReason = user.KycRejectionReason,
             UnmaskedPhone = user.PhoneNumber,
             ActiveJobsCount = activeJobsCount,
-            WalletBalance = wallet?.Balance ?? 0
+            WalletBalance = wallet?.Balance ?? 0,
+            StudentCode = user.StudentCode,
+            GraduationYear = user.GraduationYear
         };
+
+        // Nạp danh sách CV nếu là sinh viên
+        if (user.Role.Code == "student")
+        {
+            var cvFiles = await _dbContext.CvFiles
+                .AsNoTracking()
+                .Include(c => c.Category)
+                .Where(c => c.StudentId == userId)
+                .OrderByDescending(c => c.UploadedAt)
+                .ToListAsync(ct);
+
+            dto.Cvs = cvFiles.Select(c => new AdminUserCvDto
+            {
+                Id = c.Id,
+                FileName = c.FileName,
+                FileUrl = _storageService.GetPublicUrl(c.FileUrl),
+                Label = c.Label,
+                FileSize = c.FileSize,
+                CategoryName = c.Category?.Name,
+                UploadedAt = c.UploadedAt
+            }).ToList();
+        }
 
         // Lấy lịch sử AuditLog liên quan đến user này
         var auditLogs = await _dbContext.AuditLogs
