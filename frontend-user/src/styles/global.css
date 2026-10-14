@@ -167,8 +167,9 @@ img {
 /* ---------- reveal on scroll ---------- */
 .reveal {
   opacity: 0;
-  transform: translateY(26px);
-  transition: opacity .7s cubic-bezier(.2, .7, .2, 1), transform .7s cubic-bezier(.2, .7, .2, 1);
+  transform: translateY(28px);
+  transition: opacity .8s cubic-bezier(0.16, 1, 0.3, 1), transform .8s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
 }
 
 .reveal.in-view {
@@ -177,19 +178,19 @@ img {
 }
 
 .reveal-d1 {
-  transition-delay: .08s;
+  transition-delay: .09s;
 }
 
 .reveal-d2 {
-  transition-delay: .16s;
+  transition-delay: .18s;
 }
 
 .reveal-d3 {
-  transition-delay: .24s;
+  transition-delay: .27s;
 }
 
 .reveal-d4 {
-  transition-delay: .32s;
+  transition-delay: .36s;
 }
 
 /* ---------- layout shells ---------- */
@@ -454,11 +455,42 @@ img {
   background: var(--lime);
   color: #ffffff;
   font-weight: 600;
+  position: relative;
+  overflow: hidden;
+  transition: transform .25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .25s ease, filter .25s ease;
+}
+
+.btn-lime::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 40%;
+  height: 200%;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.28) 50%,
+    transparent 100%
+  );
+  transform: rotate(25deg);
+  pointer-events: none;
+  animation: btnSheen 4.5s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+@keyframes btnSheen {
+  0%, 70% {
+    left: -60%;
+  }
+  100% {
+    left: 140%;
+  }
 }
 
 .btn-lime:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px -6px rgba(16, 185, 129, 0.4);
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: 0 12px 24px -6px rgba(16, 185, 129, 0.45);
+  filter: brightness(1.04);
 }
 
 .btn-ghost {
@@ -592,6 +624,7 @@ img {
   background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
   top: -160px;
   right: -120px;
+  animation: floatMesh1 14s ease-in-out infinite alternate;
 }
 
 .mesh-2 {
@@ -601,15 +634,36 @@ img {
   bottom: -140px;
   right: 120px;
   opacity: .10;
+  animation: floatMesh2 18s ease-in-out infinite alternate;
 }
 
-@keyframes drift {
-  from {
-    transform: translate(0, 0);
+@keyframes floatMesh1 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.14;
   }
+  50% {
+    transform: translate(-35px, 25px) scale(1.08);
+    opacity: 0.22;
+  }
+  100% {
+    transform: translate(-20px, 45px) scale(0.96);
+    opacity: 0.16;
+  }
+}
 
-  to {
-    transform: translate(-30px, 30px);
+@keyframes floatMesh2 {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0.10;
+  }
+  50% {
+    transform: translate(30px, -30px) scale(1.12);
+    opacity: 0.18;
+  }
+  100% {
+    transform: translate(15px, -50px) scale(0.95);
+    opacity: 0.12;
   }
 }
 
@@ -711,16 +765,21 @@ img {
   position: absolute;
   width: 250px;
   background: var(--glass-2);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 16px;
-  box-shadow: var(--shadow);
-  transition: transform .3s ease;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
+  transition: transform .35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .35s ease, border-color .35s ease;
+  will-change: transform;
 }
 
 .hv-card:hover {
-  transform: translateY(-6px) rotate(0deg) !important;
+  transform: translateY(-8px) scale(1.02) !important;
+  box-shadow: 0 20px 35px -10px rgba(0, 0, 0, 0.18) !important;
+  border-color: var(--primary) !important;
+  z-index: 10 !important;
 }
 
 .hv-card .r {
@@ -738,6 +797,11 @@ img {
   background-size: cover;
   background-position: center;
   flex-shrink: 0;
+  transition: transform .25s ease;
+}
+
+.hv-card:hover .avatar {
+  transform: scale(1.08);
 }
 
 .hv-card .name {
@@ -771,20 +835,18 @@ img {
 .hv1 {
   top: 0;
   left: 20px;
-  transform: rotate(-6deg);
   z-index: 2;
-  animation: floaty 5s ease-in-out infinite;
+  animation: floatCard1 6s ease-in-out infinite;
 }
 
 .hv2 {
   top: 150px;
   left: 170px;
-  transform: rotate(4deg);
   z-index: 1;
   background: rgba(21, 19, 43, 0.94);
   color: #fff;
   border-color: var(--panel-dark);
-  animation: floaty 6s ease-in-out infinite .4s;
+  animation: floatCard2 7s ease-in-out infinite 0.6s;
 }
 
 .hv2 .sub {
@@ -794,20 +856,34 @@ img {
 .hv3 {
   top: 300px;
   left: 10px;
-  transform: rotate(-3deg);
   z-index: 3;
-  animation: floaty 5.5s ease-in-out infinite .8s;
+  animation: floatCard3 6.5s ease-in-out infinite 1.2s;
 }
 
-@keyframes floaty {
-
-  0%,
-  100% {
-    margin-top: 0;
+@keyframes floatCard1 {
+  0%, 100% {
+    transform: translateY(0px) rotate(-6deg);
   }
-
   50% {
-    margin-top: -10px;
+    transform: translateY(-14px) rotate(-4deg);
+  }
+}
+
+@keyframes floatCard2 {
+  0%, 100% {
+    transform: translateY(0px) rotate(4deg);
+  }
+  50% {
+    transform: translateY(-16px) rotate(5.5deg);
+  }
+}
+
+@keyframes floatCard3 {
+  0%, 100% {
+    transform: translateY(0px) rotate(-3deg);
+  }
+  50% {
+    transform: translateY(-12px) rotate(-1.5deg);
   }
 }
 
@@ -816,7 +892,16 @@ img {
   top: -6px;
   right: -10px;
   z-index: 4;
-  transform: rotate(12deg);
+  animation: stampFloat 4s ease-in-out infinite alternate;
+}
+
+@keyframes stampFloat {
+  0% {
+    transform: rotate(12deg) scale(1);
+  }
+  100% {
+    transform: rotate(16deg) scale(1.06);
+  }
 }
 
 /* ================= trust bar ================= */
@@ -850,12 +935,14 @@ img {
   font-size: 15px;
   color: var(--ink);
   opacity: .55;
-  transition: opacity .2s ease;
+  display: inline-block;
+  transition: opacity .25s ease, transform .25s cubic-bezier(0.16, 1, 0.3, 1), color .25s ease;
 }
 
 .trustbar .uni:hover {
   opacity: 1;
   color: var(--primary);
+  transform: translateY(-2px) scale(1.06);
 }
 
 /* ================= sections generic ================= */
@@ -914,12 +1001,16 @@ section {
   border-radius: var(--radius);
   padding: 32px;
   background: var(--surface-2);
-  transition: transform .2s ease, box-shadow .2s ease;
+  transition: transform .3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .3s ease, border-color .3s ease;
 }
 
 .fw-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow);
+  transform: translateY(-6px);
+  box-shadow: 0 16px 32px -8px rgba(0, 0, 0, 0.12);
+}
+
+.fw-card:hover .fw-list svg {
+  transform: scale(1.15);
 }
 
 .fw-card.fw-student {
@@ -969,6 +1060,7 @@ section {
   flex-shrink: 0;
   margin-top: 2px;
   color: var(--primary);
+  transition: transform .25s ease;
 }
 
 .fw-card.fw-student .fw-list svg {
@@ -987,13 +1079,19 @@ section {
   border-radius: 16px;
   padding: 24px 20px;
   background: var(--bg);
-  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  transition: transform .25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow .25s ease, border-color .25s ease;
 }
 
 .cat-card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow);
-  border-color: transparent;
+  transform: translateY(-6px);
+  box-shadow: 0 14px 28px -6px rgba(0, 0, 0, 0.1);
+  border-color: var(--primary);
+}
+
+.cat-card:hover .cat-icon {
+  transform: scale(1.12) rotate(6deg);
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--lime);
 }
 
 .cat-icon {
@@ -1006,6 +1104,7 @@ section {
   justify-content: center;
   margin-bottom: 16px;
   color: var(--primary);
+  transition: transform .25s cubic-bezier(0.16, 1, 0.3, 1), background-color .25s ease, color .25s ease;
 }
 
 .cat-icon svg {

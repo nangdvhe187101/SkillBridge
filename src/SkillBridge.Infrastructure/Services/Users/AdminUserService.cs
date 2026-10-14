@@ -75,6 +75,36 @@ public class AdminUserService : IAdminUserService
                 u.Id.ToString() == keyword);
         }
 
+        // 5. Lọc theo thời gian đăng ký (JoinedAt: 1 ngày, 7 ngày, 15 ngày, 30 ngày)
+        if (!string.IsNullOrWhiteSpace(filter.TimeRange) && !string.Equals(filter.TimeRange, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            var now = DateTime.UtcNow;
+            switch (filter.TimeRange.ToLowerInvariant())
+            {
+                case "1d":
+                case "1":
+                    var since1d = now.AddDays(-1);
+                    query = query.Where(u => u.JoinedAt >= since1d);
+                    break;
+                case "7d":
+                case "7":
+                    var since7d = now.AddDays(-7);
+                    query = query.Where(u => u.JoinedAt >= since7d);
+                    break;
+                case "15d":
+                case "15":
+                    var since15d = now.AddDays(-15);
+                    query = query.Where(u => u.JoinedAt >= since15d);
+                    break;
+                case "30d":
+                case "1m":
+                case "30":
+                    var since30d = now.AddDays(-30);
+                    query = query.Where(u => u.JoinedAt >= since30d);
+                    break;
+            }
+        }
+
         var totalCount = await query.CountAsync(ct);
         var page = filter.Page > 0 ? filter.Page : 1;
         var pageSize = filter.PageSize > 0 ? filter.PageSize : 10;
@@ -106,6 +136,17 @@ public class AdminUserService : IAdminUserService
         var pendingKycCount = await usersQuery.CountAsync(u => u.KycStatus == "pending", ct);
         var blacklistedCount = await usersQuery.CountAsync(u => u.AccountStatus == "blacklisted", ct);
 
+        var now = DateTime.UtcNow;
+        var since1d = now.AddDays(-1);
+        var since7d = now.AddDays(-7);
+        var since15d = now.AddDays(-15);
+        var since30d = now.AddDays(-30);
+
+        var newUsers1d = await usersQuery.CountAsync(u => u.JoinedAt >= since1d, ct);
+        var newUsers7d = await usersQuery.CountAsync(u => u.JoinedAt >= since7d, ct);
+        var newUsers15d = await usersQuery.CountAsync(u => u.JoinedAt >= since15d, ct);
+        var newUsers30d = await usersQuery.CountAsync(u => u.JoinedAt >= since30d, ct);
+
         double avgReliability = 0.0;
         if (totalUsers > 0)
         {
@@ -120,7 +161,11 @@ public class AdminUserService : IAdminUserService
             EmployersCount = employersCount,
             PendingKycCount = pendingKycCount,
             BlacklistedCount = blacklistedCount,
-            AverageReliability = avgReliability
+            AverageReliability = avgReliability,
+            NewUsers1d = newUsers1d,
+            NewUsers7d = newUsers7d,
+            NewUsers15d = newUsers15d,
+            NewUsers30d = newUsers30d
         };
     }
 

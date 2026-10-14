@@ -23,6 +23,24 @@ const STATUS_CONFIG = {
   blacklisted: { label: 'Blacklist', dot: '#4b5563', text: '#1f2937' },
 };
 
+function formatRelativeTime(dateString) {
+  if (!dateString) return '—';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return '—';
+  const now = new Date();
+  const diffMs = now - date;
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  if (diffDay > 30) return `${Math.floor(diffDay / 30)} tháng trước`;
+  if (diffDay > 0) return `${diffDay} ngày trước`;
+  if (diffHour > 0) return `${diffHour} giờ trước`;
+  if (diffMin > 0) return `${diffMin} phút trước`;
+  return 'Vừa đăng ký';
+}
+
 function UserAvatar({ name, avatarUrl, size = 30, fontSize = 12, role = 'student' }) {
   const [imgError, setImgError] = useState(false);
   const initial = name?.trim()?.charAt(0)?.toUpperCase() || 'U';
@@ -85,6 +103,7 @@ export default function AdminUsers({ onViewDetail }) {
   const [searchDebounce, setSearchDebounce] = useState('');
   const [roleF, setRoleF] = useState('all');
   const [statusF, setStatusF] = useState('all');
+  const [timeRange, setTimeRange] = useState('all'); // 'all' | '1d' | '7d' | '15d' | '30d'
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedIds, setSelectedIds] = useState([]);
@@ -157,6 +176,7 @@ export default function AdminUsers({ onViewDetail }) {
         role: roleF,
         status: statusF,
         subTab: activeSubTab,
+        timeRange,
       });
 
       if (res) {
@@ -170,7 +190,7 @@ export default function AdminUsers({ onViewDetail }) {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, pageSize, searchDebounce, roleF, statusF, activeSubTab]);
+  }, [currentPage, pageSize, searchDebounce, roleF, statusF, activeSubTab, timeRange]);
 
   useEffect(() => {
     fetchStats();
@@ -194,6 +214,11 @@ export default function AdminUsers({ onViewDetail }) {
 
   const handleStatusChange = (e) => {
     setStatusF(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleTimeRangeChange = (e) => {
+    setTimeRange(e.target.value);
     setCurrentPage(1);
   };
 
@@ -460,6 +485,26 @@ export default function AdminUsers({ onViewDetail }) {
             <option value="locked">Đã khoá</option>
             <option value="blacklisted">Blacklist</option>
           </select>
+
+          <select
+            value={timeRange}
+            onChange={handleTimeRangeChange}
+            style={{
+              padding: '6px 10px',
+              borderRadius: 6,
+              border: timeRange !== 'all' ? '1.5px solid #0051c3' : '1px solid #d1d5db',
+              fontSize: 13,
+              background: timeRange !== 'all' ? '#f0f7ff' : '#ffffff',
+              color: timeRange !== 'all' ? '#0051c3' : '#374151',
+              fontWeight: timeRange !== 'all' ? 600 : 400,
+            }}
+          >
+            <option value="all">Mọi thời điểm đăng ký</option>
+            <option value="1d">1 ngày qua (24 giờ)</option>
+            <option value="7d">7 ngày qua</option>
+            <option value="15d">15 ngày qua</option>
+            <option value="30d">30 ngày qua (1 tháng)</option>
+          </select>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -584,7 +629,8 @@ export default function AdminUsers({ onViewDetail }) {
                   />
                 </th>
                 <th style={{ minWidth: 260 }}>Objects (Tên / Email / SĐT)</th>
-                <th style={{ minWidth: 140 }}>Role</th>
+                <th style={{ minWidth: 130 }}>Role</th>
+                <th style={{ minWidth: 150 }}>Ngày đăng ký</th>
                 <th style={{ minWidth: 130 }}>eKYC Status</th>
                 <th style={{ minWidth: 120 }}>Reliability</th>
                 <th style={{ minWidth: 140 }}>Account Status</th>
@@ -636,6 +682,16 @@ export default function AdminUsers({ onViewDetail }) {
                       <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>
                         {u.role === 'student' ? 'Sinh viên' : u.role === 'employer' ? 'Nhà tuyển dụng' : 'Quản trị viên'}
                       </span>
+                    </td>
+
+                    {/* Ngày đăng ký */}
+                    <td>
+                      <div style={{ fontSize: 12.5, color: '#374151', fontWeight: 500 }}>
+                        {u.joinedAt ? new Date(u.joinedAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: '#6b7280', marginTop: 2 }}>
+                        {formatRelativeTime(u.joinedAt)}
+                      </div>
                     </td>
 
                     {/* eKYC */}

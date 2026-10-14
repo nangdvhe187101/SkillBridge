@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AdminProvider, useAdmin } from '../context/AdminContext';
 import AdminUsers from '../components/AdminUsers';
@@ -14,19 +14,22 @@ import AdminChat from '../components/AdminChat';
 import AdminBankVerification from '../components/AdminBankVerification';
 import AdminStudentVerification from '../components/AdminStudentVerification';
 import AdminStudentDetail from '../components/AdminStudentDetail';
+import AdminEmployerDetail from '../components/AdminEmployerDetail';
+import AdminLoginAudit from '../components/AdminLoginAudit';
 import AdminPlans from '../components/AdminPlans';
 import AdminContracts from '../components/AdminContracts';
 import IdleLockOverlay from '../components/security/IdleLockOverlay';
 import TwoFactorAuthModal from '../components/security/TwoFactorAuthModal';
 import Icon from '../components/Icon';
 import { adminLogout } from '../api/authApi';
+import { getPendingStudentVerifications, getAdminBankVerifications } from '../api/adminApi';
 
 const ROLE_MODULES = {
-  super: ['users', 'contracts', 'student-verification', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'tickets', 'ops', 'roles'],
-  super_admin: ['users', 'contracts', 'student-verification', 'bank-verification', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'tickets', 'ops', 'roles'],
-  business_admin: ['student-verification', 'content', 'plans', 'partners', 'messages', 'support-chat', 'tickets', 'analytics'],
-  business: ['student-verification', 'content', 'plans', 'partners', 'messages', 'support-chat', 'tickets', 'analytics'],
-  moderator: ['content', 'messages', 'support-chat', 'student-verification'],
+  super: ['users', 'contracts', 'student-verification', 'bank-verification', 'login-audit', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'tickets', 'ops', 'roles'],
+  super_admin: ['users', 'contracts', 'student-verification', 'bank-verification', 'login-audit', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'tickets', 'ops', 'roles'],
+  business_admin: ['student-verification', 'login-audit', 'content', 'plans', 'partners', 'messages', 'support-chat', 'tickets', 'analytics'],
+  business: ['student-verification', 'login-audit', 'content', 'plans', 'partners', 'messages', 'support-chat', 'tickets', 'analytics'],
+  moderator: ['content', 'messages', 'support-chat', 'student-verification', 'login-audit'],
   dispute: ['contracts', 'disputes', 'messages', 'support-chat'],
   finance: ['contracts', 'finance', 'plans', 'bank-verification', 'support-chat'],
 };
@@ -59,6 +62,7 @@ const CF_NAV_SECTIONS = [
       { id: 'support-chat', path: '/support-chat', icon: 'chat', label: 'Tin nhắn hỗ trợ (CSKH)', sub: 'Hội thoại trực tiếp với User/NTD' },
       { id: 'student-verification', path: '/student-verification', icon: 'shield-check', label: 'Duyệt thẻ sinh viên' },
       { id: 'bank-verification', path: '/bank-verification', icon: 'shield-check', label: 'Duyệt ngân hàng' },
+      { id: 'login-audit', path: '/login-audit', icon: 'shield-check', label: 'Giám sát đăng nhập', sub: 'Lịch sử phiên truy cập' },
       { id: 'content', path: '/content', icon: 'file-text', label: 'Kiểm duyệt bài đăng' },
       { id: 'messages', path: '/messages', icon: 'chat', label: 'Giám sát tin nhắn' },
       { id: 'analytics', path: '/analytics', icon: 'chart-bar', label: 'Báo cáo & Phân tích' },
@@ -85,6 +89,7 @@ const MODULE_TITLES = {
   contracts: 'Giám sát Hợp đồng & Ký quỹ Escrow',
   'student-verification': 'Duyệt thẻ sinh viên & Đối soát MSSV',
   'bank-verification': 'Duyệt tài khoản ngân hàng',
+  'login-audit': 'Giám sát Đăng nhập & An ninh Tài khoản',
   finance: 'Tài chính & Lệnh rút tiền',
   disputes: 'Trung tâm xử lý tranh chấp',
   content: 'Kiểm duyệt bài đăng tuyển dụng',
@@ -107,7 +112,49 @@ function AdminInner({ forcedTab }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [twoFactorModalOpen, setTwoFactorModalOpen] = useState(false);
-  const [selectedStudent, setSelectedStudent] = useState(null);
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [badgeCounts, setBadgeCounts] = useState({
+    'student-verification': 0,
+    'bank-verification': 0,
+  });
+
+  const fetchBadgeCounts = useCallback(async () => {
+    try {
+      const [studentRes, bankRes] = await Promise.allSettled([
+        getPendingStudentVerifications(),
+        getAdminBankVerifications('pending', 1, 1),
+      ]);
+
+      const studentPending =
+        studentRes.status === 'fulfilled' && Array.isArray(studentRes.value)
+          ? studentRes.value.length
+          : 0;
+
+      const bankPending =
+        bankRes.status === 'fulfilled' && bankRes.value?.total
+          ? bankRes.value.total
+          : (bankRes.status === 'fulfilled' && Array.isArray(bankRes.value?.items)
+              ? bankRes.value.items.length
+              : 0);
+
+      setBadgeCounts({
+        'student-verification': studentPending,
+        'bank-verification': bankPending,
+      });
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchBadgeCounts();
+    const interval = setInterval(fetchBadgeCounts, 30000);
+    window.addEventListener('admin-badges-refresh', fetchBadgeCounts);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('admin-badges-refresh', fetchBadgeCounts);
+    };
+  }, [fetchBadgeCounts]);
 
   const currentAdmin = useMemo(() => {
     try {
@@ -138,7 +185,7 @@ function AdminInner({ forcedTab }) {
   const activeTab = allowed.includes(currentTabId) ? currentTabId : allowed[0];
 
   const handleTabClick = (item) => {
-    setSelectedStudent(null);
+    setSelectedUser(null);
     navigate(item.path);
   };
 
@@ -232,13 +279,15 @@ function AdminInner({ forcedTab }) {
                 )}
                 {visibleItems.map((item) => {
                   const isActive = activeTab === item.id;
+                  const badge = badgeCounts[item.id] || 0;
 
                   return (
                     <button
                       key={item.id}
                       className={`cf-nav-item ${isActive ? 'is-active' : ''}`}
                       onClick={() => handleTabClick(item)}
-                      title={isSidebarCollapsed ? item.label : undefined}
+                      title={isSidebarCollapsed ? (badge > 0 ? `${item.label} (${badge})` : item.label) : undefined}
+                      style={{ position: 'relative' }}
                     >
                       <div className="cf-nav-item-left">
                         <Icon
@@ -260,6 +309,28 @@ function AdminInner({ forcedTab }) {
                           </div>
                         )}
                       </div>
+
+                      {!isSidebarCollapsed && badge > 0 && (
+                        <span className="cf-nav-badge">
+                          {badge > 99 ? '99+' : badge}
+                        </span>
+                      )}
+
+                      {isSidebarCollapsed && badge > 0 && (
+                        <span
+                          style={{
+                            position: 'absolute',
+                            top: 4,
+                            right: 6,
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            background: '#ef4444',
+                            border: '1.5px solid #fff',
+                          }}
+                          title={`${badge} yêu cầu chờ duyệt`}
+                        />
+                      )}
                     </button>
                   );
                 })}
@@ -393,14 +464,22 @@ function AdminInner({ forcedTab }) {
         {/* Main Content Area */}
         <main className="cf-main">
           {activeTab === 'users' && (
-            selectedStudent ? (
-              <AdminStudentDetail
-                userId={selectedStudent.id}
-                initialUser={selectedStudent}
-                onBack={() => setSelectedStudent(null)}
-              />
+            selectedUser ? (
+              selectedUser.role === 'employer' ? (
+                <AdminEmployerDetail
+                  userId={selectedUser.id}
+                  initialUser={selectedUser}
+                  onBack={() => setSelectedUser(null)}
+                />
+              ) : (
+                <AdminStudentDetail
+                  userId={selectedUser.id}
+                  initialUser={selectedUser}
+                  onBack={() => setSelectedUser(null)}
+                />
+              )
             ) : (
-              <AdminUsers onViewDetail={(u) => setSelectedStudent(u)} />
+              <AdminUsers onViewDetail={(u) => setSelectedUser(u)} />
             )
           )}
           {activeTab === 'contracts' && <AdminContracts />}
@@ -418,6 +497,7 @@ function AdminInner({ forcedTab }) {
               <AdminBankVerification />
             </div>
           )}
+          {activeTab === 'login-audit' && <AdminLoginAudit />}
           {activeTab === 'finance' && <AdminFinance />}
           {activeTab === 'disputes' && <AdminDisputes />}
           {activeTab === 'content' && <AdminContent />}

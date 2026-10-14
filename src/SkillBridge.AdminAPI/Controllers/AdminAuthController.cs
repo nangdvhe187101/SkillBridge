@@ -27,6 +27,7 @@ public class AdminAuthController : ControllerBase
     private readonly ITotpService _totpService;
     private readonly IJwtService _jwtService;
     private readonly IMemoryCache _memoryCache;
+    private readonly SkillBridge.Application.Interfaces.Admin.IAdminSecurityService _securityService;
     private readonly ILogger<AdminAuthController> _logger;
 
     public AdminAuthController(
@@ -36,6 +37,7 @@ public class AdminAuthController : ControllerBase
         ITotpService totpService,
         IJwtService jwtService,
         IMemoryCache memoryCache,
+        SkillBridge.Application.Interfaces.Admin.IAdminSecurityService securityService,
         ILogger<AdminAuthController> logger)
     {
         _loginService = loginService;
@@ -44,6 +46,7 @@ public class AdminAuthController : ControllerBase
         _totpService = totpService;
         _jwtService = jwtService;
         _memoryCache = memoryCache;
+        _securityService = securityService;
         _logger = logger;
     }
 
@@ -205,6 +208,18 @@ public class AdminAuthController : ControllerBase
         var token = _jwtService.GenerateAdminToken(session.UserId, session.Email, session.RoleCode, session.TokenVersion);
 
         _logger.LogInformation("Admin #{UserId} ({Email}) đã vượt qua 2FA TOTP thành công.", session.UserId, session.Email);
+
+        var ipAddress = HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+            ?? HttpContext.Connection.RemoteIpAddress?.ToString();
+        var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+
+        _ = _securityService.RecordLoginEventAsync(
+            session.UserId,
+            "LOGIN_SUCCESS",
+            ipAddress,
+            userAgent,
+            "admin_totp"
+        );
 
         var effectiveRoleCode = session.RoleCode;
         if (string.Equals(effectiveRoleCode, "admin", StringComparison.OrdinalIgnoreCase) &&

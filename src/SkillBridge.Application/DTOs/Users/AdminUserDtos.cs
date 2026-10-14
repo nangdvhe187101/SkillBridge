@@ -9,6 +9,7 @@ public class AdminUserFilterRequest
     public string? Role { get; set; } // 'all' | 'student' | 'employer'
     public string? Status { get; set; } // 'all' | 'active' | 'pending' | 'locked' | 'blacklisted'
     public string? SubTab { get; set; } // 'all' | 'kyc' | 'blacklist'
+    public string? TimeRange { get; set; } // 'all' | '1d' | '7d' | '15d' | '30d' (hoặc '1m')
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 10;
 }
@@ -78,4 +79,8 @@ public class AdminUserStatsDto
     public int PendingKycCount { get; set; }
     public int BlacklistedCount { get; set; }
     public double AverageReliability { get; set; }
+    public int NewUsers1d { get; set; }
+    public int NewUsers7d { get; set; }
+    public int NewUsers15d { get; set; }
+    public int NewUsers30d { get; set; }
 }

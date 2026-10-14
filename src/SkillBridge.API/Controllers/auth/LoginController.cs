@@ -8,6 +8,7 @@ using SkillBridge.API.Common;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
 using SkillBridge.Application.Interfaces;
+using SkillBridge.Application.Interfaces.Admin;
 
 namespace SkillBridge.API.Controllers
 {
@@ -17,9 +18,12 @@ namespace SkillBridge.API.Controllers
     public class LoginController : ControllerBase
     {
         private readonly ILoginService loginService;
-        public LoginController(ILoginService _loginService)
+        private readonly IAdminSecurityService _securityService;
+
+        public LoginController(ILoginService _loginService, IAdminSecurityService securityService)
         {
             loginService = _loginService;
+            _securityService = securityService;
         }
 
         [HttpPost("login")]
@@ -29,6 +33,19 @@ namespace SkillBridge.API.Controllers
             {
                 var (result, refreshToken) = await loginService.LoginAsync(dto);
                 Response.SetRefreshTokenCookie(refreshToken);
+
+                var ipAddress = HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                    ?? HttpContext.Connection.RemoteIpAddress?.ToString();
+                var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
+
+                _ = _securityService.RecordLoginEventAsync(
+                    result.UserId,
+                    "LOGIN_SUCCESS",
+                    ipAddress,
+                    userAgent,
+                    "password"
+                );
+
                 return Ok(result);
             }
             catch (BusinessException ex)
