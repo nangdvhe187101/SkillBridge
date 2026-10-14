@@ -134,6 +134,8 @@ export async function getAdminUsers(params = {}) {
   if (params.status && params.status !== 'all') query.append('status', params.status);
   if (params.subTab && params.subTab !== 'all') query.append('subTab', params.subTab);
   if (params.timeRange && params.timeRange !== 'all') query.append('timeRange', params.timeRange);
+  if (params.cvStatus && params.cvStatus !== 'all') query.append('cvStatus', params.cvStatus);
+  if (params.verificationStatus && params.verificationStatus !== 'all') query.append('verificationStatus', params.verificationStatus);
 
   const qs = query.toString();
   return apiFetch(`/admin/users${qs ? `?${qs}` : ''}`, { method: 'GET' });
