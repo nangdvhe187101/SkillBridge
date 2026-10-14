@@ -98,6 +98,7 @@ export default function AdminStudentVerification() {
         getAdminSchools().catch(() => [])
       ]);
       setRequests(Array.isArray(res) ? res : []);
+      window.dispatchEvent(new CustomEvent('admin-badges-refresh'));
       if (Array.isArray(schoolRes) && schoolRes.length > 0) {
         setSchools(schoolRes);
       }

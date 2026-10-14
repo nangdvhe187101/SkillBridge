@@ -133,6 +133,7 @@ export async function getAdminUsers(params = {}) {
   if (params.role && params.role !== 'all') query.append('role', params.role);
   if (params.status && params.status !== 'all') query.append('status', params.status);
   if (params.subTab && params.subTab !== 'all') query.append('subTab', params.subTab);
+  if (params.timeRange && params.timeRange !== 'all') query.append('timeRange', params.timeRange);
 
   const qs = query.toString();
   return apiFetch(`/admin/users${qs ? `?${qs}` : ''}`, { method: 'GET' });
@@ -366,6 +367,22 @@ export async function deleteAdminTeamMember(memberId) {
   return apiFetch(`/admin/roles/team/${memberId}`, {
     method: 'DELETE',
   });
+}
+
+// Security & Login History APIs
+export async function getLoginHistory(params = {}) {
+  const query = new URLSearchParams();
+  if (params.page) query.append('page', params.page);
+  if (params.pageSize) query.append('pageSize', params.pageSize);
+  if (params.role && params.role !== 'all') query.append('role', params.role);
+  if (params.query) query.append('query', params.query);
+
+  const qs = query.toString();
+  return apiFetch(`/admin/security/login-history${qs ? `?${qs}` : ''}`, { method: 'GET' });
+}
+
+export async function getLoginStats() {
+  return apiFetch('/admin/security/login-stats', { method: 'GET' });
 }
 
 export async function getAdminRolesList() {
