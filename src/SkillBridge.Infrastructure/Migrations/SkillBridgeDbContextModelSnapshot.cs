@@ -18,7 +18,7 @@ namespace SkillBridge.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .UseCollation("utf8mb4_unicode_ci")
-                .HasAnnotation("ProductVersion", "9.0.14")
+                .HasAnnotation("ProductVersion", "9.0.0")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
 
             MySqlModelBuilderExtensions.HasCharSet(modelBuilder, "utf8mb4");
@@ -969,6 +969,53 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.ToTable("dispute_evidence");
                 });
 
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.ExternalLogin", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("ProviderEmail")
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("provider_email");
+
+                    b.Property<string>("ProviderUserId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("provider_user_id");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("PRIMARY");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex(new[] { "Provider", "ProviderUserId" }, "uq_external_login")
+                        .IsUnique();
+
+                    b.ToTable("external_logins", (string)null);
+                });
+
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.FeaturedRequest", b =>
                 {
                     b.Property<int>("Id")
@@ -1041,6 +1088,11 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasColumnType("varchar(255)")
                         .HasColumnName("file_name");
 
+                    b.Property<string>("FileSha256")
+                        .HasMaxLength(64)
+                        .HasColumnType("varchar(64)")
+                        .HasColumnName("file_sha256");
+
                     b.Property<int>("FileSize")
                         .HasColumnType("int")
                         .HasColumnName("file_size");
@@ -1063,6 +1115,19 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasColumnType("varchar(255)")
                         .HasColumnName("public_id");
 
+                    b.Property<DateTime?>("PurgeAfter")
+                        .HasColumnType("datetime")
+                        .HasColumnName("purge_after");
+
+                    b.Property<DateTime?>("PurgedAt")
+                        .HasColumnType("datetime")
+                        .HasColumnName("purged_at");
+
+                    b.Property<string>("Side")
+                        .HasMaxLength(10)
+                        .HasColumnType("varchar(10)")
+                        .HasColumnName("side");
+
                     b.Property<DateTime>("UploadedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("datetime")
@@ -1073,8 +1138,14 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasColumnType("int")
                         .HasColumnName("user_id");
 
+                    b.Property<int?>("VerificationRequestId")
+                        .HasColumnType("int")
+                        .HasColumnName("verification_request_id");
+
                     b.HasKey("Id")
                         .HasName("PRIMARY");
+
+                    b.HasIndex("VerificationRequestId");
 
                     b.HasIndex(new[] { "UserId", "DocType" }, "idx_identitydocs_user_type");
 
@@ -1357,7 +1428,7 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Property<string>("Status")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("enum('pending','hired','submitted','completed','rejected','cancelled')")
+                        .HasColumnType("enum('pending','hired','submitted','completed','rejected','cancelled','awaiting_verification')")
                         .HasColumnName("status")
                         .HasDefaultValueSql("'pending'");
 
@@ -2265,6 +2336,57 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.ToTable("saved_jobs");
                 });
 
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.School", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Domain")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("domain");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("tinyint(1)")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("varchar(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ShortName")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("short_name");
+
+                    b.HasKey("Id")
+                        .HasName("PRIMARY");
+
+                    b.HasIndex(new[] { "Name" }, "uq_schools_name")
+                        .IsUnique();
+
+                    b.ToTable("schools", (string)null);
+                });
+
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.SecurityLog", b =>
                 {
                     b.Property<int>("Id")
@@ -2345,6 +2467,188 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.ToTable("skill_badges");
                 });
 
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.StudentProfile", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("int")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("datetime")
+                        .HasColumnName("expires_at");
+
+                    b.Property<short>("GraduationYear")
+                        .HasColumnType("smallint")
+                        .HasColumnName("graduation_year");
+
+                    b.Property<int>("SchoolId")
+                        .HasColumnType("int")
+                        .HasColumnName("school_id");
+
+                    b.Property<int>("SourceRequestId")
+                        .HasColumnType("int")
+                        .HasColumnName("source_request_id");
+
+                    b.Property<string>("StudentCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("student_code");
+
+                    b.Property<string>("StudentCodeNormalized")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("student_code_normalized");
+
+                    b.Property<DateTime>("VerifiedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("verified_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("VerifiedFullName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("verified_full_name");
+
+                    b.HasKey("UserId")
+                        .HasName("PRIMARY");
+
+                    b.HasIndex("SourceRequestId");
+
+                    b.HasIndex(new[] { "SchoolId", "StudentCodeNormalized" }, "uq_student_profiles_school_code")
+                        .IsUnique();
+
+                    b.ToTable("student_profiles", (string)null);
+                });
+
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.StudentVerificationRequest", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AdminNote")
+                        .HasColumnType("text")
+                        .HasColumnName("admin_note");
+
+                    b.Property<string>("FullNameOnCard")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("varchar(150)")
+                        .HasColumnName("full_name_on_card");
+
+                    b.Property<short>("GraduationYear")
+                        .HasColumnType("smallint")
+                        .HasColumnName("graduation_year");
+
+                    b.Property<DateTime?>("NeedInfoDeadline")
+                        .HasColumnType("datetime")
+                        .HasColumnName("need_info_deadline");
+
+                    b.Property<string>("OcrResultJson")
+                        .HasColumnType("json")
+                        .HasColumnName("ocr_result_json");
+
+                    b.Property<int?>("PendingUserId")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("int")
+                        .HasComputedColumnSql("CASE WHEN `status` = 'pending' THEN `user_id` ELSE NULL END", false);
+
+                    b.Property<string>("ReasonCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("reason_code");
+
+                    b.Property<string>("RejectionReason")
+                        .HasColumnType("text")
+                        .HasColumnName("rejection_reason");
+
+                    b.Property<string>("RequestType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("request_type");
+
+                    b.Property<DateTime?>("ResubmitAfter")
+                        .HasColumnType("datetime")
+                        .HasColumnName("resubmit_after");
+
+                    b.Property<bool>("ResubmitAllowed")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("resubmit_allowed");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("datetime")
+                        .HasColumnName("reviewed_at");
+
+                    b.Property<int?>("ReviewedByAdminId")
+                        .HasColumnType("int")
+                        .HasColumnName("reviewed_by_admin_id");
+
+                    b.Property<string>("RiskFlagsJson")
+                        .HasColumnType("json")
+                        .HasColumnName("risk_flags_json");
+
+                    b.Property<int>("SchoolId")
+                        .HasColumnType("int")
+                        .HasColumnName("school_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("varchar(30)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("StudentCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("student_code");
+
+                    b.Property<string>("StudentCodeNormalized")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("student_code_normalized");
+
+                    b.Property<DateTime>("SubmittedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("datetime")
+                        .HasColumnName("submitted_at")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("UserMessage")
+                        .HasColumnType("text")
+                        .HasColumnName("user_message");
+
+                    b.HasKey("Id")
+                        .HasName("PRIMARY");
+
+                    b.HasIndex("PendingUserId")
+                        .IsUnique()
+                        .HasDatabaseName("uq_svr_pending_user");
+
+                    b.HasIndex("ReviewedByAdminId");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex(new[] { "SchoolId", "StudentCodeNormalized" }, "idx_svr_school_code");
+
+                    b.HasIndex(new[] { "Status", "SubmittedAt" }, "idx_svr_status_submitted");
+
+                    b.ToTable("student_verification_requests", (string)null);
+                });
+
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.Subscription", b =>
                 {
                     b.Property<int>("Id")
@@ -2400,6 +2704,110 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.HasIndex(new[] { "UserId" }, "fk_subscriptions_user");
 
                     b.ToTable("subscriptions");
+                });
+
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.SubscriptionPlanConfig", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("id");
+
+                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("BadgeText")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("badge_text");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("code");
+
+                    b.Property<decimal>("CommissionRate")
+                        .HasColumnType("decimal(5,4)")
+                        .HasColumnName("commission_rate");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("DefaultRevisionLimit")
+                        .HasColumnType("int")
+                        .HasColumnName("default_revision_limit");
+
+                    b.Property<string>("FeaturesJson")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("features_json");
+
+                    b.Property<int>("FreeDirectInvites")
+                        .HasColumnType("int")
+                        .HasColumnName("free_direct_invites");
+
+                    b.Property<int>("FreeFeaturedPins")
+                        .HasColumnType("int")
+                        .HasColumnName("free_featured_pins");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsPopular")
+                        .HasColumnType("tinyint(1)")
+                        .HasColumnName("is_popular");
+
+                    b.Property<int?>("MaxActiveJobs")
+                        .HasColumnType("int")
+                        .HasColumnName("max_active_jobs");
+
+                    b.Property<int>("MaxCvFiles")
+                        .HasColumnType("int")
+                        .HasColumnName("max_cv_files");
+
+                    b.Property<int?>("MaxWeeklyApplications")
+                        .HasColumnType("int")
+                        .HasColumnName("max_weekly_applications");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("name");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(12,2)")
+                        .HasColumnName("price");
+
+                    b.Property<string>("PriceSub")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("price_sub");
+
+                    b.Property<string>("Tagline")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("tagline");
+
+                    b.Property<string>("TargetRole")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("varchar(20)")
+                        .HasColumnName("target_role");
+
+                    b.Property<int>("TierRank")
+                        .HasColumnType("int")
+                        .HasColumnName("tier_rank");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("datetime(6)")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("subscription_plan_configs");
                 });
 
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.SupportTicket", b =>
@@ -2576,10 +2984,23 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasColumnName("account_status")
                         .HasDefaultValueSql("'pending'");
 
+                    b.Property<string>("Address")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("address");
+
                     b.Property<string>("AvatarUrl")
                         .HasMaxLength(255)
                         .HasColumnType("varchar(255)")
                         .HasColumnName("avatar_url");
+
+                    b.Property<string>("BenefitsJson")
+                        .HasColumnType("text")
+                        .HasColumnName("benefits_json");
+
+                    b.Property<string>("Bio")
+                        .HasColumnType("text")
+                        .HasColumnName("bio");
 
                     b.Property<string>("BlacklistReason")
                         .HasColumnType("text")
@@ -2594,11 +3015,28 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasColumnType("varchar(50)")
                         .HasColumnName("company_size");
 
+                    b.Property<string>("CoverImageUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("varchar(500)")
+                        .HasColumnName("cover_image_url");
+
+                    b.Property<string>("EducationJson")
+                        .HasColumnType("text")
+                        .HasColumnName("education_json");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(150)
                         .HasColumnType("varchar(150)")
                         .HasColumnName("email");
+
+                    b.Property<decimal?>("ExpectedHourlyRate")
+                        .HasColumnType("decimal(12,2)")
+                        .HasColumnName("expected_hourly_rate");
+
+                    b.Property<string>("ExperienceJson")
+                        .HasColumnType("text")
+                        .HasColumnName("experience_json");
 
                     b.Property<int>("FailedLoginAttempts")
                         .HasColumnType("int")
@@ -2609,6 +3047,15 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("varchar(150)")
                         .HasColumnName("full_name");
+
+                    b.Property<short?>("GraduationYear")
+                        .HasColumnType("smallint")
+                        .HasColumnName("graduation_year");
+
+                    b.Property<string>("Headline")
+                        .HasMaxLength(255)
+                        .HasColumnType("varchar(255)")
+                        .HasColumnName("headline");
 
                     b.Property<string>("Industry")
                         .HasMaxLength(100)
@@ -2648,6 +3095,10 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasColumnType("datetime(6)")
                         .HasColumnName("lockout_until");
 
+                    b.Property<string>("OfficeImagesJson")
+                        .HasColumnType("text")
+                        .HasColumnName("office_images_json");
+
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasMaxLength(255)
@@ -2670,6 +3121,11 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasColumnName("reliability_score")
                         .HasDefaultValueSql("'100'");
 
+                    b.Property<string>("Representative")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("representative");
+
                     b.Property<int>("RoleId")
                         .HasColumnType("int")
                         .HasColumnName("role_id");
@@ -2678,6 +3134,28 @@ namespace SkillBridge.Infrastructure.Migrations
                         .HasMaxLength(150)
                         .HasColumnType("varchar(150)")
                         .HasColumnName("school");
+
+                    b.Property<int?>("SchoolId")
+                        .HasColumnType("int")
+                        .HasColumnName("school_id");
+
+                    b.Property<string>("SkillsJson")
+                        .HasColumnType("text")
+                        .HasColumnName("skills_json");
+
+                    b.Property<string>("SocialLinksJson")
+                        .HasColumnType("text")
+                        .HasColumnName("social_links_json");
+
+                    b.Property<string>("StudentCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("student_code");
+
+                    b.Property<string>("TaxCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("varchar(50)")
+                        .HasColumnName("tax_code");
 
                     b.Property<int>("TokenVersion")
                         .ValueGeneratedOnAdd()
@@ -2798,6 +3276,15 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Property<bool>("IsBankVerified")
                         .HasColumnType("tinyint(1)")
                         .HasColumnName("is_bank_verified");
+
+                    b.Property<string>("WithdrawHoldReason")
+                        .HasMaxLength(100)
+                        .HasColumnType("varchar(100)")
+                        .HasColumnName("withdraw_hold_reason");
+
+                    b.Property<DateTime?>("WithdrawHoldUntil")
+                        .HasColumnType("datetime")
+                        .HasColumnName("withdraw_hold_until");
 
                     b.HasKey("UserId")
                         .HasName("PRIMARY");
@@ -3230,6 +3717,18 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Navigation("SubmittedByNavigation");
                 });
 
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.ExternalLogin", b =>
+                {
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "User")
+                        .WithMany("ExternalLogins")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_extlogin_user");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.FeaturedRequest", b =>
                 {
                     b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "Employer")
@@ -3257,7 +3756,13 @@ namespace SkillBridge.Infrastructure.Migrations
                         .IsRequired()
                         .HasConstraintName("fk_identitydocs_user");
 
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.StudentVerificationRequest", "VerificationRequest")
+                        .WithMany("Documents")
+                        .HasForeignKey("VerificationRequestId");
+
                     b.Navigation("User");
+
+                    b.Navigation("VerificationRequest");
                 });
 
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.InsuranceFundClaim", b =>
@@ -3653,6 +4158,61 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Navigation("Category");
                 });
 
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.StudentProfile", b =>
+                {
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.School", "School")
+                        .WithMany("StudentProfiles")
+                        .HasForeignKey("SchoolId")
+                        .IsRequired()
+                        .HasConstraintName("fk_sp_school");
+
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.StudentVerificationRequest", "SourceRequest")
+                        .WithMany()
+                        .HasForeignKey("SourceRequestId")
+                        .IsRequired()
+                        .HasConstraintName("fk_sp_request");
+
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "User")
+                        .WithOne("StudentProfile")
+                        .HasForeignKey("SkillBridge.Infrastructure.Data.Entities.StudentProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_sp_user");
+
+                    b.Navigation("School");
+
+                    b.Navigation("SourceRequest");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.StudentVerificationRequest", b =>
+                {
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.AdminTeamMember", "ReviewedByAdmin")
+                        .WithMany()
+                        .HasForeignKey("ReviewedByAdminId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_svr_reviewer");
+
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.School", "School")
+                        .WithMany("VerificationRequests")
+                        .HasForeignKey("SchoolId")
+                        .IsRequired()
+                        .HasConstraintName("fk_svr_school");
+
+                    b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "User")
+                        .WithMany("StudentVerificationRequests")
+                        .HasForeignKey("UserId")
+                        .IsRequired()
+                        .HasConstraintName("fk_svr_user");
+
+                    b.Navigation("ReviewedByAdmin");
+
+                    b.Navigation("School");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.Subscription", b =>
                 {
                     b.HasOne("SkillBridge.Infrastructure.Data.Entities.User", "User")
@@ -3912,9 +4472,21 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Navigation("Users");
                 });
 
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.School", b =>
+                {
+                    b.Navigation("StudentProfiles");
+
+                    b.Navigation("VerificationRequests");
+                });
+
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.SkillBadge", b =>
                 {
                     b.Navigation("UserBadges");
+                });
+
+            modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.StudentVerificationRequest", b =>
+                {
+                    b.Navigation("Documents");
                 });
 
             modelBuilder.Entity("SkillBridge.Infrastructure.Data.Entities.Transaction", b =>
@@ -3951,6 +4523,8 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Navigation("DisputeEvidences");
 
                     b.Navigation("DisputeStudents");
+
+                    b.Navigation("ExternalLogins");
 
                     b.Navigation("FeaturedRequests");
 
@@ -3993,6 +4567,10 @@ namespace SkillBridge.Infrastructure.Migrations
                     b.Navigation("SecurityLogs");
 
                     b.Navigation("StudentDeadlineExtensions");
+
+                    b.Navigation("StudentProfile");
+
+                    b.Navigation("StudentVerificationRequests");
 
                     b.Navigation("Subscriptions");
 
