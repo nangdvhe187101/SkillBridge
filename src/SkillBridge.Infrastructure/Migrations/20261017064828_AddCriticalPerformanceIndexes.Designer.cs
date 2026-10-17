@@ -12,8 +12,8 @@ using SkillBridge.Infrastructure.Data;
 namespace SkillBridge.Infrastructure.Migrations
 {
     [DbContext(typeof(SkillBridgeDbContext))]
-    [Migration("20261017064226_AddCriticalIndexes")]
-    partial class AddCriticalIndexes
+    [Migration("20261017064828_AddCriticalPerformanceIndexes")]
+    partial class AddCriticalPerformanceIndexes
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
