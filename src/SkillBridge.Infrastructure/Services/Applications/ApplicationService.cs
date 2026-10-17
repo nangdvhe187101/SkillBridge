@@ -391,12 +391,14 @@ public class ApplicationService : IApplicationService
 
                 currentJob.HiredApplicantId = currentApp.StudentId;
                 currentJob.EscrowAmount = currentJob.Budget;
+                StateMachineValidator.ValidateJobTransition(currentJob.Status, "in_progress");
                 currentJob.Status = "in_progress";
                 currentJob.DeadlineAt = DateTime.UtcNow.AddDays(durationDays);
                 currentJob.DeadlineWarningSentAt = null;
                 currentJob.DeadlineOverdueSentAt = null;
                 currentJob.UpdatedAt = DateTime.UtcNow;
 
+                StateMachineValidator.ValidateApplicationTransition(currentApp.Status, "hired");
                 currentApp.Status = "hired";
                 currentApp.UpdatedAt = DateTime.UtcNow;
 
@@ -406,6 +408,7 @@ public class ApplicationService : IApplicationService
                     .ToListAsync();
                 foreach (var other in otherApplications)
                 {
+                    StateMachineValidator.ValidateApplicationTransition(other.Status, "rejected");
                     other.Status = "rejected";
                     other.UpdatedAt = DateTime.UtcNow;
                 }
@@ -547,6 +550,7 @@ public class ApplicationService : IApplicationService
                         10,
                         $"Sinh viên hủy việc đang làm tại Job #{jobId}. Lý do: {reason ?? "Không có lý do"}");
 
+                    StateMachineValidator.ValidateJobTransition(job.Status, "open");
                     job.Status = "open";
                     job.HiredApplicantId = null;
                     job.DeadlineAt = null;
@@ -579,6 +583,7 @@ public class ApplicationService : IApplicationService
                         .ToListAsync();
                     foreach (var other in autoRejectedApps)
                     {
+                        StateMachineValidator.ValidateApplicationTransition(other.Status, "pending");
                         other.Status = "pending";
                         other.UpdatedAt = DateTime.UtcNow;
                     }
@@ -606,6 +611,7 @@ public class ApplicationService : IApplicationService
                     }
                 }
 
+                StateMachineValidator.ValidateApplicationTransition(application.Status, "cancelled");
                 application.Status = "cancelled";
                 application.UpdatedAt = DateTime.UtcNow;
                 _dbContext.Applications.Update(application);
@@ -688,6 +694,7 @@ public class ApplicationService : IApplicationService
             throw new BusinessException("Không thể từ chối ứng viên đã được thuê hoặc đã hoàn thành công việc.");
         }
 
+        StateMachineValidator.ValidateApplicationTransition(application.Status, "rejected");
         application.Status = "rejected";
         application.UpdatedAt = DateTime.UtcNow;
 

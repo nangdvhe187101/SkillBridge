@@ -313,6 +313,7 @@ public class DeliverableService : IDeliverableService
             {
                 await _dbContext.JobDeliverables.AddAsync(deliverable, cancellationToken);
                 // Đồng bộ cập nhật trạng thái Job sang "submitted"
+                StateMachineValidator.ValidateJobTransition(job.Status, "submitted");
                 job.Status = "submitted";
                 job.UpdatedAt = DateTime.UtcNow;
 
@@ -321,6 +322,7 @@ public class DeliverableService : IDeliverableService
                     .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == studentId, cancellationToken);
                 if (studentApp != null && studentApp.Status == "hired")
                 {
+                    StateMachineValidator.ValidateApplicationTransition(studentApp.Status, "submitted");
                     studentApp.Status = "submitted";
                     studentApp.UpdatedAt = DateTime.UtcNow;
                 }
@@ -465,6 +467,7 @@ public class DeliverableService : IDeliverableService
                     throw new BusinessException($"Công việc này đã đạt giới hạn chỉnh sửa tối đa ({currentJob.RevisionLimit} lần).");
                 }
                 currentJob.RevisionCount += 1;
+                StateMachineValidator.ValidateJobTransition(currentJob.Status, "revision_requested");
                 currentJob.Status = "revision_requested";
                 currentJob.UpdatedAt = DateTime.UtcNow;
 
@@ -473,12 +476,14 @@ public class DeliverableService : IDeliverableService
                     .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == currentDeliverable.StudentId, cancellationToken);
                 if (studentApp != null && studentApp.Status == "submitted")
                 {
+                    StateMachineValidator.ValidateApplicationTransition(studentApp.Status, "hired");
                     studentApp.Status = "hired";
                     studentApp.UpdatedAt = DateTime.UtcNow;
                 }
             }
             else if (normalizedStatus == "accepted")
             {
+                StateMachineValidator.ValidateJobTransition(currentJob.Status, "completed");
                 currentJob.Status = "completed";
                 currentJob.EscrowAmount = null;
                 currentJob.UpdatedAt = DateTime.UtcNow;
@@ -487,6 +492,7 @@ public class DeliverableService : IDeliverableService
                     .FirstOrDefaultAsync(a => a.JobId == jobId && a.StudentId == currentDeliverable.StudentId, cancellationToken);
                 if (application != null)
                 {
+                    StateMachineValidator.ValidateApplicationTransition(application.Status, "completed");
                     application.Status = "completed";
                     application.UpdatedAt = DateTime.UtcNow;
                 }

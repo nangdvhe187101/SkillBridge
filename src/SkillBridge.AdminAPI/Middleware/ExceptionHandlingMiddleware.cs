@@ -50,6 +50,22 @@ public class ExceptionHandlingMiddleware
             var payload = JsonSerializer.Serialize(new { message = ex.Message });
             await context.Response.WriteAsync(payload);
         }
+        catch (Microsoft.EntityFrameworkCore.DbUpdateConcurrencyException ex)
+        {
+            _logger.LogWarning(ex, "Admin Concurrency conflict tại {Path}: {Message}", context.Request.Path, ex.Message);
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
+            var payload = JsonSerializer.Serialize(new { message = "Dữ liệu đã bị thay đổi bởi thao tác khác. Vui lòng tải lại trang và thử lại." });
+            await context.Response.WriteAsync(payload);
+        }
+        catch (ArgumentException ex)
+        {
+            _logger.LogWarning(ex, "Admin Argument validation error tại {Path}: {Message}", context.Request.Path, ex.Message);
+            context.Response.ContentType = "application/json";
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            var payload = JsonSerializer.Serialize(new { message = ex.Message });
+            await context.Response.WriteAsync(payload);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Admin Unhandled exception tại {Path}", context.Request.Path);

@@ -125,6 +125,7 @@ public class DisputeService : IDisputeService
         // Khóa trạng thái công việc sang 'disputed'
         try
         {
+            StateMachineValidator.ValidateJobTransition(job.Status ?? string.Empty, "disputed");
             job.Status = "disputed";
             job.UpdatedAt = now;
             await _dbContext.SaveChangesAsync(ct);
@@ -437,6 +438,7 @@ public class DisputeService : IDisputeService
                 _logger.LogWarning(ex, "Lỗi khi phạt điểm uy tín Employer {EmployerId}", dispute.EmployerId);
             }
 
+            StateMachineValidator.ValidateJobTransition(job.Status, "completed");
             job.Status = "completed";
             job.EscrowAmount = null;
             job.UpdatedAt = now;
@@ -470,6 +472,7 @@ public class DisputeService : IDisputeService
                 _logger.LogWarning(ex, "Lỗi khi phạt điểm uy tín Student {StudentId}", dispute.StudentId);
             }
 
+            StateMachineValidator.ValidateJobTransition(job.Status, "cancelled");
             job.Status = "cancelled";
             job.EscrowAmount = null;
             job.UpdatedAt = now;
@@ -511,12 +514,14 @@ public class DisputeService : IDisputeService
                     ct);
             }
 
+            StateMachineValidator.ValidateJobTransition(job.Status, "completed");
             job.Status = "completed";
             job.EscrowAmount = null;
             job.UpdatedAt = now;
         }
 
         // Cập nhật trạng thái Dispute
+        StateMachineValidator.ValidateDisputeTransition(dispute.Status, "closed");
         dispute.Status = "closed";
         dispute.Decision = decision;
         dispute.PayoutAmount = studentPayout;

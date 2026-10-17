@@ -342,6 +342,7 @@ public class AdminContractService : IAdminContractService
                 jobTitle: job.Title,
                 amount: amount);
 
+            StateMachineValidator.ValidateJobTransition(job.Status, "completed");
             job.Status = "completed";
             job.UpdatedAt = DateTime.UtcNow;
 
@@ -420,6 +421,7 @@ public class AdminContractService : IAdminContractService
                 amount: amount,
                 reason: $"Admin cưỡng chế hoàn cọc: {request.Reason}");
 
+            StateMachineValidator.ValidateJobTransition(job.Status, "cancelled");
             job.Status = "cancelled";
             job.UpdatedAt = DateTime.UtcNow;
 
@@ -496,12 +498,14 @@ public class AdminContractService : IAdminContractService
             if (isRelease)
             {
                 await _escrowService.ReleaseEscrowAsync(job.HiredApplicantId!.Value, job.EmployerId, job.Id, job.Title, amount);
+                StateMachineValidator.ValidateJobTransition(job.Status, "completed");
                 job.Status = "completed";
                 if (job.Employer != null) job.Employer.ReliabilityScore = Math.Max(0, job.Employer.ReliabilityScore - 10);
             }
             else
             {
                 await _escrowService.RefundEscrowAsync(job.EmployerId, job.Id, job.Title, amount, dummyRequest.Reason);
+                StateMachineValidator.ValidateJobTransition(job.Status, "cancelled");
                 job.Status = "cancelled";
                 if (job.HiredApplicant != null) job.HiredApplicant.ReliabilityScore = Math.Max(0, job.HiredApplicant.ReliabilityScore - 15);
             }
