@@ -47,7 +47,7 @@ public class WithdrawalServiceTests
 
     private WithdrawalService CreateService(SkillBridgeDbContext dbContext, IEncryptionKeyProvider? keyProvider = null)
     {
-        return new WithdrawalService(dbContext, keyProvider ?? _keyProvider, _loggerMock.Object);
+        return new WithdrawalService(dbContext, keyProvider ?? _keyProvider, _loggerMock.Object, new Mock<SkillBridge.Application.Interfaces.Admin.ISystemSettingService>().Object);
     }
 
     private static User CreateValidUser(int id, string email, string name = "Test User")

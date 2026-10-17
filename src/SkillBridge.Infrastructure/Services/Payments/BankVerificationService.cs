@@ -17,6 +17,9 @@ using ZXing.SkiaSharp;
 
 using System.Collections.Generic;
 using System.Data;
+using SkillBridge.Application.Interfaces;
+using SkillBridge.Application.Interfaces.Admin;
+using SkillBridge.Infrastructure.Services.Admin;
 using SkillBridge.Infrastructure.Services.Security;
 
 namespace SkillBridge.Infrastructure.Services.Payments;
@@ -26,15 +29,21 @@ public class BankVerificationService : IBankVerificationService
     private readonly SkillBridgeDbContext _dbContext;
     private readonly ILogger<BankVerificationService> _logger;
     private readonly IEncryptionKeyProvider _keyProvider;
+    private readonly ISystemSettingService _systemSettingService;
+    private readonly IEmailService? _emailService;
 
     public BankVerificationService(
         SkillBridgeDbContext dbContext,
         ILogger<BankVerificationService> logger,
-        IEncryptionKeyProvider keyProvider)
+        IEncryptionKeyProvider keyProvider,
+        ISystemSettingService systemSettingService,
+        IEmailService? emailService = null)
     {
         _dbContext = dbContext;
         _logger = logger;
         _keyProvider = keyProvider;
+        _systemSettingService = systemSettingService;
+        _emailService = emailService;
     }
 
     public async Task<BankVerificationResponseDto> CreateRequestAsync(int userId, CreateBankVerificationDto dto, string? ipAddress = null, CancellationToken ct = default)
@@ -514,6 +523,8 @@ public class BankVerificationService : IBankVerificationService
         _logger.LogInformation("Admin {AdminMemberId} đã duyệt yêu cầu xác thực #{RequestId} cho User {UserId} ({BankName} - {AccountMask})",
             adminMemberId, requestId, request.UserId, request.BankName, request.AccountNumberMask);
 
+        _ = SendBankVerificationApprovalEmailAsync(request, cleanReturnedName, ct);
+
         return MapToResponseDto(request);
     }
 
@@ -593,6 +604,8 @@ public class BankVerificationService : IBankVerificationService
         _logger.LogInformation("Admin {AdminMemberId} đã từ chối yêu cầu xác thực #{RequestId} (Lý do: {Reason})",
             adminMemberId, requestId, request.RejectionReason);
 
+        _ = SendBankVerificationRejectionEmailAsync(request, request.RejectionReason, ct);
+
         return MapToResponseDto(request);
     }
 
@@ -638,5 +651,76 @@ public class BankVerificationService : IBankVerificationService
             RejectionReason = r.RejectionReason,
             BankReturnedName = r.BankReturnedName
         };
+    }
+
+    private async Task SendBankVerificationApprovalEmailAsync(BankVerificationRequest request, string verifiedHolderName, CancellationToken ct)
+    {
+        try
+        {
+            if (_emailService == null || _systemSettingService == null) return;
+            var isEnabled = await _systemSettingService.IsFeatureEnabledAsync(SystemSettingService.KeyEmailBankVerification, true, ct);
+            if (!isEnabled) return;
+
+            var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
+            if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+            var subject = "[SkillBridge] Tài khoản ngân hàng của bạn đã được xác thực thành công";
+            var body = $@"
+<div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
+    <h2 style=""color: #10b981;"">Xác thực tài khoản ngân hàng thành công!</h2>
+    <p>Xin chào <strong>{user.FullName ?? "bạn"}</strong>,</p>
+    <p>Yêu cầu xác thực tài khoản ngân hàng liên kết của bạn trên hệ thống <strong>SkillBridge</strong> đã được Ban quản trị phê duyệt.</p>
+    <div style=""background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;"">
+        <p><strong>Ngân hàng:</strong> {request.BankName} ({request.BankCode})</p>
+        <p><strong>Số tài khoản:</strong> {request.AccountNumberMask}</p>
+        <p><strong>Chủ tài khoản xác thực:</strong> {verifiedHolderName}</p>
+        <p><strong>Thời gian duyệt:</strong> {DateTime.UtcNow:dd/MM/yyyy HH:mm} UTC</p>
+    </div>
+    <p>Giờ đây bạn có thể an tâm thực hiện các giao dịch rút tiền thù lao về tài khoản này một cách nhanh chóng và bảo mật.</p>
+    <hr style=""border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"" />
+    <p style=""font-size: 12px; color: #6b7280;"">Email này được gửi tự động từ Hệ thống SkillBridge. Vui lòng không phản hồi email này.</p>
+</div>";
+
+            await _emailService.SendEmailAsync(user.Email, subject, body, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi gửi email thông báo duyệt tài khoản ngân hàng cho User {UserId}", request.UserId);
+        }
+    }
+
+    private async Task SendBankVerificationRejectionEmailAsync(BankVerificationRequest request, string reason, CancellationToken ct)
+    {
+        try
+        {
+            if (_emailService == null || _systemSettingService == null) return;
+            var isEnabled = await _systemSettingService.IsFeatureEnabledAsync(SystemSettingService.KeyEmailBankVerification, true, ct);
+            if (!isEnabled) return;
+
+            var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
+            if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+            var subject = "[SkillBridge] Thông báo về yêu cầu xác thực tài khoản ngân hàng";
+            var body = $@"
+<div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
+    <h2 style=""color: #ef4444;"">Yêu cầu xác thực tài khoản ngân hàng chưa được duyệt</h2>
+    <p>Xin chào <strong>{user.FullName ?? "bạn"}</strong>,</p>
+    <p>Ban quản trị SkillBridge đã xem xét yêu cầu xác thực tài khoản ngân hàng của bạn nhưng rất tiếc chưa thể phê duyệt do thông tin chưa trùng khớp hoặc chưa hợp lệ.</p>
+    <div style=""background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; border-radius: 4px; margin: 20px 0;"">
+        <p><strong>Ngân hàng:</strong> {request.BankName} ({request.BankCode})</p>
+        <p><strong>Số tài khoản:</strong> {request.AccountNumberMask}</p>
+        <p><strong>Lý do từ chối:</strong> {reason}</p>
+    </div>
+    <p>Vui lòng đăng nhập vào ứng dụng SkillBridge, kiểm tra lại thông tin họ tên và số tài khoản ngân hàng chính chủ rồi gửi lại yêu cầu xác thực mới.</p>
+    <hr style=""border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"" />
+    <p style=""font-size: 12px; color: #6b7280;"">Email này được gửi tự động từ Hệ thống SkillBridge. Nếu cần hỗ trợ, vui lòng liên hệ bộ phận CSKH của SkillBridge.</p>
+</div>";
+
+            await _emailService.SendEmailAsync(user.Email, subject, body, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi gửi email thông báo từ chối tài khoản ngân hàng cho User {UserId}", request.UserId);
+        }
     }
 }

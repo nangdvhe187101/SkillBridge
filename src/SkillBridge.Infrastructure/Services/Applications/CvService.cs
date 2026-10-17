@@ -281,7 +281,17 @@ public class CvService : ICvService
         }
     }
 
-    public async Task<(Stream Stream, string ContentType, string FileName)> GetCvFileStreamAsync(int currentUserId, int cvId)
+    // Nhà tuyển dụng chỉ thấy các CV sinh viên đã bật "Cho phép tìm kiếm"
+    public async Task<List<CvFileDto>> GetSearchableCvFilesAsync(int studentId)
+    {
+        var list = await _cvFileRepository.GetByStudentIdAsync(studentId);
+        return list
+            .Where(c => c.IsSearchable ?? true)
+            .Select(c => MapToDto(c, c.Category?.Name))
+            .ToList();
+    }
+
+    public async Task<(Stream Stream, string ContentType, string FileName)> GetCvFileStreamAsync(int currentUserId, int cvId, bool isEmployer = false)
     {
         var cv = await _cvFileRepository.GetByIdAsync(cvId);
         if (cv == null)
@@ -289,8 +299,9 @@ public class CvService : ICvService
             throw new BusinessException("Không tìm thấy file CV.");
         }
 
-        // Quyền truy cập: Sinh viên sở hữu CV HOẶC Nhà tuyển dụng nhận được đơn ứng tuyển chứa CV này
-        if (cv.StudentId != currentUserId)
+        // Quyền truy cập: Sinh viên sở hữu CV, Nhà tuyển dụng xem CV công khai tìm kiếm,
+        // HOẶC Nhà tuyển dụng nhận được đơn ứng tuyển chứa CV này
+        if (cv.StudentId != currentUserId && !(isEmployer && (cv.IsSearchable ?? true)))
         {
             var isEmployerWithAccess = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(
                 _context.Applications.Where(a => a.CvFileId == cvId && a.Job.EmployerId == currentUserId)
@@ -302,6 +313,23 @@ public class CvService : ICvService
             }
         }
 
+        return await OpenCvStreamAsync(cv);
+    }
+
+    // Quản trị viên được xem mọi CV, chỉ cần CV thuộc đúng sinh viên đang xem để tránh lộ chéo dữ liệu
+    public async Task<(Stream Stream, string ContentType, string FileName)> GetCvFileStreamForAdminAsync(int studentId, int cvId)
+    {
+        var cv = await _cvFileRepository.GetByIdAsync(cvId);
+        if (cv == null || cv.StudentId != studentId)
+        {
+            throw new BusinessException("Không tìm thấy file CV.");
+        }
+
+        return await OpenCvStreamAsync(cv);
+    }
+
+    private async Task<(Stream Stream, string ContentType, string FileName)> OpenCvStreamAsync(CvFile cv)
+    {
         var fileKey = !string.IsNullOrWhiteSpace(cv.PublicId)
             ? cv.PublicId
             : ExtractFileKeyFromUrl(cv.FileUrl);

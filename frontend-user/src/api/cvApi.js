@@ -28,3 +28,8 @@ export async function updateCv(id, data) {
         body: JSON.stringify(data),
     });
 }
+
+// Nhà tuyển dụng xem các CV sinh viên đã cho phép tìm kiếm
+export async function getStudentCvFiles(studentId) {
+    return apiFetch(`/cv-files/student/${studentId}`, { method: 'GET' });
+}

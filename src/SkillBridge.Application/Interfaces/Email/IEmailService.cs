@@ -27,5 +27,6 @@ namespace SkillBridge.Application.Interfaces
 
         Task SendJobMatchAlertEmailAsync(string toEmail, string studentName, string jobTitle, decimal budget, string jobUrl);
         Task SendStudentWelcomeEmailAsync(string toEmail, string fullName);
+        Task SendEmailAsync(string toEmail, string subject, string htmlBody, System.Threading.CancellationToken ct = default);
     }
 }

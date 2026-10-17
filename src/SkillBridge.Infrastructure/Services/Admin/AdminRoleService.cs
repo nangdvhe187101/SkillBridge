@@ -86,18 +86,25 @@ public class AdminRoleService : IAdminRoleService
     {
         await EnsureInitialTeamAndRolesSeedAsync(ct);
 
-        if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Email))
+        if (string.IsNullOrWhiteSpace(dto.Name))
         {
-            throw new BusinessException("Họ tên và email của thành viên không được để trống.");
+            throw new BusinessException("Họ tên của thành viên không được để trống.");
         }
-
-        var rawPassword = string.IsNullOrWhiteSpace(dto.Password) ? "Admin@123" : dto.Password.Trim();
-        if (rawPassword.Length < 6)
+        if (string.IsNullOrWhiteSpace(dto.Email))
         {
-            throw new BusinessException("Mật khẩu khởi tạo phải có ít nhất 6 ký tự.");
+            throw new BusinessException("Email không được để trống.");
         }
 
         var normalizedEmail = dto.Email.Trim().ToLowerInvariant();
+        if (!ValidationPatterns.Email.IsMatch(normalizedEmail))
+        {
+            throw new BusinessException($"Email không hợp lệ: '{dto.Email.Trim()}'.");
+        }
+
+        // Không dùng mật khẩu mặc định cố định: nếu bỏ trống thì sinh ngẫu nhiên mật khẩu mạnh
+        var rawPassword = string.IsNullOrWhiteSpace(dto.Password) ? GenerateStrongPassword() : dto.Password.Trim();
+        EnsureStrongAdminPassword(rawPassword);
+
         var exists = await _dbContext.AdminTeamMembers.AnyAsync(m => m.Email == normalizedEmail, ct);
         if (exists)
         {
@@ -201,8 +208,9 @@ public class AdminRoleService : IAdminRoleService
             {
                 user.AccountStatus = dto.IsActive.Value ? "active" : "locked";
             }
-            if (!string.IsNullOrWhiteSpace(dto.Password) && dto.Password.Trim().Length >= 6)
+            if (!string.IsNullOrWhiteSpace(dto.Password))
             {
+                EnsureStrongAdminPassword(dto.Password.Trim());
                 user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password.Trim(), workFactor: 11);
                 _logger.LogInformation("Admin #{Actor} đã đặt lại mật khẩu cho thành viên {Email}", actorAdminId, member.Email);
             }
@@ -696,12 +704,52 @@ public class AdminRoleService : IAdminRoleService
         };
     }
 
+    private const int MinAdminPasswordLength = 12;
+
+    // Tài khoản quản trị có quyền cao nên yêu cầu mật khẩu mạnh hơn tài khoản người dùng thường
+    private static void EnsureStrongAdminPassword(string password)
+    {
+        if (password.Length < MinAdminPasswordLength)
+            throw new BusinessException($"Mật khẩu quản trị phải có tối thiểu {MinAdminPasswordLength} ký tự.");
+        if (!password.Any(char.IsUpper))
+            throw new BusinessException("Mật khẩu quản trị phải chứa ít nhất một chữ viết hoa.");
+        if (!password.Any(char.IsLower))
+            throw new BusinessException("Mật khẩu quản trị phải chứa ít nhất một chữ viết thường.");
+        if (!password.Any(char.IsDigit))
+            throw new BusinessException("Mật khẩu quản trị phải chứa ít nhất một chữ số.");
+        if (password.All(char.IsLetterOrDigit))
+            throw new BusinessException("Mật khẩu quản trị phải chứa ít nhất một ký tự đặc biệt.");
+    }
+
+    private static string GenerateStrongPassword()
+    {
+        const string upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+        const string lower = "abcdefghijkmnopqrstuvwxyz";
+        const string digits = "23456789";
+        const string special = "!@#$%^&*-_=+?";
+        const string all = upper + lower + digits + special;
+
+        var chars = new List<char>
+        {
+            upper[System.Security.Cryptography.RandomNumberGenerator.GetInt32(upper.Length)],
+            lower[System.Security.Cryptography.RandomNumberGenerator.GetInt32(lower.Length)],
+            digits[System.Security.Cryptography.RandomNumberGenerator.GetInt32(digits.Length)],
+            special[System.Security.Cryptography.RandomNumberGenerator.GetInt32(special.Length)]
+        };
+        while (chars.Count < 20)
+        {
+            chars.Add(all[System.Security.Cryptography.RandomNumberGenerator.GetInt32(all.Length)]);
+        }
+        return new string(chars.OrderBy(_ => System.Security.Cryptography.RandomNumberGenerator.GetInt32(int.MaxValue)).ToArray());
+    }
+
     private async Task<Role> ResolveAdminRoleAsync(int? roleId, string? roleCode, CancellationToken ct)
     {
         if (roleId.HasValue && roleId.Value > 0)
         {
-            var roleById = await _dbContext.Roles.FirstOrDefaultAsync(r => r.Id == roleId.Value, ct);
-            if (roleById != null) return roleById;
+            // Id vai trò được chỉ định rõ nhưng không tồn tại thì báo lỗi, không lặng lẽ gán vai trò khác
+            return await _dbContext.Roles.FirstOrDefaultAsync(r => r.Id == roleId.Value, ct)
+                ?? throw new BusinessException($"Không tìm thấy vai trò #{roleId.Value} để gán cho thành viên.");
         }
 
         if (!string.IsNullOrWhiteSpace(roleCode))

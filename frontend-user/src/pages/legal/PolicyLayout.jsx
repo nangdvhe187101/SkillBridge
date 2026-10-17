@@ -65,7 +65,7 @@ export default function PolicyLayout({ title, breadcrumbTitle, introText, sectio
         </div>
 
         {/* 4. Two-Column Grid (CellphoneS Style: Left Sidebar + Right Content) */}
-        <div style={{
+        <div className="policy-grid" style={{
           display: 'grid',
           gridTemplateColumns: '290px 1fr',
           gap: 24,
@@ -73,7 +73,7 @@ export default function PolicyLayout({ title, breadcrumbTitle, introText, sectio
         }}>
 
           {/* Left Column: Sidebar Tabs */}
-          <div style={{ position: 'sticky', top: 80, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="policy-sidebar" style={{ position: 'sticky', top: 80, display: 'flex', flexDirection: 'column', gap: 16 }}>
             {/* Sections List */}
             <div style={{
               background: '#ffffff',

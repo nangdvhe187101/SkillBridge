@@ -6572,3 +6572,13 @@ table.adm-table {
   user-select: none;
   white-space: nowrap;
 }
+/* Trang chính sách: lưới 2 cột (mục lục + nội dung) gập thành 1 cột trên điện thoại */
+@media (max-width: 860px) {
+  .policy-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  .policy-sidebar {
+    position: static !important;
+  }
+}

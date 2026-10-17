@@ -668,7 +668,15 @@ export default function AdminUsers({ onViewDetail }) {
             </div>
             <button
               className="cf-btn-secondary"
-              onClick={() => { setQ(''); setRoleF('all'); setStatusF('all'); }}
+              onClick={() => {
+                setQ('');
+                setRoleF('all');
+                setStatusF('all');
+                setTimeRange('all');
+                setCvStatus('all');
+                setVerificationStatus('all');
+                setCurrentPage(1);
+              }}
             >
               Reset filters
             </button>
@@ -738,6 +746,24 @@ export default function AdminUsers({ onViewDetail }) {
                       <span style={{ fontSize: 13, color: '#374151', fontWeight: 500 }}>
                         {u.role === 'student' ? 'Sinh viên' : u.role === 'employer' ? 'Nhà tuyển dụng' : 'Quản trị viên'}
                       </span>
+                      {u.role === 'student' && (
+                        <div style={{ marginTop: 4 }}>
+                          <span
+                            title={u.hasCv ? `${u.cvCount} file CV đã tải lên` : 'Sinh viên chưa tải CV'}
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 600,
+                              padding: '1px 7px',
+                              borderRadius: 10,
+                              background: u.hasCv ? '#ecfdf5' : '#f3f4f6',
+                              color: u.hasCv ? '#059669' : '#6b7280',
+                              border: u.hasCv ? '1px solid #a7f3d0' : '1px solid #e5e7eb',
+                            }}
+                          >
+                            {u.hasCv ? `${u.cvCount} CV` : 'Chưa có CV'}
+                          </span>
+                        </div>
+                      )}
                     </td>
 
                     {/* Ngày đăng ký */}

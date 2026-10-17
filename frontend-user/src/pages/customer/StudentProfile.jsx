@@ -9,6 +9,8 @@ import { useToast } from '../../context/ToastContext';
 import { talentApi } from '../../api/talentApi';
 import { getMyJobs } from '../../api/jobApi';
 import { getPublicStudentProfile, uploadAvatar, uploadCover } from '../../api/userApi';
+import { getStudentCvFiles } from '../../api/cvApi';
+import { downloadCandidateCv, viewCandidateCv } from '../../utils/fileDownloader';
 import { slugify } from '../../data/companies';
 
 function tierFromScore(score) {
@@ -16,6 +18,12 @@ function tierFromScore(score) {
   if (score >= 85) return 'silver';
   return 'bronze';
 }
+function formatBytes(bytes) {
+  if (!bytes) return '';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 const TIER_LABEL = { gold: 'Gold Tier', silver: 'Silver Tier', bronze: 'Bronze Tier' };
 
 export default function StudentProfile() {
@@ -26,7 +34,7 @@ export default function StudentProfile() {
   const avatarInputRef = useRef();
   const coverInputRef = useRef();
 
-  const [tab, setTab] = useState('overview'); // 'overview' | 'experience' | 'portfolio' | 'reviews'
+  const [tab, setTab] = useState('overview'); // 'overview' | 'experience' | 'portfolio' | 'cv' | 'reviews'
   const [selectedPf, setSelectedPf] = useState(null);
   const [loading, setLoading] = useState(true);
   const [apiStudent, setApiStudent] = useState(null);
@@ -48,6 +56,13 @@ export default function StudentProfile() {
     displaySlug === slug ||
     userSlug.replace(/-\d+$/, '') === String(slug).replace(/-\d+$/, '')
   ));
+  const viewerRole = (currentUser?.roleCode || currentUser?.role || '').toLowerCase();
+  const isEmployerViewer = !isSelf && viewerRole === 'employer';
+
+  // CV công khai của sinh viên (chỉ tải khi người xem là nhà tuyển dụng)
+  const [cvFiles, setCvFiles] = useState([]);
+  const [cvLoading, setCvLoading] = useState(false);
+  const [cvBusyId, setCvBusyId] = useState(null);
 
   const onAvatarChange = async (e) => {
     const f = e.target.files?.[0];
@@ -117,6 +132,34 @@ export default function StudentProfile() {
     return () => { isMounted = false; };
   }, [slug, isSelf, currentUser?.id]);
 
+  useEffect(() => {
+    if (!isEmployerViewer || !/^\d+$/.test(slug)) {
+      setCvFiles([]);
+      return undefined;
+    }
+    let isMounted = true;
+    setCvLoading(true);
+    getStudentCvFiles(parseInt(slug, 10))
+      .then((data) => { if (isMounted) setCvFiles(Array.isArray(data) ? data : (data?.data || [])); })
+      .catch(() => { if (isMounted) setCvFiles([]); })
+      .finally(() => { if (isMounted) setCvLoading(false); });
+    return () => { isMounted = false; };
+  }, [slug, isEmployerViewer]);
+
+  const handleCvFile = async (cv, mode) => {
+    setCvBusyId(cv.id);
+    try {
+      if (mode === 'view') {
+        const ok = await viewCandidateCv(cv.id);
+        if (!ok) showToast('Không thể mở CV. Vui lòng thử tải về.', 'error');
+      } else {
+        await downloadCandidateCv(cv.id, cv.fileName);
+      }
+    } finally {
+      setCvBusyId(null);
+    }
+  };
+
   // Hợp nhất dữ liệu: API thật > currentUser (nếu isSelf) > Fallback
   const student = useMemo(() => {
     const currentAvatar = (isSelf && (currentUser?.avatarUrl || currentUser?.avatar)) || apiStudent?.avatarUrl || apiStudent?.avatar || null;
@@ -126,7 +169,7 @@ export default function StudentProfile() {
       return {
         id: apiStudent.id,
         name: (isSelf && (currentUser?.fullName || state?.displayName)) || apiStudent.fullName,
-        headline: apiStudent.headline || 'Sinh viên tài năng · SkillBridge Freelancer',
+        headline: apiStudent.headline || null,
         school: apiStudent.school || 'Đang cập nhật trường',
         industry: apiStudent.industry || 'Lập trình & Thiết kế',
         email: apiStudent.email,
@@ -154,7 +197,7 @@ export default function StudentProfile() {
       return {
         id: currentUser.id,
         name: currentUser.fullName || state?.displayName || 'Sinh viên SkillBridge',
-        headline: currentUser.headline || 'Sinh viên tài năng · SkillBridge Freelancer',
+        headline: currentUser.headline || null,
         school: currentUser.school || 'Đại học FPT',
         industry: currentUser.industry || 'Lập trình web',
         email: currentUser.email,
@@ -184,7 +227,7 @@ export default function StudentProfile() {
     return {
       id: /^\d+$/.test(slug) ? parseInt(slug, 10) : 0,
       name: formattedName,
-      headline: 'Ứng viên tiềm năng trên SkillBridge',
+      headline: null,
       school: 'Đại học đối tác SkillBridge',
       industry: 'Chuyên môn ứng dụng',
       email: null,
@@ -211,6 +254,7 @@ export default function StudentProfile() {
   const skillsList = student.skills || [];
   const portfoliosList = student.portfolios || [];
   const reviewsList = student.reviews || [];
+  const hasSocialLinks = Boolean(student.socialLinks?.github || student.socialLinks?.linkedin || student.socialLinks?.behance);
 
   const [portfolioPage, setPortfolioPage] = useState(1);
   const [portfolioPageSize, setPortfolioPageSize] = useState(6);
@@ -452,9 +496,11 @@ export default function StudentProfile() {
                 )}
               </div>
 
-              <div style={{ fontSize: 14.5, color: '#4f46e5', fontWeight: 600, marginTop: 4 }}>
-                {student.headline}
-              </div>
+              {(student.headline || student.industry) && (
+                <div style={{ fontSize: 14.5, color: '#4f46e5', fontWeight: 600, marginTop: 4 }}>
+                  {student.headline || `${student.industry} · ${student.school}`}
+                </div>
+              )}
 
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, marginTop: 10, fontSize: 13, color: 'var(--ink-soft, #64748b)' }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
@@ -513,6 +559,18 @@ export default function StudentProfile() {
                 </button>
               )}
 
+              {isEmployerViewer && cvFiles.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-outline btn-sm"
+                  onClick={() => setTab('cv')}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <Icon name="file-text" width="14" height="14" />
+                  <span>Xem CV ({cvFiles.length})</span>
+                </button>
+              )}
+
               {isSelf ? (
                 <button
                   type="button"
@@ -564,15 +622,25 @@ export default function StudentProfile() {
                 <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--ink-soft)' }}>({student.totalReviews} đánh giá)</span>
               </div>
             </div>
-            <div style={{ padding: '12px 16px', background: 'var(--bg-subtle, #f8fafc)', borderRadius: 10 }}>
-              <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Tác phẩm Portfolio</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#0284c7', marginTop: 2 }}>{portfoliosList.length} dự án</div>
-            </div>
+            {portfoliosList.length > 0 ? (
+              <div style={{ padding: '12px 16px', background: 'var(--bg-subtle, #f8fafc)', borderRadius: 10 }}>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Tác phẩm Portfolio</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#0284c7', marginTop: 2 }}>{portfoliosList.length} dự án</div>
+              </div>
+            ) : (
+              <div style={{ padding: '12px 16px', background: 'var(--bg-subtle, #f8fafc)', borderRadius: 10 }}>
+                <div style={{ fontSize: 12, color: 'var(--ink-soft)' }}>Trạng thái hồ sơ</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: student.isKycVerified ? '#16a34a' : '#64748b', marginTop: 2, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Icon name={student.isKycVerified ? 'shield-check' : 'clock'} width="16" height="16" />
+                  <span>{student.isKycVerified ? 'Đã xác thực' : 'Đang hoạt động'}</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Navigation Tabs */}
-        <div style={{ display: 'flex', gap: 10, marginTop: 24, borderBottom: '1px solid var(--line, #e2e8f0)', paddingBottom: 10 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 24, borderBottom: '1px solid var(--line, #e2e8f0)', paddingBottom: 10 }}>
           <button
             type="button"
             className={'btn btn-sm ' + (tab === 'overview' ? 'btn-primary' : 'btn-outline')}
@@ -600,6 +668,19 @@ export default function StudentProfile() {
               {portfoliosList.length}
             </span>
           </button>
+          {isEmployerViewer && (
+            <button
+              type="button"
+              className={'btn btn-sm ' + (tab === 'cv' ? 'btn-primary' : 'btn-outline')}
+              onClick={() => setTab('cv')}
+              style={{ borderRadius: 20, display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            >
+              <span>CV ứng viên</span>
+              <span style={{ background: tab === 'cv' ? 'rgba(255,255,255,0.25)' : '#e2e8f0', color: tab === 'cv' ? '#fff' : '#475569', padding: '1px 7px', borderRadius: 10, fontSize: 11 }}>
+                {cvFiles.length}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             className={'btn btn-sm ' + (tab === 'reviews' ? 'btn-primary' : 'btn-outline')}
@@ -612,7 +693,7 @@ export default function StudentProfile() {
 
         {/* Tab 1: Overview */}
         {tab === 'overview' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20, marginTop: 20 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: hasSocialLinks ? 'repeat(auto-fit, minmax(320px, 1fr))' : '1fr', gap: 20, marginTop: 20 }}>
             <div style={{ background: 'var(--bg-card, #fff)', borderRadius: 14, padding: 24, border: '1px solid var(--line, #e2e8f0)' }}>
               <h3 style={{ margin: '0 0 14px', fontSize: 17, fontWeight: 700 }}>Giới thiệu bản thân</h3>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, color: 'var(--ink, #1e293b)', whiteSpace: 'pre-line' }}>
@@ -628,36 +709,63 @@ export default function StudentProfile() {
                   </span>
                 ))}
               </div>
+
+              {isEmployerViewer && (
+                <>
+                  <h4 style={{ margin: '24px 0 12px', fontSize: 15, fontWeight: 600 }}>CV của ứng viên</h4>
+                  {cvLoading ? (
+                    <div style={{ color: 'var(--ink-soft)', fontSize: 13 }}>Đang tải danh sách CV…</div>
+                  ) : cvFiles.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {cvFiles.map((cv) => (
+                        <div key={cv.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: 12, borderRadius: 10, border: '1px solid var(--line, #e2e8f0)' }}>
+                          <Icon name="file-text" width="18" height="18" />
+                          <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+                            <b style={{ fontSize: 13.5, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cv.label || cv.fileName}</b>
+                          </div>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            {cv.fileName?.toLowerCase().endsWith('.pdf') && (
+                              <button type="button" className="btn btn-sm btn-outline" disabled={cvBusyId === cv.id} onClick={() => handleCvFile(cv, 'view')}>Xem</button>
+                            )}
+                            <button type="button" className="btn btn-sm btn-primary" disabled={cvBusyId === cv.id} onClick={() => handleCvFile(cv, 'download')}>Tải về</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ color: 'var(--ink-soft)', fontStyle: 'italic', fontSize: 13 }}>
+                      Ứng viên chưa có CV công khai cho nhà tuyển dụng.
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
-            <div style={{ background: 'var(--bg-card, #fff)', borderRadius: 14, padding: 24, border: '1px solid var(--line, #e2e8f0)' }}>
-              <h3 style={{ margin: '0 0 14px', fontSize: 17, fontWeight: 700 }}>Liên kết & Mạng xã hội</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13.5 }}>
-                {student.socialLinks?.github && (
-                  <a href={student.socialLinks.github} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#334155', textDecoration: 'none' }}>
-                    <Icon name="link" width="15" height="15" />
-                    <span>GitHub: {student.socialLinks.github.replace('https://github.com/', '')}</span>
-                  </a>
-                )}
-                {student.socialLinks?.linkedin && (
-                  <a href={student.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#0284c7', textDecoration: 'none' }}>
-                    <Icon name="link" width="15" height="15" />
-                    <span>LinkedIn Profile</span>
-                  </a>
-                )}
-                {student.socialLinks?.behance && (
-                  <a href={student.socialLinks.behance} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#4f46e5', textDecoration: 'none' }}>
-                    <Icon name="link" width="15" height="15" />
-                    <span>Behance / Dribbble Portfolio</span>
-                  </a>
-                )}
-                {(!student.socialLinks?.github && !student.socialLinks?.linkedin && !student.socialLinks?.behance) && (
-                  <div style={{ color: 'var(--ink-soft)', fontStyle: 'italic', fontSize: 13 }}>
-                    Chưa liên kết mạng xã hội công khai.
-                  </div>
-                )}
+            {hasSocialLinks && (
+              <div style={{ background: 'var(--bg-card, #fff)', borderRadius: 14, padding: 24, border: '1px solid var(--line, #e2e8f0)' }}>
+                <h3 style={{ margin: '0 0 14px', fontSize: 17, fontWeight: 700 }}>Liên kết & Mạng xã hội</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13.5 }}>
+                  {student.socialLinks?.github && (
+                    <a href={student.socialLinks.github} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#334155', textDecoration: 'none' }}>
+                      <Icon name="link" width="15" height="15" />
+                      <span>GitHub: {student.socialLinks.github.replace('https://github.com/', '')}</span>
+                    </a>
+                  )}
+                  {student.socialLinks?.linkedin && (
+                    <a href={student.socialLinks.linkedin} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#0284c7', textDecoration: 'none' }}>
+                      <Icon name="link" width="15" height="15" />
+                      <span>LinkedIn Profile</span>
+                    </a>
+                  )}
+                  {student.socialLinks?.behance && (
+                    <a href={student.socialLinks.behance} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#4f46e5', textDecoration: 'none' }}>
+                      <Icon name="link" width="15" height="15" />
+                      <span>Behance / Dribbble Portfolio</span>
+                    </a>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
@@ -786,6 +894,46 @@ export default function StudentProfile() {
                 <Icon name="folder" width="36" height="36" style={{ color: 'var(--ink-soft)', margin: '0 auto 12px' }} />
                 <h4 style={{ margin: 0, fontSize: 16 }}>Chưa có tác phẩm nào trong Portfolio</h4>
                 <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-soft)' }}>Tác phẩm tải lên sẽ xuất hiện tại đây để chứng minh năng lực thực tế.</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab CV: chỉ hiển thị cho nhà tuyển dụng */}
+        {tab === 'cv' && isEmployerViewer && (
+          <div style={{ marginTop: 20, background: 'var(--bg-card, #fff)', borderRadius: 14, padding: 24, border: '1px solid var(--line, #e2e8f0)' }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 17, fontWeight: 700 }}>CV của ứng viên</h3>
+            {cvLoading ? (
+              <div style={{ color: 'var(--ink-soft)', fontSize: 13 }}>Đang tải danh sách CV…</div>
+            ) : cvFiles.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {cvFiles.map((cv) => (
+                  <div key={cv.id} style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', padding: 14, borderRadius: 12, border: '1px solid var(--line, #e2e8f0)' }}>
+                    <Icon name="file-text" width="22" height="22" />
+                    <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+                      <b style={{ fontSize: 14, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cv.label || cv.fileName}</b>
+                      <div style={{ fontSize: 12, color: 'var(--ink-soft)', display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                        {cv.categoryName && <span className="chip chip-lime" style={{ fontSize: 10, padding: '1px 6px' }}>{cv.categoryName}</span>}
+                        <span>{cv.fileName}</span>
+                        {cv.fileSize > 0 && <span>• {formatBytes(cv.fileSize)}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      {cv.fileName?.toLowerCase().endsWith('.pdf') && (
+                        <button type="button" className="btn btn-sm btn-outline" disabled={cvBusyId === cv.id} onClick={() => handleCvFile(cv, 'view')}>
+                          Xem
+                        </button>
+                      )}
+                      <button type="button" className="btn btn-sm btn-primary" disabled={cvBusyId === cv.id} onClick={() => handleCvFile(cv, 'download')}>
+                        Tải về
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ color: 'var(--ink-soft)', fontStyle: 'italic', fontSize: 13 }}>
+                Ứng viên chưa có CV công khai cho nhà tuyển dụng.
               </div>
             )}
           </div>

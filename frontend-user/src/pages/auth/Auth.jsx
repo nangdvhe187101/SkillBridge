@@ -47,7 +47,11 @@ export default function Auth({ forcedTab }) {
       <div className="auth-shell">
         <div className="auth-side">
           <img
-            src="/auth-3d-hero.jpg"
+            src="/auth-hero-opt.jpg"
+            width="896"
+            height="1200"
+            decoding="async"
+            fetchPriority="high"
             alt="SkillBridge - Nền tảng Micro-job cho sinh viên"
             className="auth-hero-img"
           />

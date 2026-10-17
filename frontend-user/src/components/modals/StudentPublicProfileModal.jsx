@@ -3,11 +3,38 @@ import ModalShell from './ModalShell';
 import Icon from '../Icon';
 import UserTierBadge from '../common/UserTierBadge';
 import { getPublicStudentProfile } from '../../api/userApi';
+import { getStudentCvFiles } from '../../api/cvApi';
+import { downloadCandidateCv, viewCandidateCv } from '../../utils/fileDownloader';
 
 export default function StudentPublicProfileModal({ isOpen, onClose, studentId, onReport }) {
     const [loading, setLoading] = useState(false);
     const [profile, setProfile] = useState(null);
     const [error, setError] = useState('');
+    const [cvFiles, setCvFiles] = useState([]);
+    const [cvBusyId, setCvBusyId] = useState(null);
+
+    // CV công khai của sinh viên (API chỉ cho phép tài khoản nhà tuyển dụng)
+    useEffect(() => {
+        if (!isOpen || !studentId) {
+            setCvFiles([]);
+            return undefined;
+        }
+        let isMounted = true;
+        getStudentCvFiles(studentId)
+            .then((data) => { if (isMounted) setCvFiles(Array.isArray(data) ? data : (data?.data || [])); })
+            .catch(() => { if (isMounted) setCvFiles([]); });
+        return () => { isMounted = false; };
+    }, [isOpen, studentId]);
+
+    const handleCvFile = async (cv, mode) => {
+        setCvBusyId(cv.id);
+        try {
+            if (mode === 'view') await viewCandidateCv(cv.id);
+            else await downloadCandidateCv(cv.id, cv.fileName);
+        } finally {
+            setCvBusyId(null);
+        }
+    };
 
     useEffect(() => {
         if (!isOpen || !studentId) {
@@ -271,6 +298,36 @@ export default function StudentPublicProfileModal({ isOpen, onClose, studentId, 
                                 </div>
                             </div>
                         )}
+
+                        {/* CV công khai */}
+                        <div style={{ marginBottom: '1.25rem' }}>
+                            <h4 style={{ fontSize: '0.95rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--text-color, #1e293b)' }}>
+                                CV của ứng viên ({cvFiles.length})
+                            </h4>
+                            {cvFiles.length === 0 ? (
+                                <p style={{ fontSize: '0.875rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                                    Ứng viên chưa có CV công khai cho nhà tuyển dụng.
+                                </p>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                                    {cvFiles.map((cv) => (
+                                        <div key={cv.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', padding: '0.75rem 1rem', borderRadius: '8px', border: '1px solid var(--border-color, #e2e8f0)' }}>
+                                            <Icon name="file-text" width="20" height="20" />
+                                            <div style={{ flex: '1 1 180px', minWidth: 0 }}>
+                                                <b style={{ fontSize: '0.875rem', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cv.label || cv.fileName}</b>
+                                                <span style={{ fontSize: '0.75rem', color: '#64748b' }}>{cv.categoryName ? `${cv.categoryName} · ` : ''}{cv.fileName}</span>
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '0.5rem' }}>
+                                                {cv.fileName?.toLowerCase().endsWith('.pdf') && (
+                                                    <button type="button" className="btn btn-sm btn-outline" disabled={cvBusyId === cv.id} onClick={() => handleCvFile(cv, 'view')}>Xem</button>
+                                                )}
+                                                <button type="button" className="btn btn-sm btn-primary" disabled={cvBusyId === cv.id} onClick={() => handleCvFile(cv, 'download')}>Tải về</button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
                         {/* Reviews list */}
                         <div>

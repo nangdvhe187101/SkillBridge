@@ -1043,6 +1043,10 @@ export function StoreProvider({ children }) {
   const { showToast } = useToast();
   const showToastRef = useRef(showToast);
   const stateRef = useRef(state);
+  // Dùng id + role làm khóa ổn định: UPDATE_PROFILE tạo object currentUser mới,
+  // nếu phụ thuộc vào cả object thì SignalR bị ngắt/kết nối lại và toàn bộ API bị gọi lại
+  const currentUserId = state.currentUser?.id ?? null;
+  const currentRole = state.currentUser?.roleCode ?? null;
 
   useEffect(() => {
     showToastRef.current = showToast;
@@ -1153,10 +1157,8 @@ export function StoreProvider({ children }) {
             dispatch({ type: 'UPDATE_PROFILE', patch: profile });
           }
           if (isMounted) {
-            await refreshWallet();
-            await refreshDisputes();
-            await refreshNotifications();
-            await refreshMyApplications();
+            // Các nguồn dữ liệu độc lập nhau nên tải song song thay vì tuần tự
+            await Promise.allSettled([refreshWallet(), refreshDisputes()]);
           }
         } catch (e) {
           console.warn('Không thể tải hồ sơ hoặc ví chi tiết khi khởi động:', e);
@@ -1369,7 +1371,7 @@ export function StoreProvider({ children }) {
 
   // Kết nối và lắng nghe SignalR Chat realtime
   useEffect(() => {
-    if (state.isInitializing || !state.currentUser) {
+    if (state.isInitializing || !currentUserId) {
       return;
     }
 
@@ -1390,7 +1392,7 @@ export function StoreProvider({ children }) {
         triggerRefreshConversations();
       },
       onConversationRead: ({ conversationId, readerUserId }) => {
-        const myId = state.currentUser?.id;
+        const myId = currentUserId;
         if (myId && String(readerUserId) === String(myId)) {
           // Đồng bộ nhiều thiết bị của chính mình: đặt unread = 0
           dispatch({ type: 'CONVERSATION_READ_SYNC', payload: { conversationId } });
@@ -1432,12 +1434,12 @@ export function StoreProvider({ children }) {
       realtimeRef.current = null;
       realtime.stop();
     };
-  }, [state.currentUser, state.isInitializing, refreshConversations, triggerRefreshConversations]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentUserId, state.isInitializing, refreshConversations, triggerRefreshConversations]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Polling đồng bộ thông báo thời gian thực mỗi 8s khi người dùng đăng nhập và tab đang mở
   const prevUnreadCountRef = useRef(0);
   useEffect(() => {
-    if (!state.currentUser) return;
+    if (state.isInitializing || !currentUserId) return;
     refreshNotifications();
     const interval = setInterval(async () => {
       if (document.visibilityState === 'visible') {
@@ -1453,7 +1455,7 @@ export function StoreProvider({ children }) {
       }
     }, 8000);
     return () => clearInterval(interval);
-  }, [state.currentUser, refreshNotifications, showToast]);
+  }, [currentUserId, state.isInitializing, refreshNotifications, showToast]);
 
   // Tải danh mục và danh sách công việc công khai (không cần đăng nhập)
   useEffect(() => {
@@ -1471,20 +1473,18 @@ export function StoreProvider({ children }) {
   // Tải dữ liệu cá nhân theo role sau khi quá trình xác thực khởi tạo (refresh token) hoàn tất
   useEffect(() => {
     // Tránh race condition: nếu đang refresh-token khởi động hoặc chưa đăng nhập thì không tải API auth
-    if (state.isInitializing || !state.currentUser) {
+    if (state.isInitializing || !currentUserId) {
       return;
     }
 
-    // Tải thông báo thực tế của người dùng từ backend
-    refreshNotifications();
-
+    // Thông báo đã được tải bởi effect polling phía trên
     // Nếu là employer, tải danh sách myJobs từ backend
-    if (state.currentUser.roleCode === 'employer') {
+    if (currentRole === 'employer') {
       refreshMyJobs();
     }
 
     // Nếu là student đã đăng nhập, tải savedJobIds, cvFiles, myApplications từ API
-    if (state.currentUser.roleCode === 'student') {
+    if (currentRole === 'student') {
       jobApi.getSavedJobIds()
         .then((ids) => {
           dispatch({ type: 'SET_SAVED_JOB_IDS', ids });
@@ -1510,7 +1510,7 @@ export function StoreProvider({ children }) {
 
       refreshMyApplications();
     }
-  }, [state.currentUser, state.isInitializing, refreshMyJobs, refreshMyApplications, refreshNotifications]);
+  }, [currentUserId, currentRole, state.isInitializing, refreshMyJobs, refreshMyApplications]);
 
   useEffect(() => {
     const checkDeadlines = () => {
@@ -1562,12 +1562,7 @@ export function StoreProvider({ children }) {
 
     checkDeadlines();
 
-    const id = setInterval(() => {
-      checkDeadlines();
-      if (stateRef.current?.currentUser) {
-        refreshNotifications();
-      }
-    }, 30000);
+    const id = setInterval(checkDeadlines, 30000);
 
     const onTokenRefreshed = (e) => {
       if (e.detail?.token) {
@@ -1580,7 +1575,7 @@ export function StoreProvider({ children }) {
       clearInterval(id);
       window.removeEventListener('auth:token_refreshed', onTokenRefreshed);
     };
-  }, [refreshNotifications]);
+  }, []);
 
   const actions = useMemo(() => {
     const act = {

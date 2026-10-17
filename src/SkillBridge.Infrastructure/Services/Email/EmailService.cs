@@ -448,6 +448,24 @@ namespace SkillBridge.Infrastructure.Services.Email
             await SendSafeAsync(message);
         }
 
+        public async Task SendEmailAsync(string toEmail, string subject, string htmlBody, System.Threading.CancellationToken ct = default)
+        {
+            var fromEmail = config["Smtp:From"] ?? config["Resend:From"] ?? "noreply@skillbridge.id.vn";
+            var message = new MimeMessage();
+            message.From.Add(new MailboxAddress("SkillBridge", fromEmail));
+            message.To.Add(new MailboxAddress(toEmail, toEmail));
+            message.Subject = subject;
+
+            var bodyBuilder = new BodyBuilder
+            {
+                HtmlBody = htmlBody,
+                TextBody = htmlBody
+            };
+            message.Body = bodyBuilder.ToMessageBody();
+
+            await SendSafeAsync(message);
+        }
+
         private Task<bool> IsEmailEnabledAsync(string toggleKey)
         {
             var host = config["Smtp:Host"];

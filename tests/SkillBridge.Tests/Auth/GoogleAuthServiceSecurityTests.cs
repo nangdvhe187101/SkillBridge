@@ -46,7 +46,7 @@ public class GoogleAuthServiceSecurityTests
     }
 
     [Fact]
-    public async Task GoogleLoginAsync_WhenRoleCodeIsAdmin_ShouldThrowInvalidOperationException()
+    public async Task GoogleLoginAsync_WhenRoleCodeIsAdmin_ShouldThrowBusinessException()
     {
         // Arrange
         SetupMocks();
@@ -78,13 +78,13 @@ public class GoogleAuthServiceSecurityTests
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => service.GoogleLoginAsync(dto));
-        Assert.Contains("Invalid role code", ex.Message);
+        var ex = await Assert.ThrowsAsync<SkillBridge.Application.Common.BusinessException>(() => service.GoogleLoginAsync(dto));
+        Assert.Contains("không hợp lệ", ex.Message);
         Assert.Contains("admin", ex.Message);
     }
 
     [Fact]
-    public async Task GoogleLoginAsync_WhenRoleCodeIsSuperAdmin_ShouldThrowInvalidOperationException()
+    public async Task GoogleLoginAsync_WhenRoleCodeIsSuperAdmin_ShouldThrowBusinessException()
     {
         // Arrange
         SetupMocks();
@@ -113,12 +113,12 @@ public class GoogleAuthServiceSecurityTests
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => service.GoogleLoginAsync(dto));
-        Assert.Contains("Invalid role code", ex.Message);
+        var ex = await Assert.ThrowsAsync<SkillBridge.Application.Common.BusinessException>(() => service.GoogleLoginAsync(dto));
+        Assert.Contains("không hợp lệ", ex.Message);
     }
 
     [Fact]
-    public async Task GoogleLoginAsync_WhenRoleCodeIsInvalidCustomRole_ShouldThrowInvalidOperationException()
+    public async Task GoogleLoginAsync_WhenRoleCodeIsInvalidCustomRole_ShouldThrowBusinessException()
     {
         // Arrange
         SetupMocks();
@@ -147,8 +147,8 @@ public class GoogleAuthServiceSecurityTests
         };
 
         // Act & Assert
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => service.GoogleLoginAsync(dto));
-        Assert.Contains("Invalid role code", ex.Message);
+        var ex = await Assert.ThrowsAsync<SkillBridge.Application.Common.BusinessException>(() => service.GoogleLoginAsync(dto));
+        Assert.Contains("không hợp lệ", ex.Message);
     }
 
     [Fact]

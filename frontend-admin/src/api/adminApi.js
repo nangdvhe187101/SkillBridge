@@ -1,4 +1,4 @@
-import { apiFetch } from './authApi';
+import { apiFetch, apiFetchBlob } from './authApi';
 
 // System Settings APIs
 export async function getSystemSettings() {
@@ -54,6 +54,26 @@ export async function getAdminFinanceSummary() {
 
 export async function getAdminAnalyticsOverview() {
   return apiFetch('/admin/analytics/overview', { method: 'GET' });
+}
+
+// Quản lý giao dịch: toàn bộ bảng transactions (nạp tiền, rút tiền, hoa hồng, phí gói, quảng cáo...)
+export async function getAdminTransactions(params = {}) {
+  const query = new URLSearchParams();
+  if (params.type) query.set('type', params.type);
+  if (params.userId) query.set('userId', params.userId);
+  if (params.fromDate) query.set('fromDate', params.fromDate);
+  if (params.toDate) query.set('toDate', params.toDate);
+  if (params.keyword) query.set('keyword', params.keyword);
+  query.set('page', params.page || 1);
+  query.set('pageSize', params.pageSize || 20);
+  return apiFetch(`/admin/transactions?${query.toString()}`, { method: 'GET' });
+}
+
+export async function getAdminTransactionsSummary(params = {}) {
+  const query = new URLSearchParams();
+  if (params.fromDate) query.set('fromDate', params.fromDate);
+  if (params.toDate) query.set('toDate', params.toDate);
+  return apiFetch(`/admin/transactions/summary?${query.toString()}`, { method: 'GET' });
 }
 
 export async function getAdminWithdrawals(status = 'pending', page = 1, pageSize = 20) {
@@ -149,6 +169,10 @@ export async function getAdminUserDetail(userId) {
   return apiFetch(`/admin/users/${userId}`, { method: 'GET' });
 }
 
+export async function downloadAdminUserCv(userId, cvId) {
+  return apiFetchBlob(`/admin/users/${userId}/cvs/${cvId}/download`);
+}
+
 export async function toggleLockUser(userId, reason = '') {
   return apiFetch(`/admin/users/${userId}/lock`, {
     method: 'POST',
@@ -187,8 +211,36 @@ export async function getPendingStudentVerifications() {
   return apiFetch('/admin/student-verifications/pending', { method: 'GET' });
 }
 
+// Hồ sơ xác minh thẻ sinh viên gần nhất của 1 user (null nếu chưa từng gửi yêu cầu)
+export async function getStudentVerificationByUser(userId) {
+  return apiFetch(`/admin/student-verifications/user/${userId}`, { method: 'GET' });
+}
+
 export async function getAdminSchools() {
   return apiFetch('/admin/student-verifications/schools', { method: 'GET' });
+}
+
+// Quản lý danh sách trường đại học/cao đẳng (CRUD) cho Admin
+export async function getAdminSchoolsList() {
+  return apiFetch('/admin/schools', { method: 'GET' });
+}
+
+export async function createAdminSchool(data) {
+  return apiFetch('/admin/schools', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateAdminSchool(id, data) {
+  return apiFetch(`/admin/schools/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteAdminSchool(id) {
+  return apiFetch(`/admin/schools/${id}`, { method: 'DELETE' });
 }
 
 export async function reviewStudentVerification(id, dto) {

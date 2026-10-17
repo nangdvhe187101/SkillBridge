@@ -31,6 +31,15 @@ public class CvController : ControllerBase
         return Ok(list);
     }
 
+    [HttpGet("student/{studentId:int}")]
+    [Authorize(Policy = "RequireEmployerRole")]
+    [EnableRateLimiting("GeneralApiPolicy")]
+    public async Task<IActionResult> GetStudentSearchableCvFiles(int studentId)
+    {
+        var list = await _cvService.GetSearchableCvFilesAsync(studentId);
+        return Ok(list);
+    }
+
     [HttpPost]
     [Authorize(Policy = "RequireStudentRole")]
     [EnableRateLimiting("UploadPolicy")]
@@ -94,7 +103,7 @@ public class CvController : ControllerBase
     public async Task<IActionResult> DownloadCv(int id)
     {
         var userId = User.GetRequiredUserId();
-        var (stream, contentType, fileName) = await _cvService.GetCvFileStreamAsync(userId, id);
+        var (stream, contentType, fileName) = await _cvService.GetCvFileStreamAsync(userId, id, User.IsInRole("employer"));
         return File(stream, contentType, fileName);
     }
 }

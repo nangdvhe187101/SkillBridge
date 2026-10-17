@@ -21,6 +21,11 @@ public class SystemSettingsResponseDto
     public bool EmailPayoutEnabled { get; set; } = true;
     public bool EmailDigest18hEnabled { get; set; } = true;
     public bool EmailVipMatchEnabled { get; set; } = true;
+    public bool EmailWithdrawalEnabled { get; set; } = true;
+    public bool EmailBankVerificationEnabled { get; set; } = true;
+    public bool EmailStudentVerificationEnabled { get; set; } = true;
+    public bool EmailDisputeEnabled { get; set; } = true;
+    public bool EmailTicketReplyEnabled { get; set; } = true;
 
     // CPC & Referral Settings
     public int CpcClickPrice { get; set; } = 2500;
@@ -55,6 +60,11 @@ public class UpdateSystemSettingsRequest
     public bool? EmailPayoutEnabled { get; set; }
     public bool? EmailDigest18hEnabled { get; set; }
     public bool? EmailVipMatchEnabled { get; set; }
+    public bool? EmailWithdrawalEnabled { get; set; }
+    public bool? EmailBankVerificationEnabled { get; set; }
+    public bool? EmailStudentVerificationEnabled { get; set; }
+    public bool? EmailDisputeEnabled { get; set; }
+    public bool? EmailTicketReplyEnabled { get; set; }
 
     // CPC & Referral Settings
     public int? CpcClickPrice { get; set; }

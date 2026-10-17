@@ -362,7 +362,7 @@ export default function AdminEmployerDetail({ userId, initialUser, onBack }) {
       </div>
 
       {/* 3. Bố cục 2 Cột: Cột Trái Thông tin Cơ sở, Cột Phải Tabs Chuyên sâu */}
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, alignItems: 'start' }}>
+      <div className="admin-detail-grid" style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, alignItems: 'start' }}>
 
         {/* CỘT TRÁI */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

@@ -6501,3 +6501,9 @@ table.adm-table {
 .cf-footer-links a:hover {
   color: #111827;
 }
+/* Trang chi tiết người dùng: 2 cột (thông tin + tabs) gập thành 1 cột trên màn hình hẹp */
+@media (max-width: 900px) {
+  .admin-detail-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

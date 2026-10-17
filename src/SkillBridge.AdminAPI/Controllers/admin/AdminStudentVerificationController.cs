@@ -46,6 +46,17 @@ namespace SkillBridge.AdminAPI.Controllers.admin
         }
 
         /// <summary>
+        /// Lấy hồ sơ xác minh thẻ sinh viên gần nhất của một user cụ thể (dùng cho trang Chi tiết sinh viên).
+        /// Trả về null nếu sinh viên chưa từng gửi yêu cầu xác minh nào.
+        /// </summary>
+        [HttpGet("user/{userId:int}")]
+        public async Task<IActionResult> GetByUser(int userId)
+        {
+            var result = await _studentVerificationService.GetLatestSubmittedVerificationAsync(userId);
+            return Ok(result);
+        }
+
+        /// <summary>
         /// Xét duyệt hồ sơ thẻ sinh viên (approve, need_more_info, reject)
         /// </summary>
         [HttpPost("{id}/review")]

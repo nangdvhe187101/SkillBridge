@@ -35,7 +35,7 @@ public class BankVerificationServiceTests
     private BankVerificationService CreateService(SkillBridgeDbContext dbContext, IConfiguration? config = null)
     {
         var keyProvider = new SkillBridge.Infrastructure.Services.Security.ConfigurationEncryptionKeyProvider(config ?? CreateTestConfig());
-        return new BankVerificationService(dbContext, _loggerMock.Object, keyProvider);
+        return new BankVerificationService(dbContext, _loggerMock.Object, keyProvider, new Mock<SkillBridge.Application.Interfaces.Admin.ISystemSettingService>().Object);
     }
 
     private SkillBridgeDbContext CreateInMemoryDbContext()
@@ -543,7 +543,7 @@ public class BankVerificationServiceTests
             Assert.Throws<InvalidOperationException>(() => keyProvider.GetKey());
 
             // 2. Khẳng định khởi tạo service thành công (lazy evaluation, không crash khi chưa dùng key)
-            var service = new BankVerificationService(dbContext, _loggerMock.Object, keyProvider);
+            var service = new BankVerificationService(dbContext, _loggerMock.Object, keyProvider, new Mock<SkillBridge.Application.Interfaces.Admin.ISystemSettingService>().Object);
             Assert.NotNull(service);
 
             // 3. Khẳng định hàm nghiệp vụ cần mã hóa (CreateRequestAsync) sẽ ném InvalidOperationException khi thiếu key

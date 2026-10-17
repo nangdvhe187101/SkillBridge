@@ -99,6 +99,24 @@ export async function apiFetch(path, options = {}) {
     return handleResponse(res);
 }
 
+// Tải file nhị phân (CV, tài liệu) có kèm token quản trị, trả về Blob thay vì JSON
+export async function apiFetchBlob(path) {
+    const accessToken = getAccessToken();
+    const res = await fetch(`${API_URL}${path}`, {
+        method: 'GET',
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    });
+
+    if (res.status === 401) {
+        handleAuthExpired();
+        throw new Error("Phiên đăng nhập quản trị đã hết hạn, vui lòng đăng nhập lại.");
+    }
+    if (!res.ok) {
+        await handleResponse(res);
+    }
+    return res.blob();
+}
+
 function handleAuthExpired() {
     clearAccessToken();
     localStorage.removeItem('admin_user');

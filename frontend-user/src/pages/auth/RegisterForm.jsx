@@ -250,12 +250,6 @@ export default function RegisterForm({ onSwitchTab }) {
                         value={regForm.password2}
                         onFocus={handleInputFocus}
                         onChange={(e) => updateField({ password2: e.target.value })}
-                        onPaste={(e) => {
-                            e.preventDefault();
-                            showToast('Vui lòng gõ lại mật khẩu để xác nhận (không sao chép).', 'info');
-                        }}
-                        onCopy={(e) => e.preventDefault()}
-                        onCut={(e) => e.preventDefault()}
                     />
                     <button
                         type="button"

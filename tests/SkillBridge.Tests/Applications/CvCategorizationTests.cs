@@ -334,4 +334,45 @@ public class CvCategorizationTests
         Assert.Contains("đang được sử dụng trong đơn ứng tuyển chờ duyệt", ex.Message);
         Assert.Contains("Lập trình viên React Native", ex.Message);
     }
+
+    [Fact]
+    public async Task GetCvFileStreamAsync_EmployerViewingSearchableCv_ShouldReturnStream()
+    {
+        var cv = new CvFile { Id = 7, StudentId = 20, FileName = "cv.pdf", FileUrl = "cvs/cv.pdf", PublicId = "cvs/cv.pdf", IsSearchable = true };
+        _cvRepoMock.Setup(r => r.GetByIdAsync(7)).ReturnsAsync(cv);
+        _storageMock.Setup(s => s.DownloadFileAsync("cvs/cv.pdf", default))
+            .ReturnsAsync((new MemoryStream(new byte[] { 1 }), "application/pdf", "cv.pdf"));
+        var service = CreateService();
+
+        var (_, contentType, fileName) = await service.GetCvFileStreamAsync(99, 7, isEmployer: true);
+
+        Assert.Equal("application/pdf", contentType);
+        Assert.Equal("cv.pdf", fileName);
+    }
+
+    [Fact]
+    public async Task GetCvFileStreamAsync_EmployerViewingPrivateCvWithoutApplication_ShouldThrow()
+    {
+        var cv = new CvFile { Id = 8, StudentId = 20, FileName = "cv.pdf", FileUrl = "cvs/cv.pdf", PublicId = "cvs/cv.pdf", IsSearchable = false };
+        _cvRepoMock.Setup(r => r.GetByIdAsync(8)).ReturnsAsync(cv);
+        var service = CreateService();
+
+        await Assert.ThrowsAsync<BusinessException>(() => service.GetCvFileStreamAsync(99, 8, isEmployer: true));
+    }
+
+    [Fact]
+    public async Task GetSearchableCvFilesAsync_ShouldExcludePrivateCvs()
+    {
+        _cvRepoMock.Setup(r => r.GetByStudentIdAsync(20)).ReturnsAsync(new System.Collections.Generic.List<CvFile>
+        {
+            new CvFile { Id = 1, StudentId = 20, FileName = "public.pdf", FileUrl = "cvs/a.pdf", PublicId = "cvs/a.pdf", IsSearchable = true },
+            new CvFile { Id = 2, StudentId = 20, FileName = "private.pdf", FileUrl = "cvs/b.pdf", PublicId = "cvs/b.pdf", IsSearchable = false }
+        });
+        var service = CreateService();
+
+        var list = await service.GetSearchableCvFilesAsync(20);
+
+        Assert.Single(list);
+        Assert.Equal("public.pdf", list[0].FileName);
+    }
 }

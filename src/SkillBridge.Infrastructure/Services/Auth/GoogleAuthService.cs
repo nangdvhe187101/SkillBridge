@@ -53,6 +53,14 @@ namespace SkillBridge.Infrastructure.Services.Auth
                 throw new BusinessException("Mã xác thực Google (IdToken) không hợp lệ.");
             }
 
+            // Chặn sớm vai trò không hợp lệ (admin, super_admin, tự chế...) trước khi gọi sang Google
+            if (!string.IsNullOrWhiteSpace(dto.RoleCode) &&
+                !string.Equals(dto.RoleCode, RoleCode.Student, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(dto.RoleCode, RoleCode.Employer, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BusinessException($"Vai trò '{dto.RoleCode}' không hợp lệ. Vui lòng chọn Sinh viên hoặc Nhà tuyển dụng.");
+            }
+
             GoogleJsonWebSignature.Payload payload;
             try
             {

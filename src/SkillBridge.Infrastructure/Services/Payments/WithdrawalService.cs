@@ -9,9 +9,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Payments;
+using SkillBridge.Application.Interfaces;
+using SkillBridge.Application.Interfaces.Admin;
 using SkillBridge.Application.Interfaces.Payments;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
+using SkillBridge.Infrastructure.Services.Admin;
 
 namespace SkillBridge.Infrastructure.Services.Payments;
 
@@ -31,15 +34,21 @@ public class WithdrawalService : IWithdrawalService
     private readonly SkillBridgeDbContext _dbContext;
     private readonly ILogger<WithdrawalService> _logger;
     private readonly IEncryptionKeyProvider _keyProvider;
+    private readonly ISystemSettingService _systemSettingService;
+    private readonly IEmailService? _emailService;
 
     public WithdrawalService(
         SkillBridgeDbContext dbContext,
         IEncryptionKeyProvider keyProvider,
-        ILogger<WithdrawalService> logger)
+        ILogger<WithdrawalService> logger,
+        ISystemSettingService systemSettingService,
+        IEmailService? emailService = null)
     {
         _dbContext = dbContext;
         _logger = logger;
         _keyProvider = keyProvider;
+        _systemSettingService = systemSettingService;
+        _emailService = emailService;
     }
 
     private static string FitLabel(string s, int max = 255) => s.Length <= max ? s : s[..(max - 1)] + "…";
@@ -65,7 +74,7 @@ public class WithdrawalService : IWithdrawalService
         const decimal minWithdrawAmount = 50000m;
         if (dto.Amount < minWithdrawAmount)
         {
-            throw new BusinessException($"Số tiền rút tối thiểu là {minWithdrawAmount:N0}đ.");
+            throw new BusinessException(string.Format(System.Globalization.CultureInfo.GetCultureInfo("vi-VN"), "Số tiền rút tối thiểu là {0:N0}đ.", minWithdrawAmount));
         }
 
         // Lấy khóa mã hóa trước khi mở transaction
@@ -135,7 +144,7 @@ public class WithdrawalService : IWithdrawalService
 
         if (wallet.Balance < amount)
         {
-            throw new BusinessException($"Số dư khả dụng ({wallet.Balance:N0}đ) không đủ để rút số tiền {amount:N0}đ.");
+            throw new BusinessException(string.Format(System.Globalization.CultureInfo.GetCultureInfo("vi-VN"), "Số dư khả dụng ({0:N0}đ) không đủ để rút số tiền {1:N0}đ.", wallet.Balance, amount));
         }
 
         // Đồng bộ BankAccount khớp ví hiện tại
@@ -297,6 +306,8 @@ public class WithdrawalService : IWithdrawalService
             _logger.LogInformation("Admin {AdminMemberId} đã phê duyệt yêu cầu rút tiền #{RequestId} ({Amount:N0}đ) cho User {UserId}.",
                 adminMemberId, withdrawalId, request.Amount, request.UserId);
 
+            _ = SendWithdrawalApprovalEmailAsync(request, ct);
+
             var response = MapToDto(request, request.BankAccount);
             response.RequiresMakerChecker = false;
             response.AwaitingChecker = false;
@@ -401,6 +412,8 @@ public class WithdrawalService : IWithdrawalService
 
             _logger.LogInformation("Checker {AdminMemberId} ({AdminName}) đã phê duyệt Bước 2 cho yêu cầu rút tiền lớn #{RequestId} ({Amount:N0}đ). Maker: {MakerName}. Hoàn tất giải ngân.",
                 adminMemberId, adminName, withdrawalId, request.Amount, makerInfo?.MakerName ?? "N/A");
+
+            _ = SendWithdrawalApprovalEmailAsync(request, ct);
 
             var response = MapToDto(request, request.BankAccount);
             response.RequiresMakerChecker = true;
@@ -521,6 +534,8 @@ public class WithdrawalService : IWithdrawalService
 
         _logger.LogInformation("Admin {AdminMemberId} đã từ chối yêu cầu rút #{RequestId} ({Amount:N0}đ), hoàn tiền về ví User {UserId}. Lý do: {Reason}",
             adminMemberId, request.Id, request.Amount, request.UserId, cleanReason);
+
+        _ = SendWithdrawalRejectionEmailAsync(request, cleanReason, ct);
 
         var response = MapToDto(request, request.BankAccount);
         response.RequiresMakerChecker = request.Amount > LargeWithdrawalThreshold;
@@ -792,5 +807,89 @@ public class WithdrawalService : IWithdrawalService
             CompletedWithdrawalsAmount = completedWithdrawalsAmount,
             TotalWithdrawalsCount = totalWithdrawalsCount
         };
+    }
+
+    private async Task SendWithdrawalApprovalEmailAsync(WithdrawalRequest request, CancellationToken ct)
+    {
+        if (_emailService == null) return;
+        try
+        {
+            var isEnabled = await _systemSettingService.IsFeatureEnabledAsync(SystemSettingService.KeyEmailWithdrawal, true, ct);
+            if (!isEnabled) return;
+
+            var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
+            if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+            var bankName = request.BankAccount?.BankName ?? "Tài khoản ngân hàng";
+            var accountMask = request.BankAccount?.AccountNumberMask ?? "****";
+            var subject = $"[SkillBridge] Yêu cầu rút tiền #{request.Id} đã được phê duyệt thành công";
+            var body = $@"
+<div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;"">
+    <div style=""background: #0051c3; padding: 20px; color: #fff; text-align: center;"">
+        <h2 style=""margin: 0; font-size: 20px;"">Phê duyệt Rút tiền Thành công</h2>
+    </div>
+    <div style=""padding: 24px;"">
+        <p>Xin chào <b>{user.FullName}</b>,</p>
+        <p>Yêu cầu rút tiền của bạn trên nền tảng <b>SkillBridge</b> đã được Ban Quản trị phê duyệt và lệnh chuyển khoản ngân hàng đã được thực hiện.</p>
+        <div style=""background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 20px 0;"">
+            <p style=""margin: 6px 0;""><b>Mã giao dịch:</b> #{request.Id}</p>
+            <p style=""margin: 6px 0;""><b>Số tiền thực nhận:</b> <span style=""color: #16a34a; font-weight: bold; font-size: 16px;"">{request.NetAmount:N0} VNĐ</span></p>
+            <p style=""margin: 6px 0;""><b>Ngân hàng thụ hưởng:</b> {bankName}</p>
+            <p style=""margin: 6px 0;""><b>Số tài khoản:</b> {accountMask}</p>
+            <p style=""margin: 6px 0;""><b>Thời gian xử lý:</b> {DateTime.UtcNow:dd/MM/yyyy HH:mm} (UTC)</p>
+        </div>
+        <p style=""color: #6b7280; font-size: 13px;"">Tiền sẽ về tài khoản của bạn trong vòng vài phút đến tối đa 24 giờ làm việc tùy thuộc vào hệ thống liên ngân hàng Napas247.</p>
+        <p style=""margin-top: 24px;"">Trân trọng,<br/><b>Đội ngũ Vận hành SkillBridge</b></p>
+    </div>
+</div>";
+
+            await _emailService.SendEmailAsync(user.Email, subject, body);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Lỗi khi gửi email thông báo phê duyệt rút tiền #{WithdrawalId}", request.Id);
+        }
+    }
+
+    private async Task SendWithdrawalRejectionEmailAsync(WithdrawalRequest request, string reason, CancellationToken ct)
+    {
+        if (_emailService == null) return;
+        try
+        {
+            var isEnabled = await _systemSettingService.IsFeatureEnabledAsync(SystemSettingService.KeyEmailWithdrawal, true, ct);
+            if (!isEnabled) return;
+
+            var user = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId, ct);
+            if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+            var bankName = request.BankAccount?.BankName ?? "Tài khoản ngân hàng";
+            var accountMask = request.BankAccount?.AccountNumberMask ?? "****";
+            var subject = $"[SkillBridge] Yêu cầu rút tiền #{request.Id} đã bị từ chối";
+            var body = $@"
+<div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;"">
+    <div style=""background: #dc2626; padding: 20px; color: #fff; text-align: center;"">
+        <h2 style=""margin: 0; font-size: 20px;"">Yêu cầu Rút tiền Bị Từ Chối</h2>
+    </div>
+    <div style=""padding: 24px;"">
+        <p>Xin chào <b>{user.FullName}</b>,</p>
+        <p>Yêu cầu rút tiền <b>#{request.Id}</b> của bạn đã bị Ban Quản trị từ chối với lý do sau:</p>
+        <div style=""background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 16px; margin: 20px 0; color: #991b1b;"">
+            <p style=""margin: 0; font-weight: 500;""><b>Lý do:</b> {reason}</p>
+        </div>
+        <div style=""background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 16px; margin: 20px 0;"">
+            <p style=""margin: 6px 0;""><b>Số tiền hoàn trả về ví:</b> <span style=""color: #16a34a; font-weight: bold;"">{request.Amount:N0} VNĐ</span></p>
+            <p style=""margin: 6px 0;""><b>Ngân hàng yêu cầu:</b> {bankName} ({accountMask})</p>
+        </div>
+        <p style=""color: #374151; font-size: 13.5px;"">Số tiền {request.Amount:N0} VNĐ đã được <b>hoàn trả 100% về ví SkillBridge</b> của bạn. Vui lòng kiểm tra lại thông tin tài khoản ngân hàng hoặc liên hệ Bộ phận Hỗ trợ nếu cần giải đáp thêm.</p>
+        <p style=""margin-top: 24px;"">Trân trọng,<br/><b>Đội ngũ Vận hành SkillBridge</b></p>
+    </div>
+</div>";
+
+            await _emailService.SendEmailAsync(user.Email, subject, body);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Lỗi khi gửi email thông báo từ chối rút tiền #{WithdrawalId}", request.Id);
+        }
     }
 }

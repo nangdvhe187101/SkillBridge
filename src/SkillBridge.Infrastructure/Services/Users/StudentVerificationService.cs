@@ -11,9 +11,11 @@ using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
 using SkillBridge.Application.Interfaces;
+using SkillBridge.Application.Interfaces.Admin;
 using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
+using SkillBridge.Infrastructure.Services.Admin;
 
 namespace SkillBridge.Infrastructure.Services.Users
 {
@@ -22,15 +24,21 @@ namespace SkillBridge.Infrastructure.Services.Users
         private readonly SkillBridgeDbContext dbContext;
         private readonly ILogger<StudentVerificationService> logger;
         private readonly IStorageService _storageService;
+        private readonly ISystemSettingService? _systemSettingService;
+        private readonly IEmailService? _emailService;
 
         public StudentVerificationService(
             SkillBridgeDbContext _dbContext,
             ILogger<StudentVerificationService> _logger,
-            IStorageService storageService)
+            IStorageService storageService,
+            ISystemSettingService? systemSettingService = null,
+            IEmailService? emailService = null)
         {
             dbContext = _dbContext;
             logger = _logger;
             _storageService = storageService;
+            _systemSettingService = systemSettingService;
+            _emailService = emailService;
         }
 
         public async Task<List<SchoolDto>> GetSchoolsAsync()
@@ -225,6 +233,47 @@ namespace SkillBridge.Infrastructure.Services.Users
                 SubmittedAt = request.SubmittedAt,
                 FrontCardUrl = dto.FrontCardUrl,
                 BackCardUrl = dto.BackCardUrl
+            };
+        }
+
+        public async Task<StudentVerificationResponseDto?> GetLatestSubmittedVerificationAsync(int userId)
+        {
+            var request = await dbContext.StudentVerificationRequests
+                .Include(r => r.School)
+                .Include(r => r.Documents)
+                .Where(r => r.UserId == userId)
+                .OrderByDescending(r => r.SubmittedAt)
+                .FirstOrDefaultAsync();
+
+            // Sinh viên chưa từng nộp yêu cầu xác minh nào: trả về null thật,
+            // không suy luận "đã phê duyệt" từ cờ KycStatus trên bảng users
+            if (request == null)
+            {
+                return null;
+            }
+
+            var frontDoc = request.Documents.FirstOrDefault(d => d.Side == "front");
+            var backDoc = request.Documents.FirstOrDefault(d => d.Side == "back");
+
+            return new StudentVerificationResponseDto
+            {
+                Id = request.Id,
+                UserId = request.UserId,
+                SchoolId = request.SchoolId,
+                SchoolName = request.School?.Name ?? string.Empty,
+                StudentCode = request.StudentCode,
+                FullNameOnCard = request.FullNameOnCard,
+                GraduationYear = request.GraduationYear,
+                Status = request.Status,
+                ReasonCode = request.ReasonCode,
+                UserMessage = request.UserMessage,
+                RejectionReason = request.RejectionReason,
+                AdminNote = request.AdminNote,
+                NeedInfoDeadline = request.NeedInfoDeadline,
+                SubmittedAt = request.SubmittedAt,
+                ReviewedAt = request.ReviewedAt,
+                FrontCardUrl = _storageService.GetPublicUrl(frontDoc?.FileUrl),
+                BackCardUrl = _storageService.GetPublicUrl(backDoc?.FileUrl)
             };
         }
 
@@ -493,6 +542,8 @@ namespace SkillBridge.Infrastructure.Services.Users
                         });
                     }
                 }
+
+                _ = SendStudentVerificationApprovalEmailAsync(request);
             }
             else if (decision == "need_more_info")
             {
@@ -520,6 +571,8 @@ namespace SkillBridge.Infrastructure.Services.Users
                     IsRead = false,
                     CreatedAt = DateTime.UtcNow
                 });
+
+                _ = SendStudentVerificationNeedInfoEmailAsync(request);
             }
             else if (decision == "reject")
             {
@@ -552,6 +605,8 @@ namespace SkillBridge.Infrastructure.Services.Users
                     IsRead = false,
                     CreatedAt = DateTime.UtcNow
                 });
+
+                _ = SendStudentVerificationRejectionEmailAsync(request);
             }
             else
             {
@@ -750,6 +805,111 @@ namespace SkillBridge.Infrastructure.Services.Users
                 .AsNoTracking()
                 .FirstOrDefaultAsync(ct);
             return defaultAdmin?.Id;
+        }
+
+        private async Task SendStudentVerificationApprovalEmailAsync(StudentVerificationRequest request)
+        {
+            try
+            {
+                if (_emailService == null || _systemSettingService == null) return;
+                var isEnabled = await _systemSettingService.IsFeatureEnabledAsync(SystemSettingService.KeyEmailStudentVerification, true);
+                if (!isEnabled) return;
+
+                var user = request.User ?? await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+                var schoolName = request.School?.Name ?? "Đại học / Cao đẳng";
+                var subject = "[SkillBridge] Hồ sơ thẻ sinh viên của bạn đã được xác thực thành công";
+                var body = $@"
+<div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
+    <h2 style=""color: #10b981;"">Xác thực sinh viên thành công! 🎓</h2>
+    <p>Xin chào <strong>{request.FullNameOnCard ?? user.FullName ?? "bạn"}</strong>,</p>
+    <p>Hồ sơ thẻ sinh viên của bạn trên hệ thống <strong>SkillBridge</strong> đã được Ban quản trị phê duyệt thành công.</p>
+    <div style=""background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;"">
+        <p><strong>Trường:</strong> {schoolName}</p>
+        <p><strong>Mã số sinh viên (MSSV):</strong> {request.StudentCode}</p>
+        <p><strong>Họ và tên:</strong> {request.FullNameOnCard}</p>
+        <p><strong>Năm tốt nghiệp dự kiến:</strong> {request.GraduationYear}</p>
+        <p><strong>Thời gian duyệt:</strong> {DateTime.UtcNow:dd/MM/yyyy HH:mm} UTC</p>
+    </div>
+    <p>Tài khoản của bạn đã được gắn huy hiệu <strong>Sinh viên đã xác thực (Verified Student)</strong>. Giờ đây bạn có thể mở khóa toàn bộ quyền ứng tuyển các công việc sinh viên và nhận thanh toán thù lao an toàn qua SkillBridge.</p>
+    <hr style=""border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"" />
+    <p style=""font-size: 12px; color: #6b7280;"">Email này được gửi tự động từ Hệ thống SkillBridge. Chúc bạn có trải nghiệm tuyệt vời cùng SkillBridge!</p>
+</div>";
+
+                await _emailService.SendEmailAsync(user.Email, subject, body);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Lỗi khi gửi email duyệt thẻ sinh viên cho User {UserId}", request.UserId);
+            }
+        }
+
+        private async Task SendStudentVerificationNeedInfoEmailAsync(StudentVerificationRequest request)
+        {
+            try
+            {
+                if (_emailService == null || _systemSettingService == null) return;
+                var isEnabled = await _systemSettingService.IsFeatureEnabledAsync(SystemSettingService.KeyEmailStudentVerification, true);
+                if (!isEnabled) return;
+
+                var user = request.User ?? await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+                var subject = "[SkillBridge] Yêu cầu bổ sung thông tin xác minh thẻ sinh viên";
+                var body = $@"
+<div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
+    <h2 style=""color: #f59e0b;"">Yêu cầu bổ sung thông tin hồ sơ thẻ sinh viên ⚠️</h2>
+    <p>Xin chào <strong>{user.FullName ?? "bạn"}</strong>,</p>
+    <p>Ban quản trị SkillBridge đã xem xét hồ sơ xác minh thẻ sinh viên của bạn và cần bạn bổ sung hoặc cập nhật thêm thông tin:</p>
+    <div style=""background: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 4px; margin: 20px 0;"">
+        <p><strong>Yêu cầu từ kiểm duyệt viên:</strong> {request.UserMessage}</p>
+        <p><strong>Hạn chót bổ sung:</strong> {request.NeedInfoDeadline:dd/MM/yyyy HH:mm} UTC</p>
+    </div>
+    <p>Vui lòng đăng nhập vào ứng dụng SkillBridge, truy cập mục <strong>Hồ sơ cá nhân / Xác minh thẻ sinh viên</strong> để chụp lại ảnh thẻ hoặc cập nhật theo hướng dẫn trước thời hạn trên.</p>
+    <hr style=""border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"" />
+    <p style=""font-size: 12px; color: #6b7280;"">Email này được gửi tự động từ Hệ thống SkillBridge. Vui lòng không phản hồi email này.</p>
+</div>";
+
+                await _emailService.SendEmailAsync(user.Email, subject, body);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Lỗi khi gửi email yêu cầu bổ sung thông tin thẻ sinh viên cho User {UserId}", request.UserId);
+            }
+        }
+
+        private async Task SendStudentVerificationRejectionEmailAsync(StudentVerificationRequest request)
+        {
+            try
+            {
+                if (_emailService == null || _systemSettingService == null) return;
+                var isEnabled = await _systemSettingService.IsFeatureEnabledAsync(SystemSettingService.KeyEmailStudentVerification, true);
+                if (!isEnabled) return;
+
+                var user = request.User ?? await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId);
+                if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+                var subject = "[SkillBridge] Thông báo kết quả xác minh thẻ sinh viên";
+                var body = $@"
+<div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
+    <h2 style=""color: #ef4444;"">Hồ sơ xác minh thẻ sinh viên không được duyệt</h2>
+    <p>Xin chào <strong>{user.FullName ?? "bạn"}</strong>,</p>
+    <p>Ban quản trị SkillBridge đã xem xét hồ sơ thẻ sinh viên của bạn nhưng rất tiếc chưa thể phê duyệt do thông tin không đạt yêu cầu tiêu chuẩn:</p>
+    <div style=""background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; border-radius: 4px; margin: 20px 0;"">
+        <p><strong>Lý do từ chối:</strong> {request.RejectionReason}</p>
+    </div>
+    <p>Vui lòng đăng nhập vào SkillBridge để nộp lại ảnh chụp thẻ sinh viên rõ nét, còn hạn sử dụng hoặc liên hệ đội ngũ hỗ trợ nếu bạn cần thêm thông tin.</p>
+    <hr style=""border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"" />
+    <p style=""font-size: 12px; color: #6b7280;"">Email này được gửi tự động từ Hệ thống SkillBridge. Vui lòng không phản hồi email này.</p>
+</div>";
+
+                await _emailService.SendEmailAsync(user.Email, subject, body);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Lỗi khi gửi email từ chối thẻ sinh viên cho User {UserId}", request.UserId);
+            }
         }
     }
 }

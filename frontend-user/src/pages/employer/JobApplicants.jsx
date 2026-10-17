@@ -1697,9 +1697,10 @@ export default function JobApplicants() {
               className="btn btn-outline"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
               onClick={() => {
-                const sName = viewStudentModal.name;
+                const { studentId, name: sName } = viewStudentModal;
                 setViewStudentModal(null);
-                navigate(`/u/${slugify(sName)}`);
+                // Ưu tiên id thật để trang hồ sơ tải dữ liệu từ API thay vì dữ liệu dự phòng
+                navigate(`/u/${studentId || slugify(sName)}`);
               }}
             >
               <Icon name="eye" width={14} height={14} /> Xem Portfolio công khai
