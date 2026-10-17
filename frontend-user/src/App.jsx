@@ -74,6 +74,7 @@ export default function App() {
           <Route path="/payment-policy" element={<PaymentRefundPolicy />} />
           <Route path="/dispute-policy" element={<PaymentRefundPolicy />} />
           <Route path="/contact" element={<Contact />} />
+          <Route path="/support" element={<Contact />} />
           <Route path="/forbidden" element={<Forbidden />} />
           <Route path="/403" element={<Forbidden />} />
 

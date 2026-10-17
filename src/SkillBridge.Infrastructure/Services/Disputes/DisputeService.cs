@@ -10,6 +10,8 @@ using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Chat;
 using SkillBridge.Application.DTOs.Disputes;
+using SkillBridge.Application.Interfaces;
+using SkillBridge.Application.Interfaces.Admin;
 using SkillBridge.Application.Interfaces.Disputes;
 using SkillBridge.Application.Interfaces.Notifications;
 using SkillBridge.Application.Interfaces.Payments;
@@ -17,6 +19,7 @@ using SkillBridge.Application.Interfaces.Storage;
 using SkillBridge.Application.Interfaces.Users;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
+using SkillBridge.Infrastructure.Services.Admin;
 
 namespace SkillBridge.Infrastructure.Services.Disputes;
 
@@ -28,6 +31,8 @@ public class DisputeService : IDisputeService
     private readonly IUserReliabilityService _userReliabilityService;
     private readonly INotificationService _notificationService;
     private readonly ILogger<DisputeService> _logger;
+    private readonly ISystemSettingService? _systemSettingService;
+    private readonly IEmailService? _emailService;
 
     public DisputeService(
         SkillBridgeDbContext dbContext,
@@ -35,7 +40,9 @@ public class DisputeService : IDisputeService
         IEscrowPaymentService escrowPaymentService,
         IUserReliabilityService userReliabilityService,
         INotificationService notificationService,
-        ILogger<DisputeService> logger)
+        ILogger<DisputeService> logger,
+        ISystemSettingService? systemSettingService = null,
+        IEmailService? emailService = null)
     {
         _dbContext = dbContext;
         _storageService = storageService;
@@ -43,6 +50,8 @@ public class DisputeService : IDisputeService
         _userReliabilityService = userReliabilityService;
         _notificationService = notificationService;
         _logger = logger;
+        _systemSettingService = systemSettingService;
+        _emailService = emailService;
     }
 
     public async Task<DisputeDto> CreateDisputeAsync(int userId, CreateDisputeRequest request, CancellationToken ct = default)
@@ -116,6 +125,7 @@ public class DisputeService : IDisputeService
         // Khóa trạng thái công việc sang 'disputed'
         try
         {
+            StateMachineValidator.ValidateJobTransition(job.Status ?? string.Empty, "disputed");
             job.Status = "disputed";
             job.UpdatedAt = now;
             await _dbContext.SaveChangesAsync(ct);
@@ -157,6 +167,8 @@ public class DisputeService : IDisputeService
         {
             _logger.LogWarning(ex, "Lỗi khi gửi thông báo Dispute #{DisputeId} cho User {OpponentId}", dispute.Id, opponentId);
         }
+
+        _ = SendDisputeCreatedEmailAsync(dispute, job, opponentId, filedBy, ct);
 
         return await MapToDisputeDtoAsync(dispute, ct);
     }
@@ -426,6 +438,7 @@ public class DisputeService : IDisputeService
                 _logger.LogWarning(ex, "Lỗi khi phạt điểm uy tín Employer {EmployerId}", dispute.EmployerId);
             }
 
+            StateMachineValidator.ValidateJobTransition(job.Status, "completed");
             job.Status = "completed";
             job.EscrowAmount = null;
             job.UpdatedAt = now;
@@ -459,6 +472,7 @@ public class DisputeService : IDisputeService
                 _logger.LogWarning(ex, "Lỗi khi phạt điểm uy tín Student {StudentId}", dispute.StudentId);
             }
 
+            StateMachineValidator.ValidateJobTransition(job.Status, "cancelled");
             job.Status = "cancelled";
             job.EscrowAmount = null;
             job.UpdatedAt = now;
@@ -500,12 +514,14 @@ public class DisputeService : IDisputeService
                     ct);
             }
 
+            StateMachineValidator.ValidateJobTransition(job.Status, "completed");
             job.Status = "completed";
             job.EscrowAmount = null;
             job.UpdatedAt = now;
         }
 
         // Cập nhật trạng thái Dispute
+        StateMachineValidator.ValidateDisputeTransition(dispute.Status, "closed");
         dispute.Status = "closed";
         dispute.Decision = decision;
         dispute.PayoutAmount = studentPayout;
@@ -542,6 +558,8 @@ public class DisputeService : IDisputeService
                 $"Trọng tài đã phân xử khiếu nại Job #{dispute.JobId}. Số tiền hoàn lại vào ví bạn: {employerRefund:N0}đ.{noteMsg}",
                 "/mywork",
                 ct);
+
+            _ = SendDisputeResolvedEmailAsync(dispute, adminNote, ct);
         }
         catch (Exception ex)
         {
@@ -748,5 +766,116 @@ public class DisputeService : IDisputeService
         await _dbContext.AdminTeamMembers.AddAsync(newAdmin, ct);
         await _dbContext.SaveChangesAsync(ct);
         return newAdmin.Id;
+    }
+
+    private async Task SendDisputeCreatedEmailAsync(Dispute dispute, Job job, int opponentId, string filedBy, CancellationToken ct)
+    {
+        try
+        {
+            if (_emailService == null || _systemSettingService == null) return;
+            var isEnabled = await _systemSettingService.IsFeatureEnabledAsync(SystemSettingService.KeyEmailDispute, true, ct);
+            if (!isEnabled) return;
+
+            var opponent = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == opponentId, ct);
+            if (opponent == null || string.IsNullOrWhiteSpace(opponent.Email)) return;
+
+            var filerRoleTitle = filedBy == "employer" ? "Nhà tuyển dụng" : "Sinh viên";
+            var subject = $"[SkillBridge] Thông báo khiếu nại tranh chấp cho công việc: {job.Title}";
+            var body = $@"
+<div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
+    <h2 style=""color: #ef4444;"">Thông báo khiếu nại tranh chấp hợp đồng ⚠️</h2>
+    <p>Xin chào <strong>{opponent.FullName ?? "bạn"}</strong>,</p>
+    <p><strong>{filerRoleTitle}</strong> đã chính thức mở yêu cầu khiếu nại tranh chấp trọng tài đối với công việc <strong>{job.Title}</strong> (Mã khiếu nại #{dispute.Id}).</p>
+    <div style=""background: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 4px; margin: 20px 0;"">
+        <p><strong>Công việc:</strong> {job.Title}</p>
+        <p><strong>Bên khiếu nại:</strong> {filerRoleTitle}</p>
+        <p><strong>Lý do khiếu nại:</strong> {dispute.Reason}</p>
+        <p><strong>Thời gian tạo:</strong> {dispute.FiledAt:dd/MM/yyyy HH:mm} UTC</p>
+        <p><strong>Thời hạn bổ sung bằng chứng:</strong> 72 giờ kể từ thời điểm mở khiếu nại</p>
+    </div>
+    <p>Vui lòng đăng nhập vào hệ thống SkillBridge, truy cập mục <strong>Khiếu nại / Quản lý công việc</strong> để tải lên các tệp tin hình ảnh, hợp đồng hoặc tài liệu chứng cứ phản biện bảo vệ quyền lợi của mình.</p>
+    <hr style=""border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"" />
+    <p style=""font-size: 12px; color: #6b7280;"">Email này được gửi tự động từ Ban Trọng tài SkillBridge. Vui lòng phản hồi trên ứng dụng.</p>
+</div>";
+
+            await _emailService.SendEmailAsync(opponent.Email, subject, body, ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi gửi email thông báo mở Dispute #{DisputeId} cho User {OpponentId}", dispute.Id, opponentId);
+        }
+    }
+
+    private async Task SendDisputeResolvedEmailAsync(DisputeDto dispute, string? adminNote, CancellationToken ct)
+    {
+        try
+        {
+            if (_emailService == null || _systemSettingService == null) return;
+            var isEnabled = await _systemSettingService.IsFeatureEnabledAsync(SystemSettingService.KeyEmailDispute, true, ct);
+            if (!isEnabled) return;
+
+            var student = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == dispute.StudentId, ct);
+            var employer = await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == dispute.EmployerId, ct);
+
+            var studentPayout = dispute.PayoutAmount ?? 0m;
+            var employerRefund = dispute.Amount - studentPayout;
+            var note = string.IsNullOrWhiteSpace(adminNote) ? "Theo quyết định xem xét chứng cứ của Ban Trọng tài." : adminNote;
+
+            var decisionText = dispute.Decision switch
+            {
+                "accept" => "Chấp thuận yêu cầu của Sinh viên (Giải ngân 100%)",
+                "reject" => "Bác bỏ yêu cầu của Sinh viên / Chấp thuận Nhà tuyển dụng (Hoàn cọc 100%)",
+                "split" => "Hòa giải phân chia tài chính theo tỷ lệ thực hiện",
+                _ => dispute.Decision ?? "Đã xử lý"
+            };
+
+            // Email gửi cho sinh viên
+            if (student != null && !string.IsNullOrWhiteSpace(student.Email))
+            {
+                var studentSubject = $"[SkillBridge] Kết quả phán quyết khiếu nại #{dispute.Id} - {dispute.JobTitle}";
+                var studentBody = $@"
+<div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
+    <h2 style=""color: #2563eb;"">Phán quyết khiếu nại trọng tài ⚖️</h2>
+    <p>Xin chào <strong>{student.FullName ?? "bạn"}</strong>,</p>
+    <p>Ban Trọng tài SkillBridge đã hoàn tất việc xem xét hồ sơ và ban hành phán quyết chính thức cho khiếu nại <strong>#{dispute.Id}</strong> (Công việc: {dispute.JobTitle}).</p>
+    <div style=""background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;"">
+        <p><strong>Quyết định:</strong> {decisionText}</p>
+        <p><strong>Số tiền giải ngân về ví của bạn:</strong> <span style=""color: #10b981; font-weight: bold;"">{studentPayout:N0} VNĐ</span></p>
+        <p><strong>Ghi chú phán quyết của Trọng tài:</strong> {note}</p>
+        <p><strong>Thời gian phân xử:</strong> {DateTime.UtcNow:dd/MM/yyyy HH:mm} UTC</p>
+    </div>
+    <p>Số tiền trên đã được hệ thống tự động cộng trực tiếp vào Số dư khả dụng trong Ví SkillBridge của bạn.</p>
+    <hr style=""border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"" />
+    <p style=""font-size: 12px; color: #6b7280;"">Email này được gửi tự động từ Ban Trọng tài SkillBridge.</p>
+</div>";
+                await _emailService.SendEmailAsync(student.Email, studentSubject, studentBody, ct);
+            }
+
+            // Email gửi cho nhà tuyển dụng
+            if (employer != null && !string.IsNullOrWhiteSpace(employer.Email))
+            {
+                var employerSubject = $"[SkillBridge] Kết quả phán quyết khiếu nại #{dispute.Id} - {dispute.JobTitle}";
+                var employerBody = $@"
+<div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
+    <h2 style=""color: #2563eb;"">Phán quyết khiếu nại trọng tài ⚖️</h2>
+    <p>Xin chào <strong>{employer.FullName ?? "bạn"}</strong>,</p>
+    <p>Ban Trọng tài SkillBridge đã hoàn tất việc xem xét hồ sơ và ban hành phán quyết chính thức cho khiếu nại <strong>#{dispute.Id}</strong> (Công việc: {dispute.JobTitle}).</p>
+    <div style=""background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;"">
+        <p><strong>Quyết định:</strong> {decisionText}</p>
+        <p><strong>Số tiền hoàn trả về ví của bạn:</strong> <span style=""color: #10b981; font-weight: bold;"">{employerRefund:N0} VNĐ</span></p>
+        <p><strong>Ghi chú phán quyết của Trọng tài:</strong> {note}</p>
+        <p><strong>Thời gian phân xử:</strong> {DateTime.UtcNow:dd/MM/yyyy HH:mm} UTC</p>
+    </div>
+    <p>Số tiền hoàn cọc đã được hệ thống tự động hoàn về Số dư khả dụng trong Ví SkillBridge của bạn.</p>
+    <hr style=""border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"" />
+    <p style=""font-size: 12px; color: #6b7280;"">Email này được gửi tự động từ Ban Trọng tài SkillBridge.</p>
+</div>";
+                await _emailService.SendEmailAsync(employer.Email, employerSubject, employerBody, ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi gửi email thông báo phán quyết Dispute #{DisputeId}", dispute.Id);
+        }
     }
 }

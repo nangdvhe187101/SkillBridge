@@ -66,7 +66,7 @@ public class AdminUserServiceTests
         await dbContext.Users.AddRangeAsync(admin, targetUser);
         await dbContext.SaveChangesAsync();
 
-        var service = new AdminUserService(dbContext, _loggerMock.Object);
+        var service = new AdminUserService(dbContext, new Mock<SkillBridge.Application.Interfaces.Storage.IStorageService>().Object, _loggerMock.Object);
 
         // Act
         var result = await service.ToggleLockUserAsync(admin.Id, targetUser.Id, new AdminLockUserRequest { Reason = "Nghi vấn gian lận" });
@@ -123,7 +123,7 @@ public class AdminUserServiceTests
         await dbContext.Users.AddRangeAsync(admin, targetUser);
         await dbContext.SaveChangesAsync();
 
-        var service = new AdminUserService(dbContext, _loggerMock.Object);
+        var service = new AdminUserService(dbContext, new Mock<SkillBridge.Application.Interfaces.Storage.IStorageService>().Object, _loggerMock.Object);
 
         // Act
         var result = await service.ToggleLockUserAsync(admin.Id, targetUser.Id, new AdminLockUserRequest());
@@ -176,7 +176,7 @@ public class AdminUserServiceTests
         await dbContext.Users.AddRangeAsync(rootAdmin, otherAdmin);
         await dbContext.SaveChangesAsync();
 
-        var service = new AdminUserService(dbContext, _loggerMock.Object);
+        var service = new AdminUserService(dbContext, new Mock<SkillBridge.Application.Interfaces.Storage.IStorageService>().Object, _loggerMock.Object);
 
         // Act & Assert (INV-ADM-06: Root admin cannot be locked)
         var ex = await Assert.ThrowsAsync<BusinessException>(() =>
@@ -208,7 +208,7 @@ public class AdminUserServiceTests
         await dbContext.Users.AddAsync(admin);
         await dbContext.SaveChangesAsync();
 
-        var service = new AdminUserService(dbContext, _loggerMock.Object);
+        var service = new AdminUserService(dbContext, new Mock<SkillBridge.Application.Interfaces.Storage.IStorageService>().Object, _loggerMock.Object);
 
         // Act & Assert (Q-010: Cannot lock self)
         var ex = await Assert.ThrowsAsync<BusinessException>(() =>

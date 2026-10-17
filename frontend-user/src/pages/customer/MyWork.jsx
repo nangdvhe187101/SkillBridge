@@ -1796,11 +1796,16 @@ export default function MyWork() {
                             fontSize: 12,
                             color: '#16a34a',
                             fontWeight: 600,
-                            display: 'flex',
+                            display: 'inline-flex',
                             alignItems: 'center',
-                            gap: 4
-                          }}>
-                            Đã ký quỹ bảo đảm
+                            gap: 4,
+                            background: '#dcfce7',
+                            padding: '3px 9px',
+                            borderRadius: 6,
+                            border: '1px solid #bbf7d0'
+                          }} title="Thù lao đã được NTD nạp và SkillBridge khóa ký quỹ an toàn 100%">
+                            <Icon name="shield-check" width={13} height={13} />
+                            Đã bảo chứng ký quỹ Escrow: {fmtVND(j.budget)}
                           </span>
                         </div>
 

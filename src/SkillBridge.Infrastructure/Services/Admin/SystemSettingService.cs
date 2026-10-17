@@ -31,6 +31,11 @@ public class SystemSettingService : ISystemSettingService
     public const string KeyEmailPayout = "Email_Payout_Enabled";
     public const string KeyEmailDigest18h = "Email_Digest18h_Enabled";
     public const string KeyEmailVipMatch = "Email_VipMatch_Enabled";
+    public const string KeyEmailWithdrawal = "Email_Withdrawal_Enabled";
+    public const string KeyEmailBankVerification = "Email_BankVerification_Enabled";
+    public const string KeyEmailStudentVerification = "Email_StudentVerification_Enabled";
+    public const string KeyEmailDispute = "Email_Dispute_Enabled";
+    public const string KeyEmailTicketReply = "Email_TicketReply_Enabled";
 
     // CPC & Referral Keys
     public const string KeyCpcClickPrice = "Cpc_Click_Price";
@@ -77,6 +82,11 @@ public class SystemSettingService : ISystemSettingService
             EmailPayoutEnabled = GetBoolFromDict(dict, KeyEmailPayout, true),
             EmailDigest18hEnabled = GetBoolFromDict(dict, KeyEmailDigest18h, true),
             EmailVipMatchEnabled = GetBoolFromDict(dict, KeyEmailVipMatch, true),
+            EmailWithdrawalEnabled = GetBoolFromDict(dict, KeyEmailWithdrawal, true),
+            EmailBankVerificationEnabled = GetBoolFromDict(dict, KeyEmailBankVerification, true),
+            EmailStudentVerificationEnabled = GetBoolFromDict(dict, KeyEmailStudentVerification, true),
+            EmailDisputeEnabled = GetBoolFromDict(dict, KeyEmailDispute, true),
+            EmailTicketReplyEnabled = GetBoolFromDict(dict, KeyEmailTicketReply, true),
 
             // CPC & Referral Values
             CpcClickPrice = GetIntFromDict(dict, KeyCpcClickPrice, 2500),
@@ -127,6 +137,21 @@ public class SystemSettingService : ISystemSettingService
 
         if (request.EmailVipMatchEnabled.HasValue)
             await UpsertSettingAsync(KeyEmailVipMatch, request.EmailVipMatchEnabled.Value.ToString().ToLowerInvariant(), "Bật/tắt email cảnh báo việc làm mới cho sinh viên VIP/Master", cancellationToken);
+
+        if (request.EmailWithdrawalEnabled.HasValue)
+            await UpsertSettingAsync(KeyEmailWithdrawal, request.EmailWithdrawalEnabled.Value.ToString().ToLowerInvariant(), "Bật/tắt email phê duyệt & từ chối rút tiền", cancellationToken);
+
+        if (request.EmailBankVerificationEnabled.HasValue)
+            await UpsertSettingAsync(KeyEmailBankVerification, request.EmailBankVerificationEnabled.Value.ToString().ToLowerInvariant(), "Bật/tắt email phê duyệt & từ chối xác thực tài khoản ngân hàng", cancellationToken);
+
+        if (request.EmailStudentVerificationEnabled.HasValue)
+            await UpsertSettingAsync(KeyEmailStudentVerification, request.EmailStudentVerificationEnabled.Value.ToString().ToLowerInvariant(), "Bật/tắt email phê duyệt & từ chối thẻ sinh viên eKYC", cancellationToken);
+
+        if (request.EmailDisputeEnabled.HasValue)
+            await UpsertSettingAsync(KeyEmailDispute, request.EmailDisputeEnabled.Value.ToString().ToLowerInvariant(), "Bật/tắt email khiếu nại tranh chấp & phán quyết hợp đồng", cancellationToken);
+
+        if (request.EmailTicketReplyEnabled.HasValue)
+            await UpsertSettingAsync(KeyEmailTicketReply, request.EmailTicketReplyEnabled.Value.ToString().ToLowerInvariant(), "Bật/tắt email phản hồi ticket hỗ trợ CSKH cho người dùng", cancellationToken);
 
         // CPC & Referral
         if (request.CpcClickPrice.HasValue)

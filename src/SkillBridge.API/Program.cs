@@ -4,6 +4,7 @@ using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scrutor;
@@ -159,6 +160,16 @@ builder.Services.AddScoped<SkillBridge.Application.Interfaces.Notifications.INot
 builder.Services.AddSingleton<SkillBridge.Application.Interfaces.Chat.IUserPresenceService, SkillBridge.Infrastructure.Services.Chat.UserPresenceService>();
 builder.Services.AddSingleton<SkillBridge.Application.Common.IEncryptionKeyProvider, SkillBridge.Infrastructure.Services.Security.ConfigurationEncryptionKeyProvider>();
 builder.Services.AddHttpClient();
+
+// Nén JSON trả về (Brotli ưu tiên, Gzip dự phòng) để giảm dung lượng tải qua mạng
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+});
+builder.Services.Configure<BrotliCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
+builder.Services.Configure<GzipCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
 
 builder.Services.AddControllers()
     .AddApplicationPart(typeof(SkillBridge.AdminAPI.Controllers.admin.AdminStudentVerificationController).Assembly)
@@ -361,6 +372,7 @@ else
 }
 
 app.UseForwardedHeaders();
+app.UseResponseCompression();
 
 app.UseMiddleware<SkillBridge.API.Middleware.ExceptionHandlingMiddleware>();
 

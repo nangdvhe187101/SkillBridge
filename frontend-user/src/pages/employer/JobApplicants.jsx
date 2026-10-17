@@ -635,6 +635,50 @@ export default function JobApplicants() {
               </div>
             </div>
 
+            {/* Escrow Contract Protection Banner */}
+            {wasEscrowed && job.status !== 'completed' && job.status !== 'disputed' && (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.12) 100%)',
+                border: '1.5px solid rgba(16, 185, 129, 0.35)',
+                borderRadius: 12,
+                padding: '14px 20px',
+                marginTop: 18,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 12
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{
+                    width: 38,
+                    height: 38,
+                    borderRadius: 10,
+                    background: '#dcfce7',
+                    color: '#16a34a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0
+                  }}>
+                    <Icon name="shield-check" width={20} height={20} />
+                  </span>
+                  <div>
+                    <div style={{ fontSize: 14.5, fontWeight: 700, color: '#065f46', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      Hợp đồng được bảo chứng bởi Quỹ Ký Quỹ Escrow SkillBridge
+                      <span className="chip chip-lime" style={{ fontSize: 11, padding: '2px 8px' }}>100% An toàn</span>
+                    </div>
+                    <div style={{ fontSize: 13, color: '#047857', marginTop: 2 }}>
+                      Ngân sách <strong>{fmtVND(job.budget)}</strong> đã được phong tỏa ký quỹ an toàn. Tiền chỉ được giải ngân cho sinh viên khi bạn nghiệm thu sản phẩm.
+                    </div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: '#065f46', background: 'rgba(255,255,255,0.7)', padding: '6px 12px', borderRadius: 8, border: '1px solid #a7f3d0' }}>
+                  Trạng thái Escrow: Đã nạp & Đang khóa
+                </div>
+              </div>
+            )}
+
             {/* Dispute Warning Banner for Employer */}
             {job.status === 'disputed' && (
               <div style={{
@@ -1697,9 +1741,10 @@ export default function JobApplicants() {
               className="btn btn-outline"
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
               onClick={() => {
-                const sName = viewStudentModal.name;
+                const { studentId, name: sName } = viewStudentModal;
                 setViewStudentModal(null);
-                navigate(`/u/${slugify(sName)}`);
+                // Ưu tiên id thật để trang hồ sơ tải dữ liệu từ API thay vì dữ liệu dự phòng
+                navigate(`/u/${studentId || slugify(sName)}`);
               }}
             >
               <Icon name="eye" width={14} height={14} /> Xem Portfolio công khai

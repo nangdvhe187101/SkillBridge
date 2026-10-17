@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Admin;
+using SkillBridge.Application.Interfaces;
 using SkillBridge.Application.Interfaces.Admin;
 using SkillBridge.Infrastructure.Data;
 using SkillBridge.Infrastructure.Data.Entities;
@@ -20,13 +21,19 @@ public class AdminSupportService : IAdminSupportService
 {
     private readonly SkillBridgeDbContext _dbContext;
     private readonly ILogger<AdminSupportService> _logger;
+    private readonly ISystemSettingService? _systemSettingService;
+    private readonly IEmailService? _emailService;
 
     public AdminSupportService(
         SkillBridgeDbContext dbContext,
-        ILogger<AdminSupportService> logger)
+        ILogger<AdminSupportService> logger,
+        ISystemSettingService? systemSettingService = null,
+        IEmailService? emailService = null)
     {
         _dbContext = dbContext;
         _logger = logger;
+        _systemSettingService = systemSettingService;
+        _emailService = emailService;
     }
 
     /// <inheritdoc />
@@ -174,6 +181,12 @@ public class AdminSupportService : IAdminSupportService
 
         await _dbContext.SaveChangesAsync(ct);
         _logger.LogInformation("Admin {AdminName} đã cập nhật ticket #{TicketId} (Close: {CloseTicket})", adminMember.Name, ticketId, dto.CloseTicket);
+
+        // 3. Gửi email thông báo phản hồi CSKH trực tiếp cho người dùng nếu có nội dung phản hồi hoặc đóng ticket
+        if (!string.IsNullOrWhiteSpace(dto.ReplyMessage) || dto.CloseTicket)
+        {
+            _ = SendTicketReplyEmailAsync(ticket, dto.ReplyMessage?.Trim(), dto.CloseTicket, adminMember.Name, ct);
+        }
 
         return MapToTicketDto(ticket);
     }
@@ -335,6 +348,61 @@ public class AdminSupportService : IAdminSupportService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Không thể ghi nhật ký AuditLog: {ActionText}", actionText);
+        }
+    }
+
+    private async Task SendTicketReplyEmailAsync(SupportTicket ticket, string? replyMessage, bool isClosed, string adminName, CancellationToken ct)
+    {
+        try
+        {
+            if (_emailService == null || _systemSettingService == null) return;
+            var isEnabled = await _systemSettingService.IsFeatureEnabledAsync(SystemSettingService.KeyEmailTicketReply, true, ct);
+            if (!isEnabled) return;
+
+            var user = ticket.User ?? await _dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == ticket.UserId, ct);
+            if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
+
+            var statusBadge = isClosed ? "Đã giải quyết & Đóng ticket" : "Đang tiếp tục hỗ trợ";
+            var statusColor = isClosed ? "#10b981" : "#3b82f6";
+            var replyContent = string.IsNullOrWhiteSpace(replyMessage)
+                ? (isClosed ? "Yêu cầu hỗ trợ của bạn đã được tiếp nhận và xử lý hoàn tất." : "Đội ngũ CSKH đang kiểm tra và xử lý yêu cầu của bạn.")
+                : replyMessage;
+
+            var subject = $"[SkillBridge CSKH] Phản hồi yêu cầu hỗ trợ #{ticket.Id}: \"{ticket.Subject}\"";
+            var body = $@"
+<div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;"">
+    <div style=""background: #2563eb; color: #ffffff; padding: 20px; text-align: center;"">
+        <h2 style=""margin: 0; font-size: 20px;"">Trung tâm Trợ giúp & CSKH SkillBridge</h2>
+        <p style=""margin: 5px 0 0; font-size: 13px; opacity: 0.9;"">Phản hồi yêu cầu hỗ trợ trực tuyến</p>
+    </div>
+    <div style=""padding: 24px;"">
+        <p>Xin chào <strong>{user.FullName ?? "bạn"}</strong>,</p>
+        <p>Bộ phận Chăm sóc Khách hàng của <strong>SkillBridge</strong> đã xem xét và gửi phản hồi cho yêu cầu hỗ trợ của bạn:</p>
+
+        <div style=""background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px; margin: 16px 0;"">
+            <p style=""margin: 0 0 6px;""><strong>Mã Ticket:</strong> #{ticket.Id}</p>
+            <p style=""margin: 0 0 6px;""><strong>Chủ đề:</strong> {ticket.Subject}</p>
+            <p style=""margin: 0 0 6px;""><strong>Trạng thái:</strong> <span style=""color: {statusColor}; font-weight: bold;"">{statusBadge}</span></p>
+            <p style=""margin: 0;""><strong>Nội dung phản ánh ban đầu:</strong> <span style=""color: #6b7280;"">{ticket.Description}</span></p>
+        </div>
+
+        <div style=""background: #eff6ff; border-left: 4px solid #2563eb; padding: 16px; border-radius: 4px; margin: 20px 0;"">
+            <h4 style=""margin: 0 0 8px; color: #1e40af;"">💬 Phản hồi từ Quản trị viên ({adminName}):</h4>
+            <p style=""margin: 0; color: #1e293b; white-space: pre-line;"">{replyContent}</p>
+        </div>
+
+        <p style=""font-size: 13px; color: #4b5563;"">Nếu bạn vẫn cần trợ giúp thêm hoặc có câu hỏi liên quan, vui lòng phản hồi lại email này hoặc liên hệ hotline hỗ trợ của SkillBridge.</p>
+        <hr style=""border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"" />
+        <p style=""font-size: 12px; color: #9ca3af; text-align: center; margin: 0;"">&copy; SkillBridge Customer Support Team. Trân trọng cảm ơn bạn đã đồng hành cùng SkillBridge!</p>
+    </div>
+</div>";
+
+            await _emailService.SendEmailAsync(user.Email, subject, body, ct);
+            _logger.LogInformation("Đã gửi email phản hồi ticket #{TicketId} tới {UserEmail}", ticket.Id, user.Email);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Lỗi khi gửi email phản hồi ticket #{TicketId} cho User {UserId}", ticket.Id, ticket.UserId);
         }
     }
 }

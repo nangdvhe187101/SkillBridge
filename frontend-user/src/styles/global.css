@@ -6572,3 +6572,98 @@ table.adm-table {
   user-select: none;
   white-space: nowrap;
 }
+/* Trang chính sách: lưới 2 cột (mục lục + nội dung) gập thành 1 cột trên điện thoại */
+@media (max-width: 860px) {
+  .policy-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  .policy-sidebar {
+    position: static !important;
+  }
+}
+
+/* =========================================================================
+   TỐI ƯU RESPONSIVE MOBILE, TABLET & LAPTOP CHO CÁC TRANG CỐT LÕI
+   (Jobs, Talents, Quản lý ứng viên & Modal giao dịch)
+   ========================================================================= */
+
+@media (max-width: 768px) {
+  /* 1. Trang Việc làm (Jobs.jsx) */
+  .jobs-head .search-bar {
+    flex-direction: column;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .jobs-head .search-bar input {
+    width: 100%;
+  }
+  .jobs-head .search-bar .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .filter-sort-wrap {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 10px;
+    width: 100%;
+  }
+  .filter-sort-wrap .sort-select {
+    width: 100%;
+  }
+  .job-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+  }
+
+  /* 2. Trang Quản lý ứng viên của Nhà tuyển dụng (JobApplicants.jsx) */
+  .employer-dashboard-layout {
+    grid-template-columns: 1fr !important;
+  }
+  .employer-dashboard-layout .acct-sidebar {
+    position: static !important;
+    margin-bottom: 16px;
+  }
+  .app-row {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 14px !important;
+    padding: 16px !important;
+  }
+  .app-actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justifyContent: flex-start;
+  }
+  .app-actions .btn,
+  .app-actions button {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  /* 3. Tối ưu Modal trên thiết bị di động (tránh tràn mép, dễ cuộn và chạm) */
+  .modal-shell,
+  .modal-box,
+  .modal-container {
+    max-width: 95vw !important;
+    max-height: 90vh !important;
+    margin: 16px auto !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 16px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .talents-hero h1 {
+    font-size: 22px !important;
+  }
+  .sec-eyebrow {
+    font-size: 11px !important;
+  }
+  .talents-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

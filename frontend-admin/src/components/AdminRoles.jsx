@@ -17,6 +17,11 @@ import {
   deleteAdminPermissionRoute
 } from '../api/adminApi';
 
+// Khớp với quy tắc mật khẩu quản trị phía backend (AdminRoleService)
+const ADMIN_PASSWORD_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{12,}$/;
+const ADMIN_PASSWORD_HINT = 'tối thiểu 12 ký tự, gồm chữ hoa, chữ thường, chữ số và ký tự đặc biệt.';
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const ROLE_NAME = {
   super_admin: 'Super Admin',
   super: 'Super Admin',
@@ -247,10 +252,10 @@ export default function AdminRoles() {
 
   // Reset Member Password
   const handleResetMemberPassword = async (m) => {
-    const newPass = window.prompt(`Nhập mật khẩu mới cho quản trị viên ${m.name} (${m.email}):`);
+    const newPass = window.prompt(`Nhập mật khẩu mới cho quản trị viên ${m.name} (${m.email}):\n${ADMIN_PASSWORD_HINT}`);
     if (!newPass) return;
-    if (newPass.trim().length < 6) {
-      showToast('Mật khẩu mới phải có tối thiểu 6 ký tự.', 'warning');
+    if (!ADMIN_PASSWORD_RE.test(newPass.trim())) {
+      showToast(`Mật khẩu chưa đủ mạnh: ${ADMIN_PASSWORD_HINT}`, 'warning');
       return;
     }
     try {
@@ -301,8 +306,12 @@ export default function AdminRoles() {
       showToast('Vui lòng nhập họ tên và email thành viên.', 'warning');
       return;
     }
-    if (!password || password.trim().length < 6) {
-      showToast('Vui lòng nhập mật khẩu khởi tạo (tối thiểu 6 ký tự).', 'warning');
+    if (!EMAIL_RE.test(email.trim())) {
+      showToast('Email không hợp lệ.', 'warning');
+      return;
+    }
+    if (!ADMIN_PASSWORD_RE.test(password.trim())) {
+      showToast(`Mật khẩu khởi tạo chưa đủ mạnh: ${ADMIN_PASSWORD_HINT}`, 'warning');
       return;
     }
 
@@ -746,8 +755,10 @@ export default function AdminRoles() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Tối thiểu 6 ký tự"
-                  minLength={6}
+                  placeholder="Tối thiểu 12 ký tự, có hoa, thường, số, ký tự đặc biệt"
+                  minLength={12}
+                  autoComplete="new-password"
+                  title={ADMIN_PASSWORD_HINT}
                   required
                 />
               </div>

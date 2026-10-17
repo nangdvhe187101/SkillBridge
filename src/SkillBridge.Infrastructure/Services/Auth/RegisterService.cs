@@ -65,11 +65,9 @@ public class RegisterService : IRegisterService
         if (dto.RoleCode != RoleCode.Student && dto.RoleCode != RoleCode.Employer)
             throw new BusinessException("Vai trò phải là 'student' hoặc 'employer'");
 
-        var isEduEmail = dto.RoleCode == RoleCode.Student &&
-                         (dto.Email.EndsWith("@fpt.edu.vn", StringComparison.OrdinalIgnoreCase) ||
-                          dto.Email.EndsWith("@fe.edu.vn", StringComparison.OrdinalIgnoreCase));
-
-        var initialAccountStatus = isEduEmail ? "active" : "pending";
+        // Mọi sinh viên đều phải qua luồng nộp thẻ sinh viên và được admin duyệt mới active,
+        // không phân biệt email trường nào (trước đây chỉ email @fpt.edu.vn/@fe.edu.vn được tự active).
+        var initialAccountStatus = "pending";
 
         if (await userRepository.EmailExistsAsync(dto.Email))
             throw new BusinessException("Email này đã được đăng ký");
@@ -134,8 +132,8 @@ public class RegisterService : IRegisterService
             }
         });
 
-        var message = initialAccountStatus == "active"
-            ? "Đăng ký thành công! Tài khoản sinh viên của bạn đã được kích hoạt. Bạn có thể đăng nhập ngay."
+        var message = dto.RoleCode == RoleCode.Student
+            ? "Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản, sau đó nộp thẻ sinh viên để được duyệt kích hoạt."
             : "Đăng ký thành công. Vui lòng kiểm tra email để xác thực tài khoản trước khi đăng nhập.";
 
         return new RegisterResultDto

@@ -11,13 +11,21 @@ namespace SkillBridge.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            // Rename old audit_log table to audit_logs if needed and ensure new structure
+            // Rename old audit_log table to audit_logs if needed (idempotent check)
             migrationBuilder.Sql(@"
-                ALTER TABLE `audit_log`
-                RENAME TO `audit_logs`;
+                SET @table_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+                                    WHERE TABLE_SCHEMA = DATABASE()
+                                    AND TABLE_NAME = 'audit_log');
+                SET @sql = IF(@table_exists > 0,
+                    'ALTER TABLE `audit_log` RENAME TO `audit_logs`',
+                    'SELECT 1');
+                PREPARE stmt FROM @sql;
+                EXECUTE stmt;
+                DEALLOCATE PREPARE stmt;
             ", suppressTransaction: true);
 
             // Add new columns if they don't exist
+            // Note: MySQL doesn't support DROP COLUMN IF EXISTS, so we handle it in two steps
             migrationBuilder.Sql(@"
                 ALTER TABLE `audit_logs`
                 ADD COLUMN `user_id` INT NULL AFTER `id`,
@@ -25,8 +33,24 @@ namespace SkillBridge.Infrastructure.Migrations
                 ADD COLUMN `action` VARCHAR(50) NOT NULL DEFAULT 'AUDIT' AFTER `admin_id`,
                 ADD COLUMN `old_value` VARCHAR(255) NULL AFTER `action`,
                 ADD COLUMN `new_value` VARCHAR(255) NULL AFTER `old_value`,
-                ADD COLUMN `reason` VARCHAR(500) NULL AFTER `new_value`,
-                DROP COLUMN IF EXISTS `action_text`,
+                ADD COLUMN `reason` VARCHAR(500) NULL AFTER `new_value`;
+            ", suppressTransaction: true);
+
+            // Drop action_text if exists (separate statement to handle IF EXISTS)
+            migrationBuilder.Sql(@"
+                SET @col_exists = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                                  WHERE TABLE_SCHEMA = DATABASE()
+                                  AND TABLE_NAME = 'audit_logs'
+                                  AND COLUMN_NAME = 'action_text');
+                SET @sql = IF(@col_exists > 0, 'ALTER TABLE `audit_logs` DROP COLUMN `action_text`', 'SELECT 1');
+                PREPARE stmt FROM @sql;
+                EXECUTE stmt;
+                DEALLOCATE PREPARE stmt;
+            ", suppressTransaction: true);
+
+            // Add action_text back as TEXT
+            migrationBuilder.Sql(@"
+                ALTER TABLE `audit_logs`
                 ADD COLUMN `action_text` TEXT NOT NULL AFTER `reason`;
             ", suppressTransaction: true);
 
@@ -50,18 +74,30 @@ namespace SkillBridge.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // Drop foreign keys
             migrationBuilder.Sql(@"
                 ALTER TABLE `audit_logs`
-                DROP FOREIGN KEY IF EXISTS `fk_auditlog_user`,
-                DROP FOREIGN KEY IF EXISTS `fk_auditlog_admin`,
-                DROP INDEX IF EXISTS `idx_auditlog_user`,
-                DROP INDEX IF EXISTS `idx_auditlog_admin`,
-                DROP COLUMN IF EXISTS `user_id`,
-                DROP COLUMN IF EXISTS `admin_id`,
-                DROP COLUMN IF EXISTS `action`,
-                DROP COLUMN IF EXISTS `old_value`,
-                DROP COLUMN IF EXISTS `new_value`,
-                DROP COLUMN IF EXISTS `reason`;
+                DROP FOREIGN KEY `fk_auditlog_user`,
+                DROP FOREIGN KEY `fk_auditlog_admin`;
+            ", suppressTransaction: true);
+
+            // Drop indexes
+            migrationBuilder.Sql(@"
+                ALTER TABLE `audit_logs`
+                DROP INDEX `idx_auditlog_user`,
+                DROP INDEX `idx_auditlog_admin`;
+            ", suppressTransaction: true);
+
+            // Drop columns
+            migrationBuilder.Sql(@"
+                ALTER TABLE `audit_logs`
+                DROP COLUMN `user_id`,
+                DROP COLUMN `admin_id`,
+                DROP COLUMN `action`,
+                DROP COLUMN `old_value`,
+                DROP COLUMN `new_value`,
+                DROP COLUMN `reason`,
+                DROP COLUMN `action_text`;
             ", suppressTransaction: true);
 
             migrationBuilder.Sql(@"

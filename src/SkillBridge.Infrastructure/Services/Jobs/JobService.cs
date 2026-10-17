@@ -374,6 +374,7 @@ public class JobService : IJobService
             throw new BusinessException("Chỉ có thể mở lại công việc đã bị hủy.");
         }
 
+        StateMachineValidator.ValidateJobTransition(job.Status, "open");
         job.Status = "open";
         job.HiredApplicantId = null;
         job.DeadlineAt = null;

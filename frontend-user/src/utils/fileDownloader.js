@@ -115,6 +115,29 @@ export async function downloadCandidateCv(cvFileId, originalFileName = 'CV_UngVi
     }
 }
 
+// Mở CV trong tab mới để xem trực tiếp (PDF). Tab được mở trước để không bị chặn popup.
+export async function viewCandidateCv(cvFileId) {
+    if (!cvFileId) return false;
+    const previewTab = window.open('', '_blank');
+    try {
+        const API_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || "http://localhost:5004/api";
+        const token = getAccessToken();
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const res = await fetch(`${API_URL}/cv-files/${cvFileId}/download`, { headers, credentials: 'include' });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blobUrl = URL.createObjectURL(await res.blob());
+        if (previewTab) previewTab.location.href = blobUrl;
+        else window.open(blobUrl, '_blank');
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+        return true;
+    } catch (err) {
+        console.error("Lỗi khi mở file CV của ứng viên:", err);
+        if (previewTab) previewTab.close();
+        return false;
+    }
+}
+
 export async function downloadDeliverableFile(jobId, deliverableId, originalFileName = 'deliverable.zip', type = 'final', version = 1) {
     let rawName = (originalFileName || 'san_pham_ban_giao').trim();
     rawName = rawName.replace(/[/\\?%*:|"<>]/g, '_').replace(/\s+/g, '_');

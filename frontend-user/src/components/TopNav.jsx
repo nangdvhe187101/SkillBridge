@@ -110,7 +110,7 @@ export default function TopNav() {
     <nav className="topnav">
       <div className="wrap">
         <NavLink to="/" className="logo" style={{ display: 'flex', alignItems: 'center', textDecoration: 'none' }}>
-          <img src="/logo.png" alt="SkillBridge" className="nav-logo-img" width="150" height="40" style={{ height: 40, width: 'auto', objectFit: 'contain' }} />
+          <img src="/logo-nav.png" alt="SkillBridge" className="nav-logo-img" width="56" height="40" decoding="async" style={{ height: 40, width: 'auto', objectFit: 'contain' }} />
         </NavLink>
 
         <div className={'navlinks' + (navOpen ? ' open' : '')} id="navlinks">
@@ -186,6 +186,9 @@ export default function TopNav() {
               </NavLink>
               <NavLink to="/account-settings" className={linkClass} onClick={() => setNavOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <Icon name="key" width="15" height="15" /> Cài đặt tài khoản
+              </NavLink>
+              <NavLink to="/contact" className={linkClass} onClick={() => setNavOpen(false)} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Icon name="headset" width="15" height="15" /> Đóng góp & Khiếu nại
               </NavLink>
             </div>
           )}
@@ -450,6 +453,9 @@ export default function TopNav() {
                   )}
                   <NavLink to="/account-settings" className="nav-more-link" onClick={() => goFromUserMenu('/account-settings')} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Icon name="key" width="14" height="14" /> Cài đặt tài khoản
+                  </NavLink>
+                  <NavLink to="/contact" className="nav-more-link" onClick={() => goFromUserMenu('/contact')} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Icon name="headset" width="14" height="14" /> Đóng góp & Khiếu nại
                   </NavLink>
                   <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
                   <button type="button" className="nav-more-link" style={{ width: '100%', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger, #e5484d)', display: 'flex', alignItems: 'center', gap: 8 }} onClick={handleLogout}>

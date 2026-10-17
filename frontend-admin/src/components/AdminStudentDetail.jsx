@@ -5,7 +5,9 @@ import {
   getAdminUserDetail,
   toggleLockUser,
   adjustUserReliability,
-  verifyUserKyc,
+  downloadAdminUserCv,
+  getStudentVerificationByUser,
+  reviewStudentVerification,
 } from '../api/adminApi';
 import { useToast } from '../context/ToastContext';
 
@@ -80,12 +82,60 @@ export default function AdminStudentDetail({ userId, initialUser, onBack }) {
   const [relScoreDelta, setRelScoreDelta] = useState(5);
   const [relReason, setRelReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cvBusyId, setCvBusyId] = useState(null);
+
+  // Hồ sơ xác minh thẻ sinh viên thật (từ StudentVerificationRequest), KHÔNG suy luận từ cờ user.kyc
+  const [verification, setVerification] = useState(null);
+  const [verificationLoading, setVerificationLoading] = useState(true);
+  const [verificationError, setVerificationError] = useState('');
+
+  // CV nằm ở thư mục riêng tư trên R2, phải tải qua API quản trị có kèm token rồi mở bằng Blob URL
+  const handleCvFile = async (cv, action) => {
+    // Mở tab trước khi await để trình duyệt không chặn popup
+    const viewTab = action === 'view' ? window.open('', '_blank') : null;
+    setCvBusyId(cv.id);
+    try {
+      const blob = await downloadAdminUserCv(userId, cv.id);
+      const blobUrl = URL.createObjectURL(blob);
+      if (viewTab) {
+        viewTab.location.href = blobUrl;
+      } else {
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = cv.fileName || `CV_${user?.name || userId}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      }
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (err) {
+      if (viewTab) viewTab.close();
+      showToast(err.message || 'Không thể mở file CV.', 'ban');
+    } finally {
+      setCvBusyId(null);
+    }
+  };
 
   useEffect(() => {
     if (userId) {
       loadUserDetail();
+      loadVerification();
     }
   }, [userId]);
+
+  const loadVerification = async () => {
+    setVerificationLoading(true);
+    setVerificationError('');
+    try {
+      const data = await getStudentVerificationByUser(userId);
+      setVerification(data || null);
+    } catch (err) {
+      setVerification(null);
+      setVerificationError(err.message || 'Không thể tải hồ sơ xác minh thẻ sinh viên.');
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
 
   const loadUserDetail = async () => {
     try {
@@ -106,7 +156,11 @@ export default function AdminStudentDetail({ userId, initialUser, onBack }) {
 
   const isLocked = user?.status === 'locked' || user?.isLocked;
   const isBlacklisted = user?.status === 'blacklisted' || user?.isBlacklisted;
-  const isKycVerified = user?.kyc === 'verified' || user?.isStudentVerified;
+  // Trạng thái thẻ SV lấy từ hồ sơ StudentVerificationRequest thật, không suy luận từ cờ user.kyc
+  const verificationStatus = verification?.status || null;
+  const isKycVerified = verificationStatus === 'approved';
+  const isKycRejected = verificationStatus === 'rejected';
+  const hasSubmittedVerification = Boolean(verification);
   const reliabilityScore = user?.reliability ?? user?.reliabilityScore ?? 100;
   const displayName = user?.name || user?.fullName || initialUser?.name || initialUser?.fullName || 'Người dùng';
   const displayAvatar = user?.avatarUrl || user?.avatar || initialUser?.avatarUrl || initialUser?.avatar || null;
@@ -160,12 +214,19 @@ export default function AdminStudentDetail({ userId, initialUser, onBack }) {
   };
 
   const handleVerifyKyc = async (approved, reason = '') => {
+    if (!verification?.id) {
+      showToast('Sinh viên chưa gửi yêu cầu xác minh thẻ nào để duyệt.', 'ban');
+      return;
+    }
     try {
-      await verifyUserKyc(userId, approved, reason);
-      showToast(approved ? 'Đã phê duyệt eKYC thành công!' : 'Đã từ chối eKYC.', 'check');
-      await loadUserDetail();
+      await reviewStudentVerification(verification.id, {
+        decision: approved ? 'approve' : 'reject',
+        rejectionReason: approved ? undefined : reason,
+      });
+      showToast(approved ? 'Đã phê duyệt xác thực thẻ SV thành công!' : 'Đã từ chối hồ sơ xác thực thẻ SV.', 'check');
+      await loadVerification();
     } catch (err) {
-      showToast(err.message || 'Lỗi xử lý eKYC.', 'ban');
+      showToast(err.message || 'Lỗi xử lý xác thực thẻ sinh viên.', 'ban');
     }
   };
 
@@ -335,7 +396,7 @@ export default function AdminStudentDetail({ userId, initialUser, onBack }) {
       </div>
 
       {/* 3. Bố cục 2 Cột: Cột Trái Thông tin Cơ sở, Cột Phải Tabs Chuyên sâu */}
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, alignItems: 'start' }}>
+      <div className="admin-detail-grid" style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, alignItems: 'start' }}>
 
         {/* CỘT TRÁI */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -508,6 +569,140 @@ export default function AdminStudentDetail({ userId, initialUser, onBack }) {
                   </div>
                 </div>
 
+                {/* KHỐI HỒ SƠ CV CỦA SINH VIÊN */}
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <h4 style={{ margin: 0, fontSize: 14, fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>📄</span> Hồ sơ CV đã tải lên ({user.cvs?.length || 0})
+                    </h4>
+                  </div>
+
+                  {user.cvs && user.cvs.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {user.cvs.map((cv) => {
+                        const fileSizeKb = cv.fileSize ? (cv.fileSize / 1024).toFixed(1) : '—';
+                        const uploadDate = cv.uploadedAt ? new Date(cv.uploadedAt).toLocaleDateString('vi-VN') : '—';
+
+                        return (
+                          <div
+                            key={cv.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '14px 18px',
+                              borderRadius: 8,
+                              background: '#f8fafc',
+                              border: '1px solid #e2e8f0',
+                              transition: 'border-color 0.2s ease',
+                              gap: 16,
+                              flexWrap: 'wrap',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 260, flex: 1 }}>
+                              <div
+                                style={{
+                                  width: 42,
+                                  height: 42,
+                                  borderRadius: 8,
+                                  background: '#fee2e2',
+                                  color: '#dc2626',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  fontSize: 20,
+                                  flexShrink: 0,
+                                }}
+                              >
+                                📕
+                              </div>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a' }}>
+                                  {cv.label || cv.fileName || `CV Hồ sơ #${cv.id}`}
+                                </div>
+                                <div style={{ fontSize: 12, color: '#64748b', marginTop: 3 }}>
+                                  <span style={{ fontWeight: 500, color: '#0284c7' }}>
+                                    {cv.categoryName || 'Chung / Đa ngành'}
+                                  </span>{' '}
+                                  • {fileSizeKb} KB • Tải lên: {uploadDate}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleCvFile(cv, 'view')}
+                                disabled={cvBusyId === cv.id}
+                                style={{
+                                  padding: '7px 14px',
+                                  borderRadius: 6,
+                                  background: '#0051c3',
+                                  color: '#fff',
+                                  fontSize: 12.5,
+                                  fontWeight: 600,
+                                  border: 'none',
+                                  cursor: cvBusyId === cv.id ? 'wait' : 'pointer',
+                                  opacity: cvBusyId === cv.id ? 0.7 : 1,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  boxShadow: '0 1px 2px rgba(0, 81, 195, 0.2)',
+                                }}
+                                title="Mở file CV trực tiếp trong tab mới"
+                              >
+                                👁️ Xem CV
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleCvFile(cv, 'download')}
+                                disabled={cvBusyId === cv.id}
+                                style={{
+                                  cursor: cvBusyId === cv.id ? 'wait' : 'pointer',
+                                  padding: '7px 14px',
+                                  borderRadius: 6,
+                                  background: '#fff',
+                                  color: '#334155',
+                                  fontSize: 12.5,
+                                  fontWeight: 600,
+                                  textDecoration: 'none',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  border: '1px solid #cbd5e1',
+                                }}
+                                title="Tải file CV về máy"
+                              >
+                                📥 Tải về
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div
+                      style={{
+                        padding: '24px 16px',
+                        borderRadius: 8,
+                        background: '#fafafa',
+                        border: '1px dashed #d1d5db',
+                        textAlign: 'center',
+                        color: '#6b7280',
+                      }}
+                    >
+                      <div style={{ fontSize: 26, marginBottom: 6 }}>📂</div>
+                      <div style={{ fontSize: 13.5, fontWeight: 500, color: '#374151' }}>
+                        Sinh viên chưa tải lên hồ sơ CV nào
+                      </div>
+                      <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                        Khi sinh viên upload file CV ứng tuyển, hồ sơ sẽ được hiển thị tại đây để quản trị viên kiểm duyệt.
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {isBlacklisted && (
                   <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 14 }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#b91c1c' }}>Lý do đưa vào Blacklist:</div>
@@ -520,70 +715,110 @@ export default function AdminStudentDetail({ userId, initialUser, onBack }) {
             {/* TAB 2: THẺ SINH VIÊN (EKYC) */}
             {activeTab === 'kyc' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                <div style={{ background: '#f8fafc', padding: 16, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>
-                        Trạng thái kiểm duyệt thẻ SV:
-                        <span
-                          style={{
-                            marginLeft: 8,
-                            padding: '2px 10px',
-                            borderRadius: 12,
-                            fontSize: 12,
-                            background: isKycVerified ? '#dcfce7' : '#fef3c7',
-                            color: isKycVerified ? '#15803d' : '#b45309',
-                          }}
-                        >
-                          {isKycVerified ? 'Đã phê duyệt' : 'Chờ xác thực'}
-                        </span>
+                {verificationLoading ? (
+                  <div style={{ padding: 32, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+                    Đang tải hồ sơ xác minh thẻ sinh viên...
+                  </div>
+                ) : verificationError ? (
+                  <div style={{ padding: 16, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, color: '#b91c1c', fontSize: 13 }}>
+                    {verificationError}
+                  </div>
+                ) : !hasSubmittedVerification ? (
+                  <div style={{ border: '1px dashed #cbd5e1', padding: 32, borderRadius: 8, textAlign: 'center', color: '#6b7280' }}>
+                    <div style={{ fontSize: 24, marginBottom: 8 }}>🪪</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>Chưa gửi yêu cầu xác minh thẻ sinh viên</div>
+                    <p style={{ fontSize: 12.5, margin: '6px 0 0', color: '#64748b' }}>
+                      Sinh viên <strong>{displayName}</strong> chưa upload ảnh thẻ hoặc chưa nộp yêu cầu xác minh nào lên hệ thống. Không có gì để quản trị viên duyệt.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ background: '#f8fafc', padding: 16, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>
+                            Trạng thái kiểm duyệt thẻ SV:
+                            <span
+                              style={{
+                                marginLeft: 8,
+                                padding: '2px 10px',
+                                borderRadius: 12,
+                                fontSize: 12,
+                                background: isKycVerified ? '#dcfce7' : isKycRejected ? '#fee2e2' : '#fef3c7',
+                                color: isKycVerified ? '#15803d' : isKycRejected ? '#b91c1c' : '#b45309',
+                              }}
+                            >
+                              {isKycVerified ? 'Đã phê duyệt' : isKycRejected ? 'Đã từ chối' : 'Chờ xác thực'}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+                            Mã SV: <strong>{verification.studentCode || '—'}</strong> · Trường: <strong>{verification.schoolName || displaySchool}</strong>
+                          </div>
+                          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                            Gửi lúc: {verification.submittedAt ? new Date(verification.submittedAt).toLocaleString('vi-VN') : '—'}
+                            {verification.reviewedAt && ` · Duyệt lúc: ${new Date(verification.reviewedAt).toLocaleString('vi-VN')}`}
+                          </div>
+                        </div>
+
+                        {verificationStatus === 'pending' && (
+                          <div style={{ display: 'flex', gap: 10 }}>
+                            <button
+                              onClick={() => handleVerifyKyc(false, 'Ảnh thẻ không hợp lệ hoặc thông tin không trùng khớp')}
+                              className="cf-btn-secondary"
+                              style={{ color: '#dc2626', borderColor: '#fca5a5' }}
+                            >
+                              Từ chối eKYC
+                            </button>
+                            <button
+                              onClick={() => handleVerifyKyc(true)}
+                              style={{
+                                background: '#16a34a',
+                                color: '#fff',
+                                border: 'none',
+                                padding: '7px 18px',
+                                borderRadius: 6,
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                              }}
+                            >
+                              Phê duyệt xác thực thẻ SV ✓
+                            </button>
+                          </div>
+                        )}
                       </div>
-                      {user.kycReviewedAt && (
-                        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-                          Duyệt lúc: {new Date(user.kycReviewedAt).toLocaleString('vi-VN')}
+
+                      {verification.rejectionReason && (
+                        <div style={{ marginTop: 12, padding: 10, background: '#fee2e2', borderRadius: 6, color: '#991b1b', fontSize: 12.5 }}>
+                          <strong>Lý do từ chối:</strong> {verification.rejectionReason}
                         </div>
                       )}
                     </div>
 
-                    <div style={{ display: 'flex', gap: 10 }}>
-                      <button
-                        onClick={() => handleVerifyKyc(false, 'Ảnh thẻ không hợp lệ hoặc thông tin không trùng khớp')}
-                        className="cf-btn-secondary"
-                        style={{ color: '#dc2626', borderColor: '#fca5a5' }}
-                      >
-                        Từ chối eKYC
-                      </button>
-                      <button
-                        onClick={() => handleVerifyKyc(true)}
-                        style={{
-                          background: '#16a34a',
-                          color: '#fff',
-                          border: 'none',
-                          padding: '7px 18px',
-                          borderRadius: 6,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        Phê duyệt xác thực thẻ SV ✓
-                      </button>
-                    </div>
+                    {(verification.frontCardUrl || verification.backCardUrl) && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                        {verification.frontCardUrl && (
+                          <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+                            <div style={{ padding: '6px 10px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc' }}>Mặt trước thẻ SV</div>
+                            <img src={verification.frontCardUrl} alt="Mặt trước thẻ sinh viên" style={{ width: '100%', display: 'block' }} />
+                          </div>
+                        )}
+                        {verification.backCardUrl && (
+                          <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
+                            <div style={{ padding: '6px 10px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc' }}>Mặt sau thẻ SV</div>
+                            <img src={verification.backCardUrl} alt="Mặt sau thẻ sinh viên" style={{ width: '100%', display: 'block' }} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {isBlacklisted && (
+                  <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#b91c1c' }}>Lý do đưa vào Blacklist:</div>
+                    <div style={{ fontSize: 13, color: '#7f1d1d', marginTop: 4 }}>{user.blacklistReason || 'Không có ghi chú cụ thể.'}</div>
                   </div>
-
-                  {user.kycRejectionReason && (
-                    <div style={{ marginTop: 12, padding: 10, background: '#fee2e2', borderRadius: 6, color: '#991b1b', fontSize: 12.5 }}>
-                      <strong>Lý do từ chối trước đó:</strong> {user.kycRejectionReason}
-                    </div>
-                  )}
-                </div>
-
-                <div style={{ border: '1px dashed #cbd5e1', padding: 32, borderRadius: 8, textAlign: 'center', color: '#6b7280' }}>
-                  <div style={{ fontSize: 24, marginBottom: 8 }}>🪪</div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#334155' }}>Hồ sơ đối soát sinh viên</div>
-                  <p style={{ fontSize: 12.5, margin: '6px 0 0', color: '#64748b' }}>
-                    Sinh viên: <strong>{displayName}</strong> | Trường: <strong>{displaySchool}</strong>
-                  </p>
-                </div>
+                )}
               </div>
             )}
 

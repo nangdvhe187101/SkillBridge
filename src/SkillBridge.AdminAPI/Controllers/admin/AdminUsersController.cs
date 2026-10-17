@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using SkillBridge.AdminAPI.Common;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs.Users;
+using SkillBridge.Application.Interfaces.Applications;
 using SkillBridge.Application.Interfaces.Users;
 
 namespace SkillBridge.AdminAPI.Controllers.admin;
@@ -19,10 +20,30 @@ namespace SkillBridge.AdminAPI.Controllers.admin;
 public class AdminUsersController : ControllerBase
 {
     private readonly IAdminUserService _adminUserService;
+    private readonly ICvService _cvService;
 
-    public AdminUsersController(IAdminUserService adminUserService)
+    public AdminUsersController(IAdminUserService adminUserService, ICvService cvService)
     {
         _adminUserService = adminUserService;
+        _cvService = cvService;
+    }
+
+    /// <summary>
+    /// Tải file CV của sinh viên (CV lưu ở thư mục riêng tư nên phải đi qua backend)
+    /// </summary>
+    [HttpGet("{userId:int}/cvs/{cvId:int}/download")]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> DownloadUserCv([FromRoute] int userId, [FromRoute] int cvId)
+    {
+        try
+        {
+            var (stream, contentType, fileName) = await _cvService.GetCvFileStreamForAdminAsync(userId, cvId);
+            return File(stream, contentType, fileName);
+        }
+        catch (BusinessException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
     }
 
     /// <summary>

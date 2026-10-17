@@ -54,6 +54,11 @@ export default function AdminOps() {
     emailPayoutEnabled: true,
     emailDigest18hEnabled: true,
     emailVipMatchEnabled: true,
+    emailWithdrawalEnabled: true,
+    emailBankVerificationEnabled: true,
+    emailStudentVerificationEnabled: true,
+    emailDisputeEnabled: true,
+    emailTicketReplyEnabled: true,
     // Company & Contact Information
     companyName: 'CÔNG TY CỔ PHẦN CÔNG NGHỆ SKILLBRIDGE VIỆT NAM',
     projectName: 'Dự án Khởi nghiệp Sáng tạo Sinh viên · FPT University EXE Capstone Project',
@@ -150,6 +155,11 @@ export default function AdminOps() {
             emailPayoutEnabled: res.emailPayoutEnabled ?? true,
             emailDigest18hEnabled: res.emailDigest18hEnabled ?? true,
             emailVipMatchEnabled: res.emailVipMatchEnabled ?? true,
+            emailWithdrawalEnabled: res.emailWithdrawalEnabled ?? true,
+            emailBankVerificationEnabled: res.emailBankVerificationEnabled ?? true,
+            emailStudentVerificationEnabled: res.emailStudentVerificationEnabled ?? true,
+            emailDisputeEnabled: res.emailDisputeEnabled ?? true,
+            emailTicketReplyEnabled: res.emailTicketReplyEnabled ?? true,
             // Company & Contact Information
             companyName: res.companyName || 'CÔNG TY CỔ PHẦN CÔNG NGHỆ SKILLBRIDGE VIỆT NAM',
             projectName: res.projectName || 'Dự án Khởi nghiệp Sáng tạo Sinh viên · FPT University EXE Capstone Project',
@@ -498,6 +508,36 @@ export default function AdminOps() {
               title: 'Email Thông báo Việc làm mới Phù hợp (VIP/Master)',
               desc: 'Gửi cảnh báo việc làm lương cao phù hợp kỹ năng cho ứng viên sở hữu gói Pro và Master Talent.',
               badge: 'VIP Talent'
+            },
+            {
+              key: 'emailWithdrawalEnabled',
+              title: 'Email Phê duyệt & Từ chối Yêu cầu Rút tiền',
+              desc: 'Gửi email cho người dùng ngay khi lệnh rút tiền được duyệt chuyển khoản hoặc bị từ chối kèm lý do cụ thể.',
+              badge: 'Tài chính / Rút tiền'
+            },
+            {
+              key: 'emailBankVerificationEnabled',
+              title: 'Email Phê duyệt & Từ chối Xác thực Ngân hàng',
+              desc: 'Gửi email thông báo kết quả duyệt hoặc từ chối liên kết tài khoản ngân hàng chính chủ của người dùng.',
+              badge: 'Ngân hàng / KYC'
+            },
+            {
+              key: 'emailStudentVerificationEnabled',
+              title: 'Email Phê duyệt & Từ chối Thẻ Sinh viên eKYC',
+              desc: 'Gửi email chúc mừng nhận huy hiệu Verified Student, yêu cầu chụp lại ảnh thẻ hoặc từ chối hồ sơ.',
+              badge: 'eKYC Sinh viên'
+            },
+            {
+              key: 'emailDisputeEnabled',
+              title: 'Email Khiếu nại Tranh chấp & Phán quyết Trọng tài',
+              desc: 'Gửi email cảnh báo khi có khiếu nại phát sinh (kèm thời hạn 72h) và thông báo kết quả phán quyết hoàn tiền/giải ngân.',
+              badge: 'Trọng tài / Hợp đồng'
+            },
+            {
+              key: 'emailTicketReplyEnabled',
+              title: 'Email Phản hồi Yêu cầu Hỗ trợ (CSKH)',
+              desc: 'Gửi email giải đáp trực tiếp đến hòm thư người dùng khi Admin trả lời hoặc đóng ticket hỗ trợ.',
+              badge: 'CSKH / Hỗ trợ'
             }
           ].map((toggle) => (
             <div
@@ -791,7 +831,7 @@ export default function AdminOps() {
             {/* Reply Composer */}
             {viewTicket.status === 'open' && (
               <div className="field" style={{ marginBottom: 16 }}>
-                <label>Soạn câu trả lời gửi đến người dùng (qua thông báo Notification)</label>
+                <label>Soạn câu trả lời gửi đến người dùng (qua Email CSKH)</label>
                 <textarea
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}

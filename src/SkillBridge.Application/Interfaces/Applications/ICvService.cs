@@ -17,6 +17,8 @@ public interface ICvService
     Task<CvFileDto> UpdateCvAsync(int studentId, int cvId, UpdateCvRequest request);
 
     Task DeleteCvAsync(int studentId, int cvId);
-    Task<(Stream Stream, string ContentType, string FileName)> GetCvFileStreamAsync(int currentUserId, int cvId);
+    Task<(Stream Stream, string ContentType, string FileName)> GetCvFileStreamAsync(int currentUserId, int cvId, bool isEmployer = false);
+    Task<List<CvFileDto>> GetSearchableCvFilesAsync(int studentId);
+    Task<(Stream Stream, string ContentType, string FileName)> GetCvFileStreamForAdminAsync(int studentId, int cvId);
 }
 

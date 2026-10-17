@@ -31,6 +31,7 @@ public class DependencyInjectionTests
         services.AddScoped(typeof(ILogger<>), typeof(MockLogger<>));
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddSingleton<IEncryptionKeyProvider, ConfigurationEncryptionKeyProvider>();
+        services.AddScoped(_ => new Moq.Mock<SkillBridge.Application.Interfaces.Admin.ISystemSettingService>().Object);
         services.AddScoped<IBankVerificationService, BankVerificationService>();
 
         var providerOptions = new ServiceProviderOptions

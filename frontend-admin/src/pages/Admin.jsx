@@ -1,10 +1,11 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { AdminProvider, useAdmin } from '../context/AdminContext';
 import AdminUsers from '../components/AdminUsers';
 import AdminContent from '../components/AdminContent';
 import AdminDisputes from '../components/AdminDisputes';
 import AdminFinance from '../components/AdminFinance';
+import AdminTransactions from '../components/AdminTransactions';
 import AdminPartners from '../components/AdminPartners';
 import AdminAnalytics from '../components/AdminAnalytics';
 import AdminOps from '../components/AdminOps';
@@ -13,6 +14,7 @@ import AdminMessages from '../components/AdminMessages';
 import AdminChat from '../components/AdminChat';
 import AdminBankVerification from '../components/AdminBankVerification';
 import AdminStudentVerification from '../components/AdminStudentVerification';
+import AdminSchools from '../components/AdminSchools';
 import AdminStudentDetail from '../components/AdminStudentDetail';
 import AdminEmployerDetail from '../components/AdminEmployerDetail';
 import AdminLoginAudit from '../components/AdminLoginAudit';
@@ -25,13 +27,13 @@ import { adminLogout } from '../api/authApi';
 import { getPendingStudentVerifications, getAdminBankVerifications } from '../api/adminApi';
 
 const ROLE_MODULES = {
-  super: ['users', 'contracts', 'student-verification', 'bank-verification', 'login-audit', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'tickets', 'ops', 'roles'],
-  super_admin: ['users', 'contracts', 'student-verification', 'bank-verification', 'login-audit', 'finance', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'tickets', 'ops', 'roles'],
-  business_admin: ['student-verification', 'login-audit', 'content', 'plans', 'partners', 'messages', 'support-chat', 'tickets', 'analytics'],
-  business: ['student-verification', 'login-audit', 'content', 'plans', 'partners', 'messages', 'support-chat', 'tickets', 'analytics'],
+  super: ['users', 'contracts', 'student-verification', 'schools', 'bank-verification', 'login-audit', 'finance', 'transactions', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'tickets', 'ops', 'roles'],
+  super_admin: ['users', 'contracts', 'student-verification', 'schools', 'bank-verification', 'login-audit', 'finance', 'transactions', 'disputes', 'content', 'plans', 'analytics', 'partners', 'messages', 'support-chat', 'tickets', 'ops', 'roles'],
+  business_admin: ['student-verification', 'schools', 'login-audit', 'content', 'plans', 'partners', 'messages', 'support-chat', 'tickets', 'analytics'],
+  business: ['student-verification', 'schools', 'login-audit', 'content', 'plans', 'partners', 'messages', 'support-chat', 'tickets', 'analytics'],
   moderator: ['content', 'messages', 'support-chat', 'student-verification', 'login-audit'],
   dispute: ['contracts', 'disputes', 'messages', 'support-chat'],
-  finance: ['contracts', 'finance', 'plans', 'bank-verification', 'support-chat'],
+  finance: ['contracts', 'finance', 'transactions', 'plans', 'bank-verification', 'support-chat'],
 };
 
 const ROLE_WHOAMI = {
@@ -52,6 +54,7 @@ const CF_NAV_SECTIONS = [
       { id: 'users', path: '/users', icon: 'users', label: 'Người dùng & eKYC', sub: 'Talents & Employers' },
       { id: 'contracts', path: '/contracts', icon: 'file-text', label: 'Hợp đồng & Escrow', sub: 'Live Contracts & Escrow' },
       { id: 'finance', path: '/finance', icon: 'bank', label: 'Tài chính & Rút tiền', sub: 'Payouts & Balance' },
+      { id: 'transactions', path: '/transactions', icon: 'receipt', label: 'Quản lý giao dịch', sub: 'Toàn bộ dòng tiền hệ thống' },
       { id: 'disputes', path: '/disputes', icon: 'scale', label: 'Xử lý tranh chấp', sub: 'Claims & Escrow' },
     ]
   },
@@ -61,6 +64,7 @@ const CF_NAV_SECTIONS = [
       { id: 'tickets', path: '/tickets', icon: 'ticket', label: 'Ticket hỗ trợ (CSKH)', sub: 'Hộp thư yêu cầu & Khiếu nại' },
       { id: 'support-chat', path: '/support-chat', icon: 'chat', label: 'Tin nhắn hỗ trợ (CSKH)', sub: 'Hội thoại trực tiếp với User/NTD' },
       { id: 'student-verification', path: '/student-verification', icon: 'shield-check', label: 'Duyệt thẻ sinh viên' },
+      { id: 'schools', path: '/schools', icon: 'graduation', label: 'Quản lý trường học' },
       { id: 'bank-verification', path: '/bank-verification', icon: 'shield-check', label: 'Duyệt ngân hàng' },
       { id: 'login-audit', path: '/login-audit', icon: 'shield-check', label: 'Giám sát đăng nhập', sub: 'Lịch sử phiên truy cập' },
       { id: 'content', path: '/content', icon: 'file-text', label: 'Kiểm duyệt bài đăng' },
@@ -88,9 +92,11 @@ const MODULE_TITLES = {
   users: 'Người dùng & eKYC',
   contracts: 'Giám sát Hợp đồng & Ký quỹ Escrow',
   'student-verification': 'Duyệt thẻ sinh viên & Đối soát MSSV',
+  schools: 'Quản lý trường đại học/cao đẳng',
   'bank-verification': 'Duyệt tài khoản ngân hàng',
   'login-audit': 'Giám sát Đăng nhập & An ninh Tài khoản',
   finance: 'Tài chính & Lệnh rút tiền',
+  transactions: 'Quản lý giao dịch',
   disputes: 'Trung tâm xử lý tranh chấp',
   content: 'Kiểm duyệt bài đăng tuyển dụng',
   'support-chat': 'Tin nhắn hỗ trợ trực tuyến (CSKH)',
@@ -187,6 +193,30 @@ function AdminInner({ forcedTab }) {
   const handleTabClick = (item) => {
     setSelectedUser(null);
     navigate(item.path);
+  };
+
+  // Trang chi tiết nằm trên URL (?user=&role=) để nút Back trình duyệt / touchpad / chuột quay về danh sách,
+  // F5 vẫn giữ trang chi tiết, và có thể gửi link chi tiết cho người khác
+  const detailUserId = activeTab === 'users' ? Number(searchParams.get('user')) || null : null;
+  const detailRole = searchParams.get('role');
+  const detailInitialUser = selectedUser?.id === detailUserId ? selectedUser : null;
+
+  // Mở chi tiết thì cuộn lên đầu; quay lại danh sách thì trả về đúng vị trí đang xem
+  const listScrollY = useRef(0);
+  useEffect(() => {
+    window.scrollTo(0, detailUserId ? 0 : listScrollY.current);
+  }, [detailUserId]);
+
+  const openUserDetail = (u) => {
+    listScrollY.current = window.scrollY;
+    setSelectedUser(u);
+    navigate(`/users?user=${u.id}&role=${encodeURIComponent(u.role || '')}`, { state: { fromList: true } });
+  };
+
+  const closeUserDetail = () => {
+    // Mở từ danh sách thì lùi 1 bước để giữ nguyên lịch sử; mở thẳng bằng link thì thay bằng trang danh sách
+    if (location.state?.fromList) navigate(-1);
+    else navigate('/users', { replace: true });
   };
 
   return (
@@ -463,27 +493,34 @@ function AdminInner({ forcedTab }) {
 
         {/* Main Content Area */}
         <main className="cf-main">
+          {/* Danh sách luôn được giữ (chỉ ẩn khi xem chi tiết) để quay lại không mất bộ lọc, trang, vị trí cuộn */}
           {activeTab === 'users' && (
-            selectedUser ? (
-              selectedUser.role === 'employer' ? (
+            <div style={{ display: detailUserId ? 'none' : 'block' }}>
+              <AdminUsers onViewDetail={openUserDetail} />
+            </div>
+          )}
+          {activeTab === 'users' && (
+            detailUserId && (
+              detailRole === 'employer' ? (
                 <AdminEmployerDetail
-                  userId={selectedUser.id}
-                  initialUser={selectedUser}
-                  onBack={() => setSelectedUser(null)}
+                  key={detailUserId}
+                  userId={detailUserId}
+                  initialUser={detailInitialUser}
+                  onBack={closeUserDetail}
                 />
               ) : (
                 <AdminStudentDetail
-                  userId={selectedUser.id}
-                  initialUser={selectedUser}
-                  onBack={() => setSelectedUser(null)}
+                  key={detailUserId}
+                  userId={detailUserId}
+                  initialUser={detailInitialUser}
+                  onBack={closeUserDetail}
                 />
               )
-            ) : (
-              <AdminUsers onViewDetail={(u) => setSelectedUser(u)} />
             )
           )}
           {activeTab === 'contracts' && <AdminContracts />}
           {activeTab === 'student-verification' && <AdminStudentVerification />}
+          {activeTab === 'schools' && <AdminSchools />}
           {activeTab === 'bank-verification' && (
             <div>
               <div style={{ marginBottom: 20 }}>
@@ -499,6 +536,7 @@ function AdminInner({ forcedTab }) {
           )}
           {activeTab === 'login-audit' && <AdminLoginAudit />}
           {activeTab === 'finance' && <AdminFinance />}
+          {activeTab === 'transactions' && <AdminTransactions />}
           {activeTab === 'disputes' && <AdminDisputes />}
           {activeTab === 'content' && <AdminContent />}
           {activeTab === 'plans' && <AdminPlans />}

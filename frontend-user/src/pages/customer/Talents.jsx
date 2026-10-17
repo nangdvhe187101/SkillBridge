@@ -7,7 +7,6 @@ import UserTierBadge from '../../components/common/UserTierBadge';
 import { useStore } from '../../context/StoreContext';
 import { talentApi } from '../../api/talentApi';
 import { getMyJobs, getCategories } from '../../api/jobApi';
-import { slugify } from '../../data/companies';
 
 const POPULAR_UNIVERSITIES = [
   'Đại học FPT',
@@ -1003,7 +1002,7 @@ export default function Talents() {
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
                       type="button"
-                      onClick={() => navigate(`/u/${slugify(talent.fullName)}`)}
+                      onClick={() => navigate(`/u/${talent.id}`)}
                       className="btn btn-ghost"
                       style={{
                         flex: 1,

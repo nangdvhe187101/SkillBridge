@@ -6,6 +6,8 @@ namespace SkillBridge.Application.DTOs.Payments;
 
 public class CreateWithdrawalDto
 {
+    [Required(ErrorMessage = "Vui lòng nhập số tiền rút")]
+    [Range(50000, 100000000, ErrorMessage = "Số tiền rút phải từ 50,000đ - 100,000,000đ")]
     public decimal Amount { get; set; }
 }
 
