@@ -16,7 +16,6 @@ export default function HoneypotInput({ value, onChange, name = "companyWebsite"
         overflow: 'hidden'
       }}
     >
-      <label htmlFor={name}>Leave this field empty</label>
       <input
         type="text"
         id={name}
