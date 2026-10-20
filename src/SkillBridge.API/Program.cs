@@ -374,6 +374,7 @@ else
 }
 
 app.UseForwardedHeaders();
+app.UseMiddleware<SkillBridge.Infrastructure.Services.Security.BotTrapMiddleware>();
 app.UseResponseCompression();
 
 app.UseMiddleware<SkillBridge.API.Middleware.ExceptionHandlingMiddleware>();

@@ -14,7 +14,6 @@ export default function TurnstileWidget({ onVerify, onError, onExpire }) {
 
     const renderWidget = () => {
       if (!window.turnstile || !containerRef.current || widgetIdRef.current) return;
-
       try {
         widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: SITE_KEY,
@@ -57,9 +56,7 @@ export default function TurnstileWidget({ onVerify, onError, onExpire }) {
         try {
           window.turnstile.remove(widgetIdRef.current);
           widgetIdRef.current = null;
-        } catch {
-          // ignore cleanup
-        }
+        } catch {}
       }
     };
   }, [onVerify, onError, onExpire]);

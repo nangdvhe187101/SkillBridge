@@ -47,3 +47,18 @@ src/SkillBridge.API/skillbridge.db
 uploads/
 **/uploads/
 !uploads/.gitkeep
+
+# Internal agent, docs & planning artifacts
+.agents/
+.sdd/
+.agentignore
+.claude/
+plans/
+docs/
+scripts/
+AGENTS.md
+CLAUDE.md
+CONSTITUTION.md
+GEMINI.md
+skills-lock.json
+
