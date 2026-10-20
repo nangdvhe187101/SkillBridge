@@ -12,6 +12,7 @@ public class RegisterDto
 {
     [Required(ErrorMessage = "Vui lòng nhập họ tên")]
     [StringLength(100, MinimumLength = 2, ErrorMessage = "Họ tên phải từ 2-100 ký tự")]
+    [RegularExpression(@"^[^<>]+$", ErrorMessage = "Họ tên không được chứa ký tự < hoặc >")]
     public string FullName { get; set; } = string.Empty;
 
     [Required(ErrorMessage = "Vui lòng nhập email")]

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.IO;
 
 namespace SkillBridge.Application.DTOs.Disputes;
@@ -9,13 +10,19 @@ public class DisputeFileUploadModel
     public Stream Stream { get; set; } = null!;
     public string FileName { get; set; } = null!;
     public string ContentType { get; set; } = null!;
+
+    [StringLength(500, ErrorMessage = "Mô tả không được quá 500 ký tự")]
     public string? Description { get; set; }
 }
 
 public class CreateDisputeRequest
 {
     public int JobId { get; set; }
+
+    [Required(ErrorMessage = "Vui lòng nhập lý do khiếu nại")]
+    [StringLength(1000, MinimumLength = 10, ErrorMessage = "Lý do khiếu nại phải từ 10-1000 ký tự")]
     public string Reason { get; set; } = null!;
+
     public string? Origin { get; set; } = "manual"; // 'manual' | 'revision_limit_exceeded'
     public int? DeliverableId { get; set; }
     public List<DisputeFileUploadModel>? Files { get; set; }
@@ -23,7 +30,9 @@ public class CreateDisputeRequest
 
 public class AddEvidenceRequest
 {
+    [StringLength(500, ErrorMessage = "Mô tả không được quá 500 ký tự")]
     public string Description { get; set; } = null!;
+
     public Stream Stream { get; set; } = null!;
     public string FileName { get; set; } = null!;
     public string ContentType { get; set; } = null!;

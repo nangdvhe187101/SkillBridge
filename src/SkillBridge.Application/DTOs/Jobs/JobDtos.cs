@@ -1,12 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace SkillBridge.Application.DTOs.Jobs;
 
 public class CreateJobRequest
 {
+    [Required(ErrorMessage = "Vui lòng nhập tiêu đề công việc")]
+    [StringLength(150, MinimumLength = 5, ErrorMessage = "Tiêu đề phải từ 5-150 ký tự")]
+    [RegularExpression(@"^[^<>]+$", ErrorMessage = "Tiêu đề không được chứa ký tự < hoặc >")]
     public string Title { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập mô tả công việc")]
+    [StringLength(5000, MinimumLength = 10, ErrorMessage = "Mô tả phải từ 10-5000 ký tự")]
+    [RegularExpression(@"^[^<>]+$", ErrorMessage = "Mô tả không được chứa ký tự < hoặc >")]
     public string Description { get; set; } = string.Empty;
+
     public int CategoryId { get; set; }
     public string? Location { get; set; }
     public decimal Budget { get; set; }
@@ -18,8 +27,16 @@ public class CreateJobRequest
 
 public class UpdateJobRequest
 {
+    [Required(ErrorMessage = "Vui lòng nhập tiêu đề công việc")]
+    [StringLength(150, MinimumLength = 5, ErrorMessage = "Tiêu đề phải từ 5-150 ký tự")]
+    [RegularExpression(@"^[^<>]+$", ErrorMessage = "Tiêu đề không được chứa ký tự < hoặc >")]
     public string Title { get; set; } = string.Empty;
+
+    [Required(ErrorMessage = "Vui lòng nhập mô tả công việc")]
+    [StringLength(5000, MinimumLength = 10, ErrorMessage = "Mô tả phải từ 10-5000 ký tự")]
+    [RegularExpression(@"^[^<>]+$", ErrorMessage = "Mô tả không được chứa ký tự < hoặc >")]
     public string Description { get; set; } = string.Empty;
+
     public int CategoryId { get; set; }
     public string? Location { get; set; }
     public decimal Budget { get; set; }

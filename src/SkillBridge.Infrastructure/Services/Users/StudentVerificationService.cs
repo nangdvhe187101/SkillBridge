@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Diagnostics;
-using System.Net.Http;
+using System.Net;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Net.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using SkillBridge.Application.Common;
@@ -26,17 +28,20 @@ namespace SkillBridge.Infrastructure.Services.Users
         private readonly IStorageService _storageService;
         private readonly ISystemSettingService? _systemSettingService;
         private readonly IEmailService? _emailService;
+        private readonly IStudentCardOcrEngine _ocrEngine;
 
         public StudentVerificationService(
             SkillBridgeDbContext _dbContext,
             ILogger<StudentVerificationService> _logger,
             IStorageService storageService,
+            IStudentCardOcrEngine ocrEngine,
             ISystemSettingService? systemSettingService = null,
             IEmailService? emailService = null)
         {
             dbContext = _dbContext;
             logger = _logger;
             _storageService = storageService;
+            _ocrEngine = ocrEngine;
             _systemSettingService = systemSettingService;
             _emailService = emailService;
         }
@@ -679,29 +684,17 @@ namespace SkillBridge.Infrastructure.Services.Users
                     await File.WriteAllBytesAsync(tempImagePath, imageBytes, ct);
                 }
 
-                var ocrBinary = "/Users/vannang/Projects/SkillBridge/scripts/student_card_ocr";
-                var isBinary = File.Exists(ocrBinary);
+                // Nhận diện chữ thô bằng Tesseract OCR (chạy được trên Render/Linux).
+                // Logic trích xuất bên dưới (mã sinh viên, tên, trường, niên khóa) được
+                // port 1:1 từ scripts/student_card_ocr.swift (Apple Vision Framework cũ,
+                // chỉ chạy trên macOS — giữ lại file đó trong repo để tham khảo/đối chiếu
+                // độ chính xác, không còn được gọi từ code).
+                var recognizedBlocks = await _ocrEngine.RecognizeAsync(tempImagePath, ct);
+                var recognizedLines = recognizedBlocks.Select(b => b.Text).ToList();
 
-                var startInfo = new ProcessStartInfo
+                if (recognizedLines.Count == 0)
                 {
-                    FileName = isBinary ? ocrBinary : "swift",
-                    Arguments = isBinary ? $"\"{tempImagePath}\"" : $"/Users/vannang/Projects/SkillBridge/scripts/student_card_ocr.swift \"{tempImagePath}\"",
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-
-                using var process = new Process { StartInfo = startInfo };
-                process.Start();
-
-                var output = await process.StandardOutput.ReadToEndAsync(ct);
-                var error = await process.StandardError.ReadToEndAsync(ct);
-                await process.WaitForExitAsync(ct);
-
-                if (string.IsNullOrWhiteSpace(output))
-                {
-                    logger.LogWarning("OCR returned empty output. Error: {Error}", error);
+                    logger.LogWarning("OCR không nhận diện được chữ nào trong ảnh. RequestId: {RequestId}", requestId);
                     return new StudentCardOcrResultDto
                     {
                         Success = false,
@@ -709,24 +702,12 @@ namespace SkillBridge.Infrastructure.Services.Users
                     };
                 }
 
-                using var doc = JsonDocument.Parse(output);
-                var root = doc.RootElement;
+                var studentCode = ExtractStudentCode(recognizedLines);
+                var schoolNameRaw = ExtractSchoolName(recognizedLines);
+                var gradYear = ExtractGraduationYear(recognizedLines);
+                var fullName = ExtractFullName(recognizedBlocks);
 
-                var studentCode = root.TryGetProperty("studentCode", out var sc) && sc.ValueKind == JsonValueKind.String ? sc.GetString() : null;
-                var fullName = root.TryGetProperty("fullName", out var fn) && fn.ValueKind == JsonValueKind.String ? fn.GetString() : null;
-                var schoolName = root.TryGetProperty("schoolName", out var sn) && sn.ValueKind == JsonValueKind.String ? sn.GetString() : null;
-                int? gradYear = root.TryGetProperty("graduationYear", out var gy) && gy.ValueKind == JsonValueKind.Number ? gy.GetInt32() : null;
-
-                var rawLines = new List<string>();
-                if (root.TryGetProperty("rawLines", out var rl) && rl.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var item in rl.EnumerateArray())
-                    {
-                        var str = item.GetString();
-                        if (!string.IsNullOrWhiteSpace(str)) rawLines.Add(str);
-                    }
-                }
-
+                var schoolName = schoolNameRaw;
                 int? matchedSchoolId = null;
                 if (!string.IsNullOrWhiteSpace(schoolName))
                 {
@@ -743,7 +724,16 @@ namespace SkillBridge.Infrastructure.Services.Users
                     }
                 }
 
-                request.OcrResultJson = output;
+                var ocrResultJson = JsonSerializer.Serialize(new
+                {
+                    success = true,
+                    studentCode,
+                    fullName,
+                    schoolName = schoolNameRaw,
+                    graduationYear = gradYear,
+                    rawLines = recognizedLines
+                });
+                request.OcrResultJson = ocrResultJson;
                 await dbContext.SaveChangesAsync(ct);
 
                 return new StudentCardOcrResultDto
@@ -754,7 +744,7 @@ namespace SkillBridge.Infrastructure.Services.Users
                     SchoolName = schoolName,
                     SchoolId = matchedSchoolId,
                     GraduationYear = gradYear,
-                    RawLines = rawLines
+                    RawLines = recognizedLines
                 };
             }
             catch (Exception ex)
@@ -773,6 +763,154 @@ namespace SkillBridge.Infrastructure.Services.Users
                     try { File.Delete(tempImagePath); } catch { }
                 }
             }
+        }
+
+        // ===== Logic trích xuất thông tin thẻ sinh viên — port từ scripts/student_card_ocr.swift =====
+
+        private static readonly Regex[] StudentCodeRegexes =
+        {
+            new(@"(?:Student\s*ID|MSSV|Mã\s*(?:số)?\s*sinh\s*viên)[:\s]*([A-Za-z]{1,4}\d{4,8})", RegexOptions.IgnoreCase),
+            new(@"\b([A-Za-z]{2}\d{6,8})\b", RegexOptions.IgnoreCase),
+            new(@"\b([A-Za-z]{1,3}\d{5,8})\b", RegexOptions.IgnoreCase),
+            new(@"\b(\d{7,10})\b", RegexOptions.IgnoreCase)
+        };
+
+        private static readonly Regex GraduationYearRegex = new(@"(?:20\d{2})\s*[-–/]\s*(20\d{2})", RegexOptions.None);
+
+        private static string? ExtractStudentCode(List<string> recognizedLines)
+        {
+            foreach (var line in recognizedLines)
+            {
+                foreach (var regex in StudentCodeRegexes)
+                {
+                    var match = regex.Match(line);
+                    if (match.Success)
+                    {
+                        var captureGroup = match.Groups.Count > 1 ? match.Groups[1] : match.Groups[0];
+                        var code = captureGroup.Value.ToUpperInvariant();
+                        if (code.Length >= 6)
+                        {
+                            return code;
+                        }
+                    }
+                }
+            }
+            return null;
+        }
+
+        private static string? ExtractSchoolName(List<string> recognizedLines)
+        {
+            foreach (var line in recognizedLines)
+            {
+                var lower = line.ToLowerInvariant();
+                if (lower.Contains("fpt")) return "Đại học FPT";
+                if (lower.Contains("bách khoa") || lower.Contains("bach khoa") || lower.Contains("hust")) return "Đại học Bách Khoa";
+                if (lower.Contains("quốc gia") || lower.Contains("vnu")) return "Đại học Quốc Gia";
+                if (lower.Contains("kinh tế") || lower.Contains("neu")) return "Đại học Kinh tế Quốc dân";
+                if (lower.Contains("đại học") || lower.Contains("cao đẳng") || lower.Contains("university")) return line;
+            }
+            return null;
+        }
+
+        private static int? ExtractGraduationYear(List<string> recognizedLines)
+        {
+            foreach (var line in recognizedLines)
+            {
+                var match = GraduationYearRegex.Match(line);
+                if (match.Success && match.Groups.Count > 1 && int.TryParse(match.Groups[1].Value, out var year))
+                {
+                    return year;
+                }
+            }
+            return null;
+        }
+
+        private static string RemoveAccents(string input)
+        {
+            var normalized = input.Normalize(System.Text.NormalizationForm.FormD);
+            var sb = new System.Text.StringBuilder();
+            foreach (var c in normalized)
+            {
+                var category = System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c);
+                if (category != System.Globalization.UnicodeCategory.NonSpacingMark)
+                {
+                    sb.Append(c);
+                }
+            }
+            return sb.ToString().Normalize(System.Text.NormalizationForm.FormC)
+                .Replace('Đ', 'D').Replace('đ', 'd');
+        }
+
+        private static string CleanNameToken(string text)
+        {
+            var letters = text.Where(char.IsLetter).ToList();
+            var asciiLetters = letters.Where(c => c < 128).ToList();
+            if (letters.Count > 0 && (double)asciiLetters.Count / letters.Count >= 0.6)
+            {
+                return RemoveAccents(text);
+            }
+            return text;
+        }
+
+        private static bool IsSystemLabel(string text)
+        {
+            var clean = RemoveAccents(text.ToLowerInvariant());
+            return clean.Contains("truong dai hoc") || clean.Contains("dai hoc") || clean.Contains("cao dang")
+                || clean.Contains("university") || clean.Contains("education") || clean.Contains("student id")
+                || clean.Contains("period of study") || clean.Contains("student") || clean.Length <= 1;
+        }
+
+        private static string? ExtractFullName(List<OcrTextBlock> blocks)
+        {
+            // Sắp theo Y giảm dần (cùng quy ước toạ độ chuẩn hoá 0-1, gốc dưới-trái, như bản Swift gốc).
+            var sortedBlocks = blocks.OrderByDescending(b => b.Y).ToList();
+
+            var nameBlocks = new List<OcrTextBlock>();
+            OcrTextBlock? primary = null;
+
+            foreach (var b in sortedBlocks)
+            {
+                if (IsSystemLabel(b.Text)) continue;
+                var words = b.Text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                var isAllUpper = b.Text == b.Text.ToUpperInvariant();
+
+                if (isAllUpper && words.Length >= 2 && words.Length <= 5 && primary == null)
+                {
+                    primary = b;
+                    nameBlocks.Add(b);
+                    break;
+                }
+            }
+
+            if (primary != null)
+            {
+                var primeCenterX = primary.X + primary.Width / 2.0;
+
+                foreach (var b in sortedBlocks)
+                {
+                    if (b.Text == primary.Text) continue;
+                    if (IsSystemLabel(b.Text)) continue;
+
+                    var bCenterX = b.X + b.Width / 2.0;
+                    var centerDiff = Math.Abs(primeCenterX - bCenterX);
+                    var yGap = primary.Y - (b.Y + b.Height);
+                    var words = b.Text.Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+
+                    if (yGap >= -0.015 && yGap < 0.045 && centerDiff < 0.15 && words.Length >= 1 && words.Length <= 3 && b.Text == b.Text.ToUpperInvariant())
+                    {
+                        nameBlocks.Add(b);
+                        break;
+                    }
+                }
+            }
+
+            if (nameBlocks.Count == 0)
+            {
+                return null;
+            }
+
+            var combinedRaw = string.Join(" ", nameBlocks.Select(b => b.Text));
+            return CleanNameToken(combinedRaw);
         }
 
         private async Task<int?> EnsureAdminMemberIdAsync(int adminUserId, CancellationToken ct = default)
@@ -818,17 +956,19 @@ namespace SkillBridge.Infrastructure.Services.Users
                 var user = request.User ?? await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId);
                 if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
 
-                var schoolName = request.School?.Name ?? "Đại học / Cao đẳng";
+                var safeFullName = WebUtility.HtmlEncode(request.FullNameOnCard ?? user.FullName ?? "bạn");
+                var safeSchoolName = WebUtility.HtmlEncode(request.School?.Name ?? "Đại học / Cao đẳng");
+                var safeStudentCode = WebUtility.HtmlEncode(request.StudentCode);
                 var subject = "[SkillBridge] Hồ sơ thẻ sinh viên của bạn đã được xác thực thành công";
                 var body = $@"
 <div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
     <h2 style=""color: #10b981;"">Xác thực sinh viên thành công! 🎓</h2>
-    <p>Xin chào <strong>{request.FullNameOnCard ?? user.FullName ?? "bạn"}</strong>,</p>
+    <p>Xin chào <strong>{safeFullName}</strong>,</p>
     <p>Hồ sơ thẻ sinh viên của bạn trên hệ thống <strong>SkillBridge</strong> đã được Ban quản trị phê duyệt thành công.</p>
     <div style=""background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0;"">
-        <p><strong>Trường:</strong> {schoolName}</p>
-        <p><strong>Mã số sinh viên (MSSV):</strong> {request.StudentCode}</p>
-        <p><strong>Họ và tên:</strong> {request.FullNameOnCard}</p>
+        <p><strong>Trường:</strong> {safeSchoolName}</p>
+        <p><strong>Mã số sinh viên (MSSV):</strong> {safeStudentCode}</p>
+        <p><strong>Họ và tên:</strong> {safeFullName}</p>
         <p><strong>Năm tốt nghiệp dự kiến:</strong> {request.GraduationYear}</p>
         <p><strong>Thời gian duyệt:</strong> {DateTime.UtcNow:dd/MM/yyyy HH:mm} UTC</p>
     </div>
@@ -856,14 +996,16 @@ namespace SkillBridge.Infrastructure.Services.Users
                 var user = request.User ?? await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId);
                 if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
 
+                var safeFullName = WebUtility.HtmlEncode(user.FullName ?? "bạn");
+                var safeUserMessage = WebUtility.HtmlEncode(request.UserMessage);
                 var subject = "[SkillBridge] Yêu cầu bổ sung thông tin xác minh thẻ sinh viên";
                 var body = $@"
 <div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
     <h2 style=""color: #f59e0b;"">Yêu cầu bổ sung thông tin hồ sơ thẻ sinh viên ⚠️</h2>
-    <p>Xin chào <strong>{user.FullName ?? "bạn"}</strong>,</p>
+    <p>Xin chào <strong>{safeFullName}</strong>,</p>
     <p>Ban quản trị SkillBridge đã xem xét hồ sơ xác minh thẻ sinh viên của bạn và cần bạn bổ sung hoặc cập nhật thêm thông tin:</p>
     <div style=""background: #fffbeb; border-left: 4px solid #f59e0b; padding: 15px; border-radius: 4px; margin: 20px 0;"">
-        <p><strong>Yêu cầu từ kiểm duyệt viên:</strong> {request.UserMessage}</p>
+        <p><strong>Yêu cầu từ kiểm duyệt viên:</strong> {safeUserMessage}</p>
         <p><strong>Hạn chót bổ sung:</strong> {request.NeedInfoDeadline:dd/MM/yyyy HH:mm} UTC</p>
     </div>
     <p>Vui lòng đăng nhập vào ứng dụng SkillBridge, truy cập mục <strong>Hồ sơ cá nhân / Xác minh thẻ sinh viên</strong> để chụp lại ảnh thẻ hoặc cập nhật theo hướng dẫn trước thời hạn trên.</p>
@@ -890,14 +1032,16 @@ namespace SkillBridge.Infrastructure.Services.Users
                 var user = request.User ?? await dbContext.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == request.UserId);
                 if (user == null || string.IsNullOrWhiteSpace(user.Email)) return;
 
+                var safeFullName = WebUtility.HtmlEncode(user.FullName ?? "bạn");
+                var safeRejectionReason = WebUtility.HtmlEncode(request.RejectionReason);
                 var subject = "[SkillBridge] Thông báo kết quả xác minh thẻ sinh viên";
                 var body = $@"
 <div style=""font-family: Arial, sans-serif; line-height: 1.6; color: #333;"">
     <h2 style=""color: #ef4444;"">Hồ sơ xác minh thẻ sinh viên không được duyệt</h2>
-    <p>Xin chào <strong>{user.FullName ?? "bạn"}</strong>,</p>
+    <p>Xin chào <strong>{safeFullName}</strong>,</p>
     <p>Ban quản trị SkillBridge đã xem xét hồ sơ thẻ sinh viên của bạn nhưng rất tiếc chưa thể phê duyệt do thông tin không đạt yêu cầu tiêu chuẩn:</p>
     <div style=""background: #fef2f2; border-left: 4px solid #ef4444; padding: 15px; border-radius: 4px; margin: 20px 0;"">
-        <p><strong>Lý do từ chối:</strong> {request.RejectionReason}</p>
+        <p><strong>Lý do từ chối:</strong> {safeRejectionReason}</p>
     </div>
     <p>Vui lòng đăng nhập vào SkillBridge để nộp lại ảnh chụp thẻ sinh viên rõ nét, còn hạn sử dụng hoặc liên hệ đội ngũ hỗ trợ nếu bạn cần thêm thông tin.</p>
     <hr style=""border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;"" />
