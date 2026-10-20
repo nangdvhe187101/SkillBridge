@@ -3,11 +3,15 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
 import GoogleLoginButton from '../../components/GoogleLoginButton';
+import TurnstileWidget from '../../components/TurnstileWidget';
+import HoneypotInput from '../../components/HoneypotInput';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
 export default function LoginForm({ onSwitchTab, onForgotPassword }) {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [turnstileToken, setTurnstileToken] = useState('');
+  const [honeypot, setHoneypot] = useState('');
   const [emailError, setEmailError] = useState('');
   const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -131,6 +135,9 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
       <div className="auth-link-row">
         <a href="#" onClick={(e) => { e.preventDefault(); onForgotPassword(); }}>Quên mật khẩu?</a>
       </div>
+
+      <HoneypotInput value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
+      <TurnstileWidget onVerify={(token) => setTurnstileToken(token)} />
 
       {formError && <div className="field-error" style={{ marginBottom: 12 }}>{formError}</div>}
 
