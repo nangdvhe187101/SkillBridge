@@ -27,6 +27,13 @@ RUN dotnet publish "SkillBridge.API.csproj" -c Release -o /app/publish /p:UseApp
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS final
 WORKDIR /app
 
+# Tesseract OCR cho tính năng nhận diện thẻ sinh viên (thay Apple Vision Framework,
+# vốn chỉ chạy trên macOS và không hoạt động trên container Linux này).
+# tesseract-ocr-vie: gói ngôn ngữ tiếng Việt; tesseract-ocr-eng: chữ Latin/số không dấu.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr tesseract-ocr-vie tesseract-ocr-eng \
+    && rm -rf /var/lib/apt/lists/*
+
 # Render mặc định định tuyến qua cổng 8080 (hoặc qua biến PORT)
 ENV ASPNETCORE_HTTP_PORTS=8080
 EXPOSE 8080

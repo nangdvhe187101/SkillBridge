@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Net;
 using System.Net.Http;
 using MailKit.Net.Smtp;
 using MailKit.Security;
@@ -30,6 +31,7 @@ namespace SkillBridge.Infrastructure.Services.Email
         public async Task SendVerificationEmailAsync(string toEmail, string fullName, string verificationLink)
         {
             var fromEmail = config["Smtp:From"] ?? config["Resend:From"] ?? "noreply@skillbridge.id.vn";
+            var safeFullName = HtmlEncodeUserInput(fullName);
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("SkillBridge", fromEmail));
             message.To.Add(new MailboxAddress(fullName, toEmail));
@@ -44,7 +46,7 @@ namespace SkillBridge.Infrastructure.Services.Email
         <p style=""color: #64748b; font-size: 14px; margin-top: 4px;"">Nền tảng việc làm ngắn hạn cho sinh viên</p>
     </div>
     <div style=""padding: 20px 0; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;"">
-        <p style=""font-size: 16px; color: #1e293b;"">Chào <b>{fullName}</b>,</p>
+        <p style=""font-size: 16px; color: #1e293b;"">Chào <b>{safeFullName}</b>,</p>
         <p style=""color: #475569; line-height: 1.6;"">Cảm ơn bạn đã đăng ký tài khoản SkillBridge. Vui lòng bấm vào nút bên dưới để xác thực email của bạn (liên kết có hiệu lực trong 24 giờ):</p>
         <div style=""text-align: center; margin: 32px 0;"">
             <a href=""{verificationLink}"" target=""_blank"" style=""background-color: #00c853; color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; display: inline-block; box-shadow: 0 4px 12px rgba(0,200,83,0.25);"">Xác thực tài khoản ngay</a>
@@ -68,6 +70,7 @@ namespace SkillBridge.Infrastructure.Services.Email
         public async Task SendPasswordResetOtpAsync(string toEmail, string fullName, string otp)
         {
             var fromEmail = config["Smtp:From"] ?? config["Resend:From"] ?? "noreply@skillbridge.id.vn";
+            var safeFullName = HtmlEncodeUserInput(fullName);
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("SkillBridge", fromEmail));
             message.To.Add(new MailboxAddress(fullName, toEmail));
@@ -82,7 +85,7 @@ namespace SkillBridge.Infrastructure.Services.Email
         <p style=""color: #64748b; font-size: 14px; margin-top: 4px;"">Nền tảng việc làm ngắn hạn cho sinh viên</p>
     </div>
     <div style=""padding: 20px 0; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;"">
-        <p style=""font-size: 16px; color: #1e293b;"">Chào <b>{fullName}</b>,</p>
+        <p style=""font-size: 16px; color: #1e293b;"">Chào <b>{safeFullName}</b>,</p>
         <p style=""color: #475569; line-height: 1.6;"">Mã xác thực để đặt lại mật khẩu tài khoản SkillBridge của bạn là:</p>
         <div style=""text-align: center; margin: 24px 0;"">
             <span style=""display: inline-block; font-size: 32px; font-weight: 700; letter-spacing: 6px; color: #0f172a; background-color: #f8fafc; padding: 12px 24px; border-radius: 8px; border: 1px dashed #cbd5e1;"">{otp}</span>
@@ -119,10 +122,11 @@ namespace SkillBridge.Infrastructure.Services.Email
         public async Task SendDeadlineWarningEmailAsync(string toEmail, string fullName, string jobTitle, DateTime deadlineAt)
         {
             var fromEmail = config["Smtp:From"] ?? config["Resend:From"] ?? "noreply@skillbridge.id.vn";
+            var safeJobTitle = SanitizeHeaderValue(jobTitle);
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("SkillBridge", fromEmail));
             message.To.Add(new MailboxAddress(fullName, toEmail));
-            message.Subject = $"Nhắc nhở: Công việc \"{jobTitle}\" sắp đến hạn bàn giao - SkillBridge";
+            message.Subject = $"Nhắc nhở: Công việc \"{safeJobTitle}\" sắp đến hạn bàn giao - SkillBridge";
             message.Body = new TextPart("plain")
             {
                 Text = $"Chào {fullName},\n\n" +
@@ -137,10 +141,11 @@ namespace SkillBridge.Infrastructure.Services.Email
         public async Task SendDeadlineOverdueEmailAsync(string toEmail, string fullName, string jobTitle, DateTime deadlineAt)
         {
             var fromEmail = config["Smtp:From"] ?? config["Resend:From"] ?? "noreply@skillbridge.id.vn";
+            var safeJobTitle = SanitizeHeaderValue(jobTitle);
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("SkillBridge", fromEmail));
             message.To.Add(new MailboxAddress(fullName, toEmail));
-            message.Subject = $"Cảnh báo: Công việc \"{jobTitle}\" đã quá hạn bàn giao - SkillBridge";
+            message.Subject = $"Cảnh báo: Công việc \"{safeJobTitle}\" đã quá hạn bàn giao - SkillBridge";
             message.Body = new TextPart("plain")
             {
                 Text = $"Chào {fullName},\n\n" +
@@ -157,10 +162,12 @@ namespace SkillBridge.Infrastructure.Services.Email
             if (!await IsEmailEnabledAsync("Email_JobHired_Enabled")) return;
 
             var baseUrl = config["Frontend:BaseUrl"] ?? "http://localhost:5173";
+            var safeStudentName = HtmlEncodeUserInput(studentName);
+            var safeJobTitle = HtmlEncodeUserInput(jobTitle);
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"] ?? "no-reply@skillbridge.vn"));
             message.To.Add(new MailboxAddress(studentName, toEmail));
-            message.Subject = $"🎉 Chúc mừng! Bạn đã được chọn thực hiện: \"{jobTitle}\" - SkillBridge";
+            message.Subject = $"🎉 Chúc mừng! Bạn đã được chọn thực hiện: \"{SanitizeHeaderValue(jobTitle)}\" - SkillBridge";
 
             var bodyBuilder = new BodyBuilder
             {
@@ -172,8 +179,8 @@ namespace SkillBridge.Infrastructure.Services.Email
     </div>
     <div>
         <span style=""display: inline-block; background-color: #ecfdf5; color: #059669; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; margin-bottom: 12px;"">🎉 Ứng tuyển thành công</span>
-        <h3 style=""margin: 0 0 12px; font-size: 20px; color: #0f172a;"">Chúc mừng {studentName}!</h3>
-        <p style=""line-height: 1.6; color: #475569; margin-bottom: 20px;"">Hồ sơ của bạn đã được Nhà tuyển dụng tin tưởng lựa chọn cho dự án <b>""{jobTitle}""</b>. Khoản tiền thù lao đã được ký quỹ Escrow bảo đảm an toàn trên hệ thống.</p>
+        <h3 style=""margin: 0 0 12px; font-size: 20px; color: #0f172a;"">Chúc mừng {safeStudentName}!</h3>
+        <p style=""line-height: 1.6; color: #475569; margin-bottom: 20px;"">Hồ sơ của bạn đã được Nhà tuyển dụng tin tưởng lựa chọn cho dự án <b>""{safeJobTitle}""</b>. Khoản tiền thù lao đã được ký quỹ Escrow bảo đảm an toàn trên hệ thống.</p>
         
         <div style=""background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 24px;"">
             <div style=""display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px;"">
@@ -207,10 +214,13 @@ namespace SkillBridge.Infrastructure.Services.Email
             if (!await IsEmailEnabledAsync("Email_Deliverable72h_Enabled")) return;
 
             var baseUrl = config["Frontend:BaseUrl"] ?? "http://localhost:5173";
+            var safeEmployerName = HtmlEncodeUserInput(employerName);
+            var safeStudentName = HtmlEncodeUserInput(studentName);
+            var safeJobTitle = HtmlEncodeUserInput(jobTitle);
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"] ?? "no-reply@skillbridge.vn"));
             message.To.Add(new MailboxAddress(employerName, toEmail));
-            message.Subject = $"📥 Sinh viên đã nộp bài bàn giao: \"{jobTitle}\" - SkillBridge";
+            message.Subject = $"📥 Sinh viên đã nộp bài bàn giao: \"{SanitizeHeaderValue(jobTitle)}\" - SkillBridge";
 
             var bodyBuilder = new BodyBuilder
             {
@@ -222,8 +232,8 @@ namespace SkillBridge.Infrastructure.Services.Email
     </div>
     <div>
         <span style=""display: inline-block; background-color: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; margin-bottom: 12px;"">📦 Sản phẩm mới được nộp</span>
-        <h3 style=""margin: 0 0 12px; font-size: 20px; color: #0f172a;"">Kính gửi {employerName},</h3>
-        <p style=""line-height: 1.6; color: #475569; margin-bottom: 20px;"">Sinh viên <b>{studentName}</b> vừa nộp sản phẩm bàn giao cho công việc <b>""{jobTitle}""</b>. Bạn có thể xem trước sản phẩm an toàn trên hệ thống ngay bây giờ.</p>
+        <h3 style=""margin: 0 0 12px; font-size: 20px; color: #0f172a;"">Kính gửi {safeEmployerName},</h3>
+        <p style=""line-height: 1.6; color: #475569; margin-bottom: 20px;"">Sinh viên <b>{safeStudentName}</b> vừa nộp sản phẩm bàn giao cho công việc <b>""{safeJobTitle}""</b>. Bạn có thể xem trước sản phẩm an toàn trên hệ thống ngay bây giờ.</p>
         
         <div style=""background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 12px; padding: 16px; margin-bottom: 24px;"">
             <b style=""color: #b45309; font-size: 14px; display: block; margin-bottom: 6px;"">⏳ Lưu ý thời hạn nghiệm thu tự động ({autoAcceptHours} giờ):</b>
@@ -252,6 +262,8 @@ namespace SkillBridge.Infrastructure.Services.Email
             if (!await IsEmailEnabledAsync("Email_Payout_Enabled")) return;
 
             var baseUrl = config["Frontend:BaseUrl"] ?? "http://localhost:5173";
+            var safeStudentName = HtmlEncodeUserInput(studentName);
+            var safeJobTitle = HtmlEncodeUserInput(jobTitle);
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"] ?? "no-reply@skillbridge.vn"));
             message.To.Add(new MailboxAddress(studentName, toEmail));
@@ -267,8 +279,8 @@ namespace SkillBridge.Infrastructure.Services.Email
     </div>
     <div>
         <span style=""display: inline-block; background-color: #ecfdf5; color: #059669; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; margin-bottom: 12px;"">✅ Nghiệm thu hoàn tất</span>
-        <h3 style=""margin: 0 0 12px; font-size: 20px; color: #0f172a;"">Chúc mừng {studentName}!</h3>
-        <p style=""line-height: 1.6; color: #475569; margin-bottom: 20px;"">Sản phẩm của bạn cho dự án <b>""{jobTitle}""</b> đã được nghiệm thu thành công. Khoản tiền thù lao đã được cộng trực tiếp vào số dư ví SkillBridge của bạn.</p>
+        <h3 style=""margin: 0 0 12px; font-size: 20px; color: #0f172a;"">Chúc mừng {safeStudentName}!</h3>
+        <p style=""line-height: 1.6; color: #475569; margin-bottom: 20px;"">Sản phẩm của bạn cho dự án <b>""{safeJobTitle}""</b> đã được nghiệm thu thành công. Khoản tiền thù lao đã được cộng trực tiếp vào số dư ví SkillBridge của bạn.</p>
         
         <div style=""background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 24px;"">
             <div style=""display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px;"">
@@ -302,10 +314,12 @@ namespace SkillBridge.Infrastructure.Services.Email
             if (!await IsEmailEnabledAsync("Email_Digest18h_Enabled")) return;
 
             var baseUrl = config["Frontend:BaseUrl"] ?? "http://localhost:5173";
+            var safeEmployerName = HtmlEncodeUserInput(employerName);
+            var safeJobTitle = HtmlEncodeUserInput(jobTitle);
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"] ?? "no-reply@skillbridge.vn"));
             message.To.Add(new MailboxAddress(employerName, toEmail));
-            message.Subject = $"📬 Báo cáo 18h: {applicantCount} ứng viên mới cho công việc \"{jobTitle}\"";
+            message.Subject = $"📬 Báo cáo 18h: {applicantCount} ứng viên mới cho công việc \"{SanitizeHeaderValue(jobTitle)}\"";
 
             var bodyBuilder = new BodyBuilder
             {
@@ -316,8 +330,8 @@ namespace SkillBridge.Infrastructure.Services.Email
         <p style=""color: #64748b; font-size: 13px; margin-top: 4px;"">Tổng hợp ứng viên tiềm năng hàng ngày</p>
     </div>
     <div>
-        <h3 style=""margin: 0 0 12px; font-size: 20px; color: #0f172a;"">Chào {employerName},</h3>
-        <p style=""line-height: 1.6; color: #475569; margin-bottom: 20px;"">Hôm nay có <b>{applicantCount} ứng viên mới</b> vừa nộp hồ sơ ứng tuyển cho tin đăng tuyển <b>""{jobTitle}""</b> của bạn.</p>
+        <h3 style=""margin: 0 0 12px; font-size: 20px; color: #0f172a;"">Chào {safeEmployerName},</h3>
+        <p style=""line-height: 1.6; color: #475569; margin-bottom: 20px;"">Hôm nay có <b>{applicantCount} ứng viên mới</b> vừa nộp hồ sơ ứng tuyển cho tin đăng tuyển <b>""{safeJobTitle}""</b> của bạn.</p>
         
         <div style=""background-color: #f8fafc; border-left: 4px solid #6366f1; padding: 14px 18px; margin-bottom: 24px; border-radius: 0 8px 8px 0;"">
             <p style=""margin: 0; font-size: 13.5px; color: #334155; line-height: 1.5;"">
@@ -344,10 +358,13 @@ namespace SkillBridge.Infrastructure.Services.Email
         {
             if (!await IsEmailEnabledAsync("Email_VipMatch_Enabled")) return;
 
+            var safeStudentName = HtmlEncodeUserInput(studentName);
+            var safeJobTitle = HtmlEncodeUserInput(jobTitle);
+            var safeJobUrl = HtmlEncodeUserInput(jobUrl);
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"] ?? "no-reply@skillbridge.vn"));
             message.To.Add(new MailboxAddress(studentName, toEmail));
-            message.Subject = $"⭐ Cơ hội việc làm hấp dẫn phù hợp với bạn: \"{jobTitle}\"";
+            message.Subject = $"⭐ Cơ hội việc làm hấp dẫn phù hợp với bạn: \"{SanitizeHeaderValue(jobTitle)}\"";
 
             var bodyBuilder = new BodyBuilder
             {
@@ -359,11 +376,11 @@ namespace SkillBridge.Infrastructure.Services.Email
     </div>
     <div>
         <span style=""display: inline-block; background-color: #fef3c7; color: #d97706; font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 20px; text-transform: uppercase; margin-bottom: 12px;"">⭐ Việc làm đề xuất cho bạn</span>
-        <h3 style=""margin: 0 0 12px; font-size: 20px; color: #0f172a;"">Chào {studentName},</h3>
+        <h3 style=""margin: 0 0 12px; font-size: 20px; color: #0f172a;"">Chào {safeStudentName},</h3>
         <p style=""line-height: 1.6; color: #475569; margin-bottom: 20px;"">Một dự án mới hấp dẫn rất phù hợp với kỹ năng và xếp hạng của bạn vừa được đăng tải:</p>
-        
+
         <div style=""background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 24px;"">
-            <div style=""font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 8px;"">{jobTitle}</div>
+            <div style=""font-size: 16px; font-weight: 700; color: #1e293b; margin-bottom: 8px;"">{safeJobTitle}</div>
             <div style=""display: flex; justify-content: space-between; font-size: 14px;"">
                 <span style=""color: #64748b;"">Mức thù lao dự kiến:</span>
                 <b style=""color: #059669; font-size: 16px;"">{budget:N0} đ</b>
@@ -371,7 +388,7 @@ namespace SkillBridge.Infrastructure.Services.Email
         </div>
 
         <div style=""text-align: center; margin: 28px 0;"">
-            <a href=""{jobUrl}"" target=""_blank"" style=""background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 4px 14px rgba(245,158,11,0.3);"">Xem chi tiết & Ứng tuyển ngay</a>
+            <a href=""{safeJobUrl}"" target=""_blank"" style=""background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: #ffffff; padding: 14px 32px; text-decoration: none; border-radius: 8px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 4px 14px rgba(245,158,11,0.3);"">Xem chi tiết & Ứng tuyển ngay</a>
         </div>
     </div>
     <div style=""margin-top: 32px; padding-top: 16px; border-top: 1px solid #f1f5f9; text-align: center; font-size: 12px; color: #94a3b8;"">
@@ -390,6 +407,8 @@ namespace SkillBridge.Infrastructure.Services.Email
             var frontendUrl = config["Frontend:BaseUrl"] ?? "https://www.skillbridge.id.vn";
             var jobsUrl = $"{frontendUrl.TrimEnd('/')}/jobs";
             var settingsUrl = $"{frontendUrl.TrimEnd('/')}/settings?tab=password";
+            var safeFullName = HtmlEncodeUserInput(fullName);
+            var safeToEmail = HtmlEncodeUserInput(toEmail);
 
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress("SkillBridge", config["Smtp:From"]
@@ -409,9 +428,9 @@ namespace SkillBridge.Infrastructure.Services.Email
     </div>
 
     <div style=""background: #f8fafc; border-radius: 12px; padding: 24px; margin-bottom: 24px; border: 1px solid #edf2f7;"">
-        <h2 style=""color: #0f172a; font-size: 18px; margin-top: 0; margin-bottom: 12px;"">Xin chào {fullName} 👋</h2>
+        <h2 style=""color: #0f172a; font-size: 18px; margin-top: 0; margin-bottom: 12px;"">Xin chào {safeFullName} 👋</h2>
         <p style=""color: #334155; line-height: 1.6; margin: 0 0 14px;"">
-            Chúc mừng bạn đã kích hoạt thành công tài khoản Sinh viên tại <strong>SkillBridge</strong> thông qua cổng đăng nhập trường <strong>Google FPT SSO</strong> (<code>{toEmail}</code>).
+            Chúc mừng bạn đã kích hoạt thành công tài khoản Sinh viên tại <strong>SkillBridge</strong> thông qua cổng đăng nhập trường <strong>Google FPT SSO</strong> (<code>{safeToEmail}</code>).
         </p>
         <div style=""background: #ecfdf5; border-left: 4px solid #10b981; padding: 12px 16px; border-radius: 6px; font-size: 14px; color: #065f46;"">
             ✅ <strong>Tài khoản đã được xác thực chính chủ:</strong> Bạn đã có thể ứng tuyển ngay vào các dự án và công việc sinh viên mà không cần chờ duyệt email.
@@ -470,6 +489,25 @@ namespace SkillBridge.Infrastructure.Services.Email
         {
             var host = config["Smtp:Host"];
             return Task.FromResult(!string.IsNullOrWhiteSpace(host));
+        }
+
+        /// <summary>
+        /// Mã hóa dữ liệu do người dùng cung cấp (tên, tiêu đề công việc, URL...) trước khi chèn vào
+        /// HtmlBody của email, ngăn chặn HTML/Script Injection (ví dụ: FullName chứa thẻ &lt;a&gt; link lừa đảo).
+        /// </summary>
+        private static string HtmlEncodeUserInput(string? value)
+        {
+            return WebUtility.HtmlEncode(value ?? string.Empty);
+        }
+
+        /// <summary>
+        /// Loại bỏ ký tự xuống dòng (CR/LF) khỏi giá trị sẽ được chèn vào header email (Subject),
+        /// ngăn chặn Email Header Injection khi dữ liệu người dùng (ví dụ jobTitle) chứa ký tự điều khiển.
+        /// </summary>
+        private static string SanitizeHeaderValue(string? value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            return value.Replace("\r", " ").Replace("\n", " ").Trim();
         }
 
         private async Task<bool> SendViaResendAsync(MimeMessage message)

@@ -159,7 +159,6 @@ builder.Services.AddCors(options =>
                   {
                       var uri = new Uri(origin);
                       return uri.Host.EndsWith("skillbridge.id.vn", StringComparison.OrdinalIgnoreCase) ||
-                             uri.Host.EndsWith("vercel.app", StringComparison.OrdinalIgnoreCase) ||
                              uri.Host == "localhost" ||
                              uri.Host == "127.0.0.1";
                   }

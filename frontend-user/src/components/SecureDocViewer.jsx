@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { getAccessToken } from '../api/tokenStore';
 import * as docx from 'docx-preview';
 import * as XLSX from 'xlsx';
+import DOMPurify from 'dompurify';
 
 let pdfjsLib = null;
 async function getPdfjsLib() {
@@ -440,7 +441,7 @@ export function SecureExcelViewer({ jobId, deliverableId, isFinal, version }) {
         <div style={{ position: 'relative', minWidth: 'fit-content' }}>
           {!loading && !error && sheets[activeSheet] && (
             <div
-              dangerouslySetInnerHTML={{ __html: sheets[activeSheet].html }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(sheets[activeSheet].html) }}
               style={{
                 fontSize: 13,
                 fontFamily: 'system-ui, sans-serif',
