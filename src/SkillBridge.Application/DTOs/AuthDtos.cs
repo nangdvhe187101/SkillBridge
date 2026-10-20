@@ -31,6 +31,9 @@ public class RegisterDto
     [Required(ErrorMessage = "Vui lòng chọn vai trò")]
     [RegularExpression("^(student|employer)$", ErrorMessage = "Vai trò không hợp lệ")]
     public string RoleCode { get; set; } = string.Empty;
+
+    public string? CompanyWebsite { get; set; }
+    public string? TurnstileToken { get; set; }
 }
 
 public class LoginDto
@@ -43,6 +46,9 @@ public class LoginDto
     [Required(ErrorMessage = "Vui lòng nhập mật khẩu")]
     [StringLength(100, MinimumLength = 1, ErrorMessage = "Mật khẩu không được quá 100 ký tự")]
     public string Password { get; set; } = string.Empty;
+
+    public string? CompanyWebsite { get; set; }
+    public string? TurnstileToken { get; set; }
 }
 
 public class GoogleLoginDto
@@ -105,6 +111,9 @@ public class ForgotPasswordRequestDto
     [EmailAddress(ErrorMessage = "Email không hợp lệ")]
     [StringLength(200, ErrorMessage = "Email không được quá 200 ký tự")]
     public string Email { get; set; } = string.Empty;
+
+    public string? CompanyWebsite { get; set; }
+    public string? TurnstileToken { get; set; }
 }
 
 public class VerifyOtpDto

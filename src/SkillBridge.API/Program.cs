@@ -160,6 +160,7 @@ builder.Services.AddScoped<SkillBridge.Application.Interfaces.Notifications.INot
 builder.Services.AddSingleton<SkillBridge.Application.Interfaces.Chat.IUserPresenceService, SkillBridge.Infrastructure.Services.Chat.UserPresenceService>();
 builder.Services.AddSingleton<SkillBridge.Application.Common.IEncryptionKeyProvider, SkillBridge.Infrastructure.Services.Security.ConfigurationEncryptionKeyProvider>();
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient<SkillBridge.Infrastructure.Services.Security.ITurnstileService, SkillBridge.Infrastructure.Services.Security.TurnstileService>();
 builder.Services.AddSingleton<SkillBridge.Infrastructure.Services.Users.IStudentCardOcrEngine, SkillBridge.Infrastructure.Services.Users.TesseractStudentCardOcrEngine>();
 
 // Nén JSON trả về (Brotli ưu tiên, Gzip dự phòng) để giảm dung lượng tải qua mạng
