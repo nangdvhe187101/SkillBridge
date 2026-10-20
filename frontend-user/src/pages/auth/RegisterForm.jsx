@@ -3,6 +3,8 @@ import { useStore } from '../../context/StoreContext';
 import { getPublicSystemConfigs } from '../../api/authApi';
 import Icon from '../../components/Icon';
 import GoogleLoginButton from '../../components/GoogleLoginButton';
+import TurnstileWidget, { TURNSTILE_ENABLED } from '../../components/TurnstileWidget';
+import HoneypotInput from '../../components/HoneypotInput';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -18,6 +20,10 @@ export default function RegisterForm({ onSwitchTab }) {
     const [registerMessage, setRegisterMessage] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [showPassword2, setShowPassword2] = useState(false);
+    const [turnstileToken, setTurnstileToken] = useState('');
+    // Token Turnstile chỉ dùng được một lần: tăng key để remount widget sau mỗi lần submit thất bại
+    const [turnstileKey, setTurnstileKey] = useState(0);
+    const [honeypot, setHoneypot] = useState('');
     const { register: doRegister } = useStore();
 
     useEffect(() => {
@@ -98,6 +104,11 @@ export default function RegisterForm({ onSwitchTab }) {
             return;
         }
 
+        if (TURNSTILE_ENABLED && !turnstileToken) {
+            setFormError('Vui lòng hoàn tất xác minh bạn là con người.');
+            return;
+        }
+
         setLoading(true);
         try {
             const res = await doRegister({
@@ -109,10 +120,14 @@ export default function RegisterForm({ onSwitchTab }) {
                 role,
                 roleCode: role,
                 referralCode: regForm.referralCode?.trim() || undefined,
+                turnstileToken,
+                companyWebsite: honeypot,
             });
             setRegisterMessage(res?.message || 'Đăng ký thành công! Vui lòng kiểm tra email để kích hoạt tài khoản.');
         } catch (err) {
             setFormError(err.message);
+            setTurnstileToken('');
+            setTurnstileKey((k) => k + 1);
         } finally {
             setLoading(false);
         }
@@ -288,6 +303,14 @@ export default function RegisterForm({ onSwitchTab }) {
                     </div>
                 </div>
             )}
+
+            <HoneypotInput value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
+            <TurnstileWidget
+                key={turnstileKey}
+                onVerify={(token) => setTurnstileToken(token)}
+                onExpire={() => setTurnstileToken('')}
+                onError={() => setTurnstileToken('')}
+            />
 
             {formError && <div className="field-error" style={{ marginBottom: 12 }}>{formError}</div>}
 

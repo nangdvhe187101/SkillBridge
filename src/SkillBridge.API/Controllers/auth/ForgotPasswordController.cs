@@ -1,9 +1,11 @@
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using SkillBridge.API.Common;
 using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
 using SkillBridge.Application.Interfaces.Auth;
+using SkillBridge.Infrastructure.Services.Security;
 
 namespace SkillBridge.API.Controllers
 {
@@ -13,15 +15,22 @@ namespace SkillBridge.API.Controllers
     public class ForgotPasswordController : ControllerBase
     {
         private readonly IForgotPasswordService forgotPasswordService;
+        private readonly ITurnstileService _turnstileService;
 
-        public ForgotPasswordController(IForgotPasswordService _forgotPasswordService)
+        public ForgotPasswordController(IForgotPasswordService _forgotPasswordService, ITurnstileService turnstileService)
         {
             forgotPasswordService = _forgotPasswordService;
+            _turnstileService = turnstileService;
         }
 
         [HttpPost("request-otp")]
         public async Task<IActionResult> RequestOtp([FromBody] ForgotPasswordRequestDto dto)
         {
+            if (!await _turnstileService.PassesBotCheckAsync(HttpContext, dto.CompanyWebsite, dto.TurnstileToken))
+            {
+                return BadRequest(new { message = BotCheckExtensions.FailureMessage });
+            }
+
             try
             {
                 var message = await forgotPasswordService.RequestOtpAsync(dto);
