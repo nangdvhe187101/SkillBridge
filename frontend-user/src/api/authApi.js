@@ -65,6 +65,8 @@ export async function register(fullNameOrData, email, password, phoneNumber, rol
             password: fullNameOrData.password || '',
             phoneNumber: fullNameOrData.phoneNumber || fullNameOrData.phone || null,
             roleCode: fullNameOrData.roleCode || fullNameOrData.role || 'student',
+            turnstileToken: fullNameOrData.turnstileToken,
+            companyWebsite: fullNameOrData.companyWebsite,
         };
     } else {
         payload = {
@@ -96,12 +98,12 @@ export async function register(fullNameOrData, email, password, phoneNumber, rol
     }
 }
 
-export async function login(email, password) {
+export async function login(email, password, { turnstileToken, companyWebsite } = {}) {
     const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, turnstileToken, companyWebsite }),
     });
     return handleResponse(res);
 }
@@ -152,11 +154,11 @@ export async function refreshToken() {
     return refreshPromise;
 }
 
-export async function requestPasswordResetOtp(email) {
+export async function requestPasswordResetOtp(email, { turnstileToken, companyWebsite } = {}) {
     const res = await fetch(`${API_URL}/auth/forgot-password/request-otp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email, turnstileToken, companyWebsite }),
     });
     return handleResponse(res);
 }

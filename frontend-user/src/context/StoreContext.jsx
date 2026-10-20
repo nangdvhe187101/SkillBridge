@@ -1958,8 +1958,8 @@ export function StoreProvider({ children }) {
           showToast(err?.message || 'Không thể từ chối yêu cầu.', 'warning');
         }
       },
-      login: async (email, password) => {
-        const result = await loginApi(email, password);
+      login: async (email, password, botCheck = {}) => {
+        const result = await loginApi(email, password, botCheck);
         setAccessToken(result.token);
         dispatch({ type: "AUTH_LOGIN_SUCCESS", payload: result });
         authBroadcast?.postMessage({ type: 'AUTH_LOGIN_SUCCESS', payload: result });

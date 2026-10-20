@@ -9,6 +9,7 @@ using SkillBridge.Application.Common;
 using SkillBridge.Application.DTOs;
 using SkillBridge.Application.Interfaces;
 using SkillBridge.Application.Interfaces.Admin;
+using SkillBridge.Infrastructure.Services.Security;
 
 namespace SkillBridge.API.Controllers
 {
@@ -19,23 +20,31 @@ namespace SkillBridge.API.Controllers
     {
         private readonly ILoginService loginService;
         private readonly IAdminSecurityService _securityService;
+        private readonly ITurnstileService _turnstileService;
 
-        public LoginController(ILoginService _loginService, IAdminSecurityService securityService)
+        public LoginController(ILoginService _loginService, IAdminSecurityService securityService, ITurnstileService turnstileService)
         {
             loginService = _loginService;
             _securityService = securityService;
+            _turnstileService = turnstileService;
         }
 
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginDto dto)
         {
+            var ipAddress = HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                ?? HttpContext.Connection.RemoteIpAddress?.ToString();
+
+            if (!await _turnstileService.PassesBotCheckAsync(HttpContext, dto.CompanyWebsite, dto.TurnstileToken))
+            {
+                return BadRequest(new { message = BotCheckExtensions.FailureMessage });
+            }
+
             try
             {
                 var (result, refreshToken) = await loginService.LoginAsync(dto);
                 Response.SetRefreshTokenCookie(refreshToken);
 
-                var ipAddress = HttpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault()
-                    ?? HttpContext.Connection.RemoteIpAddress?.ToString();
                 var userAgent = HttpContext.Request.Headers["User-Agent"].ToString();
 
                 _ = _securityService.RecordLoginEventAsync(

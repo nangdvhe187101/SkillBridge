@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { requestPasswordResetOtp, verifyPasswordResetOtp, resetPassword as resetPasswordApi } from '../../api/authApi';
 import Icon from '../../components/Icon';
+import TurnstileWidget, { TURNSTILE_ENABLED } from '../../components/TurnstileWidget';
+import HoneypotInput from '../../components/HoneypotInput';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
@@ -19,6 +21,18 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
     const [formError, setFormError] = useState('');
     const [infoMessage, setInfoMessage] = useState('');
     const [countdown, setCountdown] = useState(0);
+    const [turnstileToken, setTurnstileToken] = useState('');
+    // Token Turnstile chỉ dùng được một lần: tăng key để remount widget sau mỗi lần gửi OTP
+    const [turnstileKey, setTurnstileKey] = useState(0);
+    const [honeypot, setHoneypot] = useState('');
+
+    // Lấy token hiện tại để gửi kèm request và chuẩn bị widget mới cho lần gửi tiếp theo
+    const consumeBotCheck = () => {
+        const botCheck = { turnstileToken, companyWebsite: honeypot };
+        setTurnstileToken('');
+        setTurnstileKey((k) => k + 1);
+        return botCheck;
+    };
 
     useEffect(() => {
         if (countdown <= 0) return;
@@ -64,9 +78,13 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
             setEmailError('Email không đúng định dạng');
             return;
         }
+        if (TURNSTILE_ENABLED && !turnstileToken) {
+            setFormError('Vui lòng hoàn tất xác minh bạn là con người.');
+            return;
+        }
         setLoading(true);
         try {
-            const result = await requestPasswordResetOtp(email);
+            const result = await requestPasswordResetOtp(email, consumeBotCheck());
             setInfoMessage(result.message);
             setForgotStep('otp');
             setCountdown(60);
@@ -86,9 +104,13 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
             setFormError('Vui lòng nhập email.');
             return;
         }
+        if (TURNSTILE_ENABLED && !turnstileToken) {
+            setFormError('Vui lòng hoàn tất xác minh bạn là con người trước khi gửi lại mã.');
+            return;
+        }
         setLoading(true);
         try {
-            const result = await requestPasswordResetOtp(email);
+            const result = await requestPasswordResetOtp(email, consumeBotCheck());
             setInfoMessage(result.message);
             setCountdown(60);
         } catch (err) {
@@ -164,6 +186,13 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                         />
                         {emailError && <div className="field-error">{emailError}</div>}
                     </div>
+                    <HoneypotInput value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
+                    <TurnstileWidget
+                        key={turnstileKey}
+                        onVerify={(token) => setTurnstileToken(token)}
+                        onExpire={() => setTurnstileToken('')}
+                        onError={() => setTurnstileToken('')}
+                    />
                     {formError && <div className="field-error" style={{ marginBottom: 12 }}>{formError}</div>}
                     <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
                         {loading ? 'Đang gửi...' : 'Gửi mã OTP'}
@@ -197,6 +226,15 @@ export default function ForgotPasswordFlow({ onBackToLogin }) {
                     <button type="submit" className="btn btn-primary btn-block" disabled={loading}>
                         {loading ? 'Đang xác thực...' : 'Xác nhận mã OTP'}
                     </button>
+                    {/* Gửi lại mã gọi lại endpoint gửi OTP nên cần token Turnstile mới */}
+                    {countdown <= 0 && (
+                        <TurnstileWidget
+                            key={turnstileKey}
+                            onVerify={(token) => setTurnstileToken(token)}
+                            onExpire={() => setTurnstileToken('')}
+                            onError={() => setTurnstileToken('')}
+                        />
+                    )}
                     <div className="auth-foot">
                         {countdown > 0 ? (
                             <span style={{ color: 'var(--ink-subtle, #888)' }}>

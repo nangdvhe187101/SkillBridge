@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../../context/StoreContext';
 import Icon from '../../components/Icon';
 import GoogleLoginButton from '../../components/GoogleLoginButton';
-import TurnstileWidget from '../../components/TurnstileWidget';
+import TurnstileWidget, { TURNSTILE_ENABLED } from '../../components/TurnstileWidget';
 import HoneypotInput from '../../components/HoneypotInput';
 
 const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
@@ -11,6 +11,8 @@ const EMAIL_REGEX = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-
 export default function LoginForm({ onSwitchTab, onForgotPassword }) {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [turnstileToken, setTurnstileToken] = useState('');
+  // Token Turnstile chỉ dùng được một lần: tăng key để remount widget sau mỗi lần submit thất bại
+  const [turnstileKey, setTurnstileKey] = useState(0);
   const [honeypot, setHoneypot] = useState('');
   const [emailError, setEmailError] = useState('');
   const [formError, setFormError] = useState('');
@@ -49,6 +51,11 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
       return;
     }
 
+    if (TURNSTILE_ENABLED && !turnstileToken) {
+      setFormError('Vui lòng hoàn tất xác minh bạn là con người');
+      return;
+    }
+
     setLoading(true);
     setIsWarmupSlow(false);
     const slowTimer = setTimeout(() => {
@@ -56,7 +63,10 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
     }, 3500);
 
     try {
-      await doLogin(loginForm.email, loginForm.password);
+      await doLogin(loginForm.email, loginForm.password, {
+        turnstileToken,
+        companyWebsite: honeypot,
+      });
       const redirect = searchParams.get('redirect') || location.state?.from;
       if (redirect) {
         navigate(redirect, { replace: true });
@@ -65,6 +75,8 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
       }
     } catch (err) {
       setFormError(err.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
+      setTurnstileToken('');
+      setTurnstileKey((k) => k + 1);
     } finally {
       clearTimeout(slowTimer);
       setIsWarmupSlow(false);
@@ -137,7 +149,12 @@ export default function LoginForm({ onSwitchTab, onForgotPassword }) {
       </div>
 
       <HoneypotInput value={honeypot} onChange={(e) => setHoneypot(e.target.value)} />
-      <TurnstileWidget onVerify={(token) => setTurnstileToken(token)} />
+      <TurnstileWidget
+        key={turnstileKey}
+        onVerify={(token) => setTurnstileToken(token)}
+        onExpire={() => setTurnstileToken('')}
+        onError={() => setTurnstileToken('')}
+      />
 
       {formError && <div className="field-error" style={{ marginBottom: 12 }}>{formError}</div>}
 

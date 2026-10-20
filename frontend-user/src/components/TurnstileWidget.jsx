@@ -2,13 +2,18 @@ import React, { useEffect, useRef } from 'react';
 
 const SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY;
 
+export const TURNSTILE_ENABLED = Boolean(SITE_KEY);
+
 export default function TurnstileWidget({ onVerify, onError, onExpire }) {
   const containerRef = useRef(null);
   const widgetIdRef = useRef(null);
+  // Giữ callback mới nhất trong ref để widget không bị render lại mỗi khi parent re-render
+  const callbacksRef = useRef({ onVerify, onError, onExpire });
+  callbacksRef.current = { onVerify, onError, onExpire };
 
   useEffect(() => {
     if (!SITE_KEY) {
-      if (onVerify) onVerify('dev-bypass-token');
+      callbacksRef.current.onVerify?.('dev-bypass-token');
       return;
     }
 
@@ -20,13 +25,13 @@ export default function TurnstileWidget({ onVerify, onError, onExpire }) {
           theme: 'auto',
           size: 'flexible',
           callback: (token) => {
-            if (onVerify) onVerify(token);
+            callbacksRef.current.onVerify?.(token);
           },
           'error-callback': () => {
-            if (onError) onError();
+            callbacksRef.current.onError?.();
           },
           'expired-callback': () => {
-            if (onExpire) onExpire();
+            callbacksRef.current.onExpire?.();
           },
         });
       } catch (err) {
@@ -59,7 +64,7 @@ export default function TurnstileWidget({ onVerify, onError, onExpire }) {
         } catch {}
       }
     };
-  }, [onVerify, onError, onExpire]);
+  }, []);
 
   if (!SITE_KEY) return null;
 
