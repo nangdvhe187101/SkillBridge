@@ -407,8 +407,8 @@ app.UseAuthorization();
 app.UseRateLimiter();
 
 app.MapControllers();
-app.MapGet("/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
-app.MapGet("/api/health", () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
+app.MapMethods("/health", new[] { "GET", "HEAD" }, () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
+app.MapMethods("/api/health", new[] { "GET", "HEAD" }, () => Results.Ok(new { status = "Healthy", timestamp = DateTime.UtcNow }));
 app.MapHub<SkillBridge.API.Hubs.PaymentHub>("/hubs/payment");
 app.MapHub<SkillBridge.API.Hubs.ChatHub>("/hubs/chat");
 
