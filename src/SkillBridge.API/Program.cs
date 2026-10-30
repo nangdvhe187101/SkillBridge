@@ -3,6 +3,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.OData;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
@@ -173,7 +174,19 @@ builder.Services.AddResponseCompression(options =>
 builder.Services.Configure<BrotliCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
 builder.Services.Configure<GzipCompressionProviderOptions>(o => o.Level = System.IO.Compression.CompressionLevel.Fastest);
 
-builder.Services.AddControllers()
+builder.Services.AddAutoMapper(cfg =>
+{
+    cfg.AddProfile<SkillBridge.API.Mappings.GeneralMappingProfile>();
+});
+
+builder.Services.AddControllers(options =>
+    {
+        options.RespectBrowserAcceptHeader = true;
+        options.ReturnHttpNotAcceptable = true;
+        options.OutputFormatters.Add(new SkillBridge.API.Formatters.CsvOutputFormatter());
+    })
+    .AddXmlSerializerFormatters()
+    .AddOData(options => options.Select().Filter().OrderBy().Count().SetMaxTop(100))
     .AddApplicationPart(typeof(SkillBridge.AdminAPI.Controllers.admin.AdminStudentVerificationController).Assembly)
     .AddJsonOptions(options =>
     {
@@ -374,9 +387,9 @@ else
 }
 
 app.UseForwardedHeaders();
-app.UseMiddleware<SkillBridge.API.Middleware.BotTrapMiddleware>();
-app.UseResponseCompression();
+app.UseCors("AllowFrontend");
 
+app.UseResponseCompression();
 app.UseMiddleware<SkillBridge.API.Middleware.ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("EnableSwagger", false))
@@ -400,7 +413,7 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.UseCors("AllowFrontend");
+app.UseMiddleware<SkillBridge.API.Middleware.BotTrapMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();
