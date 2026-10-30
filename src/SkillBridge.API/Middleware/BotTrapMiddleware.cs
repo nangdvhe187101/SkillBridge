@@ -33,7 +33,22 @@ public class BotTrapMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        var clientIp = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        // Không chặn các request preflight CORS
+        if (HttpMethods.IsOptions(context.Request.Method))
+        {
+            await _next(context);
+            return;
+        }
+
+        var clientIp = context.Connection.RemoteIpAddress?.ToString();
+
+        // Không ban nếu không xác định được IP hoặc IP loopback
+        if (string.IsNullOrEmpty(clientIp) || clientIp == "unknown" || IPAddress.IsLoopback(context.Connection.RemoteIpAddress!))
+        {
+            await _next(context);
+            return;
+        }
+
         var cacheKey = $"banned_ip_{clientIp}";
 
         if (_cache.TryGetValue(cacheKey, out string? _))
