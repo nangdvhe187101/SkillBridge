@@ -9,6 +9,7 @@ import {
   getStudentVerificationByUser,
   reviewStudentVerification,
 } from '../api/adminApi';
+import { getCardImageUrl } from '../utils/studentCardHelper';
 import { useToast } from '../context/ToastContext';
 
 // Component Avatar chuẩn Cloudflare với Fallback chữ cái đầu nếu không có ảnh
@@ -799,13 +800,13 @@ export default function AdminStudentDetail({ userId, initialUser, onBack }) {
                         {verification.frontCardUrl && (
                           <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
                             <div style={{ padding: '6px 10px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc' }}>Mặt trước thẻ SV</div>
-                            <img src={verification.frontCardUrl} alt="Mặt trước thẻ sinh viên" style={{ width: '100%', display: 'block' }} />
+                            <img src={getCardImageUrl(verification.frontCardUrl)} alt="Mặt trước thẻ sinh viên" style={{ width: '100%', display: 'block' }} />
                           </div>
                         )}
                         {verification.backCardUrl && (
                           <div style={{ border: '1px solid #e2e8f0', borderRadius: 8, overflow: 'hidden' }}>
                             <div style={{ padding: '6px 10px', fontSize: 12, fontWeight: 600, color: '#374151', background: '#f8fafc' }}>Mặt sau thẻ SV</div>
-                            <img src={verification.backCardUrl} alt="Mặt sau thẻ sinh viên" style={{ width: '100%', display: 'block' }} />
+                            <img src={getCardImageUrl(verification.backCardUrl)} alt="Mặt sau thẻ sinh viên" style={{ width: '100%', display: 'block' }} />
                           </div>
                         )}
                       </div>
