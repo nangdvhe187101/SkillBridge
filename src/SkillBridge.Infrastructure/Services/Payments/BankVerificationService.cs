@@ -523,7 +523,9 @@ public class BankVerificationService : IBankVerificationService
         _logger.LogInformation("Admin {AdminMemberId} đã duyệt yêu cầu xác thực #{RequestId} cho User {UserId} ({BankName} - {AccountMask})",
             adminMemberId, requestId, request.UserId, request.BankName, request.AccountNumberMask);
 
-        _ = SendBankVerificationApprovalEmailAsync(request, cleanReturnedName, ct);
+        // Await tuần tự: chạy fire-and-forget trên DbContext scoped theo request có thể
+        // bị ObjectDisposedException nếu request kết thúc trước khi task nền hoàn tất.
+        await SendBankVerificationApprovalEmailAsync(request, cleanReturnedName, ct);
 
         return MapToResponseDto(request);
     }
@@ -604,7 +606,7 @@ public class BankVerificationService : IBankVerificationService
         _logger.LogInformation("Admin {AdminMemberId} đã từ chối yêu cầu xác thực #{RequestId} (Lý do: {Reason})",
             adminMemberId, requestId, request.RejectionReason);
 
-        _ = SendBankVerificationRejectionEmailAsync(request, request.RejectionReason, ct);
+        await SendBankVerificationRejectionEmailAsync(request, request.RejectionReason, ct);
 
         return MapToResponseDto(request);
     }

@@ -168,7 +168,10 @@ public class DisputeService : IDisputeService
             _logger.LogWarning(ex, "Lỗi khi gửi thông báo Dispute #{DisputeId} cho User {OpponentId}", dispute.Id, opponentId);
         }
 
-        _ = SendDisputeCreatedEmailAsync(dispute, job, opponentId, filedBy, ct);
+        // Await tuần tự: MapToDisputeDtoAsync bên dưới truy vấn lại cùng DbContext, nên gọi
+        // song song với fire-and-forget gây lỗi "A second operation was started on this
+        // context instance" (DbContext không an toàn dùng đa luồng).
+        await SendDisputeCreatedEmailAsync(dispute, job, opponentId, filedBy, ct);
 
         return await MapToDisputeDtoAsync(dispute, ct);
     }
@@ -559,7 +562,7 @@ public class DisputeService : IDisputeService
                 "/mywork",
                 ct);
 
-            _ = SendDisputeResolvedEmailAsync(dispute, adminNote, ct);
+            await SendDisputeResolvedEmailAsync(dispute, adminNote, ct);
         }
         catch (Exception ex)
         {

@@ -506,14 +506,12 @@ function JobsTab({ state, navigate, goToPostTab }) {
   const counts = useMemo(() => {
     const c = { all: state.myJobs.length, open: 0, in_progress: 0, submitted: 0, disputed: 0, completed: 0, cancelled: 0 };
     state.myJobs.forEach(j => {
-      const hasDispute = (state.disputes || []).some(
-        d => Number(d.jobId) === Number(j.id) && ['pending', 'in_arbitration'].includes(d.status)
-      );
-      const effStatus = hasDispute ? 'disputed' : j.status;
+      // hasOpenDispute lấy trực tiếp từ backend (bảng Disputes, status='open')
+      const effStatus = j.hasOpenDispute ? 'disputed' : j.status;
       if (c[effStatus] !== undefined) c[effStatus]++;
     });
     return c;
-  }, [state.myJobs, state.disputes]);
+  }, [state.myJobs]);
 
   // Category options
   const categories = useMemo(() => {
@@ -525,10 +523,7 @@ function JobsTab({ state, navigate, goToPostTab }) {
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     let list = state.myJobs.filter((j) => {
-      const hasDispute = (state.disputes || []).some(
-        d => Number(d.jobId) === Number(j.id) && ['pending', 'in_arbitration'].includes(d.status)
-      );
-      const effStatus = hasDispute ? 'disputed' : j.status;
+      const effStatus = j.hasOpenDispute ? 'disputed' : j.status;
 
       const matchSearch = needle === '' || j.title.toLowerCase().includes(needle) || (j.cat && j.cat.toLowerCase().includes(needle));
       const matchStatus = statusFilter === 'all' || effStatus === statusFilter;
@@ -738,11 +733,8 @@ function JobsTab({ state, navigate, goToPostTab }) {
               const hasAttachments = (j.attachmentCount > 0) || (j.attachments && j.attachments.length > 0);
               const attCount = j.attachmentCount || j.attachments?.length || 0;
 
-              const relatedDispute = (state.disputes || []).find(
-                (d) => Number(d.jobId) === Number(j.id)
-              );
-              const isDisputeActive = relatedDispute && ['pending', 'in_arbitration'].includes(relatedDispute.status);
-              const isDisputed = j.status === 'disputed' || isDisputeActive;
+              // hasOpenDispute lấy trực tiếp từ backend (bảng Disputes, status='open')
+              const isDisputed = j.status === 'disputed' || Boolean(j.hasOpenDispute);
               const effStatus = isDisputed ? 'disputed' : j.status;
 
               return (

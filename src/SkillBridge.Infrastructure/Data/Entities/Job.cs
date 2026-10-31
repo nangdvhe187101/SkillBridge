@@ -45,7 +45,7 @@ public partial class Job
     [Column("is_featured")]
     public bool IsFeatured { get; set; }
 
-    [Column("status", TypeName = "enum('open','filled','in_progress','submitted','revision_requested','completed','cancelled')")]
+    [Column("status", TypeName = "enum('open','filled','in_progress','submitted','revision_requested','completed','cancelled','disputed')")]
     public string Status { get; set; } = null!;
 
     [Column("hired_applicant_id")]

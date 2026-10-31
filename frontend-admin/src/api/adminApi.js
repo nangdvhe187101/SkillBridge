@@ -200,9 +200,10 @@ export async function adjustUserReliability(userId, value, note) {
   });
 }
 
-export async function verifyUserKyc(userId) {
+export async function verifyUserKyc(userId, approved = true, reason = '') {
   return apiFetch(`/admin/users/${userId}/verify-kyc`, {
     method: 'POST',
+    body: JSON.stringify({ approved, reason: reason || null }),
   });
 }
 

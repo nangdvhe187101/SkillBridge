@@ -609,20 +609,19 @@ export default function MyWork() {
   // Lọc các ứng tuyển đang trong giai đoạn làm việc thực tế
   const activeApps = useMemo(() => {
     return (state.myApplications || []).filter((a) => {
-      const targetJobId = a.jobId || a.id;
-      const hasDispute = (state.disputes || []).some(
-        (d) => Number(d.jobId) === Number(targetJobId) && ['pending', 'in_arbitration'].includes(d.status)
-      );
+      // hasOpenDispute lấy trực tiếp từ backend (bảng Disputes, status='open'), không tự ghép tay
+      // từ state.disputes để tránh lệch với enum dispute.status thật ('open'/'closed').
+      const hasDispute = Boolean(a.hasOpenDispute);
 
-      // QUAN TRỌNG: Chỉ khi chính sinh viên này trúng tuyển ('hired', 'submitted', 'revision_requested', 'disputed', 'completed')
+      // QUAN TRỌNG: Chỉ khi chính sinh viên này trúng tuyển ('hired', 'submitted', 'revision_requested', 'completed')
       // thì mới được đưa vào danh sách việc đang làm / đã hoàn thành!
       // TUYỆT ĐỐI không dựa vào a.jobStatus, vì jobStatus là trạng thái công việc chung của NTD
       // (khi NTD tuyển ứng viên khác, jobStatus đổi sang in_progress/submitted nhưng sinh viên này KHÔNG trúng tuyển).
-      const isHiredForThisJob = ['hired', 'submitted', 'revision_requested', 'disputed', 'completed'].includes(a.status);
+      const isHiredForThisJob = ['hired', 'submitted', 'revision_requested', 'completed'].includes(a.status);
 
       return isHiredForThisJob || (hasDispute && a.status !== 'pending' && a.status !== 'rejected' && a.status !== 'cancelled');
     });
-  }, [state.myApplications, state.disputes]);
+  }, [state.myApplications]);
 
   const activeAppIdsKey = useMemo(() => {
     return activeApps.map(a => a.jobId || a.id).filter(Boolean).sort().join(',');
@@ -704,12 +703,8 @@ export default function MyWork() {
       const matchingJob = (state.jobs || []).find((j) => j.id === targetJobId || (a.dashJobId && j.dashJobId === a.dashJobId)) || jobInfo;
       const delivData = deliverablesMap[targetJobId] || {};
 
-      const relatedDispute = (state.disputes || []).find(
-        (d) => Number(d.jobId) === Number(targetJobId)
-      );
-
       let effectiveStatus = a.jobStatus || jobInfo?.status;
-      if (relatedDispute && ['pending', 'in_arbitration'].includes(relatedDispute.status)) {
+      if (a.hasOpenDispute) {
         effectiveStatus = 'disputed';
       } else if (a.status === 'completed' || effectiveStatus === 'completed') {
         effectiveStatus = 'completed';

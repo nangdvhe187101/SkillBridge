@@ -306,7 +306,9 @@ public class WithdrawalService : IWithdrawalService
             _logger.LogInformation("Admin {AdminMemberId} đã phê duyệt yêu cầu rút tiền #{RequestId} ({Amount:N0}đ) cho User {UserId}.",
                 adminMemberId, withdrawalId, request.Amount, request.UserId);
 
-            _ = SendWithdrawalApprovalEmailAsync(request, ct);
+            // Await tuần tự: fire-and-forget trên DbContext scoped theo request có thể
+            // bị ObjectDisposedException nếu request kết thúc trước khi task nền hoàn tất.
+            await SendWithdrawalApprovalEmailAsync(request, ct);
 
             var response = MapToDto(request, request.BankAccount);
             response.RequiresMakerChecker = false;
@@ -413,7 +415,7 @@ public class WithdrawalService : IWithdrawalService
             _logger.LogInformation("Checker {AdminMemberId} ({AdminName}) đã phê duyệt Bước 2 cho yêu cầu rút tiền lớn #{RequestId} ({Amount:N0}đ). Maker: {MakerName}. Hoàn tất giải ngân.",
                 adminMemberId, adminName, withdrawalId, request.Amount, makerInfo?.MakerName ?? "N/A");
 
-            _ = SendWithdrawalApprovalEmailAsync(request, ct);
+            await SendWithdrawalApprovalEmailAsync(request, ct);
 
             var response = MapToDto(request, request.BankAccount);
             response.RequiresMakerChecker = true;
@@ -535,7 +537,7 @@ public class WithdrawalService : IWithdrawalService
         _logger.LogInformation("Admin {AdminMemberId} đã từ chối yêu cầu rút #{RequestId} ({Amount:N0}đ), hoàn tiền về ví User {UserId}. Lý do: {Reason}",
             adminMemberId, request.Id, request.Amount, request.UserId, cleanReason);
 
-        _ = SendWithdrawalRejectionEmailAsync(request, cleanReason, ct);
+        await SendWithdrawalRejectionEmailAsync(request, cleanReason, ct);
 
         var response = MapToDto(request, request.BankAccount);
         response.RequiresMakerChecker = request.Amount > LargeWithdrawalThreshold;

@@ -322,6 +322,21 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
                 }
             }
         }
+
+        // Tin cậy X-Forwarded-For từ dải IP chính thức của Cloudflare (đứng trước Render làm CDN/WAF).
+        // Thiếu bước này khiến RemoteIpAddress luôn là IP của edge Cloudflare thay vì IP người dùng
+        // thật, làm BotTrapMiddleware và rate limiter nhận diện sai: một edge IP từng bị quét bot sẽ
+        // khiến mọi người dùng khác đi qua đúng edge đó trong 24h bị chặn 403 nhầm.
+        foreach (var cidr in SkillBridge.API.Common.CloudflareIpRanges.All)
+        {
+            var parts = cidr.Split('/');
+            if (parts.Length == 2 &&
+                System.Net.IPAddress.TryParse(parts[0], out var prefix) &&
+                int.TryParse(parts[1], out var prefixLength))
+            {
+                options.KnownNetworks.Add(new Microsoft.AspNetCore.HttpOverrides.IPNetwork(prefix, prefixLength));
+            }
+        }
     }
 });
 

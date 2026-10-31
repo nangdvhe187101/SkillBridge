@@ -208,7 +208,8 @@ public class JobRepository : IJobRepository
                     ? (j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null))
                     : null,
                 RevisionLimit = j.RevisionLimit,
-                RevisionCount = j.RevisionCount
+                RevisionCount = j.RevisionCount,
+                HasOpenDispute = j.Disputes.Any(d => d.Status == "open")
             })
             .ToListAsync();
 
@@ -273,7 +274,8 @@ public class JobRepository : IJobRepository
                     ? (j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null))
                     : null,
                 RevisionLimit = j.RevisionLimit,
-                RevisionCount = j.RevisionCount
+                RevisionCount = j.RevisionCount,
+                HasOpenDispute = j.Disputes.Any(d => d.Status == "open")
             })
             .ToListAsync();
 
@@ -684,7 +686,8 @@ public class JobRepository : IJobRepository
                     ? (j.EscrowAmount ?? (j.HiredApplicantId.HasValue ? j.Budget : null))
                     : null,
                 RevisionLimit = j.RevisionLimit,
-                RevisionCount = j.RevisionCount
+                RevisionCount = j.RevisionCount,
+                HasOpenDispute = j.Disputes.Any(d => d.Status == "open")
             })
             .ToListAsync();
 

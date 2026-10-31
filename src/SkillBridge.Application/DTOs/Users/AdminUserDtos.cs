@@ -100,6 +100,12 @@ public class AdminBlacklistRequest
     public string Reason { get; set; } = null!; // Bắt buộc lý do theo BR-ADM-06
 }
 
+public class AdminReviewKycRequest
+{
+    public bool Approved { get; set; }
+    public string? Reason { get; set; } // Bắt buộc khi Approved = false
+}
+
 public class AdminUserStatsDto
 {
     public int TotalUsers { get; set; }

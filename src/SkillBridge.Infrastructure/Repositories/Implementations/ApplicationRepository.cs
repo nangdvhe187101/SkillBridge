@@ -87,6 +87,8 @@ public class ApplicationRepository : IApplicationRepository
         var query = _context.Applications
             .Include(a => a.Job)
                 .ThenInclude(j => j.Employer)
+            .Include(a => a.Job)
+                .ThenInclude(j => j.Disputes)
             .Include(a => a.CvFile)
             .Where(a => a.StudentId == studentId);
 

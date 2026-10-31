@@ -83,6 +83,7 @@ public class JobSummaryDto
     public decimal? EscrowAmount { get; set; }
     public int RevisionLimit { get; set; }
     public int RevisionCount { get; set; }
+    public bool HasOpenDispute { get; set; }
 }
 
 public class JobDetailDto

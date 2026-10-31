@@ -507,10 +507,11 @@ export default function AdminLoginAudit() {
             </span>
 
             <Pagination
-              page={page}
+              currentPage={page}
+              totalPages={Math.ceil(total / pageSize)}
+              totalItems={total}
               pageSize={pageSize}
-              total={total}
-              onChange={(newPage) => setPage(newPage)}
+              onPageChange={setPage}
             />
           </div>
         )}

@@ -497,8 +497,13 @@ public class AdminUserService : IAdminUserService
         return MapToListItemDto(user);
     }
 
-    public async Task<AdminUserListItemDto> VerifyKycAsync(int adminUserId, int targetUserId, CancellationToken ct = default)
+    public async Task<AdminUserListItemDto> VerifyKycAsync(int adminUserId, int targetUserId, AdminReviewKycRequest request, CancellationToken ct = default)
     {
+        if (!request.Approved && string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new BusinessException("Lý do từ chối xác thực định danh (eKYC) không được để trống.");
+        }
+
         var user = await _dbContext.Users
             .Include(u => u.Role)
             .FirstOrDefaultAsync(u => u.Id == targetUserId, ct);
@@ -508,20 +513,35 @@ public class AdminUserService : IAdminUserService
             throw new KeyNotFoundException($"Không tìm thấy người dùng #{targetUserId}.");
         }
 
-        user.KycStatus = "verified";
         user.KycReviewedBy = adminUserId;
         user.KycReviewedAt = DateTime.UtcNow;
 
-        if (user.AccountStatus == "pending")
+        string actionText;
+        if (request.Approved)
         {
-            user.AccountStatus = "active";
+            user.KycStatus = "verified";
+            user.KycRejectionReason = null;
+
+            if (user.AccountStatus == "pending")
+            {
+                user.AccountStatus = "active";
+            }
+
+            actionText = $"VERIFY_KYC: Admin #{adminUserId} đã phê duyệt xác thực định danh (eKYC) cho người dùng #{targetUserId} ({user.FullName}).";
+        }
+        else
+        {
+            user.KycStatus = "rejected";
+            user.KycRejectionReason = request.Reason;
+
+            actionText = $"REJECT_KYC: Admin #{adminUserId} đã từ chối xác thực định danh (eKYC) cho người dùng #{targetUserId} ({user.FullName}). Lý do: {request.Reason}";
         }
 
         var actorId = await EnsureAdminMemberIdAsync(adminUserId, ct);
         await _dbContext.AuditLogs.AddAsync(new AuditLog
         {
             ActorId = actorId,
-            ActionText = $"VERIFY_KYC: Admin #{adminUserId} đã phê duyệt xác thực định danh (eKYC) cho người dùng #{targetUserId} ({user.FullName}).",
+            ActionText = actionText,
             CreatedAt = DateTime.UtcNow
         }, ct);
 
