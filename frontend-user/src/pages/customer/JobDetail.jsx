@@ -178,13 +178,27 @@ export default function JobDetail() {
     applyLabel = 'Ứng tuyển ngay';
     applyDisabled = false;
   } else if (hasApplied) {
-    applyDisabled = true;
-    if (appStatus === 'hired') applyLabel = 'Đã trúng tuyển — nộp bàn giao bên trên';
-    else if (appStatus === 'submitted') applyLabel = 'Đã nộp bàn giao — chờ xác nhận';
-    else if (appStatus === 'completed') applyLabel = 'Đã hoàn thành';
-    else if (appStatus === 'rejected') applyLabel = 'Rất tiếc, bạn chưa được chọn';
-    else if (appStatus === 'cancelled') applyLabel = 'Đã hủy';
-    else applyLabel = 'Đã ứng tuyển';
+    if (appStatus === 'hired') {
+      applyDisabled = true;
+      applyLabel = 'Đã trúng tuyển — nộp bàn giao bên trên';
+    } else if (appStatus === 'submitted') {
+      applyDisabled = true;
+      applyLabel = 'Đã nộp bàn giao — chờ xác nhận';
+    } else if (appStatus === 'completed') {
+      applyDisabled = true;
+      applyLabel = 'Đã hoàn thành';
+    } else if (appStatus === 'rejected') {
+      // Backend cho phép ứng tuyển lại khi đơn cũ đã bị từ chối (ApplicationService.ApplyJobAsync)
+      applyDisabled = false;
+      applyLabel = 'Rất tiếc, bạn chưa được chọn — Ứng tuyển lại';
+    } else if (appStatus === 'cancelled') {
+      // Backend cho phép ứng tuyển lại khi đơn cũ đã bị hủy (ApplicationService.ApplyJobAsync)
+      applyDisabled = false;
+      applyLabel = 'Ứng tuyển lại';
+    } else {
+      applyDisabled = true;
+      applyLabel = 'Đã ứng tuyển';
+    }
   } else if (j?.hiredApplicantId || (j?.status && j.status !== 'open')) {
     applyDisabled = true;
     if (j?.status === 'completed') {
