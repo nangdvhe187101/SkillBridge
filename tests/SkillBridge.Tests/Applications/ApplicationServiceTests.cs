@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,7 @@ using SkillBridge.Infrastructure.Data.Entities;
 using SkillBridge.Infrastructure.Repositories.Interfaces;
 using SkillBridge.Infrastructure.Services.Applications;
 using Xunit;
+using RealApplicationRepository = SkillBridge.Infrastructure.Repositories.Implementations.ApplicationRepository;
 
 namespace SkillBridge.Tests.Applications;
 
@@ -298,5 +300,127 @@ public class ApplicationServiceTests
             service.ApplyJobAsync(student.Id, new ApplyJobRequest { JobId = job.Id, CvFileId = cvFile.Id }));
 
         Assert.Contains("đã gửi đơn ứng tuyển", ex.Message);
+    }
+
+    [Fact]
+    public async Task GetMyApplicationsAsync_WhenJobHasOpenDispute_ShouldSetHasOpenDisputeTrue()
+    {
+        // Arrange: dùng ApplicationRepository thật để xác nhận cả Include(j => j.Disputes)
+        // và phép tính HasOpenDispute trong ApplicationService hoạt động đúng với nhau.
+        using var dbContext = CreateInMemoryDbContext();
+        var studentRole = new Role { Id = 2, Code = "student", Name = "Sinh viên", Type = "user", IsActive = true };
+        var employerRole = new Role { Id = 3, Code = "employer", Name = "Nhà tuyển dụng", Type = "user", IsActive = true };
+
+        var employer = new User
+        {
+            Id = 22,
+            Email = "employer3@skillbridge.vn",
+            FullName = "Employer Test 3",
+            RoleId = employerRole.Id,
+            Role = employerRole,
+            AccountStatus = "active",
+            KycStatus = "verified",
+            PasswordHash = "hash"
+        };
+
+        var student = new User
+        {
+            Id = 12,
+            Email = "student3@skillbridge.vn",
+            FullName = "Student Test 3",
+            RoleId = studentRole.Id,
+            Role = studentRole,
+            AccountStatus = "active",
+            KycStatus = "verified",
+            PasswordHash = "hash"
+        };
+
+        var jobDisputed = new Job
+        {
+            Id = 102,
+            EmployerId = employer.Id,
+            Employer = employer,
+            Title = "Job đang bị khiếu nại",
+            Description = "Mô tả chi tiết công việc",
+            Status = "in_progress",
+            Budget = 500000,
+            HiredApplicantId = student.Id,
+            PostedAt = DateTime.UtcNow.AddDays(-5),
+            UpdatedAt = DateTime.UtcNow.AddDays(-5)
+        };
+
+        var jobNormal = new Job
+        {
+            Id = 103,
+            EmployerId = employer.Id,
+            Employer = employer,
+            Title = "Job bình thường",
+            Description = "Mô tả chi tiết công việc",
+            Status = "in_progress",
+            Budget = 300000,
+            HiredApplicantId = student.Id,
+            PostedAt = DateTime.UtcNow.AddDays(-3),
+            UpdatedAt = DateTime.UtcNow.AddDays(-3)
+        };
+
+        var appDisputed = new JobApplication
+        {
+            Id = 3,
+            JobId = jobDisputed.Id,
+            StudentId = student.Id,
+            Status = "hired",
+            AppliedAt = DateTime.UtcNow.AddDays(-5),
+            UpdatedAt = DateTime.UtcNow.AddDays(-5)
+        };
+
+        var appNormal = new JobApplication
+        {
+            Id = 4,
+            JobId = jobNormal.Id,
+            StudentId = student.Id,
+            Status = "hired",
+            AppliedAt = DateTime.UtcNow.AddDays(-3),
+            UpdatedAt = DateTime.UtcNow.AddDays(-3)
+        };
+
+        await dbContext.Roles.AddRangeAsync(studentRole, employerRole);
+        await dbContext.Users.AddRangeAsync(employer, student);
+        await dbContext.Jobs.AddRangeAsync(jobDisputed, jobNormal);
+        await dbContext.Applications.AddRangeAsync(appDisputed, appNormal);
+        await dbContext.Disputes.AddAsync(new Dispute
+        {
+            JobId = jobDisputed.Id,
+            StudentId = student.Id,
+            EmployerId = employer.Id,
+            Amount = 500000,
+            FiledBy = "student",
+            Origin = "manual",
+            Reason = "Nhà tuyển dụng không phản hồi quá 48 giờ",
+            Status = "open",
+            FiledAt = DateTime.UtcNow.AddHours(-10)
+        });
+        await dbContext.SaveChangesAsync();
+
+        var realApplicationRepository = new RealApplicationRepository(dbContext);
+        var service = new ApplicationService(
+            realApplicationRepository,
+            new DbBackedJobRepository(dbContext),
+            new DbBackedCvFileRepository(dbContext),
+            dbContext,
+            _storageMock.Object,
+            _escrowMock.Object,
+            _reliabilityMock.Object,
+            _notificationMock.Object,
+            _loggerMock.Object);
+
+        // Act
+        var result = await service.GetMyApplicationsAsync(student.Id);
+
+        // Assert
+        var dtoDisputed = result.Items.Single(i => i.JobId == jobDisputed.Id);
+        var dtoNormal = result.Items.Single(i => i.JobId == jobNormal.Id);
+
+        Assert.True(dtoDisputed.HasOpenDispute, "Đơn ứng tuyển cho job có dispute status='open' phải có HasOpenDispute=true.");
+        Assert.False(dtoNormal.HasOpenDispute, "Đơn ứng tuyển cho job không có dispute phải có HasOpenDispute=false.");
     }
 }

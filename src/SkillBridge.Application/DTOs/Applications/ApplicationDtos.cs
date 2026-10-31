@@ -39,6 +39,7 @@ public class JobApplicationResponseDto
     public DateTime? CompletedAt { get; set; }
     public int RevisionLimit { get; set; }
     public int RevisionCount { get; set; }
+    public bool HasOpenDispute { get; set; }
 }
 
 public class ApplicantItemDto

@@ -919,11 +919,8 @@ export default function Wallet() {
                 ((state.disputes && state.disputes.length > 0) ? state.disputes : state.claims).map((c) => {
                   const isDisputeDto = Boolean(c.reason !== undefined && c.filedAt);
                   const statusMap = {
-                    pending: { label: 'Chờ đối chất (72h)', color: '#d97706', bg: 'rgba(245, 158, 11, 0.12)' },
-                    in_arbitration: { label: 'Trọng tài đang xử lý', color: '#6366f1', bg: 'rgba(99, 102, 241, 0.12)' },
-                    resolved: { label: 'Đã phân xử', color: '#16a34a', bg: 'rgba(34, 197, 94, 0.12)' },
-                    closed: { label: 'Đã đóng', color: '#64748b', bg: 'rgba(100, 116, 139, 0.12)' },
-                    rejected: { label: 'Đã bác bỏ', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.12)' }
+                    open: { label: 'Chờ đối chất (72h)', color: '#d97706', bg: 'rgba(245, 158, 11, 0.12)' },
+                    closed: { label: 'Đã phân xử', color: '#16a34a', bg: 'rgba(34, 197, 94, 0.12)' }
                   };
                   const statusInfo = statusMap[c.status] || {
                     label: c.statusLabel || (c.status === 'approved' ? 'Đã bồi thường' : 'Đang xử lý'),

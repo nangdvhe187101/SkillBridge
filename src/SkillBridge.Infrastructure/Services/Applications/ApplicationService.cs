@@ -306,7 +306,8 @@ public class ApplicationService : IApplicationService
             DeadlineAt = a.Job?.DeadlineAt,
             CompletedAt = (string.Equals(a.Job?.Status, "completed", StringComparison.OrdinalIgnoreCase) || string.Equals(a.Job?.Status, "closed", StringComparison.OrdinalIgnoreCase)) ? a.Job?.UpdatedAt : null,
             RevisionLimit = a.Job?.RevisionLimit ?? 2,
-            RevisionCount = a.Job?.RevisionCount ?? 0
+            RevisionCount = a.Job?.RevisionCount ?? 0,
+            HasOpenDispute = a.Job?.Disputes?.Any(d => d.Status == "open") ?? false
         }).ToList();
 
         return new SkillBridge.Application.DTOs.Jobs.PagedResult<JobApplicationResponseDto>
