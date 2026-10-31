@@ -292,4 +292,95 @@ public class KycServiceTests
         Assert.Equal("HE123456", result.StudentIdNumber);
         Assert.Equal(pastYear, result.GraduationYear);
     }
+
+    [Fact]
+    public async Task GetKycStatusAsync_WhenRejectedByAdmin_ShouldReturnRejectedWithReason()
+    {
+        // Arrange: mô phỏng đúng trạng thái sau khi AdminUserService.VerifyKycAsync từ chối eKYC
+        using var dbContext = CreateInMemoryDbContext();
+        var user = new User
+        {
+            Id = 6,
+            FullName = "Công ty TNHH Test",
+            Email = "employer@skillbridge.vn",
+            PasswordHash = "hashed",
+            RoleId = 3,
+            AccountStatus = "pending",
+            KycStatus = "rejected",
+            KycRejectionReason = "Giấy phép kinh doanh không hợp lệ",
+            ReliabilityScore = 70
+        };
+        dbContext.Users.Add(user);
+        dbContext.IdentityDocuments.Add(new IdentityDocument
+        {
+            Id = 10,
+            UserId = 6,
+            DocType = "business_license",
+            FileName = "gpkd.jpg",
+            FileUrl = "identity_documents/6/gpkd.jpg",
+            PublicId = "gpkd_10",
+            FileType = "image/jpeg",
+            FileSize = 1024,
+            UploadedAt = DateTime.UtcNow
+        });
+        await dbContext.SaveChangesAsync();
+
+        var service = new KycService(dbContext, _storageMock.Object, _loggerMock.Object);
+
+        // Act
+        var result = await service.GetKycStatusAsync(6);
+
+        // Assert: frontend chỉ hiện banner "Cần nộp lại hồ sơ" đúng khi hai field này đúng
+        Assert.Equal("rejected", result.KycStatus);
+        Assert.Equal("Giấy phép kinh doanh không hợp lệ", result.KycRejectionReason);
+    }
+
+    [Fact]
+    public async Task SubmitKycAsync_AfterRejection_ShouldAllowResubmitAndClearRejectionReason()
+    {
+        // Arrange: user đã bị admin từ chối eKYC trước đó
+        using var dbContext = CreateInMemoryDbContext();
+        var user = new User
+        {
+            Id = 7,
+            FullName = "Công ty TNHH Resubmit",
+            Email = "employer2@skillbridge.vn",
+            PasswordHash = "hashed",
+            RoleId = 3,
+            AccountStatus = "pending",
+            KycStatus = "rejected",
+            KycRejectionReason = "Ảnh giấy phép kinh doanh bị mờ",
+            ReliabilityScore = 70
+        };
+        dbContext.Users.Add(user);
+        await dbContext.SaveChangesAsync();
+
+        var service = new KycService(dbContext, _storageMock.Object, _loggerMock.Object);
+        _storageMock
+            .Setup(s => s.UploadStreamAsync(It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new FileUploadResult { FileKey = "identity_documents/7/gpkd_new.jpg", FileUrl = "identity_documents/7/gpkd_new.jpg" });
+
+        var fileBytes = Encoding.UTF8.GetBytes("fake image content");
+        var files = new List<KycFileUploadModel>
+        {
+            new KycFileUploadModel
+            {
+                FileStream = new MemoryStream(fileBytes),
+                FileName = "gpkd_new.jpg",
+                ContentType = "image/jpeg",
+                Length = fileBytes.Length,
+                DocType = "business_license"
+            }
+        };
+
+        // Act: nộp lại hồ sơ sau khi bị từ chối không được chặn (khác với pending/verified)
+        var result = await service.SubmitKycAsync(7, new SubmitKycRequest { DocumentType = "business_license", CompanyName = "Công ty TNHH Resubmit" }, files);
+
+        // Assert
+        Assert.Equal("pending", result.KycStatus);
+        var updatedUser = await dbContext.Users.FindAsync(7);
+        Assert.NotNull(updatedUser);
+        Assert.Equal("pending", updatedUser.KycStatus);
+        Assert.Null(updatedUser.KycRejectionReason);
+    }
 }
