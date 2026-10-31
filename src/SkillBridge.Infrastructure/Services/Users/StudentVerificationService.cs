@@ -548,7 +548,6 @@ namespace SkillBridge.Infrastructure.Services.Users
                     }
                 }
 
-                _ = SendStudentVerificationApprovalEmailAsync(request);
             }
             else if (decision == "need_more_info")
             {
@@ -577,7 +576,6 @@ namespace SkillBridge.Infrastructure.Services.Users
                     CreatedAt = DateTime.UtcNow
                 });
 
-                _ = SendStudentVerificationNeedInfoEmailAsync(request);
             }
             else if (decision == "reject")
             {
@@ -611,7 +609,6 @@ namespace SkillBridge.Infrastructure.Services.Users
                     CreatedAt = DateTime.UtcNow
                 });
 
-                _ = SendStudentVerificationRejectionEmailAsync(request);
             }
             else
             {
@@ -629,6 +626,22 @@ namespace SkillBridge.Infrastructure.Services.Users
             }
 
             await dbContext.SaveChangesAsync();
+
+            // Gửi email thông báo sau khi đã lưu DB thành công. Chạy tuần tự (await) trên
+            // cùng dbContext thay vì fire-and-forget, vì gọi song song trên cùng DbContext
+            // scoped gây lỗi "A second operation was started on this context instance".
+            if (decision == "approve")
+            {
+                await SendStudentVerificationApprovalEmailAsync(request);
+            }
+            else if (decision == "need_more_info")
+            {
+                await SendStudentVerificationNeedInfoEmailAsync(request);
+            }
+            else if (decision == "reject")
+            {
+                await SendStudentVerificationRejectionEmailAsync(request);
+            }
 
             var front = request.Documents.FirstOrDefault(d => d.Side == "front");
             var back = request.Documents.FirstOrDefault(d => d.Side == "back");

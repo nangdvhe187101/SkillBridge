@@ -185,7 +185,7 @@ public class AdminSupportService : IAdminSupportService
         // 3. Gửi email thông báo phản hồi CSKH trực tiếp cho người dùng nếu có nội dung phản hồi hoặc đóng ticket
         if (!string.IsNullOrWhiteSpace(dto.ReplyMessage) || dto.CloseTicket)
         {
-            _ = SendTicketReplyEmailAsync(ticket, dto.ReplyMessage?.Trim(), dto.CloseTicket, adminMember.Name, ct);
+            await SendTicketReplyEmailAsync(ticket, dto.ReplyMessage?.Trim(), dto.CloseTicket, adminMember.Name, ct);
         }
 
         return MapToTicketDto(ticket);
