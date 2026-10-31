@@ -3,7 +3,7 @@ import Icon from './Icon';
 import { useConfirm } from '../context/ConfirmContext';
 import { useToast } from '../context/ToastContext';
 import Pagination from './Pagination';
-import { rolesSeed } from '../data/adminSeed';
+import { rolesSeed, featuresSeed } from '../data/adminSeed';
 import {
   getAdminTeamMembers,
   addAdminTeamMember,
