@@ -63,7 +63,7 @@ public class AdminRolesController : ControllerBase
         {
             var errorDetail = ex.InnerException?.Message ?? ex.Message;
             _logger.LogError(ex, "Lỗi khi thêm thành viên quản trị: {Message}", errorDetail);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi thêm thành viên: " + errorDetail });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi thêm thành viên. Vui lòng thử lại sau." });
         }
     }
 
@@ -90,7 +90,7 @@ public class AdminRolesController : ControllerBase
         {
             var errorDetail = ex.InnerException?.Message ?? ex.Message;
             _logger.LogError(ex, "Lỗi khi cập nhật thành viên quản trị #{MemberId}: {Message}", id, errorDetail);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi cập nhật thành viên: " + errorDetail });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi cập nhật thành viên. Vui lòng thử lại sau." });
         }
     }
 
@@ -116,7 +116,7 @@ public class AdminRolesController : ControllerBase
         {
             var errorDetail = ex.InnerException?.Message ?? ex.Message;
             _logger.LogError(ex, "Lỗi khi xóa thành viên quản trị #{MemberId}: {Message}", id, errorDetail);
-            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi xóa thành viên: " + errorDetail });
+            return StatusCode(StatusCodes.Status500InternalServerError, new { message = "Lỗi hệ thống khi xóa thành viên. Vui lòng thử lại sau." });
         }
     }
 
