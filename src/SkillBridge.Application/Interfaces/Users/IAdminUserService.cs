@@ -43,7 +43,7 @@ public interface IAdminUserService
     Task<AdminUserListItemDto> AdjustReliabilityAsync(int adminUserId, int targetUserId, AdminAdjustReliabilityRequest request, CancellationToken ct = default);
 
     /// <summary>
-    /// Phê duyệt xác thực định danh (eKYC) của người dùng
+    /// Phê duyệt hoặc từ chối xác thực định danh (eKYC) của người dùng
     /// </summary>
-    Task<AdminUserListItemDto> VerifyKycAsync(int adminUserId, int targetUserId, CancellationToken ct = default);
+    Task<AdminUserListItemDto> VerifyKycAsync(int adminUserId, int targetUserId, AdminReviewKycRequest request, CancellationToken ct = default);
 }

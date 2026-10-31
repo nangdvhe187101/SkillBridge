@@ -216,4 +216,161 @@ public class AdminUserServiceTests
 
         Assert.Contains("chính mình", ex.Message);
     }
+
+    [Fact]
+    public async Task VerifyKyc_WhenApproved_ShouldSetVerifiedAndActivateAccount()
+    {
+        // Arrange
+        await using var dbContext = CreateInMemoryDbContext();
+        var adminRole = new Role { Id = 7, Code = "admin", Name = "Admin", Type = "admin", IsActive = true };
+        var employerRole = new Role { Id = 3, Code = "employer", Name = "Nhà tuyển dụng", Type = "user", IsActive = true };
+
+        var admin = new User
+        {
+            Id = 10,
+            Email = "admin_test@skillbridge.vn",
+            FullName = "Admin Test",
+            RoleId = adminRole.Id,
+            Role = adminRole,
+            AccountStatus = "active",
+            KycStatus = "verified",
+            PasswordHash = "hash"
+        };
+
+        var targetUser = new User
+        {
+            Id = 30,
+            Email = "employer@gmail.com",
+            FullName = "Employer Test",
+            RoleId = employerRole.Id,
+            Role = employerRole,
+            AccountStatus = "pending",
+            KycStatus = "pending",
+            PasswordHash = "hash"
+        };
+
+        await dbContext.Roles.AddRangeAsync(adminRole, employerRole);
+        await dbContext.Users.AddRangeAsync(admin, targetUser);
+        await dbContext.SaveChangesAsync();
+
+        var service = new AdminUserService(dbContext, new Mock<SkillBridge.Application.Interfaces.Storage.IStorageService>().Object, _loggerMock.Object);
+
+        // Act
+        var result = await service.VerifyKycAsync(admin.Id, targetUser.Id, new AdminReviewKycRequest { Approved = true });
+
+        // Assert
+        Assert.Equal("verified", result.Kyc);
+        Assert.Equal("active", result.Status);
+        var updatedInDb = await dbContext.Users.FindAsync(targetUser.Id);
+        Assert.NotNull(updatedInDb);
+        Assert.Equal("verified", updatedInDb.KycStatus);
+        Assert.Equal("active", updatedInDb.AccountStatus);
+        Assert.Null(updatedInDb.KycRejectionReason);
+
+        var audit = await dbContext.AuditLogs.FirstOrDefaultAsync();
+        Assert.NotNull(audit);
+        Assert.Contains("VERIFY_KYC", audit.ActionText);
+    }
+
+    [Fact]
+    public async Task VerifyKyc_WhenRejected_ShouldSetRejectedAndKeepAccountStatus()
+    {
+        // Arrange
+        await using var dbContext = CreateInMemoryDbContext();
+        var adminRole = new Role { Id = 7, Code = "admin", Name = "Admin", Type = "admin", IsActive = true };
+        var employerRole = new Role { Id = 3, Code = "employer", Name = "Nhà tuyển dụng", Type = "user", IsActive = true };
+
+        var admin = new User
+        {
+            Id = 10,
+            Email = "admin_test@skillbridge.vn",
+            FullName = "Admin Test",
+            RoleId = adminRole.Id,
+            Role = adminRole,
+            AccountStatus = "active",
+            KycStatus = "verified",
+            PasswordHash = "hash"
+        };
+
+        var targetUser = new User
+        {
+            Id = 31,
+            Email = "employer2@gmail.com",
+            FullName = "Employer Test 2",
+            RoleId = employerRole.Id,
+            Role = employerRole,
+            AccountStatus = "pending",
+            KycStatus = "pending",
+            PasswordHash = "hash"
+        };
+
+        await dbContext.Roles.AddRangeAsync(adminRole, employerRole);
+        await dbContext.Users.AddRangeAsync(admin, targetUser);
+        await dbContext.SaveChangesAsync();
+
+        var service = new AdminUserService(dbContext, new Mock<SkillBridge.Application.Interfaces.Storage.IStorageService>().Object, _loggerMock.Object);
+
+        // Act
+        var result = await service.VerifyKycAsync(admin.Id, targetUser.Id,
+            new AdminReviewKycRequest { Approved = false, Reason = "Giấy phép kinh doanh không hợp lệ" });
+
+        // Assert
+        Assert.Equal("rejected", result.Kyc);
+        Assert.Equal("pending", result.Status); // Không tự active khi bị từ chối
+        var updatedInDb = await dbContext.Users.FindAsync(targetUser.Id);
+        Assert.NotNull(updatedInDb);
+        Assert.Equal("rejected", updatedInDb.KycStatus);
+        Assert.Equal("pending", updatedInDb.AccountStatus); // Không tự active khi bị từ chối
+        Assert.Equal("Giấy phép kinh doanh không hợp lệ", updatedInDb.KycRejectionReason);
+
+        var audit = await dbContext.AuditLogs.FirstOrDefaultAsync();
+        Assert.NotNull(audit);
+        Assert.Contains("REJECT_KYC", audit.ActionText);
+        Assert.Contains("Giấy phép kinh doanh không hợp lệ", audit.ActionText);
+    }
+
+    [Fact]
+    public async Task VerifyKyc_WhenRejectedWithoutReason_ShouldThrowBusinessException()
+    {
+        // Arrange
+        await using var dbContext = CreateInMemoryDbContext();
+        var adminRole = new Role { Id = 7, Code = "admin", Name = "Admin", Type = "admin", IsActive = true };
+        var employerRole = new Role { Id = 3, Code = "employer", Name = "Nhà tuyển dụng", Type = "user", IsActive = true };
+
+        var admin = new User
+        {
+            Id = 10,
+            Email = "admin_test@skillbridge.vn",
+            FullName = "Admin Test",
+            RoleId = adminRole.Id,
+            Role = adminRole,
+            AccountStatus = "active",
+            KycStatus = "verified",
+            PasswordHash = "hash"
+        };
+
+        var targetUser = new User
+        {
+            Id = 32,
+            Email = "employer3@gmail.com",
+            FullName = "Employer Test 3",
+            RoleId = employerRole.Id,
+            Role = employerRole,
+            AccountStatus = "pending",
+            KycStatus = "pending",
+            PasswordHash = "hash"
+        };
+
+        await dbContext.Roles.AddRangeAsync(adminRole, employerRole);
+        await dbContext.Users.AddRangeAsync(admin, targetUser);
+        await dbContext.SaveChangesAsync();
+
+        var service = new AdminUserService(dbContext, new Mock<SkillBridge.Application.Interfaces.Storage.IStorageService>().Object, _loggerMock.Object);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<BusinessException>(() =>
+            service.VerifyKycAsync(admin.Id, targetUser.Id, new AdminReviewKycRequest { Approved = false }));
+
+        Assert.Contains("Lý do", ex.Message);
+    }
 }

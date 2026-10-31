@@ -176,15 +176,15 @@ public class AdminUsersController : ControllerBase
     }
 
     /// <summary>
-    /// Phê duyệt xác thực định danh (eKYC) của người dùng
+    /// Phê duyệt hoặc từ chối xác thực định danh (eKYC) của người dùng
     /// </summary>
     [HttpPost("{id:int}/verify-kyc")]
-    public async Task<IActionResult> VerifyKyc([FromRoute] int id, CancellationToken ct)
+    public async Task<IActionResult> VerifyKyc([FromRoute] int id, [FromBody] AdminReviewKycRequest request, CancellationToken ct)
     {
         var adminUserId = User.GetRequiredUserId();
         try
         {
-            var result = await _adminUserService.VerifyKycAsync(adminUserId, id, ct);
+            var result = await _adminUserService.VerifyKycAsync(adminUserId, id, request, ct);
             return Ok(result);
         }
         catch (KeyNotFoundException ex)
