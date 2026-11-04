@@ -702,6 +702,9 @@ export default function MyWork() {
       const jobInfo = jobDetailsMap[targetJobId];
       const matchingJob = (state.jobs || []).find((j) => j.id === targetJobId || (a.dashJobId && j.dashJobId === a.dashJobId)) || jobInfo;
       const delivData = deliverablesMap[targetJobId] || {};
+      const relatedDispute = (state.disputes || []).find(
+        (d) => Number(d.jobId) === Number(targetJobId)
+      );
 
       let effectiveStatus = a.jobStatus || jobInfo?.status;
       if (a.hasOpenDispute) {
@@ -773,7 +776,7 @@ export default function MyWork() {
       emp: state.jobs.find((pj) => pj.dashJobId === j.id)?.emp || 'Nhà tuyển dụng',
       empAvatar: j.employerAvatar || j.empAvatar || null
     }));
-  }, [activeApps, deliverablesMap, state.jobs, state.myJobs, state.currentUser]);
+  }, [activeApps, deliverablesMap, state.jobs, state.myJobs, state.currentUser, state.disputes]);
 
   // Thống kê nhanh
   const stats = useMemo(() => {

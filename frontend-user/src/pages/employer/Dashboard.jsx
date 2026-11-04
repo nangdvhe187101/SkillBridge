@@ -736,6 +736,7 @@ function JobsTab({ state, navigate, goToPostTab }) {
               // hasOpenDispute lấy trực tiếp từ backend (bảng Disputes, status='open')
               const isDisputed = j.status === 'disputed' || Boolean(j.hasOpenDispute);
               const effStatus = isDisputed ? 'disputed' : j.status;
+              const relatedDispute = (state.disputes || []).find((d) => Number(d.jobId) === Number(j.id));
 
               return (
                 <div
